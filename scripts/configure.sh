@@ -1,10 +1,10 @@
 #!/bin/bash
 
-sudo apt-get install postgresql
+sudo apt-get install postgresql-18
 
-sudo pg_ctlcluster 12 main start
+sudo pg_ctlcluster 18 main start
 
-sudo pg_ctlcluster 12 main status
+sudo pg_ctlcluster 18 main status
 
 sudo -u postgres psql
 
