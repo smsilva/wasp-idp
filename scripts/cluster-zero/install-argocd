@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+assets_directory="${this_script_directory}/assets"
+
+helm repo \
+  add argo https://argoproj.github.io/argo-helm > /dev/null
+
+helm repo \
+  update argo > /dev/null
+
+echo ""
+echo "Installing argo-cd..."
+
+helm upgrade \
+  --install \
+  --namespace argocd \
+  --create-namespace \
+  argocd argo/argo-cd \
+  --version 10.2.1 \
+  --values "${assets_directory}/argocd-values.yaml" \
+  --wait > /dev/null
+
+echo ""
+
+for deployment in $(
+  kubectl \
+    --namespace argocd \
+    get deploy \
+    --output name
+); do
+  kubectl \
+    --namespace argocd \
+    wait \
+    --for condition=Available \
+    --timeout=360s \
+    "${deployment}" > /dev/null
+done
+
+echo ""
+echo "ArgoCD installed."
+echo "Retrieve the admin password with:"
+echo "  kubectl --namespace argocd get secret argocd-initial-admin-secret --output jsonpath='{.data.password}' | base64 --decode"

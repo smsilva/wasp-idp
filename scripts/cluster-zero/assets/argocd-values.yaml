@@ -1,0 +1,8 @@
+server:
+  service:
+    type: LoadBalancer
+    servicePortHttp: 80
+    servicePortHttps: 443
+    servicePortHttpName: http
+    servicePortHttpsName: https
+    namedTargetPort: true
