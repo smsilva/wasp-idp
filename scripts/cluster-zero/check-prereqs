@@ -1,0 +1,50 @@
+#!/bin/bash
+# Validate the CLI tools needed to bring up the local cluster-zero exercise.
+#
+# No `set -e`: the checker must keep going after a missing tool to report the
+# full list in a single run.
+
+required_tools="k3d kubectl helm docker"
+
+missing=""
+
+version_for() {
+  local tool="${1?}"
+  case "${tool}" in
+    k3d)
+      k3d version | head --lines 1
+      ;;
+    kubectl)
+      kubectl version --client 2> /dev/null | head --lines 1
+      ;;
+    helm)
+      helm version --short
+      ;;
+    docker)
+      docker --version
+      ;;
+  esac
+}
+
+echo "Checking cluster-zero prerequisites..."
+echo ""
+
+for tool in ${required_tools}; do
+  if command -v "${tool}" &> /dev/null; then
+    version="$(version_for "${tool}")"
+    printf '  ok      %-8s %s\n' "${tool}" "${version}"
+  else
+    printf '  MISSING %-8s\n' "${tool}"
+    missing="${missing} ${tool}"
+  fi
+done
+
+echo ""
+
+if [ -n "${missing}" ]; then
+  echo "Missing required tools:${missing}"
+  echo "Install them before creating a cluster."
+  exit 1
+fi
+
+echo "All prerequisites present."
