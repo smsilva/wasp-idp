@@ -1,0 +1,52 @@
+#!/bin/bash
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+assets_directory="${this_script_directory}/assets"
+
+helm repo \
+  add crossplane-stable https://charts.crossplane.io/stable > /dev/null
+
+helm repo \
+  update crossplane-stable > /dev/null
+
+echo ""
+echo "Installing crossplane core..."
+
+helm upgrade \
+  --install \
+  --create-namespace \
+  --namespace crossplane-system \
+  crossplane crossplane-stable/crossplane \
+  --version 2.3.4 \
+  --wait > /dev/null
+
+kubectl \
+  wait deployment \
+    --namespace crossplane-system \
+    --selector release=crossplane \
+    --for condition=Available \
+    --timeout=360s > /dev/null
+
+echo ""
+echo "Installing Azure provider family..."
+
+helm upgrade \
+  --install \
+  --namespace crossplane-system \
+  crossplane-azure "${assets_directory}/crossplane-packages" \
+  --values "${assets_directory}/crossplane-packages/values-azure.yaml" \
+  --wait > /dev/null
+
+echo ""
+echo "Waiting for providers to become healthy..."
+
+kubectl wait provider \
+  --all \
+  --for condition=Healthy \
+  --timeout=360s
+
+echo ""
+echo "Crossplane and Azure providers installed."
