@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+check-prereqs
+cluster-create "${1:-idp-cluster-zero}"
+install-argocd
+install-crossplane
+verify

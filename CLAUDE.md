@@ -143,6 +143,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 |--------|---------|
 | `scripts/install.sh` | Installs nvm, Node v24, Yarn, creates the Backstage app |
 | `scripts/configure.sh` | Installs PostgreSQL 18 and configures the production DB |
+| `scripts/cluster-zero/up` | Stands up a local k3d cluster (3 servers) with ArgoCD + Crossplane (Azure providers) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
 
 ## Targets
 

@@ -1,0 +1,22 @@
+#!/bin/bash
+# Read-only health check for the cluster-zero exercise. No `set -e`: keep
+# reporting every section even if one component is unhealthy.
+
+echo "Nodes:"
+kubectl get nodes
+
+echo ""
+echo "ArgoCD deployments:"
+kubectl --namespace argocd get deployments
+
+echo ""
+echo "Crossplane deployments:"
+kubectl --namespace crossplane-system get deployments
+
+echo ""
+echo "Crossplane providers:"
+kubectl get providers
+
+echo ""
+echo "Crossplane functions:"
+kubectl get functions 2> /dev/null || echo "  (none installed)"

@@ -63,3 +63,13 @@ Set up credentials at [console.cloud.google.com](https://console.cloud.google.co
 # Install and configure PostgreSQL 18 (production)
 ./scripts/configure.sh
 ```
+
+## Local cluster-zero exercise
+
+A disposable k3d cluster (3 servers) with ArgoCD and Crossplane (Azure providers), used to exercise the "cluster zero" bootstrap from the multi-tenant IDP design before it's reimplemented in Terraform against real Azure AKS.
+
+```bash
+scripts/cluster-zero/up      # stand up cluster + ArgoCD + Crossplane
+scripts/cluster-zero/verify  # check health of everything
+scripts/cluster-zero/cluster-delete  # tear down
+```
