@@ -46,7 +46,7 @@ echo "Waiting for providers to become healthy..."
 kubectl wait provider \
   --all \
   --for condition=Healthy \
-  --timeout=600s
+  --timeout=900s
 
 echo ""
 echo "Crossplane and Azure providers installed."
