@@ -145,6 +145,14 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 | `scripts/configure.sh` | Installs PostgreSQL 18 and configures the production DB |
 | `scripts/cluster-zero/up` | Stands up a local k3d cluster (3 servers) with ArgoCD + Crossplane (Azure providers) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
 
+## Architecture decisions (recorded)
+
+- **azurerm version:** `infra/terraform/cluster-zero/` uses `azurerm ~> 4.x` (modern). Do NOT add the new AKS module to `azure-platform-foundation` — that repo is pinned to `azurerm 2.72.0` and would require a risky full upgrade.
+- **Cluster-zero Terraform boundary:** Terraform provisions AKS + installs ArgoCD only. Crossplane and Azure providers arrive via GitOps (app-of-apps) after ArgoCD is up — not via Terraform.
+- **Platform Library vs. per-project GitOps repo:** central Crossplane Compositions/XRDs live in a read-only Platform Library repo; each project's GitOps config lives in its own write-restricted repo (only that project's Backstage instance can write to it). This is the blast-radius/write-access isolation boundary.
+- **Per-project isolation model:** security boundary is a separate Backstage instance per project (separate namespace, separate GitOps repo, separate GitHub org) — not RBAC inside a shared instance. One project's team must not be able to discover another project's existence.
+- **Crossplane provider wait timeout:** on a resource-contrained host (8 cores, 3-node k3d), the 10 Azure providers can take >600 s to reach `Healthy` due to apiserver patch pressure under etcd load. Use `--timeout=900s` for `kubectl wait provider --all --for condition=Healthy`.
+
 ## Targets
 
 - Backstage as IDP foundation

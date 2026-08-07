@@ -2,40 +2,48 @@
 
 ## Why
 
-Bootstrap the Backstage IDP PoC repository with proper git hygiene and documentation.
-`idp/` existed only as `node_modules/` on disk (no source files on the working tree); the actual source code lives in branch `dev`.
-Chose to document in `CLAUDE.md` + `README.md` at repo root and add a `.gitignore` rather than touching any source code.
+Evoluir o Backstage IDP PoC para uma plataforma multi-tenant real, servindo ~120 projetos (clientes) com isolamento estrito de segurança por projeto (uma instância Backstage por projeto, namespaces separados, GitOps repo isolado, GitHub org separada).
+
+Design spec completo em `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md`.
+
+Abordagem: Walk Skeleton — exercitar ponta a ponta localmente (k3d) antes de atacar Azure real. O exercício local (k3d + ArgoCD + Crossplane + 10 Azure providers) está concluído em `scripts/cluster-zero/`.
 
 ## In Progress
 
-Last step: pushed `main` and `dev` to `origin`.
-Intended next: no active work item; repo is clean.
+Último passo: plano de implementação do cluster-zero Terraform escrito e commitado em `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`. Branch `dev` pushed a `origin`.
+
+**Próximo passo imediato:** executar o plano `2026-08-07-cluster-zero-terraform.md` (Inline Execution ou Subagent-Driven — usuário não escolheu ainda). Escolha foi deixada para a próxima sessão.
 
 ## Open Questions / Hypotheses
 
-- None carried from a previous handoff.
-- Whether to surface the three PoC security risks as Jira tasks or GitHub issues (not decided).
+- Convenção de naming/topics para os repos `azure-*-foundation` existentes ainda não definida — bloqueante para o script de bulk-registration do catálogo (item 5 do backlog).
+- Automação de criação dos ~120 repos GitOps por projeto (via `github_repository` Terraform provider ou GitHub API) ainda não planejada — mencionada como risco no spec.
+- Subscrição Azure disponível para o apply real do cluster-zero Terraform? (não confirmado — o ciclo de teste do plano é só `fmt`/`validate`/`tflint` por isso).
 
 ## Known Broken
 
-1. `app-config.production.yaml` — `guest: {}` present in production config — **intentional** (PoC only; must be removed before real production use).
-2. `packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC; replace with real `PermissionPolicy` before production).
-3. `packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog: true` — **intentional** (PoC; restrict by domain or catalog before production).
+1. `idp/app-config.production.yaml` — `guest: {}` presente — **intentional** (PoC; remover antes de produção real).
+2. `idp/packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC; substituir por `PermissionPolicy` real antes de produção).
+3. `idp/packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog: true` — **intentional** (PoC; restringir por domínio ou catálogo antes de produção).
 
 ## How to Resume
 
 ```bash
 cd /home/silvios/git/backstage
 git checkout dev
-cd idp && yarn start
+# Para executar o próximo plano:
+cat docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md
 ```
 
 ## Next Steps
 
-- [ ] Restrict `idp/app-config.production.yaml`: remove `guest` provider, keep only Google.
-- [ ] Replace `allow-all` permission policy with a real `PermissionPolicy` implementation.
-- [ ] Restrict `googleAuthModule.ts` sign-in resolver to a trusted domain or catalog-only.
-- [ ] Add Crossplane integration (declared target, not started).
-- [ ] Add GitHub Actions CI/CD pipeline (declared target, not started).
+### Imediato
+- [ ] Executar `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md` (cluster-zero Terraform: AKS + ArgoCD no Azure real). Escolher Inline Execution (opção 2) ou Subagent-Driven (opção 1).
+
+### Backlog (em ordem de dependência)
+- [ ] **#2 Platform Library** — repo central com Crossplane Compositions/XRDs + umbrella Helm chart versionado. Escrever o plano quando o cluster-zero Terraform estiver aplicado (nomes de recursos AKS reais necessários).
+- [ ] **#3 GitOps repo por projeto** — ApplicationSet + Kind de onboarding + automação de criação dos repos (~120). Depende de #2.
+- [ ] **#4 Provisionamento Backstage por projeto** — Helm chart parametrizado + External Secrets ← AKV. Depende de #2 e #3.
+- [ ] **#5 Catálogo Backstage** — Software Template para novos serviços + script de bulk-registration para repos existentes. Depende de convenção de naming acordada com o time.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
