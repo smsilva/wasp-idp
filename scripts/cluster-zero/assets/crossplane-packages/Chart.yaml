@@ -1,0 +1,5 @@
+apiVersion: v2
+name: crossplane-packages
+description: Crossplane providers and functions, selectable and versioned via values.yaml
+type: application
+version: 0.1.0

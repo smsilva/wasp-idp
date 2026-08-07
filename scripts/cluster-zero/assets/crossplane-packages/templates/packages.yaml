@@ -1,0 +1,13 @@
+{{- range .Values.items }}
+{{- $enabled := true }}
+{{- if hasKey . "enabled" }}{{- $enabled = .enabled }}{{- end }}
+{{- if $enabled }}
+---
+apiVersion: {{ .apiVersion | default (ternary "pkg.crossplane.io/v1beta1" "pkg.crossplane.io/v1" (eq .kind "Function")) }}
+kind: {{ required "each item needs a kind (Function or Provider)" .kind }}
+metadata:
+  name: {{ required "each item needs a name" .name }}
+spec:
+  package: {{ required "each item needs a package" .package }}:{{ .version | default "latest" }}
+{{- end }}
+{{- end }}
