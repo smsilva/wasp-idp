@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+
+cluster_name="${1:-idp-cluster-zero}"
+
+echo ""
+echo "Creating k3d cluster '${cluster_name}' (3 servers)..."
+
+k3d cluster create \
+  "${cluster_name}" \
+  --api-port 6550 \
+  --port "9080:80@loadbalancer" \
+  --port "9443:443@loadbalancer" \
+  --servers 3 \
+  --k3s-arg '--disable=traefik@server:*' \
+  --wait \
+  --timeout 360s
+
+kubectl wait node \
+  --selector kubernetes.io/os=linux \
+  --for condition=Ready \
+  --timeout=360s
+
+kubectl wait deployment metrics-server \
+  --namespace kube-system \
+  --for condition=Available \
+  --timeout=360s
+
+sleep 2
+
+kubectl wait pods \
+  --namespace kube-system \
+  --selector k8s-app=metrics-server \
+  --for condition=Ready \
+  --timeout=360s
+
+echo ""
+echo "Cluster '${cluster_name}' ready."
