@@ -10,3 +10,4 @@ coverage/
 
 # Personal/local context (not versioned)
 CLAUDE.local.md
+.mcp.json
