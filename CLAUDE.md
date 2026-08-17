@@ -154,6 +154,14 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - **Crossplane provider wait timeout:** on a resource-contrained host (8 cores, 3-node k3d), the 10 Azure providers can take >600 s to reach `Healthy` due to apiserver patch pressure under etcd load. Use `--timeout=900s` for `kubectl wait provider --all --for condition=Healthy`.
 - **Cluster naming idea (not decided):** OpenStack's TripleO project uses `Undercloud` (the bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project Backstage clusters (overcloud-like).
 
+## Security TODOs (PoC hardening, deferred)
+
+Flagged by automated security review — intentional PoC shortcuts, to revisit before any real deployment:
+
+- `idp/app-config.production.yaml`: `guest` auth provider is enabled in production config — should be dev-only.
+- `idp/packages/backend/src/googleAuthModule.ts`: `dangerouslyAllowSignInWithoutUserInCatalog: true` lets any Google account sign in without a catalog `User` entity.
+- `idp/packages/backend/src/index.ts`: uses `@backstage/plugin-permission-backend-module-allow-all-policy` — no real authorization policy in place.
+
 ## Targets
 
 - Backstage as IDP foundation
