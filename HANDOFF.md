@@ -22,15 +22,16 @@ Rejeitado: usar `<...>` em campos executáveis (quebraria API groups do k8s); ma
 representam). Criado `CLAUDE.local.md` com a estrutura da AWS Organization pessoal (accounts
 já criadas via console). Mudanças de `aws/` estão staged.
 
-Criada a doc `aws/docs/bootstrap/` (novo domínio, índice + tópico `00-iam-user-crossplane.md`)
-com o passo a passo executável do bootstrap manual: criar a IAM user `crossplane-poc`,
-anexar `PowerUserAccess` + a policy inline `bootstrap-iam-policy.json`, gerar access key,
-gravar em `poc-idp/crossplane-poc-credentials`.
+Bootstrap manual da IAM user `crossplane-poc` executado com sucesso na conta `hub`
+real (`094289743086`) — ver `docs/HANDOFF-done.md` para o registro completo. Criado
+profile local `hub` em `~/.aws/config` (assume `OrganizationAccountAccessRole` a
+partir do profile `personal`) para acesso administrativo à conta `hub` sem SSO
+dedicado.
 
-**Próximo passo imediato:** executar esse bootstrap de fato na conta `hub` (`094289743086`),
-seguindo `aws/docs/bootstrap/00-iam-user-crossplane.md` — requer credencial
-`AdministratorAccess` ativa (não a `crossplane-poc`, que ainda não existe). Depois:
-k3d + Crossplane + providers → Network, conforme `aws/eks/` e `aws/docs/network/`.
+**Próximo passo imediato:** instalar k3d + Crossplane + providers localmente
+(`aws/eks/scripts/install-crossplane` + `install-providers`), depois consumir a
+credencial `crossplane-poc` via `aws/eks/scripts/configure-aws-creds` (passo ⑦ do
+bootstrap) e seguir para Network conforme `aws/eks/` e `aws/docs/network/`.
 
 ## Open Questions / Hypotheses
 
@@ -47,15 +48,13 @@ k3d + Crossplane + providers → Network, conforme `aws/eks/` e `aws/docs/networ
 
 ## Known Broken
 
-1. `aws/` inteira é **não-executada** nesta conta — **intentional**: só copiada e genericizada,
-   nada foi provisionado nem validado contra a AWS pessoal ainda.
-2. IAM user `crossplane-poc` e secret `poc-idp/crossplane-poc-credentials` **não existem** na
-   conta `hub` — **intentional**: bootstrap manual de admin pendente (ver `aws/CLAUDE.md`).
-3. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — **intentional**: são Helm
+1. `aws/` inteira ainda é **não-executada** além do bootstrap IAM — **intentional**: k3d,
+   Crossplane, providers e network seguem não provisionados/validados contra a conta pessoal.
+2. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — **intentional**: são Helm
    templates (`{{ }}`).
-4. `idp/app-config.production.yaml` — `guest: {}` presente — **intentional** (PoC).
-5. `idp/packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC).
-6. `idp/packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog:
+3. `idp/app-config.production.yaml` — `guest: {}` presente — **intentional** (PoC).
+4. `idp/packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC).
+5. `idp/packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog:
    true` — **intentional** (PoC).
 
 ## How to Resume
@@ -69,10 +68,9 @@ cat aws/docs/accounts/CLAUDE.md
 
 ## Next Steps
 
-- [ ] Executar o bootstrap admin na conta `hub` (`094289743086`), seguindo
-      `aws/docs/bootstrap/00-iam-user-crossplane.md` (doc já escrita — falta rodar contra a
-      conta real).
 - [ ] Rodar `aws/eks/scripts/install-crossplane` + `install-providers` (k3d local).
+- [ ] Consumir a credencial `crossplane-poc` no cluster (passo ⑦ do bootstrap, via
+      `aws/eks/scripts/configure-aws-creds`).
 - [ ] Configurar **network** na `hub` (ver `aws/docs/network/` + `aws/eks/resources/network/`).
 - [ ] Decidir base do domínio: delegar `wasp.silvios.me` (ou subzona `aws.wasp.silvios.me`)
       de Azure DNS → Route53, e registrar a hosted zone antes das fatias DNS/ingress/TLS.
