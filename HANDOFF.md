@@ -22,10 +22,15 @@ Rejeitado: usar `<...>` em campos executáveis (quebraria API groups do k8s); ma
 representam). Criado `CLAUDE.local.md` com a estrutura da AWS Organization pessoal (accounts
 já criadas via console). Mudanças de `aws/` estão staged.
 
-**Próximo passo imediato:** iniciar a configuração de **network na conta `hub`**
-(`094289743086`). Antes: **bootstrap do IAM user `crossplane-poc`** na `hub` (+ secret
-`poc-idp/crossplane-poc-credentials` no Secrets Manager), depois k3d + Crossplane + providers
-→ Network, conforme `aws/eks/` e `aws/docs/network/`.
+Criada a doc `aws/docs/bootstrap/` (novo domínio, índice + tópico `00-iam-user-crossplane.md`)
+com o passo a passo executável do bootstrap manual: criar a IAM user `crossplane-poc`,
+anexar `PowerUserAccess` + a policy inline `bootstrap-iam-policy.json`, gerar access key,
+gravar em `poc-idp/crossplane-poc-credentials`.
+
+**Próximo passo imediato:** executar esse bootstrap de fato na conta `hub` (`094289743086`),
+seguindo `aws/docs/bootstrap/00-iam-user-crossplane.md` — requer credencial
+`AdministratorAccess` ativa (não a `crossplane-poc`, que ainda não existe). Depois:
+k3d + Crossplane + providers → Network, conforme `aws/eks/` e `aws/docs/network/`.
 
 ## Open Questions / Hypotheses
 
@@ -64,9 +69,9 @@ cat aws/docs/accounts/CLAUDE.md
 
 ## Next Steps
 
-- [ ] Bootstrap admin na conta `hub` (`094289743086`): criar IAM user `crossplane-poc`, anexar
-      `aws/eks/providers/bootstrap-iam-policy.json`, gravar creds no Secrets Manager
-      (`poc-idp/crossplane-poc-credentials`).
+- [ ] Executar o bootstrap admin na conta `hub` (`094289743086`), seguindo
+      `aws/docs/bootstrap/00-iam-user-crossplane.md` (doc já escrita — falta rodar contra a
+      conta real).
 - [ ] Rodar `aws/eks/scripts/install-crossplane` + `install-providers` (k3d local).
 - [ ] Configurar **network** na `hub` (ver `aws/docs/network/` + `aws/eks/resources/network/`).
 - [ ] Decidir base do domínio: delegar `wasp.silvios.me` (ou subzona `aws.wasp.silvios.me`)

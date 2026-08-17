@@ -47,6 +47,7 @@ por qualquer time.
 
 | # | Domínio | Índice | Estado |
 |---|---|---|---|
+| 0 | **Bootstrap** — conta hub vazia → IAM user da automação com credencial | [`bootstrap/CLAUDE.md`](bootstrap/CLAUDE.md) | ✅ completo |
 | 1 | **Network** — hub-and-spoke, VPC/subnets, TGW, VPN, DNS, CIDR | [`network/CLAUDE.md`](network/CLAUDE.md) | ✅ completo |
 | 2 | **Accounts & Organizations** — conta vazia → hub → contas por projeto | [`accounts/CLAUDE.md`](accounts/CLAUDE.md) | ✅ completo |
 | 3 | **Security & IAM** — perímetro de identidade, menor privilégio, roles cross-account, RAM, Pod Identity, VPN auth, detecção | [`security/CLAUDE.md`](security/CLAUDE.md) | ✅ completo |
@@ -54,9 +55,11 @@ por qualquer time.
 | 5 | **Compute** — EKS como spoke, node groups, add-ons + Pod Identity, RBAC, ingress, GitOps | [`compute/CLAUDE.md`](compute/CLAUDE.md) | ✅ completo |
 | 6 | **Observability** — logs, métricas, alertas de conectividade, custo como sinal | [`observability/CLAUDE.md`](observability/CLAUDE.md) | ✅ completo |
 
-> A ordem de construção segue a dependência real: **network primeiro** (a fundação sobre a
-> qual contas, clusters e VPNs se apoiam). Os **6 domínios estão completos** — o próximo passo
-> do projeto é retomar o schema detalhado e a spec de implementação (ver `../../HANDOFF.md`).
+> A ordem de construção segue a dependência real: **bootstrap primeiro** (dá à automação a
+> credencial que ela usa em todos os domínios seguintes), depois **network** (a fundação
+> sobre a qual contas, clusters e VPNs se apoiam). Os **7 domínios estão completos** — o
+> próximo passo do projeto é retomar o schema detalhado e a spec de implementação (ver
+> `../../HANDOFF.md`).
 
 ## Relação com o resto do repo
 
