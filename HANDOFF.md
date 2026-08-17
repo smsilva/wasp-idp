@@ -2,48 +2,75 @@
 
 ## Why
 
-Evoluir o Backstage IDP PoC para uma plataforma multi-tenant real, servindo ~120 projetos (clientes) com isolamento estrito de segurança por projeto (uma instância Backstage por projeto, namespaces separados, GitOps repo isolado, GitHub org separada).
+Exercitar a PoC AWS EKS-via-Crossplane (arquitetura de referência hub-and-spoke) na conta
+AWS **pessoal** do Silvio, de forma genérica, antes de qualquer ambiente corporativo. A pasta
+`aws/` foi copiada de um exemplo interno e teve **todas** as referências de projeto/organização
+removidas (branding, tickets, nomes de sprint, apps não-desejados).
 
-Design spec completo em `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md`.
+Abordagem de genericização (registrada em `aws/CLAUDE.md`): placeholders `<...>` para
+valores por-conta/segredos; valores genéricos concretos (`platform.example.com`, `poc-eks`)
+onde o token é identificador executável de YAML/Crossplane. Valores reais da conta pessoal
+ficam em `CLAUDE.local.md` (gitignored), não versionados.
 
-Abordagem: Walk Skeleton — exercitar ponta a ponta localmente (k3d) antes de atacar Azure real. O exercício local (k3d + ArgoCD + Crossplane + 10 Azure providers) está concluído em `scripts/cluster-zero/`.
+Rejeitado: usar `<...>` em campos executáveis (quebraria API groups do k8s); manter apêndices
+`99-apendice-cit.md` (deletados — eram só valores reais internos).
 
 ## In Progress
 
-Último passo: plano de implementação do cluster-zero Terraform escrito e commitado em `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`. Branch `dev` pushed a `origin`.
+Último passo: concluída a limpeza de `aws/` — removidas referências `ciandt`/`flow-*`,
+`litellm`, tickets `FLWP-*` e códigos de história `Hxx` (substituídos pela feature que
+representam). Criado `CLAUDE.local.md` com a estrutura da AWS Organization pessoal (accounts
+já criadas via console). Mudanças de `aws/` estão staged.
 
-**Próximo passo imediato:** executar o plano `2026-08-07-cluster-zero-terraform.md` (Inline Execution ou Subagent-Driven — usuário não escolheu ainda). Escolha foi deixada para a próxima sessão.
+**Próximo passo imediato:** iniciar a configuração de **network na conta `hub`**
+(`094289743086`). Antes: **bootstrap do IAM user `crossplane-poc`** na `hub` (+ secret
+`poc-idp/crossplane-poc-credentials` no Secrets Manager), depois k3d + Crossplane + providers
+→ Network, conforme `aws/eks/` e `aws/docs/network/`.
 
 ## Open Questions / Hypotheses
 
-- Convenção de naming/topics para os repos `azure-*-foundation` existentes ainda não definida — bloqueante para o script de bulk-registration do catálogo (item 5 do backlog).
-- Automação de criação dos ~120 repos GitOps por projeto (via `github_repository` Terraform provider ou GitHub API) ainda não planejada — mencionada como risco no spec.
-- Subscrição Azure disponível para o apply real do cluster-zero Terraform? (não confirmado — o ciclo de teste do plano é só `fmt`/`validate`/`tflint` por isso).
+- **Base do domínio (a decidir):** `wasp.silvios.me` está em Azure DNS; pode-se delegar
+  subzona para Route53. Definir se a âncora AWS é o domínio inteiro ou uma subzona
+  (ex.: `aws.wasp.silvios.me`). Enquanto não delegado, sem `<hosted-zone-id>` → fatias
+  DNS/ingress/TLS (fases 88+/100+) bloqueadas; rede/EKS/Pod Identity/ESO rodam sem isso.
+- **Como parametrizar** os valores hoje em `CLAUDE.local.md` (chart values? env? EnvironmentConfig?)
+  — decidir depois de ter uma execução ponta a ponta.
+- Estrutura de OU pessoal (Infra/Workloads→Production/Sandbox) difere da doc de accounts
+  (Infra=hub + conta-por-projeto) — mapear ao parametrizar.
+- Track paralelo (Azure cluster-zero + Backstage multi-tenant) permanece pausado; ver
+  `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`. Não é o foco desta retomada.
 
 ## Known Broken
 
-1. `idp/app-config.production.yaml` — `guest: {}` presente — **intentional** (PoC; remover antes de produção real).
-2. `idp/packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC; substituir por `PermissionPolicy` real antes de produção).
-3. `idp/packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog: true` — **intentional** (PoC; restringir por domínio ou catálogo antes de produção).
+1. `aws/` inteira é **não-executada** nesta conta — **intentional**: só copiada e genericizada,
+   nada foi provisionado nem validado contra a AWS pessoal ainda.
+2. IAM user `crossplane-poc` e secret `poc-idp/crossplane-poc-credentials` **não existem** na
+   conta `hub` — **intentional**: bootstrap manual de admin pendente (ver `aws/CLAUDE.md`).
+3. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — **intentional**: são Helm
+   templates (`{{ }}`).
+4. `idp/app-config.production.yaml` — `guest: {}` presente — **intentional** (PoC).
+5. `idp/packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC).
+6. `idp/packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog:
+   true` — **intentional** (PoC).
 
 ## How to Resume
 
 ```bash
-cd /home/silvios/git/backstage
-git checkout dev
-# Para executar o próximo plano:
-cat docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md
+cd /home/silvios/git/wasp-idp
+cat CLAUDE.local.md            # valores reais da AWS Organization pessoal
+cat aws/CLAUDE.md              # contexto operacional + convenção de genericização
+cat aws/docs/accounts/CLAUDE.md
 ```
 
 ## Next Steps
 
-### Imediato
-- [ ] Executar `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md` (cluster-zero Terraform: AKS + ArgoCD no Azure real). Escolher Inline Execution (opção 2) ou Subagent-Driven (opção 1).
-
-### Backlog (em ordem de dependência)
-- [ ] **#2 Platform Library** — repo central com Crossplane Compositions/XRDs + umbrella Helm chart versionado. Escrever o plano quando o cluster-zero Terraform estiver aplicado (nomes de recursos AKS reais necessários).
-- [ ] **#3 GitOps repo por projeto** — ApplicationSet + Kind de onboarding + automação de criação dos repos (~120). Depende de #2.
-- [ ] **#4 Provisionamento Backstage por projeto** — Helm chart parametrizado + External Secrets ← AKV. Depende de #2 e #3.
-- [ ] **#5 Catálogo Backstage** — Software Template para novos serviços + script de bulk-registration para repos existentes. Depende de convenção de naming acordada com o time.
+- [ ] Bootstrap admin na conta `hub` (`094289743086`): criar IAM user `crossplane-poc`, anexar
+      `aws/eks/providers/bootstrap-iam-policy.json`, gravar creds no Secrets Manager
+      (`poc-idp/crossplane-poc-credentials`).
+- [ ] Rodar `aws/eks/scripts/install-crossplane` + `install-providers` (k3d local).
+- [ ] Configurar **network** na `hub` (ver `aws/docs/network/` + `aws/eks/resources/network/`).
+- [ ] Decidir base do domínio: delegar `wasp.silvios.me` (ou subzona `aws.wasp.silvios.me`)
+      de Azure DNS → Route53, e registrar a hosted zone antes das fatias DNS/ingress/TLS.
+- [ ] Definir estratégia de parametrização dos valores hoje em `CLAUDE.local.md`.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.

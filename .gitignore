@@ -7,3 +7,6 @@ coverage/
 *.local
 .env
 *.env
+
+# Personal/local context (not versioned)
+CLAUDE.local.md
