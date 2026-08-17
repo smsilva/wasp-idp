@@ -1,0 +1,94 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $ed := .Values.externalDns -}}
+{{- if $ed.enabled }}
+# Pod Identity do external-dns (fatia 2). Mesmo MOLDE da fase 80/ESO
+# (Role -> inline policy -> PodIdentityAssociation), trocando a policy de Secrets Manager
+# pela de Route53 e o par ns/SA para o do external-dns. Trust fixa pods.eks.amazonaws.com
+# (não OIDC), igual ao Pod Identity base. Aplicada ANTES do Release (fase 88): a association é recurso
+# AWS puro (não exige que namespace/SA existam), então criá-la primeiro faz o pod do
+# external-dns nascer já com credencial — elimina a race sem rollout restart.
+---
+# Role assumida pelos pods do external-dns via Pod Identity.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-external-dns-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "pods.eks.amazonaws.com"
+            },
+            "Action": [
+              "sts:AssumeRole",
+              "sts:TagSession"
+            ]
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-external-dns-role
+---
+# Inline policy Route53 escopada à zona compartilhada (3º critério de aceite — alterar OUTRA
+# zona é negado). A escrita (ChangeResourceRecordSets) fica presa ao ARN da hostedZoneId; as
+# ações de leitura (ListHostedZones/ListResourceRecordSets/ListTagsForResources) EXIGEM
+# Resource "*" no Route53 (ListHostedZones não suporta resource-level scoping) — são só
+# leitura, não permitem mutar registro algum, então não abrem brecha de isolamento. Quem
+# garante que o external-dns não pisa em registro alheio na zona é o par txtOwnerId +
+# policy=upsert-only (regra 1/2/4 de aceite), não a IAM.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: {{ $fullClusterName }}-external-dns-route53-policy
+spec:
+  forProvider:
+    roleRef:
+      name: {{ $fullClusterName }}-external-dns-role
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "ChangeRecordsScopedToZone",
+            "Effect": "Allow",
+            "Action": [
+              "route53:ChangeResourceRecordSets"
+            ],
+            "Resource": "arn:aws:route53:::hostedzone/{{ $ed.hostedZoneId }}"
+          },
+          {
+            "Sid": "ListZonesReadOnly",
+            "Effect": "Allow",
+            "Action": [
+              "route53:ListHostedZones",
+              "route53:ListResourceRecordSets",
+              "route53:ListTagsForResources"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+---
+# Liga a Role ao SA do external-dns (criado pelo Release, fase 88). A partir daqui os pods do
+# external-dns assumem a Role via Pod Identity — sem serviceAccountRoleArn (isso seria IRSA).
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: PodIdentityAssociation
+metadata:
+  name: {{ $fullClusterName }}-external-dns-assoc
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    roleArnRef:
+      name: {{ $fullClusterName }}-external-dns-role
+    namespace: {{ $ed.namespace | quote }}
+    serviceAccount: {{ $ed.serviceAccount | quote }}
+    tags:
+      Name: {{ $fullClusterName }}-external-dns-assoc
+{{- end }}

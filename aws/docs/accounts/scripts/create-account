@@ -1,0 +1,199 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria (ou reaproveita) uma conta-membro da Organization e a move para a OU pedida
+  (ver aws/docs/accounts/03-provisionamento-de-contas.md). Idempotente: se já existir
+  uma conta ACTIVE com o --name pedido, só garante que está na OU certa.
+
+    Options:
+
+      -h,  --help              Show this help
+      -n,  --name              Nome da conta (obrigatório, ex.: hub, sandbox-01, acme-prod)
+      -e,  --email-domain      Domínio para o e-mail (obrigatório, ex.: example.com)
+      -u,  --email-user        Base da caixa (mailbox) para plus-addressing (opcional).
+                                Com ela:  <email-user>+<name>@<email-domain>
+                                Sem ela:  <name>+aws@<email-domain>  (catch-all corporativo)
+           --ou                infra | sandbox | production (obrigatório)
+
+  Dois modos de e-mail (o endereço vira o root user da conta e precisa ser único em
+  TODA a AWS, além de válido/controlado por você):
+
+    - Domínio corporativo com catch-all: omita --email-user. Ex.: --name hub
+      --email-domain <email-domain>  ->  hub+aws@<email-domain> (roteia pelo catch-all).
+
+    - Caixa pessoal (Gmail/Workspace): passe --email-user com a SUA caixa. O Gmail
+      entrega qualquer <caixa>+tag@gmail.com em <caixa>@gmail.com, então o nome da
+      conta vira o tag e cada conta fica única. Ex.: --email-user smsilva
+      --name hub --email-domain gmail.com  ->  smsilva+hub@gmail.com.
+
+    Examples:
+
+      ${this_script_name} --name hub --email-domain example.com --ou infra
+
+      ${this_script_name} --name hub --email-user smsilva --email-domain gmail.com --ou infra
+
+      ${this_script_name} --name acme-sandbox --email-domain example.com --ou sandbox
+
+      ${this_script_name} --name acme-prod --email-domain example.com --ou production
+EOF
+}
+
+name=""
+email_domain=""
+email_user=""
+ou=""
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -n | --name )
+      shift
+      name="${1}"
+      ;;
+
+    -e | --email-domain )
+      shift
+      email_domain="${1}"
+      ;;
+
+    -u | --email-user )
+      shift
+      email_user="${1}"
+      ;;
+
+    --ou )
+      shift
+      ou="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -z "${name}" ] || [ -z "${email_domain}" ] || [ -z "${ou}" ]; then
+  echo "Faltam argumentos obrigatórios: --name, --email-domain e --ou." >&2
+  show_usage
+  exit 1
+fi
+
+case "${ou}" in
+  infra | sandbox | production ) ;;
+  * )
+    echo "--ou inválido: '${ou}' (use infra, sandbox ou production)" >&2
+    exit 1
+    ;;
+esac
+
+if [ "${ou}" == "production" ]; then
+  echo "ATENÇÃO: criando conta na OU Production." >&2
+  echo "Confirme que já validou o mesmo setup em Sandbox antes de prosseguir aqui." >&2
+fi
+
+set -e
+
+check
+
+if [ -n "${email_user}" ]; then
+  email="${email_user}+${name}@${email_domain}"
+else
+  email="${name}+aws@${email_domain}"
+fi
+root_id="$(aws organizations list-roots --query 'Roots[0].Id' --output text)"
+
+case "${ou}" in
+  infra )
+    ou_name="Infra"
+    parent_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Infra'].Id" --output text)"
+    ;;
+  sandbox )
+    ou_name="Sandbox"
+    workloads_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Workloads'].Id" --output text)"
+    parent_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${workloads_id}" --query "OrganizationalUnits[?Name=='Sandbox'].Id" --output text)"
+    ;;
+  production )
+    ou_name="Production"
+    workloads_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Workloads'].Id" --output text)"
+    parent_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${workloads_id}" --query "OrganizationalUnits[?Name=='Production'].Id" --output text)"
+    ;;
+esac
+
+if [ -z "${parent_id}" ]; then
+  echo "OU '${ou_name}' não encontrada — rode ${this_script_directory}/create-organizational-unit-structure primeiro." >&2
+  exit 1
+fi
+
+existing_account_id="$(aws organizations list-accounts \
+  --query "Accounts[?Name=='${name}' && Status=='ACTIVE'].Id" --output text)"
+
+if [ -n "${existing_account_id}" ]; then
+  echo "ok  conta '${name}' já existe (${existing_account_id}) — garantindo que está em ${ou_name}"
+  current_parent_id="$(aws organizations list-parents --child-id "${existing_account_id}" \
+    --query 'Parents[0].Id' --output text)"
+  if [ "${current_parent_id}" != "${parent_id}" ]; then
+    aws organizations move-account --account-id "${existing_account_id}" \
+      --source-parent-id "${current_parent_id}" --destination-parent-id "${parent_id}"
+    echo "movida  conta '${name}' -> ${ou_name}"
+  else
+    echo "ok  já está em ${ou_name}"
+  fi
+  echo "${existing_account_id}"
+  exit 0
+fi
+
+echo "Criando conta '${name}' (${email}) em ${ou_name}..."
+request_id="$(aws organizations create-account --email "${email}" --account-name "${name}" \
+  --query CreateAccountStatus.Id --output text)"
+
+echo "Aguardando provisionamento (request ${request_id})..."
+account_id=""
+for _ in $(seq 1 30); do
+  status_json="$(aws organizations describe-create-account-status --create-account-request-id "${request_id}")"
+  state="$(echo "${status_json}" | jq -r .CreateAccountStatus.State)"
+
+  if [ "${state}" == "SUCCEEDED" ]; then
+    account_id="$(echo "${status_json}" | jq -r .CreateAccountStatus.AccountId)"
+    break
+  fi
+
+  if [ "${state}" == "FAILED" ]; then
+    reason="$(echo "${status_json}" | jq -r .CreateAccountStatus.FailureReason)"
+    echo "create-account FALHOU: ${reason}" >&2
+    exit 1
+  fi
+
+  sleep 10
+done
+
+if [ -z "${account_id}" ]; then
+  echo "create-account não concluiu em tempo — verifique manualmente: aws organizations describe-create-account-status --create-account-request-id ${request_id}" >&2
+  exit 1
+fi
+
+echo "conta criada  ${name} = ${account_id}"
+
+aws organizations move-account --account-id "${account_id}" \
+  --source-parent-id "${root_id}" --destination-parent-id "${parent_id}"
+echo "movida  '${name}' -> ${ou_name}"
+
+echo "${account_id}"

@@ -1,0 +1,81 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Remove uma aplicação da fatia 2 instalada pelo 'deploy' (helm uninstall). NÃO toca
+  na plataforma (istio/cert-manager/external-dns/LB Controller) nem no cluster — só
+  desfaz o que o 'deploy <app>' criou.
+
+  O external-dns roda com policy=upsert-only: ele NÃO deleta o A/TXT do host ao
+  remover o Ingress-fantasma. O registro DNS órfão na zona compartilhada é esperado;
+  limpar à mão só com autorização p/ mexer na zona (ver README, seção de apps).
+
+    Options:
+
+      -h,  --help              Show this help
+      -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
+      -c,  --context           contexto kubectl do EKS (default: poc-eks-<id>)
+
+    Examples:
+
+      ${this_script_name} echo
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -i | --cluster-id )
+      shift
+      cluster_id="${1}"
+      ;;
+
+    -c | --context )
+      shift
+      context="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+app="${1:?informe a app a remover (ex.: ${this_script_name} echo)}"
+
+set -e
+
+id_file="${this_script_directory}/../.cluster-id"
+
+if [ -z "${cluster_id}" ]; then
+  if [ ! -f "${id_file}" ]; then
+    echo "Sem ${id_file} e sem --cluster-id." >&2
+    exit 1
+  fi
+  cluster_id="$(cat "${id_file}")"
+fi
+
+context="${context:-poc-eks-${cluster_id}}"
+
+echo "Removendo '${app}' do contexto ${context} (helm uninstall)..."
+helm --kube-context "${context}" uninstall "${app}"
+
+echo
+echo "Feito. A plataforma permanece intacta."
+echo "Lembrete: o A/TXT de DNS do host NÃO é removido (external-dns upsert-only) — ver README."

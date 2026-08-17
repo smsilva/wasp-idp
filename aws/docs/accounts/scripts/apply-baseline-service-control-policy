@@ -1,0 +1,285 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Aplica os guardrails baseline via Service Control Policy (ver
+  aws/docs/accounts/02-guardrails-scp.md):
+
+    Root         -> DenyLeaveOrganization, ProtectCloudTrail
+    Workloads    -> DenyOutsideApprovedRegions, RequireImdsv2, DenyRootUser
+    (Infra recebe os mesmos guardrails de Workloads nesta baseline mínima)
+
+  Idempotente: reaproveita qualquer policy já existente com o mesmo nome; reanexa só
+  se ainda não estiver anexada ao target.
+
+    Options:
+
+      -h,  --help              Show this help
+      -r,  --regions           Regiões aprovadas, separadas por vírgula (default: us-east-1)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --regions us-east-1,sa-east-1
+EOF
+}
+
+regions="us-east-1"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -r | --regions )
+      shift
+      regions="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+# SCPs só podem ser anexadas se o policy type estiver habilitado na Root — habilitar é
+# idempotente na prática: se já estiver ENABLED, pulamos; a habilitação é assíncrona
+# (PENDING_ENABLE por alguns segundos), então esperamos virar ENABLED antes de seguir.
+enable_scp_policy_type() {
+  local root_id="${1}"
+
+  local status
+  status="$(aws organizations list-roots \
+    --query "Roots[?Id=='${root_id}'] | [0].PolicyTypes[?Type=='SERVICE_CONTROL_POLICY'].Status | [0]" \
+    --output text)"
+
+  if [ "${status}" == "ENABLED" ]; then
+    echo "ok  SERVICE_CONTROL_POLICY já habilitado na Root" >&2
+    return 0
+  fi
+
+  if [ "${status}" != "PENDING_ENABLE" ]; then
+    echo "Habilitando SERVICE_CONTROL_POLICY na Root..." >&2
+    aws organizations enable-policy-type \
+      --root-id "${root_id}" --policy-type SERVICE_CONTROL_POLICY > /dev/null
+  fi
+
+  for _ in $(seq 1 12); do
+    status="$(aws organizations list-roots \
+      --query "Roots[?Id=='${root_id}'] | [0].PolicyTypes[?Type=='SERVICE_CONTROL_POLICY'].Status | [0]" \
+      --output text)"
+    if [ "${status}" == "ENABLED" ]; then
+      echo "ok  SERVICE_CONTROL_POLICY habilitado na Root" >&2
+      return 0
+    fi
+    sleep 5
+  done
+
+  echo "SERVICE_CONTROL_POLICY não ficou ENABLED em tempo — verifique 'aws organizations list-roots'." >&2
+  exit 1
+}
+
+# aws:RequestedRegion precisa de uma lista JSON de strings.
+regions_json="$(echo "${regions}" | tr ',' '\n' | jq -R . | jq -s -c .)"
+
+find_or_create_policy() {
+  local name="${1}"
+  local description="${2}"
+  local content="${3}"
+
+  local existing_id
+  existing_id="$(aws organizations list-policies --filter SERVICE_CONTROL_POLICY \
+    --query "Policies[?Name=='${name}'].Id" --output text)"
+
+  if [ -n "${existing_id}" ]; then
+    echo "ok  policy '${name}' já existe (${existing_id}) — atualizando conteúdo" >&2
+    aws organizations update-policy --policy-id "${existing_id}" --content "${content}" > /dev/null
+    echo "${existing_id}"
+    return 0
+  fi
+
+  local new_id
+  new_id="$(aws organizations create-policy \
+    --name "${name}" --description "${description}" \
+    --type SERVICE_CONTROL_POLICY --content "${content}" \
+    --query Policy.PolicySummary.Id --output text)"
+  echo "criada  policy '${name}' (${new_id})" >&2
+  echo "${new_id}"
+}
+
+attach_if_missing() {
+  local policy_id="${1}"
+  local target_id="${2}"
+
+  local already_attached
+  already_attached="$(aws organizations list-policies-for-target \
+    --target-id "${target_id}" --filter SERVICE_CONTROL_POLICY \
+    --query "Policies[?Id=='${policy_id}'].Id" --output text)"
+
+  if [ -n "${already_attached}" ]; then
+    echo "ok  já anexada em ${target_id}" >&2
+    return 0
+  fi
+
+  aws organizations attach-policy --policy-id "${policy_id}" --target-id "${target_id}"
+  echo "anexada em ${target_id}" >&2
+}
+
+root_id="$(aws organizations list-roots --query 'Roots[0].Id' --output text)"
+
+enable_scp_policy_type "${root_id}"
+
+workloads_id="$(aws organizations list-organizational-units-for-parent \
+  --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Workloads'].Id" --output text)"
+infra_id="$(aws organizations list-organizational-units-for-parent \
+  --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Infra'].Id" --output text)"
+
+if [ -z "${workloads_id}" ] || [ -z "${infra_id}" ]; then
+  echo "OUs Infra/Workloads não encontradas — rode ${this_script_directory}/create-organizational-unit-structure primeiro." >&2
+  exit 1
+fi
+
+deny_leave_org_content=$(cat <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyLeaveOrganization",
+      "Effect": "Deny",
+      "Action": "organizations:LeaveOrganization",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+)
+
+protect_cloudtrail_content=$(cat <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProtectCloudTrail",
+      "Effect": "Deny",
+      "Action": [
+        "cloudtrail:StopLogging",
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:UpdateTrail"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+)
+
+deny_outside_regions_content=$(cat <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyOutsideApprovedRegions",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:*",
+        "organizations:*",
+        "route53:*",
+        "route53domains:*",
+        "cloudfront:*",
+        "support:*",
+        "sts:*",
+        "budgets:*",
+        "waf:*",
+        "wafv2:*",
+        "health:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": ${regions_json}
+        }
+      }
+    }
+  ]
+}
+EOF
+)
+
+require_imdsv2_content=$(cat <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RequireImdsv2",
+      "Effect": "Deny",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": {
+        "StringNotEquals": {
+          "ec2:MetadataHttpTokens": "required"
+        }
+      }
+    }
+  ]
+}
+EOF
+)
+
+deny_root_user_content=$(cat <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyRootUser",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "aws:PrincipalArn": "arn:aws:iam::*:root"
+        }
+      }
+    }
+  ]
+}
+EOF
+)
+
+deny_leave_org_id="$(find_or_create_policy DenyLeaveOrganization "Impede sair da Organization" "${deny_leave_org_content}")"
+protect_cloudtrail_id="$(find_or_create_policy ProtectCloudTrail "Protege CloudTrail contra desativação" "${protect_cloudtrail_content}")"
+deny_outside_regions_id="$(find_or_create_policy DenyOutsideApprovedRegions "Restringe a regiões aprovadas: ${regions}" "${deny_outside_regions_content}")"
+require_imdsv2_id="$(find_or_create_policy RequireImdsv2 "Exige IMDSv2 em toda instância EC2" "${require_imdsv2_content}")"
+deny_root_user_id="$(find_or_create_policy DenyRootUser "Nega ações do usuário root da conta-membro" "${deny_root_user_content}")"
+
+echo "Anexando guardrails de Organization inteira (Root)..."
+attach_if_missing "${deny_leave_org_id}" "${root_id}"
+attach_if_missing "${protect_cloudtrail_id}" "${root_id}"
+
+echo "Anexando guardrails de baseline em Workloads..."
+attach_if_missing "${deny_outside_regions_id}" "${workloads_id}"
+attach_if_missing "${require_imdsv2_id}" "${workloads_id}"
+attach_if_missing "${deny_root_user_id}" "${workloads_id}"
+
+echo "Anexando os mesmos guardrails de baseline em Infra..."
+attach_if_missing "${deny_outside_regions_id}" "${infra_id}"
+attach_if_missing "${require_imdsv2_id}" "${infra_id}"
+attach_if_missing "${deny_root_user_id}" "${infra_id}"
+
+echo ""
+echo "Guardrails baseline aplicados."

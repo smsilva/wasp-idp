@@ -1,0 +1,267 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $alb := .Values.awsLoadBalancerController -}}
+{{- if $alb.enabled }}
+# Pod Identity do AWS Load Balancer Controller (fatia 2). Mesmo MOLDE das fases
+# 80/86 (Role -> inline policy -> PodIdentityAssociation), trocando a policy pela de
+# ELBv2/EC2 necessária para o controller criar/gerenciar NLB e alvos. Trust fixa
+# pods.eks.amazonaws.com (não OIDC/IRSA), igual às fases anteriores. Aplicada ANTES do
+# Release (fase 92): a association é recurso AWS puro, então criá-la primeiro faz o pod
+# do controller nascer já com credencial — elimina a race sem rollout restart.
+---
+# Role assumida pelos pods do LB Controller via Pod Identity.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-alb-controller-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "pods.eks.amazonaws.com"
+            },
+            "Action": [
+              "sts:AssumeRole",
+              "sts:TagSession"
+            ]
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-alb-controller-role
+---
+# Inline policy com o conjunto de statements padrão do AWS Load Balancer Controller
+# (fonte: doc oficial do controller, statements de describe EC2/ELBv2 + criação/gestão de
+# NLB/ALB, target groups, listeners e regras). Ações mutáveis de LB/TG existente são
+# condicionadas à tag elbv2.k8s.aws/cluster (o controller sempre seta essa tag); describe/
+# list não suportam resource-level scoping no ELBv2/EC2, por isso Resource "*" nessas.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: {{ $fullClusterName }}-alb-controller-policy
+spec:
+  forProvider:
+    roleRef:
+      name: {{ $fullClusterName }}-alb-controller-role
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "CreateServiceLinkedRoleForElb",
+            "Effect": "Allow",
+            "Action": ["iam:CreateServiceLinkedRole"],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {
+                "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
+              }
+            }
+          },
+          {
+            "Sid": "DescribeEc2AndElbv2ReadOnly",
+            "Effect": "Allow",
+            "Action": [
+              "ec2:DescribeAccountAttributes",
+              "ec2:DescribeAddresses",
+              "ec2:DescribeAvailabilityZones",
+              "ec2:DescribeInternetGateways",
+              "ec2:DescribeVpcs",
+              "ec2:DescribeVpcPeeringConnections",
+              "ec2:DescribeSubnets",
+              "ec2:DescribeSecurityGroups",
+              "ec2:DescribeInstances",
+              "ec2:DescribeNetworkInterfaces",
+              "ec2:DescribeTags",
+              "ec2:GetCoipPoolUsage",
+              "ec2:GetManagedPrefixListEntries",
+              "ec2:DescribeCoipPools",
+              "elasticloadbalancing:DescribeLoadBalancers",
+              "elasticloadbalancing:DescribeLoadBalancerAttributes",
+              "elasticloadbalancing:DescribeListeners",
+              "elasticloadbalancing:DescribeListenerCertificates",
+              "elasticloadbalancing:DescribeSSLPolicies",
+              "elasticloadbalancing:DescribeRules",
+              "elasticloadbalancing:DescribeTargetGroups",
+              "elasticloadbalancing:DescribeTargetGroupAttributes",
+              "elasticloadbalancing:DescribeTargetHealth",
+              "elasticloadbalancing:DescribeTags",
+              "elasticloadbalancing:DescribeListenerAttributes"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "AcmIamWafShieldReadOnly",
+            "Effect": "Allow",
+            "Action": [
+              "cognito-idp:DescribeUserPoolClient",
+              "acm:ListCertificates",
+              "acm:DescribeCertificate",
+              "iam:ListServerCertificates",
+              "iam:GetServerCertificate",
+              "waf-regional:GetWebACL",
+              "waf-regional:GetWebACLForResource",
+              "waf-regional:AssociateWebACL",
+              "waf-regional:DisassociateWebACL",
+              "wafv2:GetWebACL",
+              "wafv2:GetWebACLForResource",
+              "wafv2:AssociateWebACL",
+              "wafv2:DisassociateWebACL",
+              "shield:DescribeProtection",
+              "shield:GetSubscriptionState",
+              "shield:DescribeSubscription",
+              "shield:CreateProtection",
+              "shield:DeleteProtection"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "ManageSecurityGroupsForLb",
+            "Effect": "Allow",
+            "Action": [
+              "ec2:AuthorizeSecurityGroupIngress",
+              "ec2:RevokeSecurityGroupIngress",
+              "ec2:CreateSecurityGroup",
+              "ec2:CreateTags",
+              "ec2:DeleteTags",
+              "ec2:AuthorizeSecurityGroupEgress",
+              "ec2:RevokeSecurityGroupEgress",
+              "ec2:DeleteSecurityGroup"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "CreateLoadBalancerAndTargetGroup",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:CreateLoadBalancer",
+              "elasticloadbalancing:CreateTargetGroup"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "Null": {
+                "aws:RequestedRegion": "false"
+              }
+            }
+          },
+          {
+            "Sid": "ManageListenersAndRules",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:CreateListener",
+              "elasticloadbalancing:DeleteListener",
+              "elasticloadbalancing:CreateRule",
+              "elasticloadbalancing:DeleteRule"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "TagLbAndTargetGroupScopedToCluster",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:AddTags",
+              "elasticloadbalancing:RemoveTags"
+            ],
+            "Resource": [
+              "arn:aws:elasticloadbalancing:*:*:targetgroup/*/*",
+              "arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*",
+              "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"
+            ],
+            "Condition": {
+              "Null": {
+                "aws:RequestedRegion": "false",
+                "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
+              }
+            }
+          },
+          {
+            "Sid": "TagListenersAndListenerRules",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:AddTags",
+              "elasticloadbalancing:RemoveTags"
+            ],
+            "Resource": [
+              "arn:aws:elasticloadbalancing:*:*:listener/net/*/*/*",
+              "arn:aws:elasticloadbalancing:*:*:listener/app/*/*/*",
+              "arn:aws:elasticloadbalancing:*:*:listener-rule/net/*/*/*",
+              "arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*"
+            ]
+          },
+          {
+            "Sid": "ModifyLbAndTargetGroupScopedToCluster",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:ModifyLoadBalancerAttributes",
+              "elasticloadbalancing:SetIpAddressType",
+              "elasticloadbalancing:SetSecurityGroups",
+              "elasticloadbalancing:SetSubnets",
+              "elasticloadbalancing:DeleteLoadBalancer",
+              "elasticloadbalancing:ModifyTargetGroup",
+              "elasticloadbalancing:ModifyTargetGroupAttributes",
+              "elasticloadbalancing:DeleteTargetGroup"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "Null": {
+                "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
+              }
+            }
+          },
+          {
+            "Sid": "RegisterAndDeregisterTargets",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:RegisterTargets",
+              "elasticloadbalancing:DeregisterTargets"
+            ],
+            "Resource": "arn:aws:elasticloadbalancing:*:*:targetgroup/*/*"
+          },
+          {
+            "Sid": "ManageListenerCertificatesAndWebAcl",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:SetWebAcl",
+              "elasticloadbalancing:ModifyListener",
+              "elasticloadbalancing:AddListenerCertificates",
+              "elasticloadbalancing:RemoveListenerCertificates",
+              "elasticloadbalancing:ModifyRule"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "SetRulePrioritiesForMultipleRules",
+            "Effect": "Allow",
+            "Action": [
+              "elasticloadbalancing:SetRulePriorities",
+              "elasticloadbalancing:DescribeRules",
+              "elasticloadbalancing:CreateRule",
+              "elasticloadbalancing:DeleteRule"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+---
+# Liga a Role ao SA do LB Controller (criado pelo Release, fase 92). A partir daqui os
+# pods do controller assumem a Role via Pod Identity — sem serviceAccountRoleArn (IRSA).
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: PodIdentityAssociation
+metadata:
+  name: {{ $fullClusterName }}-alb-controller-assoc
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    roleArnRef:
+      name: {{ $fullClusterName }}-alb-controller-role
+    namespace: {{ $alb.namespace | quote }}
+    serviceAccount: {{ $alb.serviceAccount | quote }}
+    tags:
+      Name: {{ $fullClusterName }}-alb-controller-assoc
+{{- end }}

@@ -1,0 +1,52 @@
+# NÃO ESCOLHIDA (17/08/2026: forks decididos a favor de filhos públicos + spec de topologia
+# explícita — este mundo de intenção/profile fica arquivado, não implementar) — status do
+# Environment desenhado como FICHA DE CATÁLOGO,
+# não só ready:bool. É o que um `kubectl get environments -A` ou o plugin Backstage/CLI
+# mostra ao "listar environments". Catálogo é dirigido pelo status do Environment (pai),
+# nunca pelos filhos (que são internos).
+#
+# Abaixo: como o status POPULADO apareceria (não é um claim aplicável — é a projeção que o
+# IDP lê). Campos escolhidos para responder as perguntas de catálogo: o que é, de quem,
+# em que estado, como acesso, quanto custa (sinal).
+apiVersion: platform.example.com/v1alpha1
+kind: Environment
+metadata:
+  name: env01
+  namespace: team-payments
+spec:
+  profile: prod
+  region: us-east-1
+status:
+  # --- estado de provisionamento (coluna principal da listagem) ---
+  phase: Ready                    # Provisioning | Ready | Degraded | Failed | Deleting
+  ready: true
+
+  # --- identidade / ownership (catálogo por tenant) ---
+  profile: prod                   # ecoa o spec p/ facilitar filtro na listagem
+  owner: team-payments            # deriva do namespace
+  createdAt: "2026-08-16T21:38:23Z"
+
+  # --- acesso (o que o cliente precisa p/ USAR o cluster) ---
+  clusterName: poc-eks-env01
+  clusterEndpoint: https://XXXX.eks.us-east-1.amazonaws.com
+  kubeconfigSecret: poc-eks-env01-kubeconfig   # ref do Secret-contrato (namespace do tenant?)
+  domain: env01.<root-domain>
+
+  # --- topologia resolvida (read-only, p/ quem quer inspecionar sem ver os filhos) ---
+  vpcId: vpc-0d4b06cd180ffec99
+  nodeGroupCount: 2
+  region: us-east-1
+
+  # --- sinal de custo (útil no catálogo de um IDP; aproximado, não billing real) ---
+  # costSignal: "~$0.30/h"        # control plane + nodes + NAT — a validar se vale a pena
+
+  # --- saúde por camada (diagnóstico do time de cloud sem kubectl nos filhos) ---
+  conditions:
+    - type: NetworkReady
+      status: "True"
+    - type: ClusterReady
+      status: "True"
+    - type: NodeGroupsReady
+      status: "True"
+    - type: Ready
+      status: "True"

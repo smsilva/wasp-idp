@@ -1,0 +1,28 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+---
+apiVersion: eks.aws.upbound.io/v1beta2
+kind: Cluster
+metadata:
+  name: {{ $fullClusterName }}
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    version: {{ .Values.k8sVersion | quote }}
+    roleArnRef:
+      name: {{ $fullClusterName }}-cluster-role
+    accessConfig:
+      authenticationMode: API
+    vpcConfig:
+      endpointPrivateAccess: {{ .Values.cluster.endpointPrivateAccess }}
+      endpointPublicAccess: {{ .Values.cluster.endpointPublicAccess }}
+      {{- with .Values.cluster.publicAccessCidrs }}
+      publicAccessCidrs:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      subnetIdRefs:
+        - name: {{ $fullClusterName }}-private-1a
+        - name: {{ $fullClusterName }}-private-1b
+        - name: {{ $fullClusterName }}-public-1a
+        - name: {{ $fullClusterName }}-public-1b
+    tags:
+      Name: {{ $fullClusterName }}

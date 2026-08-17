@@ -1,0 +1,16 @@
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: VPC
+metadata:
+  name: {{ include "eks.fullClusterName" . }}-vpc
+  labels:
+    poc.eks/cluster: {{ include "eks.fullClusterName" . }}
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    cidrBlock: {{ .Values.vpc.cidr }}
+    enableDnsSupport: true
+    enableDnsHostnames: true
+    tags:
+      Name: {{ include "eks.fullClusterName" . }}-vpc
+{{- include "eks.commonTags" . }}

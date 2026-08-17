@@ -1,0 +1,31 @@
+# NÃO ESCOLHIDA (17/08/2026: forks decididos a favor de filhos públicos + spec de topologia
+# explícita — este mundo de intenção/profile fica arquivado, não implementar) — Environment
+# como PRODUTO do IDP: spec de INTENÇÃO, não
+# topologia. É a entrada do catálogo consumida por Backstage/CLI/time-de-cloud.
+#
+# Princípio: o spec do Environment é DELIBERADAMENTE mais pobre que a soma dos filhos
+# (Network + Cluster + N NodeGroups). O cliente escolhe uma FINALIDADE (profile); o
+# Environment traduz profile -> topologia internamente. subnetIds, instanceType, scaling,
+# fan-out de nodegroups NÃO aparecem aqui — são consequência do profile, decisão interna.
+#
+# Namespaced (não cluster-scoped): o claim vive no namespace do time/cliente -> listagem
+# por tenant + RBAC por namespace de graça. Os filhos (infra AWS durável) continuam
+# cluster-scoped/hub-owned, compostos internamente e NÃO claimáveis por clientes.
+apiVersion: platform.example.com/v1alpha1
+kind: Environment
+metadata:
+  name: env01
+  namespace: team-payments        # tenant — habilita catálogo por time + RBAC
+spec:
+  profile: prod                   # dev | prod | ml — único campo que o cliente PRECISA decidir
+  region: us-east-1               # opcional (default us-east-1)
+  # domain: default do XRD (<root-domain>)
+  #
+  # profile define TUDO o que hoje é topologia explícita:
+  #   dev  -> 1 nodegroup t3.medium 1/1/2, endpoint público, single-AZ NAT
+  #   prod -> 2 nodegroups (workers t3.large 3/3/6 + spot), multi-AZ, HA
+  #   ml   -> nodegroup GPU + workers, scaling agressivo
+  #
+  # Porta de escape p/ o time de cloud (NÃO é o caminho principal do IDP):
+  # overrides:
+  #   nodeGroups: [...]           # sobrepõe o que o profile definiu — uso avançado só

@@ -1,0 +1,75 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: environment-eks
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: Environment
+  # ORQUESTRADOR FINO: o Environment não compõe mais os ~30 MRs diretamente —
+  # compõe 2 XRs FILHOS (Network + Cluster) como recursos compostos nativos e repassa os inputs
+  # do claim. Contrato externo INALTERADO: o claim Environment é idêntico ao de antes e o
+  # resultado provisionado é o mesmo (Network 16 MRs + Cluster 14 MRs = ~30 MRs, cluster ACTIVE,
+  # Secret-kubeconfig publicado). A Composition monolítica de ~768 linhas virou este arquivo.
+  #
+  # Pilar 5 PE 2.0 "Composable by design" / "Modular by design": cada camada (rede, cluster) é um
+  # módulo discreto, versionado e testável isoladamente; o Environment as COMPÕE. O cruzamento
+  # Network→Cluster acontece DENTRO das Compositions filhas, por label env=<id> (o mesmo id
+  # repassado aos 2) — o orquestrador só garante que ambos recebem o MESMO id.
+  #
+  # XR-compõe-XR: como Network/Cluster têm XRDs referenceable, o patch-and-transform aceita o
+  # apiVersion/kind do composite como base. O Ready do Environment (function-auto-ready) reflete
+  # "Network Ready AND Cluster Ready" automaticamente.
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        # Os 3 inputs comuns (id/prefix/region) vão para AMBOS os filhos via patchSet.
+        patchSets:
+          - name: common-inputs
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.id
+                toFieldPath: spec.id
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.prefix
+                toFieldPath: spec.prefix
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.region
+                toFieldPath: spec.region
+        resources:
+          # ---------- Network (16 MRs de rede) ----------
+          - name: network
+            base:
+              apiVersion: platform.example.com/v1alpha1
+              kind: Network
+            patches:
+              - type: PatchSet
+                patchSetName: common-inputs
+              # agrega o vpcId publicado pelo Network no status do Environment (visão única).
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.vpcId
+                toFieldPath: status.vpcId
+          # ---------- Cluster (14 MRs: EKS + IAM + ponte) ----------
+          # Recebe também o nodeGroup (só o Cluster o usa). Consome as subnets do Network acima
+          # por label env=<id> (mesmo id, garantido pelo patchSet common-inputs).
+          - name: cluster
+            base:
+              apiVersion: platform.example.com/v1alpha1
+              kind: Cluster
+            patches:
+              - type: PatchSet
+                patchSetName: common-inputs
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.nodeGroup
+                toFieldPath: spec.nodeGroup
+              # agrega o clusterName publicado pelo Cluster no status do Environment.
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.clusterName
+                toFieldPath: status.clusterName

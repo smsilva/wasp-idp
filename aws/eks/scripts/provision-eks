@@ -1,0 +1,297 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Provisiona o EKS em fases (10->65 base + 72->88 plataforma ESO/external-dns +
+  90->106 AWS LB Controller/istio/cert-manager), com kubectl wait nas
+  barreiras de readiness. 70-access NÃO entra aqui (depende do callerArn ->
+  configure-access).
+
+    Options:
+
+      -h,  --help              Show this help
+      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -i,  --cluster-id        clusterId (default: reusa aws/eks/.cluster-id ou gera)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} \\
+        --cluster-name poc-idp
+
+      ${this_script_name} \\
+        --cluster-id abc12
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -c | --cluster-name )
+      shift
+      cluster_name="${1}"
+      ;;
+
+    -i | --cluster-id )
+      shift
+      cluster_id="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+cluster_name="${cluster_name:-poc-idp}"
+
+set -e
+
+context="k3d-${cluster_name}"
+chart_dir="${this_script_directory}/../chart"
+id_file="${this_script_directory}/../.cluster-id"
+
+# clusterId gerado uma única vez e persistido (paridade com random_string.id do Azure).
+if [ -n "${cluster_id}" ]; then
+  echo "${cluster_id}" > "${id_file}"
+  echo "Usando cluster id '${cluster_id}' (--cluster-id), persistido em ${id_file}"
+elif [ -f "${id_file}" ]; then
+  cluster_id="$(cat "${id_file}")"
+  echo "Reusando cluster id '${cluster_id}' de ${id_file}"
+else
+  cluster_id="$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c5)"
+  echo "${cluster_id}" > "${id_file}"
+  echo "Gerado cluster id '${cluster_id}' em ${id_file}"
+fi
+
+full="poc-eks-${cluster_id}"
+
+# crossplaneArn: ARN do IAM user cujas creds estão exportadas (o próprio user do
+# Crossplane). Como as creds NÃO são de sessão SSO, get-caller-identity já devolve o ARN
+# do user direto (arn:aws:iam::ACCT:user/crossplane-poc). Usado pelas fases 72+
+# (ClusterAuth/AccessEntry + ProviderConfigs remotos).
+crossplane_arn="$(aws sts get-caller-identity --query Arn --output text)"
+echo "crossplaneArn = ${crossplane_arn}"
+
+# vpcId: lido do VPC já criado pela fase 1 -- usado pelo AWS Load Balancer Controller
+# (fase 92) para não depender do IMDS. Vazio na primeira passada (VPC ainda não existe);
+# nesse caso o chart recebe vpcId="" e o controller cai no fallback via metadata service
+# (aceitável: só ocorre num provisionamento do zero, antes da fase 92 rodar de fato -- a
+# fase 1 já terá criado o VPC quando chegarmos lá).
+
+# callerArn/crossplaneArn=... satisfazem os guards `fail` de 70/72 (helm avalia TODOS os
+# templates antes de --show-only). As fases 10-60 não referenciam esses valores, e
+# 70-access nunca é emitido aqui — o placeholder de callerArn jamais chega ao cluster.
+render() {
+  helm template "${chart_dir}" \
+    --set "clusterId=${cluster_id}" \
+    --set "callerArn=unused" \
+    --set "awsLoadBalancerController.vpcId=${vpc_id:-}" \
+    --set "crossplaneArn=${crossplane_arn}" \
+    --show-only "templates/${1}"
+}
+
+apply_phase() {
+  render "${1}" | kubectl --context "${context}" apply -f -
+}
+
+# Fase 1 — VPC
+apply_phase 10-vpc.yaml
+kubectl --context "${context}" wait "vpc.ec2.aws.upbound.io/${full}-vpc" \
+  --for=condition=Ready --timeout=120s
+# vpc_id: lido agora que a VPC está Ready -- usado pela fase 92 (AWS Load Balancer
+# Controller) para não depender do IMDS dentro do pod.
+vpc_id="$(kubectl --context "${context}" get "vpc.ec2.aws.upbound.io/${full}-vpc" \
+  -o jsonpath='{.status.atProvider.id}')"
+
+# Fase 2 — Subnets
+apply_phase 20-subnets.yaml
+for subnet in public-1a public-1b private-1a private-1b; do
+  kubectl --context "${context}" wait "subnet.ec2.aws.upbound.io/${full}-${subnet}" \
+    --for=condition=Ready --timeout=120s
+done
+
+# Fase 3 — Network access (barreira crítica: NATGateway)
+apply_phase 30-network-access.yaml
+kubectl --context "${context}" wait "natgateway.ec2.aws.upbound.io/${full}-nat" \
+  --for=condition=Ready --timeout=300s
+# A rota privada só reconcilia depois do NAT resolver e pode levar mais que 120s (o wait
+# estourou uma vez com a rota ficando Ready logo em seguida — sob set -e isso matava o
+# script). Timeout ampliado para 300s (mesmo patamar do NAT) enquanto observamos; se voltar
+# a estourar, investigar a causa em vez de só aumentar de novo.
+kubectl --context "${context}" wait "route.ec2.aws.upbound.io/${full}-route-private-nat" \
+  --for=condition=Ready --timeout=300s
+
+# Fase 4 — IAM
+apply_phase 40-iam.yaml
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-cluster-role" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-node-role" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 5 — EKS Cluster (10-15 min)
+apply_phase 50-eks.yaml
+kubectl --context "${context}" wait "cluster.eks.aws.upbound.io/${full}" \
+  --for=condition=Ready --timeout=900s
+
+# Fase 6 — NodeGroup
+apply_phase 60-nodegroup.yaml
+kubectl --context "${context}" wait "nodegroup.eks.aws.upbound.io/${full}-node-group" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 7 — Pod Identity: agent + Role/RPA/PodIdentityAssociation do EBS CSI. O addon do
+# driver NÃO entra aqui — é a fase 68, aplicada só depois da association Ready (elimina a
+# race em que o controller subia sem credencial e caía em CrashLoop).
+apply_phase 65-pod-identity.yaml
+kubectl --context "${context}" wait "addon.eks.aws.upbound.io/${full}-addon-pod-identity-agent" \
+  --for=condition=Ready --timeout=300s
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-ebs-csi-role" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "podidentityassociation.eks.aws.upbound.io/${full}-ebs-csi-assoc" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 7b — Addon EBS CSI driver, aplicado APÓS a association Ready (fase 65). Os pods do
+# controller nascem já com a Pod Identity resolvida — sem a race que exigia rollout restart.
+apply_phase 68-ebs-csi-driver.yaml
+kubectl --context "${context}" wait "addon.eks.aws.upbound.io/${full}-addon-ebs-csi-driver" \
+  --for=condition=Ready --timeout=300s
+
+# Fase 8 — Ponte Crossplane -> EKS remoto: ClusterAuth (Secret kubeconfig) +
+# AccessEntry/APA do IAM user do Crossplane. Sem a AccessEntry, o kubeconfig autentica
+# mas não tem RBAC no cluster.
+apply_phase 72-cluster-auth.yaml
+kubectl --context "${context}" wait "clusterauth.eks.aws.upbound.io/${full}-cluster-auth" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "accessentry.eks.aws.upbound.io/${full}-access-entry-crossplane" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "accesspolicyassociation.eks.aws.upbound.io/${full}-access-admin-crossplane" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 9 — ProviderConfigs remotos (helm + kubernetes). Sem condição Ready útil (não são
+# MRs) — só aplica.
+apply_phase 74-remote-providerconfigs.yaml
+
+# Fase 10 — Pod Identity do ESO (Role + inline policy + association) ANTES do Release. A
+# association é recurso AWS puro (não exige namespace/SA no cluster) — criá-la primeiro faz
+# o pod do ESO (fase 82) já nascer com credencial, eliminando a race que exigia rollout
+# restart (a validação confirmou a race quando o Release vinha antes). É o análogo do
+# encadeamento que a fase 65 (EBS CSI) ainda não tem.
+apply_phase 80-eso-pod-identity.yaml
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-eso-role" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "rolepolicy.iam.aws.upbound.io/${full}-eso-secrets-policy" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "podidentityassociation.eks.aws.upbound.io/${full}-eso-assoc" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 11 — external-secrets (ESO) via provider-helm. Release Ready = chart instalado e
+# deployments prontos (wait=true no chart do provider-helm). Pods nascem com a Pod Identity
+# da fase 80 já resolvida.
+apply_phase 82-external-secrets.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-external-secrets" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 12 — Config do ESO (ClusterSecretStore + ExternalSecret de smoke) via
+# provider-kubernetes. Depende dos CRDs do ESO (fase 82).
+apply_phase 84-eso-config.yaml
+kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-eso-clustersecretstore" \
+  --for=condition=Ready --timeout=180s
+kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-eso-smoke" \
+  --for=condition=Ready --timeout=180s
+
+# Fase 13 — Pod Identity do external-dns (Role + inline policy route53 + association) ANTES
+# do Release. Mesmo padrão anti-race das fases 65/80: a association é recurso AWS puro, então
+# criá-la primeiro faz o pod do external-dns (fase 88) nascer com credencial resolvida.
+apply_phase 86-external-dns-pod-identity.yaml
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-external-dns-role" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "rolepolicy.iam.aws.upbound.io/${full}-external-dns-route53-policy" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "podidentityassociation.eks.aws.upbound.io/${full}-external-dns-assoc" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 14 — external-dns via provider-helm. Release Ready = chart instalado e deployment
+# pronto (wait=true). O pod nasce com a Pod Identity da fase 86 já resolvida.
+apply_phase 88-external-dns.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-external-dns" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 15 — Pod Identity do AWS Load Balancer Controller (fatia 2). Mesmo padrão
+# anti-race das fases 65/80/86/90: association ANTES do Release (fase 92).
+apply_phase 90-alb-controller-pod-identity.yaml
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-alb-controller-role" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "rolepolicy.iam.aws.upbound.io/${full}-alb-controller-policy" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "podidentityassociation.eks.aws.upbound.io/${full}-alb-controller-assoc" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 16 — AWS Load Balancer Controller via provider-helm. Release Ready = chart
+# instalado e deployment pronto. O pod nasce com a Pod Identity da fase 90 já resolvida.
+apply_phase 92-alb-controller.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-alb-controller" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 17 — istio base (CRDs). Precede istiod (fase 96) e o gateway (fase 98).
+apply_phase 94-istio-base.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-istio-base" \
+  --for=condition=Ready --timeout=300s
+
+# Fase 18 — istiod (control plane). Depende dos CRDs da fase 94.
+apply_phase 96-istiod.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-istiod" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 19 — istio ingressgateway (Service LoadBalancer -> NLB via AWS LB Controller já
+# provisionado na fase 92). Depende do istiod (fase 96).
+apply_phase 98-istio-gateway.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-istio-gateway" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 20 — Pod Identity do cert-manager (fatia 2). Role PRÓPRIA (não reusa a do
+# external-dns), mesmo padrão anti-race: association ANTES do Release (fase 102).
+apply_phase 100-cert-manager-pod-identity.yaml
+kubectl --context "${context}" wait "role.iam.aws.upbound.io/${full}-cert-manager-role" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "rolepolicy.iam.aws.upbound.io/${full}-cert-manager-route53-policy" \
+  --for=condition=Ready --timeout=120s
+kubectl --context "${context}" wait "podidentityassociation.eks.aws.upbound.io/${full}-cert-manager-assoc" \
+  --for=condition=Ready --timeout=120s
+
+# Fase 21 — cert-manager via provider-helm. Release Ready = chart instalado (com CRDs) e
+# deployments prontos. O pod nasce com a Pod Identity da fase 100 já resolvida.
+apply_phase 102-cert-manager.yaml
+kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-cert-manager" \
+  --for=condition=Ready --timeout=600s
+
+# Fase 22 — ClusterIssuer ACME (solver DNS-01 Route53) via provider-kubernetes. Depende
+# dos CRDs do cert-manager (fase 102).
+apply_phase 104-cert-manager-issuer.yaml
+kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-cert-manager-issuer" \
+  --for=condition=Ready --timeout=180s
+
+# Fase 23 — Certificate de smoke: força um ciclo ACME completo contra o ClusterIssuer da
+# fase 104. Timeout maior (propagação DNS + validação ACME pode levar alguns minutos).
+apply_phase 106-cert-manager-smoke.yaml
+kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-cert-manager-smoke" \
+  --for=condition=Ready --timeout=300s
+
+echo "EKS '${full}' provisionado (base + ESO + external-dns + LB Controller + istio + cert-manager). Rode 'make access' para configurar o kubeconfig."
+kubectl --context "${context}" get managed

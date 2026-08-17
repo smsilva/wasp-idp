@@ -1,0 +1,81 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $es := .Values.externalSecrets -}}
+{{- if $es.enabled }}
+# Pod Identity do ESO (fatia 2). Segue o MOLDE canônico da fase 65
+# (Role -> policy -> PodIdentityAssociation), trocando a managed policy por uma inline
+# escopada ao prefixo de secrets e o par ns/SA para o do ESO. Trust fixa
+# pods.eks.amazonaws.com (não OIDC), igual ao Pod Identity base. Aplicada ANTES do Release (fase 82): a
+# association é recurso AWS puro (não exige que namespace/SA existam), então criá-la
+# primeiro faz o pod do ESO nascer já com credencial — elimina a race sem rollout restart.
+---
+# Role assumida pelos pods do ESO via Pod Identity.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-eso-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "pods.eks.amazonaws.com"
+            },
+            "Action": [
+              "sts:AssumeRole",
+              "sts:TagSession"
+            ]
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-eso-role
+---
+# Inline policy escopada ao prefixo <secretPrefix>/* — o isolamento do 4º critério de
+# aceite (ler fora do prefixo é negado). GetSecretValue + DescribeSecret são o mínimo do
+# provider aws do ESO. Account id derivado do crossplaneArn (helper eks.awsAccountId) —
+# escopa à conta corrente sem hardcode nem cross-account (não usar `*` no campo account).
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: {{ $fullClusterName }}-eso-secrets-policy
+spec:
+  forProvider:
+    roleRef:
+      name: {{ $fullClusterName }}-eso-role
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "secretsmanager:GetSecretValue",
+              "secretsmanager:DescribeSecret"
+            ],
+            "Resource": "arn:aws:secretsmanager:{{ .Values.region }}:{{ include "eks.awsAccountId" . }}:secret:{{ $es.secretPrefix }}/*"
+          }
+        ]
+      }
+---
+# Liga a Role ao SA do ESO (criado pelo Release, fase 80). A partir daqui os pods do ESO
+# assumem a Role via Pod Identity — sem serviceAccountRoleArn (isso seria IRSA).
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: PodIdentityAssociation
+metadata:
+  name: {{ $fullClusterName }}-eso-assoc
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    roleArnRef:
+      name: {{ $fullClusterName }}-eso-role
+    namespace: {{ $es.namespace | quote }}
+    serviceAccount: {{ $es.serviceAccount | quote }}
+    tags:
+      Name: {{ $fullClusterName }}-eso-assoc
+{{- end }}

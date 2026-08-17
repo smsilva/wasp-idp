@@ -1,0 +1,83 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: environments.platform.example.com
+spec:
+  # Cluster-scoped: um Environment é a pegada AWS durável de um cluster (hub-owned),
+  # não pertence a um namespace de app. Espelha o escopo das stacks de infra.
+  scope: Cluster
+  group: platform.example.com
+  names:
+    kind: Environment
+    plural: environments
+  # model-02 no Crossplane v2: XRDs apiextensions.crossplane.io/v2 NÃO suportam connection
+  # secret no nível do XR (connectionSecretKeys é rejeitado). O contrato-Secret continua
+  # válido, mas o Secret é produzido DIRETAMENTE pelo MR ClusterAuth da Composition
+  # (writeConnectionSecretToRef → nome determinístico <prefix>-<id>-kubeconfig em
+  # crossplane-system), não republicado pelo XR. O ArgoCDInstance aponta para esse Secret.
+  # Os params self-aware extras (id/domain/clusterName) viajam por status do XR (abaixo),
+  # não pelo Secret — nesta fatia o satélite só precisa do kubeconfig.
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: string
+                  description: >-
+                    Identificador determinístico do Environment (≤5 alfanum). Deriva todos os
+                    external-names: cluster <prefix>-<id>, subzona <id>.<domain>.
+                  pattern: '^[a-z0-9]{1,5}$'
+                prefix:
+                  type: string
+                  description: Prefixo do naming (configurável p/ adoção por outros times).
+                  default: poc-eks
+                region:
+                  type: string
+                  default: us-east-1
+                domain:
+                  type: string
+                  description: Zona-pai onde a subzona <id>.<domain> é delegada (NS).
+                  default: <root-domain>
+                nodeGroup:
+                  type: object
+                  description: Configuração do NodeGroup gerenciado.
+                  properties:
+                    instanceType:
+                      type: string
+                      default: t3.medium
+                    desiredSize:
+                      type: integer
+                      default: 3
+                    minSize:
+                      type: integer
+                      default: 3
+                    maxSize:
+                      type: integer
+                      default: 4
+                  default: {}
+              # infraRepo/appRepo entram quando a fatia 2 (entrega de infra no spoke) começar —
+              # nesta fatia o Environment vai só até a ponte + Secret-contrato (do MR ClusterAuth).
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                # Agregado das 2 camadas: o Environment vira orquestrador que compõe
+                # Network + Cluster e republica no seu status os identificadores-chave de cada um,
+                # dando visão única de saúde por camada num só `kubectl get environment`. O Ready
+                # condition do XR (auto-ready) já reflete "Network Ready AND Cluster Ready".
+                vpcId:
+                  type: string
+                  description: ID da VPC, agregado do status do Network filho.
+                clusterName:
+                  type: string
+                  description: Nome do EKS (<prefix>-<id>), agregado do status do Cluster filho.

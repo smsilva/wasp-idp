@@ -1,0 +1,16 @@
+# Claim de exemplo do Cluster isolado — 2ª fatia da decomposição.
+# Provisiona EKS + IAM + NodeGroup + ponte (14 MRs), CONSUMINDO a rede de um Network com o
+# MESMO id (as subnets são casadas por label environment.example.com/env=<id>).
+#
+# PRÉ-REQUISITO: um Network com id igual ao daqui já Ready no hub (ex.: net01). Sem ele, o
+# EKS Cluster/NodeGroup ficam esperando o selector resolver (nenhuma subnet casa).
+#
+# ⚠️ EKS REAL: ~28-30 min, custo control plane (~$0.10/h) + 3×t3.medium + usa o NAT do Network.
+# Só aplicar sob autorização explícita.
+apiVersion: platform.example.com/v1alpha1
+kind: Cluster
+metadata:
+  name: net01
+spec:
+  id: net01          # DEVE bater com o id do Network (casa as subnets por label)
+  # prefix (poc-eks), region (us-east-1), nodeGroup (t3.medium 3/3/4): defaults do XRD.

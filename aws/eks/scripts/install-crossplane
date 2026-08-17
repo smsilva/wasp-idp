@@ -1,0 +1,132 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria o cluster k3d (idempotente) e instala o Crossplane.
+
+    Options:
+
+      -h,  --help              Show this help
+      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -p,  --api-port          Porta da API do k3d (default: 6551)
+      -s,  --servers           Número de servers do k3d (default: 3)
+      -v,  --crossplane-version
+                               Versão do chart do Crossplane (default: 2.3.1)
+      -ct, --cluster-timeout   Timeout de criação do cluster k3d (default: 360s)
+      -it, --install-timeout   Timeout de install do Crossplane (default: 360s)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} \\
+        --cluster-name poc-idp \\
+        --servers 3 \\
+        --crossplane-version 2.3.1
+
+      ${this_script_name} \\
+        --cluster-timeout 600s \\
+        --install-timeout 600s
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -c | --cluster-name )
+      shift
+      cluster_name="${1}"
+      ;;
+
+    -p | --api-port )
+      shift
+      api_port="${1}"
+      ;;
+
+    -s | --servers )
+      shift
+      servers="${1}"
+      ;;
+
+    -v | --crossplane-version )
+      shift
+      crossplane_version="${1}"
+      ;;
+
+    -ct | --cluster-timeout )
+      shift
+      cluster_timeout="${1}"
+      ;;
+
+    -it | --install-timeout )
+      shift
+      install_timeout="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+cluster_name="${cluster_name:-poc-idp}"
+api_port="${api_port:-6551}"
+servers="${servers:-3}"
+crossplane_version="${crossplane_version:-2.3.1}"
+cluster_timeout="${cluster_timeout:-360s}"
+install_timeout="${install_timeout:-360s}"
+
+set -e
+
+if k3d cluster list | grep -q "^${cluster_name}\b"; then
+  echo "Cluster '${cluster_name}' já existe — pulando criação."
+else
+  k3d cluster create "${cluster_name}" \
+    --api-port "${api_port}" \
+    --servers "${servers}" \
+    --k3s-arg '--disable=traefik@server:*' \
+    --wait \
+    --timeout "${cluster_timeout}"
+fi
+
+kubectl --context "k3d-${cluster_name}" wait node \
+  --selector kubernetes.io/os=linux \
+  --for condition=Ready \
+  --timeout=120s
+
+if kubectl --context "k3d-${cluster_name}" get deployment crossplane \
+    --namespace crossplane-system > /dev/null 2>&1; then
+  echo "Crossplane já instalado — pulando."
+  exit 0
+fi
+
+helm repo add crossplane-stable https://charts.crossplane.io/stable
+helm repo update
+helm install crossplane \
+  --create-namespace \
+  --namespace crossplane-system \
+  crossplane-stable/crossplane \
+  --version "${crossplane_version}" \
+  --wait
+
+kubectl --context "k3d-${cluster_name}" wait deployment \
+  --namespace crossplane-system \
+  --selector release=crossplane \
+  --for condition=Available \
+  --timeout="${install_timeout}"

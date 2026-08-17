@@ -1,0 +1,23 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $istio := .Values.istio -}}
+{{- if $istio.enabled }}
+# istio base (CRDs) instalado via provider-helm (fatia 2). Namespace-scoped
+# istio-system, criado pelo próprio Release (skipCreateNamespace não setado -> chart cria
+# se faltar). Precede istiod (fase 96) e o gateway (fase 98) — ambos dependem dos CRDs
+# aqui instalados. Sem Pod Identity própria (chart não roda pod com credencial AWS).
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $fullClusterName }}-istio-base
+spec:
+  forProvider:
+    namespace: {{ $istio.systemNamespace | quote }}
+    chart:
+      name: base
+      repository: {{ $istio.chartRepository | quote }}
+      version: {{ $istio.chartVersion | quote }}
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $fullClusterName }}-helm
+{{- end }}

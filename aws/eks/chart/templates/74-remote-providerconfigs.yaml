@@ -1,0 +1,30 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+# ProviderConfigs do provider-helm e provider-kubernetes apontando para o EKS remoto via
+# o Secret kubeconfig gerado pelo ClusterAuth (fase 72). A partir daqui um Release
+# (helm.crossplane.io) instala charts e um Object (kubernetes.crossplane.io) aplica CRs
+# DENTRO do EKS. Nomes = <full>-{helm,k8s} para não colidir com o ProviderConfig `default`
+# do provider AWS. Espelha <assets-repo> (helm_releases + eks kubernetes PC).
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: {{ $fullClusterName }}-helm
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      name: {{ $fullClusterName }}-kubeconfig
+      namespace: crossplane-system
+      key: kubeconfig
+---
+apiVersion: kubernetes.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: {{ $fullClusterName }}-k8s
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      name: {{ $fullClusterName }}-kubeconfig
+      namespace: crossplane-system
+      key: kubeconfig

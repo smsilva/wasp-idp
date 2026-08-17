@@ -1,0 +1,165 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Remove os Managed Resources do EKS na ordem INVERSA da criação
+  (70-access -> 88-external-dns -> 86-external-dns-pod-identity -> 84-eso-config ->
+  82-external-secrets -> 80-eso-pod-identity -> 74-remote-providerconfigs ->
+  72-cluster-auth -> 68-ebs-csi-driver -> 65-pod-identity -> 60-nodegroup -> 50-eks ->
+  40-iam -> 30-network-access -> 20-subnets -> 10-vpc) e destrói o k3d local. Tolerante a
+  erro por fase (recurso já removido não interrompe o teardown).
+
+  ATENÇÃO: remove recursos REAIS na AWS (custo só zera após o teardown).
+
+  DESTRUTIVO E IRREVERSÍVEL. Exige confirmação explícita via --yes-destroy — sem essa
+  flag o script RECUSA. O EKS leva ~28-30 min para reprovisionar; o ambiente costuma ser
+  reaproveitado entre atividades. NÃO destrua sem o dono do trabalho autorizar naquele
+  momento (ver CLAUDE.local.md → "Ambiente AWS/EKS — NUNCA destruir sem autorização").
+
+    Options:
+
+      -h,  --help              Show this help
+      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
+           --keep-cluster      Preserva o k3d local (só remove os MRs AWS)
+           --yes-destroy       OBRIGATÓRIO: confirma a destruição real dos recursos AWS
+
+    Examples:
+
+      ${this_script_name} --yes-destroy
+
+      ${this_script_name} \\
+        --cluster-id smoke1 \\
+        --yes-destroy
+
+      ${this_script_name} \\
+        --cluster-id smoke1 \\
+        --keep-cluster \\
+        --yes-destroy
+EOF
+}
+
+keep_cluster=0
+yes_destroy=0
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -c | --cluster-name )
+      shift
+      cluster_name="${1}"
+      ;;
+
+    -i | --cluster-id )
+      shift
+      cluster_id="${1}"
+      ;;
+
+    --keep-cluster )
+      keep_cluster=1
+      ;;
+
+    --yes-destroy )
+      yes_destroy=1
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+cluster_name="${cluster_name:-poc-idp}"
+
+# Guarda de segurança: teardown é destrutivo e irreversível, e o ambiente costuma ser
+# reaproveitado (EKS ~28-30 min para recriar). Recusa sem confirmação explícita. Não
+# remover esta guarda — é a rede que impede destruição acidental por default. Ver
+# CLAUDE.local.md → "Ambiente AWS/EKS — NUNCA destruir sem autorização explícita".
+if [ "${yes_destroy}" -ne 1 ]; then
+  echo "RECUSADO: teardown destrói recursos REAIS na AWS (EKS ~28-30 min para recriar)." >&2
+  echo "Se o dono do trabalho autorizou AGORA, rode de novo com --yes-destroy." >&2
+  echo "Ver CLAUDE.local.md → 'Ambiente AWS/EKS — NUNCA destruir sem autorização'." >&2
+  exit 1
+fi
+
+context="k3d-${cluster_name}"
+chart_dir="${this_script_directory}/../chart"
+id_file="${this_script_directory}/../.cluster-id"
+
+if [ -z "${cluster_id}" ]; then
+  if [ ! -f "${id_file}" ]; then
+    echo "Sem ${id_file} e sem --cluster-id — nada de EKS para remover."
+    cluster_id=""
+  else
+    cluster_id="$(cat "${id_file}")"
+  fi
+fi
+
+if [ -n "${cluster_id}" ]; then
+  full="poc-eks-${cluster_id}"
+  caller_arn="$(aws sts get-caller-identity --query Arn --output text 2>/dev/null || echo unused)"
+
+  echo "Removendo EKS '${full}' (contexto ${context})"
+
+  delete_phase() {
+    helm template "${chart_dir}" \
+      --set "clusterId=${cluster_id}" \
+      --set "callerArn=${caller_arn}" \
+      --set "crossplaneArn=${caller_arn}" \
+      --show-only "templates/${1}" \
+      | kubectl --context "${context}" delete --ignore-not-found=true -f - || true
+  }
+
+  # Ordem inversa. cert-manager/istio/LB Controller (106->90) são as fases
+  # mais recentes, removidas primeiro; external-dns (88->86) e ESO (84->72) vêm em seguida,
+  # logo após o 70-access. Em cada par, o Release (chart/CRDs) ou Object é deletado antes
+  # da Pod Identity para os finalizers do operador resolverem enquanto ainda há credencial.
+  # O external-dns roda upsert-only (nunca deleta registro na zona), então remover o chart
+  # não apaga os A/TXT já criados no Route53 — limpar registros de smoke à mão se
+  # necessário (ver README). O ClusterIssuer/Certificate de smoke do cert-manager também
+  # deixam o registro TXT de desafio ACME órfão na zona — mesma limpeza manual se preciso.
+  for phase in 70-access.yaml \
+               106-cert-manager-smoke.yaml 104-cert-manager-issuer.yaml \
+               102-cert-manager.yaml 100-cert-manager-pod-identity.yaml \
+               98-istio-gateway.yaml 96-istiod.yaml 94-istio-base.yaml \
+               92-alb-controller.yaml 90-alb-controller-pod-identity.yaml \
+               88-external-dns.yaml 86-external-dns-pod-identity.yaml \
+               84-eso-config.yaml 82-external-secrets.yaml \
+               80-eso-pod-identity.yaml 74-remote-providerconfigs.yaml 72-cluster-auth.yaml \
+               68-ebs-csi-driver.yaml 65-pod-identity.yaml 60-nodegroup.yaml 50-eks.yaml \
+               40-iam.yaml 30-network-access.yaml 20-subnets.yaml 10-vpc.yaml; do
+    echo "Removendo fase ${phase}…"
+    delete_phase "${phase}"
+    sleep 5
+  done
+
+  echo "Aguardando remoção dos managed resources (até 15 min)…"
+  kubectl --context "${context}" wait managed --all --for=delete --timeout=900s || true
+  kubectl --context "${context}" get managed || true
+
+  if [ "${cluster_id}" = "$(cat "${id_file}" 2>/dev/null)" ]; then
+    rm -f "${id_file}"
+  fi
+fi
+
+if [ "${keep_cluster}" -eq 1 ]; then
+  echo "k3d preservado (--keep-cluster)."
+else
+  k3d cluster delete "${cluster_name}"
+fi

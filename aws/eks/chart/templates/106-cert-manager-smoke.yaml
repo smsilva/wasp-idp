@@ -1,0 +1,30 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $cm := .Values.certManager -}}
+{{- if $cm.enabled }}
+# Certificate de smoke (mesmo padrão do ExternalSecret de smoke, fase 84): força um ciclo
+# ACME completo (pedido -> desafio DNS-01 -> registro TXT no Route53 -> validação -> emissão)
+# contra o ClusterIssuer da fase 104. Critério de aceite: Secret {{ $cm.smokeSecretName }}
+# no ns {{ $cm.namespace }} com condição Ready=True (ver README para o comando de validação).
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: {{ $fullClusterName }}-cert-manager-smoke
+spec:
+  providerConfigRef:
+    name: {{ $fullClusterName }}-k8s
+  forProvider:
+    manifest:
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      metadata:
+        name: cert-smoke-test
+        namespace: {{ $cm.namespace | quote }}
+      spec:
+        secretName: {{ $cm.smokeSecretName | quote }}
+        dnsNames:
+          - {{ $cm.smokeDomain | quote }}
+        issuerRef:
+          kind: ClusterIssuer
+          name: {{ $cm.clusterIssuerName | quote }}
+{{- end }}

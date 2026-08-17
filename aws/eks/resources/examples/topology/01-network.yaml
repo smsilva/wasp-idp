@@ -1,0 +1,4 @@
+apiVersion: aws.example.com/v1alpha1
+kind: Network
+metadata:
+  name: hub-net-01

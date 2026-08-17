@@ -1,0 +1,88 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $pi := .Values.podIdentity -}}
+# EKS Pod Identity — base de identidade de workload da fatia 2.
+# Espelha o padrão de <assets-repo> (crossplane/providers/aws/eks): addon
+# eks-pod-identity-agent + Role (trust pods.eks.amazonaws.com) + RolePolicyAttachment +
+# PodIdentityAssociation. Trust policy fixa — NÃO depende do OIDC issuer (por-cluster,
+# recriado a cada provisão). ESO/external-dns/cert-manager repetem este mesmo padrão para suas roles.
+# O addon do driver EBS CSI (consumidor) foi separado na fase 68, aplicada após a
+# association ficar Ready — mesmo encadeamento que a fase 80/82 do ESO usa para evitar a
+# race de Pod Identity.
+---
+# Habilita Pod Identity no cluster. Sem role própria — é só o agent. OVERWRITE torna a
+# reaplicação idempotente (o addon pode já existir de uma provisão anterior).
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: Addon
+metadata:
+  name: {{ $fullClusterName }}-addon-pod-identity-agent
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    addonName: {{ $pi.agentAddonName | quote }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    resolveConflictsOnCreate: OVERWRITE
+    resolveConflictsOnUpdate: OVERWRITE
+    tags:
+      Name: {{ $fullClusterName }}-addon-pod-identity-agent
+{{- if $pi.ebsCsi.enabled }}
+---
+# Consumidor-base de Pod Identity: o EBS CSI driver. A Role usa o principal fixo
+# pods.eks.amazonaws.com (não o OIDC issuer). É o padrão que ESO/external-dns/cert-manager herdam:
+# Role -> RolePolicyAttachment -> PodIdentityAssociation.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-ebs-csi-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "pods.eks.amazonaws.com"
+            },
+            "Action": [
+              "sts:AssumeRole",
+              "sts:TagSession"
+            ]
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-ebs-csi-role
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: {{ $fullClusterName }}-ebs-csi-policy
+spec:
+  forProvider:
+    policyArn: {{ $pi.ebsCsi.policyArn | quote }}
+    roleRef:
+      name: {{ $fullClusterName }}-ebs-csi-role
+---
+# Associa a Role ao ServiceAccount do driver. A partir daqui os pods do driver assumem
+# a Role via Pod Identity — sem serviceAccountRoleArn (isso seria IRSA), sem OIDC.
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: PodIdentityAssociation
+metadata:
+  name: {{ $fullClusterName }}-ebs-csi-assoc
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    roleArnRef:
+      name: {{ $fullClusterName }}-ebs-csi-role
+    namespace: {{ $pi.ebsCsi.namespace | quote }}
+    serviceAccount: {{ $pi.ebsCsi.serviceAccount | quote }}
+    tags:
+      Name: {{ $fullClusterName }}-ebs-csi-assoc
+{{- end }}
+# O addon aws-ebs-csi-driver NÃO fica aqui — foi movido para a fase 68 (aplicada só depois
+# da PodIdentityAssociation acima estar Ready), eliminando a race em que o controller subia
+# sem credencial e caía em CrashLoop. Ver 68-ebs-csi-driver.yaml.

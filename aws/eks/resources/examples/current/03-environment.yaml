@@ -1,0 +1,27 @@
+# Claim de exemplo do Environment — primeiro spoke da fatia walk-skeleton.
+# Pré-requisito de apply: aws/eks/resources/environment/environmentconfig.yaml já aplicado
+# no hub (crossplaneArn) e a function-environment-configs instalada
+# (.claude/skills/kubernetes/assets/crossplane/packages/values-functions.yaml).
+#
+# model-02 no Crossplane v2 (ver argocd/xrd.yaml + docs/superpowers/specs/
+# env-argocd-models-1b/model-02-connection-secret.md): XRDs v2 NÃO suportam connection
+# secret no nível do XR, então NÃO há writeConnectionSecretToRef aqui. O Secret-contrato é
+# escrito DIRETO pelo MR ClusterAuth da Composition, com nome determinístico
+# <prefix>-<id>-kubeconfig (aqui: poc-eks-env01-kubeconfig) em crossplane-system. O
+# ArgoCDInstance referencia ESSE nome em spec.environmentConnectionSecretRef (argocd01.yaml).
+apiVersion: platform.example.com/v1alpha1
+kind: Environment
+metadata:
+  name: env01
+spec:
+  id: env01
+  # prefix, region, domain, nodeGroup: defaults do XRD bastam nesta fatia (poc-eks,
+  # us-east-1, <root-domain>, t3.medium 3/3/4). Descomente para sobrepor:
+  # prefix: poc-eks
+  # region: us-east-1
+  # domain: <root-domain>
+  # nodeGroup:
+  #   instanceType: t3.medium
+  #   desiredSize: 3
+  #   minSize: 3
+  #   maxSize: 4

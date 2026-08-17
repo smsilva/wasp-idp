@@ -1,0 +1,31 @@
+# PROPOSTA (ainda não implementada) — Environment orquestra Network + Cluster + N NodeGroups
+# a partir de 1 claim, mantendo a experiência "walk skeleton" (1 CR → cluster inteiro).
+#
+# Contrato externo: o usuário ainda aplica UM Environment e recebe rede + cluster + pools de
+# nós. A diferença vs. o modelo atual é interna: o nodeGroup deixa de ser objeto único e vira
+# LISTA (nodeGroups: [...]), refletindo o 1:N que o EKS suporta nativamente.
+#
+# spec.id removido (como Network/Cluster): metadata.name é o identificador. O orquestrador
+# deriva os nomes dos filhos a partir dele: Network=<name>-net, Cluster=<name>, NodeGroup por
+# item (<name>-<pool.name>). subnetIds NÃO aparecem aqui — o orquestrador os resolve do
+# Network.status e injeta no Cluster/NodeGroups (o usuário do Environment não vê subnet ID).
+apiVersion: platform.example.com/v1alpha1
+kind: Environment
+metadata:
+  name: env01
+spec:
+  # prefix, region, domain: defaults do XRD (poc-eks, us-east-1, <root-domain>).
+  nodeGroups:
+    - name: workers
+      instanceType: t3.medium
+      desiredSize: 3
+      minSize: 3
+      maxSize: 4
+    - name: spot
+      instanceType: t3.large
+      capacityType: SPOT
+      desiredSize: 2
+      minSize: 0
+      maxSize: 5
+  # Default do XRD para nodeGroups: um único pool "workers" t3.medium 3/3/4 (paridade com o
+  # comportamento atual quando o usuário não especifica nada — 1 claim, 1 nodegroup).

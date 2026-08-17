@@ -1,0 +1,162 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Instala uma aplicação da fatia 2 no EKS via helm PURO (fora do Crossplane — ADR
+  decisão 5: a plataforma é Crossplane, as apps são consumo do cluster). Opera contra
+  o contexto do EKS, NÃO o k3d — as apps rodam no EKS.
+
+  Dois modos de DNS/TLS (--mode):
+
+    wildcard (default) — reusa a sub-zona delegada <envid>.<base-domain> e o cert
+      wildcard *.<envid>… que a plataforma entrega. Host = <app>.<envid>.<base-domain>.
+      A app precisa só de Gateway+VirtualService — sem Ingress-fantasma, sem cert próprio.
+      Descobre em runtime: selector do Gateway (--set gateway.selector).
+
+    perApp (modelo por-app legado) — zona compartilhada + external-dns por-app. Descobre em runtime:
+      selector do Gateway + hostname do NLB (alvo do Ingress-fantasma). Host = o do values.
+
+    Options:
+
+      -h,  --help              Show this help
+      -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
+      -c,  --context           contexto kubectl do EKS (default: poc-eks-<id>)
+      -m,  --mode              wildcard | perApp (default: wildcard)
+      -b,  --base-domain       domínio base (default: <root-domain>)
+
+    Examples:
+
+      ${this_script_name} echo
+
+      ${this_script_name} echo \\
+        --cluster-id h11c --mode wildcard
+EOF
+}
+
+mode="wildcard"
+base_domain="<root-domain>"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -i | --cluster-id )
+      shift
+      cluster_id="${1}"
+      ;;
+
+    -c | --context )
+      shift
+      context="${1}"
+      ;;
+
+    -m | --mode )
+      shift
+      mode="${1}"
+      ;;
+
+    -b | --base-domain )
+      shift
+      base_domain="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+app="${1:?informe a app a instalar (ex.: ${this_script_name} echo)}"
+
+set -e
+
+id_file="${this_script_directory}/../.cluster-id"
+chart_dir="${this_script_directory}/${app}"
+
+if [ ! -d "${chart_dir}" ]; then
+  echo "Chart não encontrado: ${chart_dir}" >&2
+  exit 1
+fi
+
+if [ -z "${cluster_id}" ]; then
+  if [ ! -f "${id_file}" ]; then
+    echo "Sem ${id_file} e sem --cluster-id — rode provision-eks antes (ou passe --cluster-id)." >&2
+    exit 1
+  fi
+  cluster_id="$(cat "${id_file}")"
+fi
+
+full="poc-eks-${cluster_id}"
+context="${context:-${full}}"
+
+# O chart oficial `gateway` do istio-release rotula os pods do ingressgateway com
+# `istio: <release-name>`. A plataforma (fase 98) nomeia o Release <full>-istio-gateway,
+# então o selector é esse. Confirmamos direto no Service para não presumir o nome.
+gateway_svc="${full}-istio-gateway"
+gateway_ns="istio-ingress"
+
+echo "Descobrindo a plataforma no contexto ${context}..."
+
+gateway_selector="$(kubectl --context "${context}" get svc "${gateway_svc}" -n "${gateway_ns}" \
+  -o jsonpath='{.spec.selector.istio}')"
+if [ -z "${gateway_selector}" ]; then
+  echo "Não achei o selector 'istio' no svc ${gateway_ns}/${gateway_svc} — o ingress istio está de pé?" >&2
+  exit 1
+fi
+echo "  gateway selector: istio=${gateway_selector}"
+
+set_args=(--set "gateway.selector=${gateway_selector}" --set "dnsMode=${mode}")
+
+case "${mode}" in
+  wildcard )
+    # Host montado a partir do envid: <app>.<envid>.<base-domain>. Reusa o cert wildcard
+    # *.<envid>… já emitido pela plataforma (Secret wildcard-<envid>-tls no istio-ingress).
+    host="${app}.${cluster_id}.${base_domain}"
+    wildcard_secret="wildcard-${cluster_id}-tls"
+    echo "  modo:             wildcard (host ${host}, secret ${wildcard_secret})"
+    set_args+=(--set "host=${host}" --set "tls.wildcardSecretName=${wildcard_secret}")
+    ;;
+
+  perApp )
+    # Alvo do Ingress-fantasma: o external-dns aponta o A-record para este NLB.
+    nlb_hostname="$(kubectl --context "${context}" get svc "${gateway_svc}" -n "${gateway_ns}" \
+      -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')"
+    if [ -z "${nlb_hostname}" ]; then
+      echo "NLB ainda sem hostname no svc ${gateway_ns}/${gateway_svc}." >&2
+      exit 1
+    fi
+    echo "  modo:             perApp (NLB ${nlb_hostname})"
+    set_args+=(--set "dns.target=${nlb_hostname}")
+    ;;
+
+  * )
+    echo "Modo inválido: ${mode} (use wildcard | perApp)" >&2
+    exit 1
+    ;;
+esac
+
+echo "Instalando '${app}' via helm no EKS..."
+helm --kube-context "${context}" upgrade --install "${app}" "${chart_dir}" \
+  "${set_args[@]}" \
+  --wait
+
+resolved_host="$(helm --kube-context "${context}" get values "${app}" -a -o json 2>/dev/null \
+  | sed -n 's/.*"host":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+echo
+echo "OK. Valide a rota pública:"
+echo "  curl -k -s -o /dev/null -w '%{http_code}\\n' https://${resolved_host:-<host>}"

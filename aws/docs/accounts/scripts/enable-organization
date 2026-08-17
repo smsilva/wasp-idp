@@ -1,0 +1,64 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Habilita AWS Organizations na conta atual com feature-set ALL (pré-requisito para
+  SCPs — ver aws/docs/accounts/01-organizations-e-ous.md). Idempotente: se a
+  Organization já existir, só valida o feature-set e não recria nada.
+
+  A conta em que você roda isto vira a MANAGEMENT ACCOUNT — ela nunca deve hospedar
+  workload depois disso (ver aws/docs/accounts/00-estrategia-de-contas.md).
+
+    Options:
+
+      -h,  --help    Show this help
+
+    Examples:
+
+      ${this_script_name}
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+existing_feature_set="$(aws organizations describe-organization --query Organization.FeatureSet --output text 2> /dev/null || true)"
+
+if [ -n "${existing_feature_set}" ]; then
+  if [ "${existing_feature_set}" == "ALL" ]; then
+    echo "Organization já existe com feature-set=ALL — nada a fazer."
+    exit 0
+  fi
+  echo "Organization existe com feature-set=${existing_feature_set}. Fazendo upgrade para ALL..."
+  aws organizations enable-all-features
+  echo "Upgrade solicitado — cada conta-membro existente precisa aceitar (ver AWS Organizations console)."
+  exit 0
+fi
+
+echo "Criando Organization com feature-set=ALL na conta atual (vira a management account)..."
+aws organizations create-organization --feature-set ALL
+
+echo "Organization criada. Próximo passo: ${this_script_directory}/create-organizational-unit-structure"

@@ -1,0 +1,91 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: argocdinstance-helm
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ArgoCDInstance
+  # model-02 PURO: o ArgoCDInstance conhece SÓ o connection secret publicado pelo Environment
+  # (spec.environmentConnectionSecretRef). A partir dele cria um ProviderConfig helm próprio
+  # (self-contained — não depende dos PCs que o Environment criou) e instala o Release argo-cd
+  # DENTRO do spoke.
+  #
+  # ETAPA 1 (validada): ProviderConfig helm + Release argo-cd — ArgoCDInstance Ready, 7 pods do
+  # ArgoCD Running no spoke.
+  # ETAPA 2 (Usage/model-04, teardown gracioso) EM ABERTO — testado, esbarra em 2 limites do
+  # Crossplane v2 (todos confirmados na prática):
+  #   (1) só a `protection.crossplane.io Usage` (Namespaced) referencia recursos namespaced (o
+  #       Secret); as cluster-scoped (`apiextensions Usage`, `protection ClusterUsage`) NÃO têm
+  #       `namespace` no resourceRef → não apontam para o Secret.
+  #   (2) a protection Usage exige `spec.by` quando `of` é cross-namespace — e o `by` natural (o
+  #       Release do ArgoCD) tem nome com hash não-determinístico, impatchável.
+  # → Proteger o Secret é inviável de forma limpa. Alternativas p/ retomar (ver HANDOFF): (a)
+  #   `apiextensions Usage` protegendo o MR ClusterAuth (cluster-scoped, nome determinístico
+  #   poc-eks-env01-cluster-auth) em vez do Secret; (c) adiar p/ a fatia de entrega de infra no
+  #   spoke, onde o Usage protege recursos AWS cluster-scoped naturais.
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          # ---------- ProviderConfig helm próprio (aponta p/ o Secret-contrato do Environment) ----------
+          # metadata.name = <argocd-instance-name>-helm; secretRef = o Secret referenciado no
+          # spec do ArgoCDInstance. readinessChecks None (PC não tem status observável).
+          - name: providerconfig-helm
+            base:
+              apiVersion: helm.crossplane.io/v1beta1
+              kind: ProviderConfig
+              spec:
+                credentials:
+                  source: Secret
+                  secretRef:
+                    key: kubeconfig
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-helm" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.environmentConnectionSecretRef.name
+                toFieldPath: spec.credentials.secretRef.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.environmentConnectionSecretRef.namespace
+                toFieldPath: spec.credentials.secretRef.namespace
+            readinessChecks:
+              - type: None
+          # ---------- Release argo-cd (instala o ArgoCD no spoke via o PC acima) ----------
+          - name: argocd-release
+            base:
+              apiVersion: helm.crossplane.io/v1beta1
+              kind: Release
+              spec:
+                forProvider:
+                  namespace: argocd
+                  chart:
+                    name: argo-cd
+                    repository: https://argoproj.github.io/argo-helm
+                    version: "7.7.7"
+                rollbackLimit: 3
+            patches:
+              # providerConfigRef = o PC helm próprio criado acima (<name>-helm).
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.providerConfigRef.name
+                transforms:
+                  - type: string
+                    string: { type: Format, fmt: "%s-helm" }
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.namespace
+                toFieldPath: spec.forProvider.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.chartVersion
+                toFieldPath: spec.forProvider.chart.version

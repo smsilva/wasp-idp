@@ -1,0 +1,137 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: InternetGateway
+metadata:
+  name: {{ $fullClusterName }}-igw
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-igw
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: EIP
+metadata:
+  name: {{ $fullClusterName }}-nat-eip
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    domain: vpc
+    tags:
+      Name: {{ $fullClusterName }}-nat-eip
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: NATGateway
+metadata:
+  name: {{ $fullClusterName }}-nat
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    connectivityType: public
+    allocationIdRef:
+      name: {{ $fullClusterName }}-nat-eip
+    subnetIdRef:
+      name: {{ $fullClusterName }}-public-1a
+    tags:
+      Name: {{ $fullClusterName }}-nat
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTable
+metadata:
+  name: {{ $fullClusterName }}-rt-public
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-rt-public
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTable
+metadata:
+  name: {{ $fullClusterName }}-rt-private
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-rt-private
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Route
+metadata:
+  name: {{ $fullClusterName }}-route-public-igw
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    destinationCidrBlock: 0.0.0.0/0
+    routeTableIdRef:
+      name: {{ $fullClusterName }}-rt-public
+    gatewayIdRef:
+      name: {{ $fullClusterName }}-igw
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Route
+metadata:
+  name: {{ $fullClusterName }}-route-private-nat
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    destinationCidrBlock: 0.0.0.0/0
+    routeTableIdRef:
+      name: {{ $fullClusterName }}-rt-private
+    natGatewayIdRef:
+      name: {{ $fullClusterName }}-nat
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: {{ $fullClusterName }}-rta-public-1a
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    routeTableIdRef:
+      name: {{ $fullClusterName }}-rt-public
+    subnetIdRef:
+      name: {{ $fullClusterName }}-public-1a
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: {{ $fullClusterName }}-rta-public-1b
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    routeTableIdRef:
+      name: {{ $fullClusterName }}-rt-public
+    subnetIdRef:
+      name: {{ $fullClusterName }}-public-1b
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: {{ $fullClusterName }}-rta-private-1a
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    routeTableIdRef:
+      name: {{ $fullClusterName }}-rt-private
+    subnetIdRef:
+      name: {{ $fullClusterName }}-private-1a
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: RouteTableAssociation
+metadata:
+  name: {{ $fullClusterName }}-rta-private-1b
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    routeTableIdRef:
+      name: {{ $fullClusterName }}-rt-private
+    subnetIdRef:
+      name: {{ $fullClusterName }}-private-1b

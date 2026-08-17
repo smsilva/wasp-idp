@@ -1,0 +1,18 @@
+# PROPOSTA (ainda não implementada) — 2º NodeGroup no MESMO Cluster (clu01), demonstrando
+# o 1:N que a decomposição habilita. Ex.: pool spot separado do pool geral
+# (nodegroup01-workers.yaml), com instanceType/scaling/capacityType próprios.
+apiVersion: platform.example.com/v1alpha1
+kind: NodeGroup
+metadata:
+  name: clu01-spot
+spec:
+  clusterRef:
+    name: clu01
+  subnetIds:
+    - subnet-0ae59ad27914a847a   # privada AZ-a
+    - subnet-0f8ab31afbd171cf8   # privada AZ-b
+  instanceType: t3.large
+  capacityType: SPOT
+  desiredSize: 2
+  minSize: 0
+  maxSize: 5

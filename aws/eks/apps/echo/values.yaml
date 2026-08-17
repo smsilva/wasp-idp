@@ -1,0 +1,54 @@
+# Chart echo — smoke aberto da plataforma-base (fatia 2).
+#
+# Camada de APLICAÇÃO (ADR decisão 5): helm puro, fora do Crossplane. A plataforma
+# (Pod Identity → ESO → external-dns → ingress/TLS) entrega o cluster pronto; este chart só consome. Valores que dependem do
+# cluster corrente são preenchidos em runtime pelo script aws/eks/apps/deploy.
+
+# --- Modo de DNS/TLS ---------------------------------------------------------------
+# wildcard (DEFAULT): a plataforma entrega, por ambiente, uma sub-zona
+#   delegada <envid>.<root-domain> com um wildcard A-alias *.<envid>… → NLB e
+#   um cert wildcard *.<envid>… já emitido (Secret em istio-ingress). A app precisa só de
+#   Gateway (reusa o Secret wildcard) + VirtualService — SEM Ingress-fantasma, SEM
+#   IngressClass, SEM Certificate próprio, external-dns fora do caminho.
+# perApp (modelo por-app legado): zona compartilhada, external-dns por-app via Ingress-fantasma +
+#   IngressClass istio + Certificate próprio. Mantido para compat/comparação.
+dnsMode: wildcard
+
+# Host público. Em wildcard, é <app>.<envid>.<root-domain> (o script monta a
+# partir do envid). Em perApp, um host na zona compartilhada <root-domain>.
+host: echo.h11c.<root-domain>
+
+# httpbin de referência (paridade com o snapshot AKS ~/trash/resources/aks-poc): servidor
+# trivial e descartável que só ecoa a request. Porta 80 no container.
+image:
+  repository: kennethreitz/httpbin
+  tag: latest
+  pullPolicy: IfNotPresent
+containerPort: 80
+
+# Namespace da aplicação (criado pelo chart). Sem sidecar injection: o roteamento público
+# entra pelo istio-ingressgateway (que tem o Envoy); o backend não precisa de mesh.
+namespace: echo
+
+tls:
+  # ns do ingressgateway — onde o Gateway istio resolve o credentialName (SDS) e onde
+  # vivem o cert e (no modo perApp) o Ingress-fantasma.
+  gatewayNamespace: istio-ingress
+  # wildcard: nome do Secret do cert wildcard JÁ emitido pela plataforma (reusado, não
+  # recriado). O script injeta via --set a partir do envid (wildcard-<envid>-tls).
+  wildcardSecretName: wildcard-h11c-tls
+  # perApp (legado): ClusterIssuer + Secret do Certificate próprio da app.
+  clusterIssuer: letsencrypt-dns-route53
+  secretName: echo-tls
+
+# Selector do istio Gateway → pods do ingressgateway. NÃO é "istio: ingress" (padrão do
+# AKS de referência): o chart oficial `gateway` do istio-release rotula os pods com
+# `istio: <release-name>` = "<clusterName>-<clusterId>-istio-gateway". O script deploy
+# descobre e injeta via --set gateway.selector.
+gateway:
+  selector: SET-AT-RUNTIME
+
+# perApp (legado): dns.target = hostname do NLB, alvo do Ingress-fantasma. No modo
+# wildcard NÃO é usado (o wildcard A-alias da plataforma já cobre o host).
+dns:
+  target: SET-AT-RUNTIME

@@ -1,0 +1,14 @@
+# Claim de exemplo do ArgoCDInstance — satélite par do env01 (model-02). O contrato é o
+# Secret escrito pelo MR ClusterAuth da Composition do Environment, com nome determinístico
+# <prefix>-<id>-kubeconfig. Para env01 (prefix default poc-eks): poc-eks-env01-kubeconfig
+# em crossplane-system. Aplicar DEPOIS que o Secret existir (env01 provisionado).
+apiVersion: platform.example.com/v1alpha1
+kind: ArgoCDInstance
+metadata:
+  name: argocd-env01
+spec:
+  environmentConnectionSecretRef:
+    name: poc-eks-env01-kubeconfig
+    namespace: crossplane-system
+  # chartVersion: "7.7.7"
+  # namespace: argocd

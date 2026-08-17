@@ -1,0 +1,76 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria o Secret aws-iam-credential (formato INI) e aplica o ProviderConfig default.
+  Fonte das keys: env AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+
+    Options:
+
+      -h,  --help              Show this help
+      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --cluster-name poc-idp
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -c | --cluster-name )
+      shift
+      cluster_name="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+cluster_name="${cluster_name:-poc-idp}"
+
+: "${AWS_ACCESS_KEY_ID?exporte AWS_ACCESS_KEY_ID}"
+: "${AWS_SECRET_ACCESS_KEY?exporte AWS_SECRET_ACCESS_KEY}"
+
+set -e
+
+context="k3d-${cluster_name}"
+
+echo "Usando access key ${AWS_ACCESS_KEY_ID:0:4}… para o Secret aws-iam-credential"
+
+creds_file="$(mktemp)"
+trap 'rm -f "${creds_file}"' EXIT
+cat > "${creds_file}" <<EOF
+[default]
+aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+EOF
+
+kubectl --context "${context}" create secret generic aws-iam-credential \
+  --namespace crossplane-system \
+  --from-file=creds="${creds_file}" \
+  --dry-run=client -o yaml \
+  | kubectl --context "${context}" apply -f -
+
+kubectl --context "${context}" apply -f "${this_script_directory}/../providers/provider-config.yaml"

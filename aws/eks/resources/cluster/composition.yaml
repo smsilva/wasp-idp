@@ -1,0 +1,426 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: cluster-eks
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: Cluster
+  # Cluster + identidade + ponte (14 MRs): 2 IAM Roles + 4 RolePolicyAttachments, EKS Cluster,
+  # NodeGroup, ClusterAuth (Secret-kubeconfig), AccessEntry + AccessPolicyAssociation, 2
+  # ProviderConfigs remotos (helm/kubernetes no hub). Migração 1:1 da Composition monolítica
+  # environment-eks, comportamento-idêntico.
+  #
+  # CRUZAMENTOS CROSS-XR (Network→Cluster) — os 2 selectors que atravessam a fronteira do XR
+  # perdem matchControllerRef e casam por matchLabels no label environment.example.com/env=<id>
+  # (as subnets vivem no XR Network, não neste). São os 2 únicos pontos que mudam vs. a monolítica:
+  #   (1) EKS Cluster.vpcConfig.subnetIdSelector → cluster-subnet=true + env=<id> (as 4 subnets)
+  #   (2) NodeGroup.subnetIdSelector            → tier=private     + env=<id> (as 2 privadas)
+  # Todo o resto (role→attachment, cluster→role, nodegroup→cluster/role, ponte→cluster) é INTERNO
+  # a este XR → mantém matchControllerRef: true.
+  #
+  # crossplaneArn (decisão b): o step function-environment-configs injeta o EnvironmentConfig do
+  # hub (poc-eks-hub-config), consumido pelos MRs access-entry/access-admin via
+  # FromEnvironmentFieldPath. O EnvironmentConfig é o MESMO da monolítica (environmentconfig.yaml,
+  # aplicado 1x no hub) — nenhuma mudança nele.
+  mode: Pipeline
+  pipeline:
+    - step: environment-configs
+      functionRef:
+        name: function-environment-configs
+      input:
+        apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+        kind: Input
+        spec:
+          environmentConfigs:
+            - type: Reference
+              ref:
+                name: poc-eks-hub-config
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        patchSets:
+          # env=<id>: casa com as subnets do Network (cross-XR) e marca os MRs deste XR p/ debug.
+          - name: env-label
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.id
+                toFieldPath: metadata.labels[environment.example.com/env]
+          - name: region
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.region
+                toFieldPath: spec.forProvider.region
+        resources:
+          # ---------- 40 IAM (Roles cluster/node + attachments) ----------
+          # Role: external-name É o nome da IAM Role (escolhido) → naming determinístico OK.
+          # RolePolicyAttachment: external-name computado pelo provider → NÃO setar.
+          - name: cluster-role
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  environment.example.com/role: cluster-role
+              spec:
+                forProvider:
+                  assumeRolePolicy: |
+                    {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                        {
+                          "Effect": "Allow",
+                          "Principal": { "Service": "eks.amazonaws.com" },
+                          "Action": "sts:AssumeRole"
+                        }
+                      ]
+                    }
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-cluster-role" }
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+          - name: node-role
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: Role
+              metadata:
+                labels:
+                  environment.example.com/role: node-role
+              spec:
+                forProvider:
+                  assumeRolePolicy: |
+                    {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                        {
+                          "Effect": "Allow",
+                          "Principal": { "Service": "ec2.amazonaws.com" },
+                          "Action": "sts:AssumeRole"
+                        }
+                      ]
+                    }
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-node-role" }
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+          - name: cluster-policy
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicyAttachment
+              spec:
+                forProvider:
+                  policyArn: arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: cluster-role
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+          - name: node-policy-worker
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicyAttachment
+              spec:
+                forProvider:
+                  policyArn: arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: node-role
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+          - name: node-policy-ecr
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicyAttachment
+              spec:
+                forProvider:
+                  policyArn: arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: node-role
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+          - name: node-policy-cni
+            base:
+              apiVersion: iam.aws.upbound.io/v1beta1
+              kind: RolePolicyAttachment
+              spec:
+                forProvider:
+                  policyArn: arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+                  roleSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: node-role
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+          # ---------- 50 EKS Cluster ----------
+          # external-name = nome do cluster (escolhido). CARO (~$0.10/h) e LENTO (~12-15 min).
+          # CRUZAMENTO CROSS-XR (1): subnetIdSelector casa as 4 subnets do Network por
+          # cluster-subnet=true + env=<id> — SEM matchControllerRef (as subnets são de outro XR).
+          - name: cluster
+            base:
+              apiVersion: eks.aws.upbound.io/v1beta2
+              kind: Cluster
+              metadata:
+                labels:
+                  environment.example.com/role: cluster
+              spec:
+                forProvider:
+                  version: "1.34"
+                  roleArnSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: cluster-role
+                  accessConfig:
+                    authenticationMode: API
+                  vpcConfig:
+                    endpointPrivateAccess: true
+                    endpointPublicAccess: true
+                    subnetIdSelector:
+                      # cross-XR: NÃO matchControllerRef (subnets vivem no Network).
+                      matchLabels:
+                        environment.example.com/cluster-subnet: "true"
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              # cross-XR (1): injeta env=<id> no selector de subnets (discrimina o Network certo).
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.id
+                toFieldPath: spec.forProvider.vpcConfig.subnetIdSelector.matchLabels[environment.example.com/env]
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s" }
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+              # status: clusterName, clusterArn, oidcIssuer (arrays → índice [0]).
+              - type: ToCompositeFieldPath
+                fromFieldPath: metadata.annotations[crossplane.io/external-name]
+                toFieldPath: status.clusterName
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.arn
+                toFieldPath: status.clusterArn
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.identity[0].oidc[0].issuer
+                toFieldPath: status.oidcIssuer
+          # ---------- 60 NodeGroup ----------
+          # CRUZAMENTO CROSS-XR (2): subnetIdSelector casa as subnets PRIVADAS do Network por
+          # tier=private + env=<id> — SEM matchControllerRef. clusterName/nodeRole são INTERNOS.
+          - name: node-group
+            base:
+              apiVersion: eks.aws.upbound.io/v1beta2
+              kind: NodeGroup
+              spec:
+                forProvider:
+                  clusterNameSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: cluster
+                  nodeRoleArnSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: node-role
+                  subnetIdSelector:
+                    # cross-XR: NÃO matchControllerRef (subnets vivem no Network).
+                    matchLabels:
+                      environment.example.com/tier: private
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              # cross-XR (2): injeta env=<id> no selector de subnets privadas.
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.id
+                toFieldPath: spec.forProvider.subnetIdSelector.matchLabels[environment.example.com/env]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.nodeGroup.instanceType
+                toFieldPath: spec.forProvider.instanceTypes[0]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.nodeGroup.desiredSize
+                toFieldPath: spec.forProvider.scalingConfig.desiredSize
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.nodeGroup.minSize
+                toFieldPath: spec.forProvider.scalingConfig.minSize
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.nodeGroup.maxSize
+                toFieldPath: spec.forProvider.scalingConfig.maxSize
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-node-group" }
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+          # ---------- 72 Ponte Crossplane(hub) -> EKS remoto (ClusterAuth + AccessEntry) ----------
+          # ClusterAuth gera o Secret-contrato (kubeconfig). AccessEntry+APA dão RBAC admin ao
+          # IAM user do Crossplane (crossplaneArn do EnvironmentConfig). Todos INTERNOS (cluster).
+          - name: cluster-auth
+            base:
+              apiVersion: eks.aws.upbound.io/v1beta1
+              kind: ClusterAuth
+              spec:
+                forProvider:
+                  clusterNameSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: cluster
+                writeConnectionSecretToRef:
+                  namespace: crossplane-system
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-cluster-auth" }
+                toFieldPath: metadata.annotations[crossplane.io/external-name]
+              # Secret-contrato: <prefix>-<id>-kubeconfig — deve bater com o
+              # spec.environmentConnectionSecretRef.name do ArgoCDInstance.
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-kubeconfig" }
+                toFieldPath: spec.writeConnectionSecretToRef.name
+              # status: publica o nome do Secret-kubeconfig (contrato p/ satélites).
+              - type: ToCompositeFieldPath
+                fromFieldPath: spec.writeConnectionSecretToRef.name
+                toFieldPath: status.kubeconfigSecret
+          - name: access-entry-crossplane
+            base:
+              apiVersion: eks.aws.upbound.io/v1beta1
+              kind: AccessEntry
+              spec:
+                forProvider:
+                  clusterNameSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: cluster
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: FromEnvironmentFieldPath
+                fromFieldPath: crossplaneArn
+                toFieldPath: spec.forProvider.principalArn
+          - name: access-admin-crossplane
+            base:
+              apiVersion: eks.aws.upbound.io/v1beta1
+              kind: AccessPolicyAssociation
+              spec:
+                forProvider:
+                  clusterNameSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: cluster
+                  policyArn: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+                  accessScope:
+                    type: cluster
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: FromEnvironmentFieldPath
+                fromFieldPath: crossplaneArn
+                toFieldPath: spec.forProvider.principalArn
+          # ---------- 74 ProviderConfigs remotos (helm/kubernetes apontando p/ o spoke) ----------
+          # Apontam para o Secret-kubeconfig do ClusterAuth. metadata.name = external-name do PC
+          # (não recurso AWS). readinessChecks None (PC não tem status observável de "pronto").
+          - name: remote-providerconfig-helm
+            base:
+              apiVersion: helm.crossplane.io/v1beta1
+              kind: ProviderConfig
+              spec:
+                credentials:
+                  source: Secret
+                  secretRef:
+                    namespace: crossplane-system
+                    key: kubeconfig
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-helm" }
+                toFieldPath: metadata.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-kubeconfig" }
+                toFieldPath: spec.credentials.secretRef.name
+            readinessChecks:
+              - type: None
+          - name: remote-providerconfig-k8s
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha1
+              kind: ProviderConfig
+              spec:
+                credentials:
+                  source: Secret
+                  secretRef:
+                    namespace: crossplane-system
+                    key: kubeconfig
+            patches:
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-k8s" }
+                toFieldPath: metadata.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-kubeconfig" }
+                toFieldPath: spec.credentials.secretRef.name
+            readinessChecks:
+              - type: None

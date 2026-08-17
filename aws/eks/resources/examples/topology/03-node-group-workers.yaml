@@ -1,0 +1,28 @@
+# PROPOSTA (ainda não implementada) — NodeGroup como abstração própria (XRD+Composition
+# separados), não mais um campo spec.nodeGroup dentro do Cluster.
+#
+# Motivo: o EKS já trata NodeGroup como recurso independente do Cluster (eks.aws.upbound.io
+# NodeGroup referencia o Cluster via clusterNameSelector; não é um sub-campo dele) — e um
+# Cluster real pode ter VÁRIOS NodeGroups (ex.: um pool geral + um pool spot + um pool com
+# GPU). Modelar nodeGroup como objeto único no Cluster.spec impedia isso (1:1 forçado).
+# Com NodeGroup como claim próprio, é 1:N naturalmente — basta aplicar mais de um claim
+# referenciando o mesmo clusterRef.
+#
+# clusterRef.name: mesmo padrão do subnetIds explícito no Cluster — referência direta ao
+# metadata.name do Cluster, sem selector/label. A Composition resolve via
+# clusterNameSelector (matchLabels/matchControllerRef INTERNO, pois aqui o NodeGroup É
+# quem referencia o Cluster explicitamente, não o contrário).
+apiVersion: platform.example.com/v1alpha1
+kind: NodeGroup
+metadata:
+  name: clu01-workers
+spec:
+  clusterRef:
+    name: clu01
+  subnetIds:
+    - subnet-0ae59ad27914a847a   # privada AZ-a
+    - subnet-0f8ab31afbd171cf8   # privada AZ-b
+  instanceType: t3.medium
+  desiredSize: 3
+  minSize: 3
+  maxSize: 4

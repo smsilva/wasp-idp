@@ -1,0 +1,15 @@
+# Config global do hub (opção b do README/crossplaneArn): valores compartilhados por
+# TODOS os Environments deste hub — hoje só o ARN do IAM user do Crossplane
+# (crossplane-poc), consumido pela fase 72 (ClusterAuth/AccessEntry) via o step
+# function-environment-configs da Composition. Aplicar uma vez no hub, antes do 1º claim
+# Environment:
+#   kubectl apply -f aws/eks/resources/environment/environmentconfig.yaml
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+  name: poc-eks-hub-config
+  labels:
+    platform.example.com/hub: poc-idp
+data:
+  # Conta <account-id> (ver aws/CLAUDE.md) — IAM user dedicada do Crossplane.
+  crossplaneArn: arn:aws:iam::<account-id>:user/crossplane-poc

@@ -1,0 +1,91 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria a estrutura mínima de OUs (ver aws/docs/accounts/01-organizations-e-ous.md):
+
+    Root
+    ├── Infra        (Hub / Connectivity Account)
+    └── Workloads
+        ├── Sandbox      (criada ANTES de Production — validar aqui primeiro)
+        └── Production
+
+  Idempotente: reaproveita qualquer OU já existente com o mesmo nome no mesmo pai.
+
+    Options:
+
+      -h,  --help    Show this help
+
+    Examples:
+
+      ${this_script_name}
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+find_or_create_ou() {
+  local name="${1}"
+  local parent_id="${2}"
+
+  local existing_id
+  existing_id="$(aws organizations list-organizational-units-for-parent \
+    --parent-id "${parent_id}" \
+    --query "OrganizationalUnits[?Name=='${name}'].Id" --output text)"
+
+  if [ -n "${existing_id}" ]; then
+    echo "ok  OU '${name}' já existe (${existing_id})" >&2
+    echo "${existing_id}"
+    return 0
+  fi
+
+  local new_id
+  new_id="$(aws organizations create-organizational-unit \
+    --parent-id "${parent_id}" --name "${name}" \
+    --query OrganizationalUnit.Id --output text)"
+  echo "criada  OU '${name}' (${new_id})" >&2
+  echo "${new_id}"
+}
+
+root_id="$(aws organizations list-roots --query 'Roots[0].Id' --output text)"
+echo "Root: ${root_id}"
+
+infra_id="$(find_or_create_ou Infra "${root_id}")"
+workloads_id="$(find_or_create_ou Workloads "${root_id}")"
+sandbox_id="$(find_or_create_ou Sandbox "${workloads_id}")"
+production_id="$(find_or_create_ou Production "${workloads_id}")"
+
+cat <<EOF
+
+Estrutura de OUs pronta:
+  Infra:               ${infra_id}
+  Workloads:           ${workloads_id}
+  Workloads/Sandbox:   ${sandbox_id}
+  Workloads/Production: ${production_id}
+
+Próximo passo: ${this_script_directory}/apply-baseline-service-control-policy
+EOF

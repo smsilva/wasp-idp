@@ -1,0 +1,26 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $pi := .Values.podIdentity -}}
+{{- if $pi.ebsCsi.enabled }}
+# Addon aws-ebs-csi-driver — separado da fase 65 para eliminar a race de Pod Identity.
+# A fase 65 cria a Role + RolePolicyAttachment + PodIdentityAssociation do EBS CSI; o
+# provision-eks só aplica ESTA fase depois que a association está Ready. Assim os pods do
+# ebs-csi-controller nascem já com AWS_CONTAINER_CREDENTIALS_FULL_URI injetado, sem cair em
+# CrashLoop (`no EC2 IMDS role found`) — o mesmo encadeamento que a fase 80 (Pod Identity)
+# → 82 (Release) do ESO usa. A identidade vem da association (por isso NÃO setamos
+# serviceAccountRoleArn, que seria IRSA).
+---
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: Addon
+metadata:
+  name: {{ $fullClusterName }}-addon-ebs-csi-driver
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    addonName: {{ $pi.ebsCsi.driverAddonName | quote }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    resolveConflictsOnCreate: OVERWRITE
+    resolveConflictsOnUpdate: OVERWRITE
+    tags:
+      Name: {{ $fullClusterName }}-addon-ebs-csi-driver
+{{- end }}

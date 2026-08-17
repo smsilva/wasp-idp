@@ -1,0 +1,125 @@
+# Exposição pública do echo. Tudo no ns do ingressgateway (istio-ingress) porque é lá que
+# o Gateway istio resolve o Secret TLS (credentialName via SDS). O backend vive no ns echo;
+# o VirtualService roteia para ele pelo FQDN cluster-interno.
+#
+# Dois modos (.Values.dnsMode):
+#   wildcard — Gateway reusa o cert wildcard *.<envid> da plataforma; VirtualService.
+#                     Sem Ingress-fantasma/IngressClass/Certificate. external-dns fora do caminho.
+#   perApp  — Certificate próprio + Gateway + VirtualService + IngressClass/Ingress
+#                     fantasma para o external-dns publicar o A-record na zona compartilhada.
+
+{{- $secretName := ternary .Values.tls.wildcardSecretName .Values.tls.secretName (eq .Values.dnsMode "wildcard") }}
+
+{{- if eq .Values.dnsMode "perApp" }}
+# --- (perApp) TLS: Certificate próprio (cert-manager) ------------------------------
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: echo
+  namespace: {{ .Values.tls.gatewayNamespace }}
+spec:
+  commonName: {{ .Values.host }}
+  dnsNames:
+    - {{ .Values.host }}
+  secretName: {{ .Values.tls.secretName }}
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ .Values.tls.clusterIssuer }}
+{{- end }}
+
+# --- istio Gateway: termina 80/443 no ingressgateway ------------------------------
+# selector casa os pods do ingressgateway (istio: <release-name>, injetado em runtime).
+# HTTP (80) não redireciona no Gateway: o redirect http→https é feito no VirtualService.
+# HTTPS (443) termina TLS com o Secret do cert (wildcard reusado, ou o próprio no perApp).
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: echo
+  namespace: {{ .Values.tls.gatewayNamespace }}
+spec:
+  selector:
+    istio: {{ .Values.gateway.selector }}
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - {{ .Values.host | quote }}
+      tls:
+        httpsRedirect: false
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - {{ .Values.host | quote }}
+      tls:
+        mode: SIMPLE
+        credentialName: {{ $secretName }}
+
+# --- istio VirtualService: roteia o host para o backend httpbin -------------------
+# http (porta 80) → redirect 302 para https; https → route para o Service echo no ns echo.
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: echo
+  namespace: {{ .Values.tls.gatewayNamespace }}
+spec:
+  hosts:
+    - {{ .Values.host | quote }}
+  gateways:
+    - echo
+  http:
+    - match:
+        - port: 80
+      redirect:
+        scheme: https
+        redirectCode: 302
+    - route:
+        - destination:
+            host: echo.{{ .Values.namespace }}.svc.cluster.local
+            port:
+              number: 80
+
+{{- if eq .Values.dnsMode "perApp" }}
+# --- (perApp) IngressClass istio: torna o Ingress-fantasma válido ------------------
+# O webhook do AWS LB Controller recusa Ingress com ingressClassName desconhecido. O
+# controller istio.io/ingress-controller NÃO está ativo — a classe existe só para o
+# Ingress-fantasma passar na validação.
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: istio
+spec:
+  controller: istio.io/ingress-controller
+
+# --- (perApp) Ingress "fantasma": só para o external-dns publicar o A-record -------
+# external-dns (--source=service,ingress) não vê Gateway/VirtualService istio. Este
+# Ingress existe SÓ para ele criar o registro; o routing real é do Gateway+VS.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-dns
+  namespace: {{ .Values.tls.gatewayNamespace }}
+  annotations:
+    external-dns.alpha.kubernetes.io/target: {{ .Values.dns.target | quote }}
+spec:
+  ingressClassName: istio
+  rules:
+    - host: {{ .Values.host }}
+      http:
+        paths:
+          - path: /.well-known/not-used-path/just-for-external-dns
+            pathType: Prefix
+            backend:
+              service:
+                name: non-existent-service
+                port:
+                  number: 80
+{{- end }}

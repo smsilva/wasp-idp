@@ -1,0 +1,36 @@
+apiVersion: aws.example.com/v1alpha1
+kind: Cluster
+metadata:
+  name: blue
+spec:
+  domain: blue.<root-domain>
+
+  region: us-east-1
+
+  controlPlaneSubnetIds:
+    - subnet-08c24583e2b05ea99 # pública AZ-a
+    - subnet-0841a768b8afdee3c # pública AZ-b
+    - subnet-0ae59ad27914a847a # privada AZ-a
+    - subnet-0f8ab31afbd171cf8 # privada AZ-b
+
+  nodeGroups:
+    - name: blue-workers
+      instanceType: t3.medium
+      size:
+        desired: 3
+        min: 3
+        max: 4
+      subnetIds:
+        - subnet-0ae59ad27914a847a # privada AZ-a
+        - subnet-0f8ab31afbd171cf8 # privada AZ-b
+
+    - name: blue-workers-spot
+      instanceType: t3.medium
+      size:
+        desired: 2
+        min: 1
+        max: 3
+      spot: true
+      subnetIds:
+        - subnet-0ae59ad27914a847a # privada AZ-a
+        - subnet-0f8ab31afbd171cf8 # privada AZ-b

@@ -1,0 +1,64 @@
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-family-aws
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-aws:v2.5.1
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-aws-vpc
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-vpc:v2.5.1
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-aws-ec2
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-ec2:v2.5.1
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-aws-iam
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-iam:v2.5.1
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-aws-eks
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-eks:v2.5.1
+# provider-aws-route53 (fatia 2): sub-zona delegada por ambiente +
+# registro wildcard (ADR-delta 2026-08-13, reverte a decisão 3). Mesma família/versão dos
+# demais AWS. Fornece os Kinds Zone e Record (route53.aws.upbound.io).
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-aws-route53
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-route53:v2.5.1
+# Providers da fatia 2: entregam a plataforma DENTRO do EKS remoto. O provider-helm
+# instala charts (Release) e o provider-kubernetes aplica CRs (Object); ambos autenticam
+# via o Secret kubeconfig do ClusterAuth (ver chart/templates/72-cluster-auth.yaml +
+# 74-remote-providerconfigs.yaml). Versões espelham o lab de referência
+# (~/git/kubernetes/lab/crossplane/packages/providers-others.yaml).
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-helm
+spec:
+  package: xpkg.upbound.io/upbound/provider-helm:v1
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-kubernetes
+spec:
+  package: xpkg.upbound.io/upbound/provider-kubernetes:v1.2.1

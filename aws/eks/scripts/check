@@ -1,0 +1,25 @@
+#!/bin/bash
+# Valida binários e credenciais AWS antes de qualquer provisionamento.
+set -e
+
+missing=0
+for tool in k3d kubectl helm aws; do
+  if command -v "${tool}" > /dev/null 2>&1; then
+    echo "ok  ${tool} -> $(command -v "${tool}")"
+  else
+    echo "MISSING ${tool}"
+    missing=1
+  fi
+done
+
+if [ "${missing}" -ne 0 ]; then
+  echo "Instale os binários ausentes antes de prosseguir." >&2
+  exit 1
+fi
+
+if aws sts get-caller-identity --query Arn --output text; then
+  echo "ok  credenciais AWS válidas"
+else
+  echo "Credenciais AWS inválidas — exporte AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY." >&2
+  exit 1
+fi

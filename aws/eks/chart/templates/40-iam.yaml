@@ -1,0 +1,85 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-cluster-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "eks.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-cluster-role
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-node-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "ec2.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-node-role
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: {{ $fullClusterName }}-cluster-policy
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+    roleRef:
+      name: {{ $fullClusterName }}-cluster-role
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: {{ $fullClusterName }}-node-policy-worker
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+    roleRef:
+      name: {{ $fullClusterName }}-node-role
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: {{ $fullClusterName }}-node-policy-ecr
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+    roleRef:
+      name: {{ $fullClusterName }}-node-role
+---
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: {{ $fullClusterName }}-node-policy-cni
+spec:
+  forProvider:
+    policyArn: arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+    roleRef:
+      name: {{ $fullClusterName }}-node-role

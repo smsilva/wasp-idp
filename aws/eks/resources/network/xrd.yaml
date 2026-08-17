@@ -1,0 +1,65 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: networks.platform.example.com
+spec:
+  # Cluster-scoped, como o Environment: um Network é a pegada de REDE durável de um
+  # cluster (hub-owned). Primeira das 2 abstrações da decomposição (a outra é
+  # Cluster). O Environment vira orquestrador fino que compõe Network + Cluster.
+  #
+  # Contrato de saída (Pilar 5 PE 2.0, "API-first contract"): o Network taggeia TODAS as
+  # subnets com environment.example.com/env=<id> + cluster-subnet/tier, e o Cluster as
+  # seleciona por matchLabels (SEM matchControllerRef, pois atravessam XRs). Publica também
+  # vpcId/subnetIds no status para diagnóstico sem inspecionar os 16 MRs um a um.
+  scope: Cluster
+  group: platform.example.com
+  names:
+    kind: Network
+    plural: networks
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: string
+                  description: >-
+                    Identificador determinístico do Environment (≤5 alfanum). Deriva os
+                    external-names (<prefix>-<id>-*) e o label de cruzamento
+                    environment.example.com/env=<id> que o Cluster usa para achar as subnets.
+                  pattern: '^[a-z0-9]{1,5}$'
+                prefix:
+                  type: string
+                  description: Prefixo do naming (configurável p/ adoção por outros times).
+                  default: poc-eks
+                region:
+                  type: string
+                  default: us-east-1
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                vpcId:
+                  type: string
+                  description: ID real da VPC (status.atProvider.id do MR vpc), publicado p/ diagnóstico.
+                subnetIds:
+                  type: object
+                  description: IDs reais das 4 subnets, por papel. Consumo humano/diagnóstico (o Cluster casa por label, não por estes IDs).
+                  properties:
+                    publicA:
+                      type: string
+                    publicB:
+                      type: string
+                    privateA:
+                      type: string
+                    privateB:
+                      type: string

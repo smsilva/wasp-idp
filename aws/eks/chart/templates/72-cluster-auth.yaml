@@ -1,0 +1,53 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- if not .Values.crossplaneArn }}
+{{- fail "crossplaneArn is empty — pass --set crossplaneArn=$(aws sts get-caller-identity --query Arn --output text) with the Crossplane IAM user creds exported (see scripts/provision-eks)" }}
+{{- end }}
+# Ponte Crossplane(k3d) -> EKS remoto (fatia 2). Espelha o bloco
+# ClusterAuth + AccessEntry de <assets-repo> (crossplane/providers/aws/eks).
+# É a PRIMEIRA história que instala coisas DENTRO do cluster: os providers helm/kubernetes
+# precisam de um kubeconfig com RBAC no EKS. Duas peças:
+#   1. ClusterAuth  -> gera o Secret <full>-kubeconfig (token STS a partir das creds do
+#      IAM user do Crossplane) em crossplane-system.
+#   2. AccessEntry + AccessPolicyAssociation -> dão ao MESMO IAM user acesso admin ao
+#      cluster (sem isso o token do kubeconfig autentica mas não tem RBAC). O 70-access
+#      só concede ao caller SSO; aqui é o principal do Crossplane.
+---
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: ClusterAuth
+metadata:
+  name: {{ $fullClusterName }}-cluster-auth
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+  writeConnectionSecretToRef:
+    name: {{ $fullClusterName }}-kubeconfig
+    namespace: crossplane-system
+---
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: AccessEntry
+metadata:
+  name: {{ $fullClusterName }}-access-entry-crossplane
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    principalArn: {{ .Values.crossplaneArn | quote }}
+    tags:
+      Name: {{ $fullClusterName }}-access-entry-crossplane
+---
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: AccessPolicyAssociation
+metadata:
+  name: {{ $fullClusterName }}-access-admin-crossplane
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    principalArn: {{ .Values.crossplaneArn | quote }}
+    policyArn: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+    accessScope:
+      type: cluster

@@ -1,0 +1,24 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+---
+apiVersion: eks.aws.upbound.io/v1beta2
+kind: NodeGroup
+metadata:
+  name: {{ $fullClusterName }}-node-group
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    nodeRoleArnRef:
+      name: {{ $fullClusterName }}-node-role
+    subnetIdRefs:
+      - name: {{ $fullClusterName }}-private-1a
+      - name: {{ $fullClusterName }}-private-1b
+    scalingConfig:
+      desiredSize: {{ .Values.nodeGroup.desiredSize }}
+      minSize: {{ .Values.nodeGroup.minSize }}
+      maxSize: {{ .Values.nodeGroup.maxSize }}
+    instanceTypes:
+      - {{ .Values.nodeGroup.instanceType }}
+    tags:
+      Name: {{ $fullClusterName }}-node-group

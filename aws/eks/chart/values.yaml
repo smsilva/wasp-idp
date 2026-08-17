@@ -1,0 +1,128 @@
+region: us-east-1
+clusterName: poc-eks
+clusterId: ""              # preenchido em runtime via --set clusterId=<id>
+callerArn: ""              # preenchido em runtime via --set callerArn=<arn> (só 70-access; ver scripts/configure-access)
+crossplaneArn: ""          # ARN do IAM user do Crossplane (fases 72+); --set crossplaneArn=<arn> (ver scripts/provision-eks)
+k8sVersion: "1.34"
+cluster:
+  # ATENÇÃO (segurança): estes defaults são de SPIKE/dev (cluster efêmero). O
+  # endpoint público do control plane é gated por IAM (authenticationMode: API +
+  # AccessEntry), mas fica alcançável de qualquer IP (0.0.0.0/0) com publicAccessCidrs
+  # vazio. NÃO usar este default em produção sem uma das duas mitigações:
+  #   1. --set cluster.publicAccessCidrs[0]=<CIDR-corporativo/VPN>  (allowlist), ou
+  #   2. --set cluster.endpointPublicAccess=false                   (só acesso privado)
+  endpointPrivateAccess: true
+  endpointPublicAccess: true    # spike/walk-skeleton: acesso público ao control plane
+  publicAccessCidrs: []         # vazio = 0.0.0.0/0 — restringir em produção (ver acima)
+vpc:
+  cidr: 172.16.0.0/16
+subnets:
+  public:  [172.16.1.0/24, 172.16.2.0/24]
+  private: [172.16.3.0/24, 172.16.4.0/24]
+  azs: [us-east-1a, us-east-1b]
+nodeGroup:
+  instanceType: t3.medium
+  minSize: 1
+  desiredSize: 3
+  maxSize: 3
+# Pod Identity (fatia 2): base de identidade de workload. O agent é sempre
+# instalado; ebsCsi é o consumidor-base que prova o fluxo (Role -> RPA -> Association).
+podIdentity:
+  agentAddonName: eks-pod-identity-agent
+  ebsCsi:
+    enabled: true
+    driverAddonName: aws-ebs-csi-driver
+    namespace: kube-system
+    serviceAccount: ebs-csi-controller-sa
+    policyArn: arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+# external-secrets (fatia 2): ESO instalado via provider-helm + ClusterSecretStore
+# provider aws/SecretsManager. O pod do ESO autentica no Secrets Manager via Pod Identity
+# (Role com trust pods.eks.amazonaws.com + inline policy escopada ao prefixo secretPrefix).
+# chart bumpado 0.10.7 → 2.9.0 (última estável, ago/2026) — serve a API estável
+# external-secrets.io/v1 (v1beta1 removido a partir do operator 0.17). Os CRs da fase 84
+# migraram para v1. Sem breaking change nos values usados (installCRDs, serviceAccount.create/name
+# seguem válidos no chart 2.x).
+externalSecrets:
+  enabled: true
+  chartRepository: https://charts.external-secrets.io
+  chartName: external-secrets
+  chartVersion: "2.9.0"
+  namespace: external-secrets
+  serviceAccount: external-secrets          # SA criado pelo chart; alvo da PodIdentityAssociation
+  secretPrefix: poc-eks                     # policy escopada a arn:...:secret:<secretPrefix>/*
+  smokeSecretName: poc-eks/smoke            # secret de teste (criado à mão; ver README)
+  smokeSecretKey: token                      # chave dentro do JSON do secret de smoke
+# external-dns (fatia 2): gerencia registros na hosted zone Route53 existente e
+# COMPARTILHADA <root-domain>. O pod autentica no Route53 via Pod Identity (Role
+# com trust pods.eks.amazonaws.com + inline policy escopada à zona hostedZoneId). Isolamento
+# na zona compartilhada por txtOwnerId + domainFilter + zoneIdFilter (só mexe no que ele
+# mesmo criou, marcado pelo TXT de ownership, e só nessa zona).
+externalDns:
+  enabled: true
+  chartRepository: https://kubernetes-sigs.github.io/external-dns/
+  chartName: external-dns
+  chartVersion: "1.15.2"
+  namespace: external-dns
+  serviceAccount: external-dns               # SA criado pelo chart; alvo da PodIdentityAssociation
+  hostedZoneId: <hosted-zone-id>        # zona pública existente; policy escopada a arn:...:hostedzone/<id>
+  domainFilter: <root-domain>      # --domain-filter: só gerencia hosts nesta zona
+  txtOwnerId: poc-eks-idp                   # --txt-owner-id: marca de ownership (isolamento)
+  policy: upsert-only                         # nunca deleta registro alheio (reforça o isolamento)
+# AWS Load Balancer Controller (fatia 2): materializa um NLB para o Service
+# LoadBalancer do istio-ingressgateway (ADR decisão 4a). Pod autentica via Pod Identity
+# (Role com trust pods.eks.amazonaws.com + policy ELBv2/EC2 describe/tag, reusando o
+# molde de fases de Pod Identity → external-dns). Subnets já carregam as tags kubernetes.io/role/elb e
+# .../internal-elb (fase 20) — o controller descobre subnets por tag, sem precisar de
+# vpcId/subnetIds hardcoded além do vpcId explícito abaixo.
+awsLoadBalancerController:
+  enabled: true
+  chartRepository: https://aws.github.io/eks-charts
+  chartName: aws-load-balancer-controller
+  chartVersion: "3.5.0"
+  namespace: kube-system
+  serviceAccount: aws-load-balancer-controller  # SA criado pelo chart; alvo da PodIdentityAssociation
+  vpcId: ""    # preenchido em runtime via --set (ver scripts/provision-eks) — evita depender do IMDS
+# istio (fatia 2): base (CRDs) + istiod (control plane) + gateway (ingressgateway,
+# Service type LoadBalancer -> NLB via AWS Load Balancer Controller acima). Três Releases
+# separados (paridade com o padrão AKS de referência: istio_base/istio_discovery/
+# istio_gateway), cada um com wait=true e dependência de ordem via provision-eks.
+istio:
+  enabled: true
+  chartRepository: https://istio-release.storage.googleapis.com/charts
+  chartVersion: "1.30.3"
+  systemNamespace: istio-system
+  ingressNamespace: istio-ingress
+# cert-manager (fatia 2): ACME Let's Encrypt via ClusterIssuer, validação DNS-01 na
+# MESMA zona/Pod Identity Route53 do external-dns, mas com Role própria (não reusa a Role do external-dns,
+# escopada só a ChangeResourceRecordSets/ListHostedZones/ListResourceRecordSets, e ao SA
+# cert-manager, não ao do external-dns). acmeServer=staging evita rate-limit da PoC (cert
+# não confiável no browser é esperado); trocar para "production" quando for para valer.
+certManager:
+  enabled: true
+  chartRepository: https://charts.jetstack.io
+  chartName: cert-manager
+  chartVersion: "v1.21.1"
+  namespace: cert-manager
+  serviceAccount: cert-manager    # SA criado pelo chart; alvo da PodIdentityAssociation própria
+  acmeServer: staging             # staging | production (ver docs/letsencrypt sobre rate-limit)
+  acmeEmail: <acme-email>
+  clusterIssuerName: letsencrypt-dns-route53
+  hostedZoneId: <hosted-zone-id>   # issuer COMPARTILHADO: zona pai (ingress/TLS, não alterado)
+  # sub-zona wildcard: sub-zonas delegadas por ambiente. O solver DNS-01 do cert wildcard
+  # escreve o TXT de desafio na sub-zona (id próprio, != da pai) -> cada id entra no escopo
+  # da policy Route53 do cert-manager (fase 100). Uma entrada por ambiente/sub-zona. Spike
+  # h11c: <subzone-hosted-zone-id> (sub-zona h11c.<root-domain>).
+  extraHostedZoneIds:
+    - <subzone-hosted-zone-id>
+  # ClusterIssuers por-ambiente (fase 104): um issuer separado por sub-zona, com o
+  # hostedZoneID da SUB-ZONA (o compartilhado acima aponta para a pai). O cert wildcard do
+  # ambiente usa este issuer. clusterIssuerName-<envid> é o nome resultante.
+  subZoneIssuers:
+    - envid: h11c
+      hostedZoneId: <subzone-hosted-zone-id>
+  smokeDomain: cert-smoke-test.<root-domain>  # host de teste do Certificate de smoke
+  smokeSecretName: cert-smoke-test-tls                   # Secret TLS materializado pelo smoke
+providerConfigName: default
+tags:
+  managed-by: crossplane
+  project: poc-cloud-idp

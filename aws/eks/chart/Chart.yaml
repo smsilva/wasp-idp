@@ -1,0 +1,6 @@
+apiVersion: v2
+name: aws-eks
+description: Managed Resources do Crossplane para provisionar um cluster EKS na AWS
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

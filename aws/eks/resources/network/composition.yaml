@@ -1,0 +1,453 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: network-eks
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: Network
+  # Pegada de REDE durável (16 MRs): VPC, 4 Subnets, IGW, EIP, NAT, 2 RouteTables, 2 Routes,
+  # 4 RouteTableAssociations. Migração 1:1 da Composition monolítica environment-eks,
+  # SEM mudança de comportamento — mesmos CIDRs, AZs, tags, external-names.
+  #
+  # DUAS diferenças em relação à monolítica, ambas para o cruzamento cross-XR (Network→Cluster):
+  #  (1) TODOS os MRs ganham o label environment.example.com/env=<id> (patch de spec.id).
+  #      É o discriminador que impede o Cluster de casar subnets de OUTRO Environment no mesmo hub.
+  #  (2) Selectors INTERNOS (VPC→subnet, NAT→eip/subnet, route→rt/gw, rta→rt/subnet) mantêm
+  #      matchControllerRef: true — são resolvidos DENTRO deste XR (regra 2 do brainstorm).
+  #
+  # NAMING (lição da monolítica): NÃO setar crossplane.io/external-name em recursos cujo ID é
+  # gerado pela AWS (VPC, Subnet, IGW, EIP, NAT, RouteTable, Route, RTA) — setá-lo faria o
+  # provider tentar ADOTAR um recurso inexistente em vez de criar. Nome amigável vai em tags.Name.
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        # patchSets: o label env=<id> é idêntico em todos os MRs → 1 patchSet reusável.
+        patchSets:
+          - name: env-label
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.id
+                toFieldPath: metadata.labels[environment.example.com/env]
+          - name: region
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.region
+                toFieldPath: spec.forProvider.region
+        resources:
+          # ---------- 10 VPC ----------
+          - name: vpc
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: VPC
+              metadata:
+                labels:
+                  environment.example.com/role: vpc
+              spec:
+                forProvider:
+                  cidrBlock: 172.16.0.0/16
+                  enableDnsSupport: true
+                  enableDnsHostnames: true
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-vpc" }
+                toFieldPath: spec.forProvider.tags.Name
+              # status: publica o ID real da VPC de volta ao XR (diagnóstico).
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.id
+                toFieldPath: status.vpcId
+          # ---------- 20 Subnets (4) ----------
+          - name: subnet-public-1a
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: Subnet
+              metadata:
+                labels:
+                  environment.example.com/role: public-1a
+                  environment.example.com/tier: public
+                  environment.example.com/cluster-subnet: "true"
+              spec:
+                forProvider:
+                  availabilityZone: us-east-1a
+                  cidrBlock: 172.16.1.0/24
+                  mapPublicIpOnLaunch: true
+                  vpcIdSelector:
+                    matchControllerRef: true
+                  tags:
+                    kubernetes.io/role/elb: "1"
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-public-1a" }
+                toFieldPath: spec.forProvider.tags.Name
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.id
+                toFieldPath: status.subnetIds.publicA
+          - name: subnet-public-1b
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: Subnet
+              metadata:
+                labels:
+                  environment.example.com/role: public-1b
+                  environment.example.com/tier: public
+                  environment.example.com/cluster-subnet: "true"
+              spec:
+                forProvider:
+                  availabilityZone: us-east-1b
+                  cidrBlock: 172.16.2.0/24
+                  mapPublicIpOnLaunch: true
+                  vpcIdSelector:
+                    matchControllerRef: true
+                  tags:
+                    kubernetes.io/role/elb: "1"
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-public-1b" }
+                toFieldPath: spec.forProvider.tags.Name
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.id
+                toFieldPath: status.subnetIds.publicB
+          - name: subnet-private-1a
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: Subnet
+              metadata:
+                labels:
+                  environment.example.com/role: private-1a
+                  environment.example.com/tier: private
+                  environment.example.com/cluster-subnet: "true"
+              spec:
+                forProvider:
+                  availabilityZone: us-east-1a
+                  cidrBlock: 172.16.3.0/24
+                  vpcIdSelector:
+                    matchControllerRef: true
+                  tags:
+                    kubernetes.io/role/internal-elb: "1"
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-private-1a" }
+                toFieldPath: spec.forProvider.tags.Name
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.id
+                toFieldPath: status.subnetIds.privateA
+          - name: subnet-private-1b
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: Subnet
+              metadata:
+                labels:
+                  environment.example.com/role: private-1b
+                  environment.example.com/tier: private
+                  environment.example.com/cluster-subnet: "true"
+              spec:
+                forProvider:
+                  availabilityZone: us-east-1b
+                  cidrBlock: 172.16.4.0/24
+                  vpcIdSelector:
+                    matchControllerRef: true
+                  tags:
+                    kubernetes.io/role/internal-elb: "1"
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-private-1b" }
+                toFieldPath: spec.forProvider.tags.Name
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.id
+                toFieldPath: status.subnetIds.privateB
+          # ---------- 30 Network access (IGW, EIP, NAT, route tables, routes, RTAs) ----------
+          # Route e RouteTableAssociation NÃO têm campo tags (identificados por controller-ref).
+          - name: igw
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: InternetGateway
+              metadata:
+                labels:
+                  environment.example.com/role: igw
+              spec:
+                forProvider:
+                  vpcIdSelector:
+                    matchControllerRef: true
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-igw" }
+                toFieldPath: spec.forProvider.tags.Name
+          - name: nat-eip
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: EIP
+              metadata:
+                labels:
+                  environment.example.com/role: nat-eip
+              spec:
+                forProvider:
+                  domain: vpc
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-nat-eip" }
+                toFieldPath: spec.forProvider.tags.Name
+          - name: nat
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: NATGateway
+              metadata:
+                labels:
+                  environment.example.com/role: nat
+              spec:
+                forProvider:
+                  connectivityType: public
+                  allocationIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: nat-eip
+                  subnetIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: public-1a
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-nat" }
+                toFieldPath: spec.forProvider.tags.Name
+          - name: rt-public
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: RouteTable
+              metadata:
+                labels:
+                  environment.example.com/role: rt-public
+              spec:
+                forProvider:
+                  vpcIdSelector:
+                    matchControllerRef: true
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-rt-public" }
+                toFieldPath: spec.forProvider.tags.Name
+          - name: rt-private
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: RouteTable
+              metadata:
+                labels:
+                  environment.example.com/role: rt-private
+              spec:
+                forProvider:
+                  vpcIdSelector:
+                    matchControllerRef: true
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: spec.prefix
+                    - fromFieldPath: spec.id
+                  strategy: string
+                  string: { fmt: "%s-%s-rt-private" }
+                toFieldPath: spec.forProvider.tags.Name
+          - name: route-public-igw
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: Route
+              spec:
+                forProvider:
+                  destinationCidrBlock: 0.0.0.0/0
+                  routeTableIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: rt-public
+                  gatewayIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: igw
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+          - name: route-private-nat
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: Route
+              spec:
+                forProvider:
+                  destinationCidrBlock: 0.0.0.0/0
+                  routeTableIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: rt-private
+                  natGatewayIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: nat
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+          - name: rta-public-1a
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: RouteTableAssociation
+              spec:
+                forProvider:
+                  routeTableIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: rt-public
+                  subnetIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: public-1a
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+          - name: rta-public-1b
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: RouteTableAssociation
+              spec:
+                forProvider:
+                  routeTableIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: rt-public
+                  subnetIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: public-1b
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+          - name: rta-private-1a
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: RouteTableAssociation
+              spec:
+                forProvider:
+                  routeTableIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: rt-private
+                  subnetIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: private-1a
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region
+          - name: rta-private-1b
+            base:
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: RouteTableAssociation
+              spec:
+                forProvider:
+                  routeTableIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: rt-private
+                  subnetIdSelector:
+                    matchControllerRef: true
+                    matchLabels:
+                      environment.example.com/role: private-1b
+            patches:
+              - type: PatchSet
+                patchSetName: env-label
+              - type: PatchSet
+                patchSetName: region

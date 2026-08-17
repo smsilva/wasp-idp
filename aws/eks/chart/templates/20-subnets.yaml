@@ -1,0 +1,67 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: {{ $fullClusterName }}-public-1a
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    availabilityZone: {{ index .Values.subnets.azs 0 }}
+    cidrBlock: {{ index .Values.subnets.public 0 }}
+    mapPublicIpOnLaunch: true
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-public-1a
+      kubernetes.io/role/elb: "1"
+      kubernetes.io/cluster/{{ $fullClusterName }}: owned
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: {{ $fullClusterName }}-public-1b
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    availabilityZone: {{ index .Values.subnets.azs 1 }}
+    cidrBlock: {{ index .Values.subnets.public 1 }}
+    mapPublicIpOnLaunch: true
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-public-1b
+      kubernetes.io/role/elb: "1"
+      kubernetes.io/cluster/{{ $fullClusterName }}: owned
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: {{ $fullClusterName }}-private-1a
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    availabilityZone: {{ index .Values.subnets.azs 0 }}
+    cidrBlock: {{ index .Values.subnets.private 0 }}
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-private-1a
+      kubernetes.io/role/internal-elb: "1"
+      kubernetes.io/cluster/{{ $fullClusterName }}: owned
+---
+apiVersion: ec2.aws.upbound.io/v1beta1
+kind: Subnet
+metadata:
+  name: {{ $fullClusterName }}-private-1b
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    availabilityZone: {{ index .Values.subnets.azs 1 }}
+    cidrBlock: {{ index .Values.subnets.private 1 }}
+    vpcIdRef:
+      name: {{ $fullClusterName }}-vpc
+    tags:
+      Name: {{ $fullClusterName }}-private-1b
+      kubernetes.io/role/internal-elb: "1"
+      kubernetes.io/cluster/{{ $fullClusterName }}: owned

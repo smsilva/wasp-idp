@@ -1,0 +1,63 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $es := .Values.externalSecrets -}}
+{{- if $es.enabled }}
+# Config do ESO aplicada DENTRO do EKS via provider-kubernetes (Object). São CRs do ESO
+# (external-secrets.io/v1 — API estável servida pelo chart 2.9.0; migrado de
+# v1beta1, removida no operator 0.17+), logo dependem do Release (fase 82) ter registrado os
+# CRDs. O provider-kubernetes usa o ProviderConfig <full>-k8s (fase 74). ADR decisão 5:
+# plataforma via Crossplane (Object), não kubectl imperativo.
+---
+# ClusterSecretStore provider aws/SecretsManager. Sem bloco `auth` -> o ESO usa a cadeia
+# de credenciais padrão do SDK, que no cluster resolve para a Pod Identity da fase 82
+# (AWS_CONTAINER_CREDENTIALS_FULL_URI injetado no pod). Status Valid = credencial OK
+# (2º critério de aceite).
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: {{ $fullClusterName }}-eso-clustersecretstore
+spec:
+  providerConfigRef:
+    name: {{ $fullClusterName }}-k8s
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ClusterSecretStore
+      metadata:
+        name: aws-secrets-manager
+      spec:
+        provider:
+          aws:
+            service: SecretsManager
+            region: {{ .Values.region }}
+---
+# ExternalSecret de smoke: materializa um Secret k8s a partir de <smokeSecretName> no
+# Secrets Manager (3º critério de aceite). O secret é criado à mão antes da validação
+# (ver README). Fica no ns do ESO; property extrai a chave do JSON.
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: {{ $fullClusterName }}-eso-smoke
+spec:
+  providerConfigRef:
+    name: {{ $fullClusterName }}-k8s
+  forProvider:
+    manifest:
+      apiVersion: external-secrets.io/v1
+      kind: ExternalSecret
+      metadata:
+        name: eso-smoke-test
+        namespace: {{ $es.namespace | quote }}
+      spec:
+        refreshInterval: 1h
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: aws-secrets-manager
+        target:
+          name: eso-smoke-test
+          creationPolicy: Owner
+        data:
+          - secretKey: {{ $es.smokeSecretKey | quote }}
+            remoteRef:
+              key: {{ $es.smokeSecretName | quote }}
+              property: {{ $es.smokeSecretKey | quote }}
+{{- end }}

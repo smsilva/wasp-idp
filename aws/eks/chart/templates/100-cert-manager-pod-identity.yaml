@@ -1,0 +1,101 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $cm := .Values.certManager -}}
+{{- if $cm.enabled }}
+# Pod Identity do cert-manager (fatia 2). Mesmo MOLDE das fases 80/86/90 (Role ->
+# inline policy -> PodIdentityAssociation). Role PRÓPRIA (não reusa a do
+# external-dns): trust/escopo separados por serviço, mesmo mirando a MESMA zona Route53
+# compartilhada — cada operador só assume a credencial que precisa, sem depender de
+# ownership cruzado. Aplicada ANTES do Release (fase 102): a association é recurso AWS
+# puro, então criá-la primeiro faz o pod do cert-manager nascer já com credencial —
+# elimina a race sem rollout restart, igual às fases anteriores.
+---
+# Role assumida pelos pods do cert-manager via Pod Identity.
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: {{ $fullClusterName }}-cert-manager-role
+spec:
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "pods.eks.amazonaws.com"
+            },
+            "Action": [
+              "sts:AssumeRole",
+              "sts:TagSession"
+            ]
+          }
+        ]
+      }
+    tags:
+      Name: {{ $fullClusterName }}-cert-manager-role
+---
+# Inline policy Route53 escopada à MESMA zona compartilhada do external-dns — necessária para o
+# solver DNS-01 do ACME (ClusterIssuer, fase 104) criar/remover o registro TXT de desafio
+# _acme-challenge.<host>. GetChange é read-only sobre o ID de change retornado por
+# ChangeResourceRecordSets (usado pelo cert-manager para poll de propagação).
+apiVersion: iam.aws.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: {{ $fullClusterName }}-cert-manager-route53-policy
+spec:
+  forProvider:
+    roleRef:
+      name: {{ $fullClusterName }}-cert-manager-role
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "ChangeAcmeChallengeRecordScopedToZone",
+            "Effect": "Allow",
+            "Action": [
+              "route53:ChangeResourceRecordSets"
+            ],
+            "Resource": [
+              "arn:aws:route53:::hostedzone/{{ $cm.hostedZoneId }}"
+              {{- /* sub-zona wildcard: o solver DNS-01 do cert wildcard escreve o TXT de
+                     desafio na SUB-ZONA do ambiente, não na pai. Cada sub-zona tem um
+                     hostedZoneId próprio -> precisa entrar no escopo, senão AccessDenied.
+                     Lista extensível: uma entrada por ambiente/sub-zona. */ -}}
+              {{- range $zid := $cm.extraHostedZoneIds }}
+              ,"arn:aws:route53:::hostedzone/{{ $zid }}"
+              {{- end }}
+            ]
+          },
+          {
+            "Sid": "ListZonesAndPollChangeReadOnly",
+            "Effect": "Allow",
+            "Action": [
+              "route53:ListHostedZones",
+              "route53:ListResourceRecordSets",
+              "route53:GetChange"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+---
+# Liga a Role ao SA do cert-manager (criado pelo Release, fase 102). A partir daqui os
+# pods do cert-manager assumem a Role via Pod Identity — sem serviceAccountRoleArn (IRSA).
+apiVersion: eks.aws.upbound.io/v1beta1
+kind: PodIdentityAssociation
+metadata:
+  name: {{ $fullClusterName }}-cert-manager-assoc
+spec:
+  forProvider:
+    region: {{ .Values.region }}
+    clusterNameRef:
+      name: {{ $fullClusterName }}
+    roleArnRef:
+      name: {{ $fullClusterName }}-cert-manager-role
+    namespace: {{ $cm.namespace | quote }}
+    serviceAccount: {{ $cm.serviceAccount | quote }}
+    tags:
+      Name: {{ $fullClusterName }}-cert-manager-assoc
+{{- end }}

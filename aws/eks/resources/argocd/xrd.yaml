@@ -1,0 +1,60 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: argocdinstances.platform.example.com
+spec:
+  # Cluster-scoped, como o Environment: um ArgoCDInstance é o satélite que instala o ArgoCD
+  # DENTRO do spoke de um Environment. É o 1º exemplar do padrão "satélite referencia o
+  # Environment" (model-02 + model-04). Ver
+  # docs/superpowers/specs/env-argocd-models-1b/model-02-connection-secret.md.
+  #
+  # model-02 PURO (sem environmentRef): o contrato é o Secret, não um lookup por nome do
+  # Environment. O ArgoCDInstance só conhece o connection secret publicado pelo Environment
+  # (writeConnectionSecretToRef) — desacoplamento real produtor/consumidor (artigo PE 2.0,
+  # "API-first contract"). Reusável por qualquer satélite futuro (Crossplane-no-spoke,
+  # Monitoring, Backup) do mesmo jeito — responde Q2 de graça.
+  scope: Cluster
+  group: platform.example.com
+  names:
+    kind: ArgoCDInstance
+    plural: argocdinstances
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - environmentConnectionSecretRef
+              properties:
+                environmentConnectionSecretRef:
+                  type: object
+                  description: >-
+                    Connection secret publicado pelo Environment referenciado
+                    (writeConnectionSecretToRef): carrega kubeconfig + id + domain +
+                    clusterName. O contrato É o Secret — não há lookup do XR Environment.
+                  required:
+                    - name
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                      default: crossplane-system
+                chartVersion:
+                  type: string
+                  description: Versão do chart argo-cd (argoproj helm).
+                  default: "7.7.7"
+                namespace:
+                  type: string
+                  description: Namespace onde o ArgoCD é instalado no spoke.
+                  default: argocd
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean

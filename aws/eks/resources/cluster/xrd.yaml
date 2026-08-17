@@ -1,0 +1,83 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: clusters.platform.example.com
+spec:
+  # Cluster-scoped, como Environment/Network: um Cluster é o EKS + identidade (IAM) + ponte
+  # (ClusterAuth/AccessEntry/ProviderConfigs) de um Environment. Segunda das 2 abstrações da
+  # decomposição. CONSOME a rede de um Network por LABEL (matchLabels env=<id>,
+  # sem matchControllerRef) — não por Ref-by-name (metadata.name é hasheado, imprevisível
+  # entre XRs). Ver brainstorm 2026-08-14 (Decisão 2) + blueprint XEKSCluster.
+  #
+  # Kind "Cluster" colide em nome curto com eks.aws.upbound.io/Cluster e outros — sempre
+  # qualificar por grupo (cluster.platform.example.com) em kubectl. Aceito: o brainstorm
+  # fixou o nome sem prefixo X (convenção do repo). Revisar se atrapalhar na prática.
+  scope: Cluster
+  group: platform.example.com
+  names:
+    kind: Cluster
+    plural: clusters
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: string
+                  description: >-
+                    Identificador do Environment (≤5 alfanum). DEVE bater com o id do Network
+                    correspondente — é o label environment.example.com/env=<id> que casa as
+                    subnets. Deriva os external-names do cluster (<prefix>-<id>).
+                  pattern: '^[a-z0-9]{1,5}$'
+                prefix:
+                  type: string
+                  default: poc-eks
+                region:
+                  type: string
+                  default: us-east-1
+                nodeGroup:
+                  type: object
+                  description: Configuração do NodeGroup gerenciado.
+                  properties:
+                    instanceType:
+                      type: string
+                      default: t3.medium
+                    desiredSize:
+                      type: integer
+                      default: 3
+                    minSize:
+                      type: integer
+                      default: 3
+                    maxSize:
+                      type: integer
+                      default: 4
+                  default: {}
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                clusterName:
+                  type: string
+                  description: Nome do EKS (<prefix>-<id>).
+                clusterArn:
+                  type: string
+                  description: ARN do cluster (status.atProvider.arn).
+                oidcIssuer:
+                  type: string
+                  description: >-
+                    OIDC issuer URL (status.atProvider.identity[0].oidc[0].issuer) — base de
+                    IRSA/Pod Identity para a plataforma-no-spoke (fatia futura).
+                kubeconfigSecret:
+                  type: string
+                  description: >-
+                    Nome do Secret-kubeconfig publicado pelo MR ClusterAuth em crossplane-system
+                    (<prefix>-<id>-kubeconfig). É o CONTRATO consumido por satélites (ArgoCDInstance).

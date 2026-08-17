@@ -1,0 +1,23 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $istio := .Values.istio -}}
+{{- if $istio.enabled }}
+# istiod (control plane) via provider-helm (fatia 2). Mesmo namespace istio-system
+# da fase 94 (base), da qual depende (CRDs). Aplicado ANTES do gateway (fase 98), que
+# depende do webhook de injeção do istiod para o sidecar do ingressgateway (embora o
+# gateway em si não use sidecar, o chart valida a presença do control plane).
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $fullClusterName }}-istiod
+spec:
+  forProvider:
+    namespace: {{ $istio.systemNamespace | quote }}
+    chart:
+      name: istiod
+      repository: {{ $istio.chartRepository | quote }}
+      version: {{ $istio.chartVersion | quote }}
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $fullClusterName }}-helm
+{{- end }}

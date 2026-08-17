@@ -1,0 +1,32 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $cm := .Values.certManager -}}
+{{- if $cm.enabled }}
+# cert-manager via provider-helm (fatia 2). Release = MR do Crossplane
+# (helm.crossplane.io), aplicado pelo mesmo Crossplane que provisiona o EKS (ADR decisão
+# 5). O SA do chart é o alvo da PodIdentityAssociation da fase 100, aplicada ANTES deste
+# Release — mesmo padrão anti-race das fases 82/88/92: os pods já nascem com a Pod
+# Identity resolvida. crds.enabled=true é o campo ATUAL do chart v1.21.1 (substitui o
+# installCRDs legado de versões anteriores). O ClusterIssuer (fase 104) depende dos CRDs
+# aqui instalados.
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $fullClusterName }}-cert-manager
+spec:
+  forProvider:
+    namespace: {{ $cm.namespace | quote }}
+    chart:
+      name: {{ $cm.chartName | quote }}
+      repository: {{ $cm.chartRepository | quote }}
+      version: {{ $cm.chartVersion | quote }}
+    values:
+      crds:
+        enabled: true
+      serviceAccount:
+        create: true
+        name: {{ $cm.serviceAccount | quote }}
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $fullClusterName }}-helm
+{{- end }}

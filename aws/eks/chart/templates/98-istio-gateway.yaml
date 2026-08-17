@@ -1,0 +1,32 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $istio := .Values.istio -}}
+{{- if $istio.enabled }}
+# istio ingressgateway via provider-helm (fatia 2, ADR decisão 4a). Namespace
+# próprio istio-ingress (criado pelo Release), separado do istio-system — paridade com o
+# padrão AKS de referência. O Service type LoadBalancer leva as annotations do AWS Load
+# Balancer Controller (fase 92, já com Pod Identity da fase 90) para materializar um NLB
+# (não ALB): aws-load-balancer-type=external + nlb-target-type=ip fixam o tipo; scheme
+# internet-facing expõe publicamente (paridade com o LB público do AKS de referência).
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $fullClusterName }}-istio-gateway
+spec:
+  forProvider:
+    namespace: {{ $istio.ingressNamespace | quote }}
+    chart:
+      name: gateway
+      repository: {{ $istio.chartRepository | quote }}
+      version: {{ $istio.chartVersion | quote }}
+    values:
+      service:
+        type: LoadBalancer
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: external
+          service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+          service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $fullClusterName }}-helm
+{{- end }}

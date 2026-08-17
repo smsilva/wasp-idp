@@ -1,0 +1,51 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $ed := .Values.externalDns -}}
+{{- if $ed.enabled }}
+# external-dns instalado via provider-helm no EKS remoto (fatia 2). Release = MR do
+# Crossplane (helm.crossplane.io), aplicado pelo mesmo Crossplane que provisiona o EKS (ADR
+# decisão 5 — plataforma via provider-helm). O SA do chart (serviceAccount.name) é o alvo da
+# PodIdentityAssociation da fase 86, aplicada ANTES deste Release — assim os pods já nascem
+# com a Pod Identity resolvida (sem race/rollout restart, igual ao ESO). NÃO setamos
+# serviceAccount.annotations (Pod Identity não usa annotation de role, ao contrário de IRSA).
+#
+# Isolamento na zona COMPARTILHADA (regras 1/2/4 de aceite): txtOwnerId marca cada registro
+# criado com um TXT de ownership e o external-dns só toca no que carrega essa marca;
+# domainFilters restringe aos hosts de <root-domain>; zoneIdFilters trava na zona
+# Z0624... (regra 3). policy=upsert-only nunca deleta — reforço extra contra apagar registro
+# alheio. wait=true segura o Release até o deployment ficar pronto.
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $fullClusterName }}-external-dns
+spec:
+  forProvider:
+    namespace: {{ $ed.namespace | quote }}
+    chart:
+      name: {{ $ed.chartName | quote }}
+      repository: {{ $ed.chartRepository | quote }}
+      version: {{ $ed.chartVersion | quote }}
+    values:
+      serviceAccount:
+        create: true
+        name: {{ $ed.serviceAccount | quote }}
+      provider:
+        name: aws
+      policy: {{ $ed.policy | quote }}
+      registry: txt
+      txtOwnerId: {{ $ed.txtOwnerId | quote }}
+      domainFilters:
+        - {{ $ed.domainFilter | quote }}
+      extraArgs:
+        # zone-id-filter NÃO é value first-class do chart (só domainFilters é) — vai como
+        # arg cru. Trava o external-dns na zona Z0624... (3º critério de aceite: mirar
+        # outra zona é ignorado). --aws-zone-type=public restringe a zonas públicas.
+        - --zone-id-filter={{ $ed.hostedZoneId }}
+        - --aws-zone-type=public
+      env:
+        - name: AWS_REGION
+          value: {{ .Values.region }}
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $fullClusterName }}-helm
+{{- end }}

@@ -1,0 +1,37 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $alb := .Values.awsLoadBalancerController -}}
+{{- if $alb.enabled }}
+# AWS Load Balancer Controller instalado via provider-helm no EKS remoto (fatia 2).
+# Release = MR do Crossplane (helm.crossplane.io), aplicado pelo mesmo Crossplane que
+# provisiona o EKS (ADR decisão 5). O SA do chart (serviceAccount.name) é o alvo da
+# PodIdentityAssociation da fase 90, aplicada ANTES deste Release — mesmo padrão anti-race
+# das fases 65/80/86: os pods do controller já nascem com a Pod Identity resolvida.
+#
+# clusterName/region/vpcId são explícitos (não dependem do IMDS, que os pods podem não
+# alcançar da forma esperada); vpcId vem do --set do provision-eks (VPC já criada na fase
+# 10). Subnets já carregam kubernetes.io/role/elb e .../internal-elb (fase 20) — o
+# controller as descobre por tag automaticamente. wait=true segura até o deployment
+# ficar pronto.
+---
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $fullClusterName }}-alb-controller
+spec:
+  forProvider:
+    namespace: {{ $alb.namespace | quote }}
+    chart:
+      name: {{ $alb.chartName | quote }}
+      repository: {{ $alb.chartRepository | quote }}
+      version: {{ $alb.chartVersion | quote }}
+    values:
+      clusterName: {{ $fullClusterName | quote }}
+      region: {{ .Values.region | quote }}
+      vpcId: {{ $alb.vpcId | quote }}
+      serviceAccount:
+        create: true
+        name: {{ $alb.serviceAccount | quote }}
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $fullClusterName }}-helm
+{{- end }}
