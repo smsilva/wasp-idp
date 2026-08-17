@@ -5,10 +5,42 @@ segredos).
 
 ## Pré-requisitos
 
-- Conta Hub já criada (`../accounts/03-provisionamento-de-contas.md`) e você autenticado
-  nela com uma credencial **`AdministratorAccess`** (SSO admin, não a `crossplane-poc` —
-  ela ainda não existe). Sem isso os passos ③ e ⑤ abaixo falham com `AccessDenied`.
-- `aws` CLI configurado (`aws sts get-caller-identity` deve retornar a conta Hub).
+- Conta Hub já criada (`../accounts/03-provisionamento-de-contas.md`) e você com acesso
+  **`AdministratorAccess`** **na própria conta Hub** (não a `crossplane-poc` — ela ainda
+  não existe). Sem isso os passos ③ e ⑤ abaixo falham com `AccessDenied`. Há dois caminhos
+  para obter esse admin, dependendo do estágio do Identity Center:
+
+  - **(a) Permission set SSO atribuído à conta Hub** (estado-alvo): `aws sso login --profile
+    <hub-profile>` e pronto — a identidade vira `assumed-role/AWSReservedSSO_*`. Requer que
+    o Identity Center já tenha uma atribuição para a conta Hub (ver
+    `../accounts/04-acesso-cross-account.md`).
+
+  - **(b) Cross-account via `OrganizationAccountAccessRole`** (o que vale enquanto o SSO
+    **ainda não foi propagado** para a conta-membro — caso comum logo após criar a conta).
+    A conta Hub nasce com essa role assumível a partir da management account; a forma
+    reutilizável pela CLI é um **named profile** em `~/.aws/config` que a assume:
+
+    ```ini
+    [profile hub]
+    role_arn = arn:aws:iam::<hub-account-id>:role/OrganizationAccountAccessRole
+    source_profile = <management-profile>   # profile SSO admin da management account
+    role_session_name = bootstrap-crossplane-poc
+    region = us-east-1
+    ```
+
+    O `<management-profile>` precisa de sessão SSO ativa (`aws sso login --profile
+    <management-profile>`). Detalhe do padrão em `../accounts/04-acesso-cross-account.md`.
+
+- `aws` CLI apontando para a conta Hub. **Confirme antes de qualquer passo abaixo:**
+
+  ```bash
+  export AWS_PROFILE=hub          # ou o profile do caminho (a)
+  aws sts get-caller-identity     # Account deve ser o <hub-account-id>
+  ```
+
+  Todos os comandos das etapas seguintes assumem `AWS_PROFILE` já apontando para a Hub —
+  errar a conta aqui cria a IAM user no lugar errado (ex.: na management account).
+
 - `aws/eks/providers/bootstrap-iam-policy.json` já versionado neste repo (fonte de
   verdade da policy inline — não editar `<account-id>` no arquivo; substituir só no
   comando, ver ④).

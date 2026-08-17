@@ -46,6 +46,37 @@ auto-conceder IAM).
 o padrão é **IAM Role assumível cross-account** (`sts:AssumeRole` com trust policy
 escopada à conta de origem), não um segundo IAM user duplicado na conta de destino.
 
+## Acesso admin à conta-membro *antes* de o SSO estar propagado
+
+Habilitar o Identity Center e atribuir permission sets é uma configuração à parte — logo
+após `create-account`, a conta-membro nova normalmente **ainda não tem** atribuição SSO
+própria, então `aws sso login` não a alcança. O gancho que **sempre** existe é a role
+`OrganizationAccountAccessRole` (ver `03-provisionamento-de-contas.md`, passo ④), assumível
+a partir da management account.
+
+Em vez de `aws sts assume-role` avulso (credenciais temporárias soltas no shell), o padrão
+reutilizável pela CLI é um **named profile** que a SDK renova sozinha a cada chamada:
+
+```ini
+# ~/.aws/config
+[profile <member-alias>]
+role_arn = arn:aws:iam::<member-account-id>:role/OrganizationAccountAccessRole
+source_profile = <management-profile>   # profile SSO admin da management account
+role_session_name = <session-name>
+region = <region>
+```
+
+```bash
+aws sso login --profile <management-profile>     # sessão da management ativa
+AWS_PROFILE=<member-alias> aws sts get-caller-identity
+# arn:aws:sts::<member-account-id>:assumed-role/OrganizationAccountAccessRole/<session-name>
+```
+
+O `assumed-role/OrganizationAccountAccessRole` na identidade confirma o hop cross-account.
+Continua sendo credencial **temporária** (STS via role), sem access key de longa duração —
+mesma propriedade do SSO. É acesso **de bootstrap**: serve até o permission set SSO da
+conta-membro ser criado, quando o caminho passa a ser o `aws sso login` direto acima.
+
 ## Convenção de nomenclatura de permission sets
 
 | Permission Set | Uso | Contas típicas |

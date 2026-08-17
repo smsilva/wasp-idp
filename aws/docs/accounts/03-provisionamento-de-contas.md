@@ -98,6 +98,13 @@ aws sts assume-role \
   --role-session-name bootstrap
 ```
 
+> Para uso recorrente na CLI (não só uma verificação avulsa), prefira encapsular esse
+> assume-role num **named profile** (`role_arn` + `source_profile`) em vez de exportar as
+> credenciais STS à mão — a SDK renova a sessão sozinha. Padrão em
+> [`04-acesso-cross-account.md`](04-acesso-cross-account.md#acesso-admin-à-conta-membro-antes-de-o-sso-estar-propagado).
+> É o caminho de acesso admin à conta-membro **enquanto** o permission set SSO dela não foi
+> criado (passo ⑤).
+
 ## Checklist de uma conta nova, do zero ao "pronta para workload"
 
 ```text
