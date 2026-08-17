@@ -9,6 +9,12 @@ Contexto AWS do PoC EKS via Crossplane (ver plano em
 > (`<supernet>`, `<hub-asn>`); valores reais da conta que executa a PoC não são versionados.
 > Primeiro domínio pronto: `network/`.
 
+> **Convenção de genericização:** valores por-conta/segredos (account id, zone ids, domínio,
+> e-mail) usam placeholders `<...>`; identificadores estruturais que precisam ser YAML/Crossplane
+> válido (API groups como `platform.example.com`, nomes `poc-eks`) usam valores genéricos
+> concretos — **nunca** `<...>` em campo executável. Valores reais desta conta ficam em
+> `CLAUDE.local.md` na raiz do repo (gitignored).
+
 ## Conta AWS
 
 - Conta `<account-id>` (pode **não ser isolada** — assumir que já hospeda infra de outros
