@@ -1,0 +1,42 @@
+#!/bin/bash
+# ATENÇÃO: rode via SOURCE, não execute — as credenciais precisam ficar exportadas no
+# shell chamador (configure-aws-creds/provision-eks/teardown rodam depois, como comandos
+# separados na mesma sessão; um subprocesso não consegue exportar env pro pai).
+#
+#   source aws/eks/scripts/load-crossplane-creds
+#
+# Fonte das keys: Secrets Manager (poc-idp/crossplane-poc-credentials, us-east-1) —
+# nunca um arquivo local. Mesmo padrão documentado em aws/CLAUDE.md ("Operação:
+# credenciais AWS via CLI"): recupera inline, na memória do processo, nunca persiste em
+# disco nem imprime as chaves. Pré-requisito: acesso admin ativo à conta que hospeda o
+# secret para o get-secret-value do bootstrap.
+#
+# Override (raro — outra conta/secret): exporte CROSSPLANE_SECRET_ID/
+# CROSSPLANE_SECRET_REGION antes do source.
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  echo "Erro: rode via 'source ${BASH_SOURCE[0]}', não execute direto — as credenciais" >&2
+  echo "precisam ficar exportadas no shell chamador." >&2
+  exit 1
+fi
+
+secret_id="${CROSSPLANE_SECRET_ID:-poc-idp/crossplane-poc-credentials}"
+secret_region="${CROSSPLANE_SECRET_REGION:-us-east-1}"
+
+# Atribuição explícita (não `source <(... | jq ...)`): a secret key nunca passa por
+# interpretação do shell como comando, só como valor de string — mesmo que contenha
+# metacaracteres. JSON fica só na memória do processo, nunca em arquivo.
+_secret_json="$(aws secretsmanager get-secret-value \
+  --secret-id "${secret_id}" --region "${secret_region}" \
+  --query SecretString --output text)"
+
+export AWS_ACCESS_KEY_ID
+AWS_ACCESS_KEY_ID="$(printf '%s' "${_secret_json}" | jq -r '.aws_access_key_id')"
+export AWS_SECRET_ACCESS_KEY
+AWS_SECRET_ACCESS_KEY="$(printf '%s' "${_secret_json}" | jq -r '.aws_secret_access_key')"
+unset _secret_json
+
+export AWS_DEFAULT_REGION="${secret_region}"
+unset AWS_PROFILE AWS_SESSION_TOKEN
+
+echo "Creds do Crossplane carregadas (AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:0:4}…, região ${AWS_DEFAULT_REGION})"

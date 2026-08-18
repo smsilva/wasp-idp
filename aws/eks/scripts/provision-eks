@@ -8,8 +8,8 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Provisiona o EKS em fases (10->65 base + 72->88 plataforma ESO/external-dns +
-  90->106 AWS LB Controller/istio/cert-manager), com kubectl wait nas
+  Provisiona o EKS em fases (10->65 base + 72->78 plataforma ESO/external-dns/Route53 +
+  80->106 AWS LB Controller/istio/cert-manager), com kubectl wait nas
   barreiras de readiness. 70-access NÃO entra aqui (depende do callerArn ->
   configure-access).
 
@@ -99,12 +99,23 @@ echo "crossplaneArn = ${crossplane_arn}"
 # callerArn/crossplaneArn=... satisfazem os guards `fail` de 70/72 (helm avalia TODOS os
 # templates antes de --show-only). As fases 10-60 não referenciam esses valores, e
 # 70-access nunca é emitido aqui — o placeholder de callerArn jamais chega ao cluster.
+# route53: o zoneId da sub-zona só existe depois da fase 76 (Zone Ready) — antes disso
+# fica vazio e as fases que o consomem (86/88/100/104/105) ainda não rodaram. nameServers e
+# nlbHostname idem (Zone Ready e Service do ingressgateway, respectivamente). São variáveis
+# mutáveis, preenchidas em runtime e repassadas a TODO render() via --set/--set-json.
+zone_id=""
+ns_json="[]"
+nlb_hostname=""
 render() {
   helm template "${chart_dir}" \
     --set "clusterId=${cluster_id}" \
     --set "callerArn=unused" \
     --set "awsLoadBalancerController.vpcId=${vpc_id:-}" \
     --set "crossplaneArn=${crossplane_arn}" \
+    --set "externalDns.hostedZoneId=${zone_id}" \
+    --set "certManager.hostedZoneId=${zone_id}" \
+    --set "route53.nlbHostname=${nlb_hostname}" \
+    --set-json "route53.nameServers=${ns_json}" \
     --show-only "templates/${1}"
 }
 
@@ -188,6 +199,29 @@ kubectl --context "${context}" wait "accesspolicyassociation.eks.aws.upbound.io/
 # MRs) — só aplica.
 apply_phase 74-remote-providerconfigs.yaml
 
+# Fase 9a — Sub-zona Route53 do ambiente. Criada CEDO: o zoneId é insumo das fases de
+# external-dns (86/88), cert-manager (100/104/105) e do wildcard A-alias (99). Route53 é
+# global -> o Zone não tem forProvider.region (a fase renderiza sem esse campo).
+apply_phase 76-route53-zone.yaml
+kubectl --context "${context}" wait "zone.route53.aws.upbound.io/${full}-zone" \
+  --for=condition=Ready --timeout=180s
+# Lê o zoneId + os 4 nameservers autoritativos publicados pelo Zone. A partir daqui todo
+# render() recebe zone_id (fases downstream) e ns_json (delegação).
+zone_id="$(kubectl --context "${context}" get "zone.route53.aws.upbound.io/${full}-zone" \
+  -o jsonpath='{.status.atProvider.zoneId}')"
+# nameServers é []string — jsonpath cru sai "[ns1 ns2]" (separado por espaço, sem aspas),
+# NÃO é JSON válido p/ --set-json. jq -c produz o array JSON correto ["ns1","ns2"].
+ns_json="$(kubectl --context "${context}" get "zone.route53.aws.upbound.io/${full}-zone" \
+  -o json | jq -c '.status.atProvider.nameServers')"
+echo "sub-zona Route53: zoneId=${zone_id} nameServers=${ns_json}"
+
+# Fase 9b — Delegação NS na zona pai: aponta a sub-zona para os nameservers acima. Só
+# ADICIONA um registro isolado na pai (o nome da sub-zona deste ambiente) — não toca em
+# registros de outros ambientes. Torna a delegação self-service (dig NS resolve).
+apply_phase 78-route53-delegation.yaml
+kubectl --context "${context}" wait "record.route53.aws.upbound.io/${full}-zone-delegation" \
+  --for=condition=Ready --timeout=180s
+
 # Fase 10 — Pod Identity do ESO (Role + inline policy + association) ANTES do Release. A
 # association é recurso AWS puro (não exige namespace/SA no cluster) — criá-la primeiro faz
 # o pod do ESO (fase 82) já nascer com credencial, eliminando a race que exigia rollout
@@ -265,6 +299,42 @@ apply_phase 98-istio-gateway.yaml
 kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-istio-gateway" \
   --for=condition=Ready --timeout=600s
 
+# Fase 19a — Wildcard A-alias *.<sub-zona> -> NLB. Alvo = hostname do NLB que o Service do
+# ingressgateway (fase 98) materializou. O Service vive no EKS REMOTO, não no hub k3d
+# (${context}) — precisa de um contexto kubectl próprio para o EKS. As creds do Crossplane
+# já exportadas têm cluster-admin (AccessEntry da fase 72), então usamos
+# `aws eks update-kubeconfig` com um ALIAS próprio (não conflita com o contexto `${full}`
+# que configure-access/apps/deploy criam para o operador) e removemos ao final — nunca
+# deixamos o contexto ativo apontando pro EKS (evita operar o Crossplane errado).
+eks_region="$(kubectl --context "${context}" get "cluster.eks.aws.upbound.io/${full}" \
+  -o jsonpath='{.spec.forProvider.region}')"
+eks_tmp_context="${full}-provision-tmp"
+aws eks update-kubeconfig --region "${eks_region}" --name "${full}" --alias "${eks_tmp_context}" >/dev/null
+cleanup_eks_tmp_context() {
+  kubectl config delete-context "${eks_tmp_context}" >/dev/null 2>&1 || true
+  kubectl config use-context "${context}" >/dev/null 2>&1 || true
+}
+trap cleanup_eks_tmp_context EXIT
+
+nlb_hostname=""
+for _ in $(seq 1 24); do
+  nlb_hostname="$(kubectl --context "${eks_tmp_context}" get svc "${full}-istio-gateway" -n istio-ingress \
+    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+  [ -n "${nlb_hostname}" ] && break
+  echo "Aguardando o NLB do istio-ingress publicar hostname…"
+  sleep 5
+done
+cleanup_eks_tmp_context
+trap - EXIT
+if [ -z "${nlb_hostname}" ]; then
+  echo "NLB ainda sem hostname no svc istio-ingress/${full}-istio-gateway após 2 min — o AWS Load Balancer Controller (fase 92) provisionou o NLB?" >&2
+  exit 1
+fi
+echo "wildcard A-alias -> NLB ${nlb_hostname}"
+apply_phase 99-route53-wildcard.yaml
+kubectl --context "${context}" wait "record.route53.aws.upbound.io/${full}-zone-wildcard" \
+  --for=condition=Ready --timeout=180s
+
 # Fase 20 — Pod Identity do cert-manager (fatia 2). Role PRÓPRIA (não reusa a do
 # external-dns), mesmo padrão anti-race: association ANTES do Release (fase 102).
 apply_phase 100-cert-manager-pod-identity.yaml
@@ -287,11 +357,18 @@ apply_phase 104-cert-manager-issuer.yaml
 kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-cert-manager-issuer" \
   --for=condition=Ready --timeout=180s
 
-# Fase 23 — Certificate de smoke: força um ciclo ACME completo contra o ClusterIssuer da
+# Fase 23 — Certificate WILDCARD *.<sub-zona>: o cert que as apps reusam (Secret
+# wildcard-<envid>-tls no istio-ingress). Ready=True exige delegação NS ativa (fase 78) +
+# propagação DNS; timeout amplo p/ o ciclo ACME DNS-01.
+apply_phase 105-cert-manager-wildcard.yaml
+kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-cert-manager-wildcard" \
+  --for=condition=Ready --timeout=300s
+
+# Fase 24 — Certificate de smoke: força um ciclo ACME completo contra o ClusterIssuer da
 # fase 104. Timeout maior (propagação DNS + validação ACME pode levar alguns minutos).
 apply_phase 106-cert-manager-smoke.yaml
 kubectl --context "${context}" wait "object.kubernetes.crossplane.io/${full}-cert-manager-smoke" \
   --for=condition=Ready --timeout=300s
 
-echo "EKS '${full}' provisionado (base + ESO + external-dns + LB Controller + istio + cert-manager). Rode 'make access' para configurar o kubeconfig."
+echo "EKS '${full}' provisionado (base + ESO + external-dns + LB Controller + istio + cert-manager + Route53 sub-zona/wildcard). Rode 'make access' para configurar o kubeconfig."
 kubectl --context "${context}" get managed

@@ -1,0 +1,34 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $r53 := .Values.route53 -}}
+{{- $zoneName := include "eks.zoneName" . -}}
+{{- if and $r53.enabled $r53.nlbHostname }}
+# Registro wildcard *.<sub-zona> A-alias → NLB (fatia 2). Um único A-alias ESTÁTICO por
+# ambiente cobre TODOS os hosts das apps (echo.<envid>…, foo.<envid>…) — é o que tira o
+# external-dns do caminho crítico e mata o Ingress-fantasma por app. Aplicado como
+# penúltima fase (após 98-istio-gateway): o alvo é o NLB que o Service do ingressgateway
+# materializou, cujo hostname só existe depois daquela fase.
+#
+# alias vs. records/ttl são MUTUAMENTE EXCLUSIVOS no schema do Record (ver provider
+# provider-aws-route53). Usamos alias:
+#   - name: hostname do NLB (lido em runtime pelo provision-eks, injetado via --set).
+#   - zoneId: canonical hosted zone do ELB da região (route53.albHostedZoneId), NÃO a zona
+#             do registro — é a zona interna do ELB, fixa por região.
+# zoneIdRef aponta para o Zone irmão (fase 76) por nome — determinístico, sem --set do zoneId.
+---
+apiVersion: route53.aws.upbound.io/v1beta1
+kind: Record
+metadata:
+  name: {{ $fullClusterName }}-zone-wildcard
+  labels:
+    poc.eks/cluster: {{ include "eks.fullClusterName" . }}
+spec:
+  forProvider:
+    zoneIdRef:
+      name: {{ $fullClusterName }}-zone
+    name: {{ printf "*.%s" $zoneName | quote }}
+    type: A
+    alias:
+      - name: {{ $r53.nlbHostname | quote }}
+        zoneId: {{ $r53.albHostedZoneId | quote }}
+        evaluateTargetHealth: false
+{{- end }}

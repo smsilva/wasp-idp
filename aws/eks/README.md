@@ -25,6 +25,12 @@ DNS, ingress, secrets e SSO são etapas seguintes (ver o design do épico).
   fonte de verdade. Contexto completo (conta, onde ficam as credenciais) em
   [`../CLAUDE.md`](../CLAUDE.md).
 - `aws sts get-caller-identity` deve retornar sem erro (o `make check` valida).
+- Opcional: `source scripts/load-crossplane-creds` busca essas credenciais no **Secrets
+  Manager** (secret `poc-idp/crossplane-poc-credentials`) e as exporta só na memória do
+  shell chamador — nunca em disco. É um passo **anterior** ao `configure-aws-creds`, que
+  consome essas env vars para criar o Secret k8s + `ProviderConfig`. Precisa ser rodado
+  com `source` (não executado) para as env vars sobreviverem no shell que chama os demais
+  scripts.
 
 ## Uso
 
@@ -70,13 +76,29 @@ O **control plane domina** — o restante é rápido.
 | `65-pod-identity` | agent + role + association + addon EBS CSI | ~2-3 min (+ race EBS, ver abaixo) |
 | `72-cluster-auth` | ClusterAuth + AccessEntry do Crossplane | ~1 min |
 | `74-remote-providerconfigs` | (sem Ready — só aplica) | imediato |
+| `76-route53-zone` | `Zone` da sub-zona do ambiente | ~1 min |
+| `78-route53-delegation` | `Record` NS na zona pai | ~1 min |
 | `80-eso-pod-identity` | Role + inline policy + association | ~1-2 min |
 | `82-external-secrets` | `Release` do chart ESO (wait=true) | ~2 min |
 | `84-eso-config` | 2 `Object` (ClusterSecretStore + ExternalSecret) | < 1 min |
+| `86-external-dns-pod-identity` | Role + inline policy + association | ~1-2 min |
+| `88-external-dns` | `Release` do chart external-dns | ~2 min |
+| `90-alb-controller-pod-identity` | Role + inline policy + association | ~1-2 min |
+| `92-alb-controller` | `Release` do AWS Load Balancer Controller | ~2 min |
+| `94-istio-base` | `Release` do chart istio/base (CRDs) | ~1 min |
+| `96-istiod` | `Release` do istiod (control plane) | ~1-2 min |
+| `98-istio-gateway` | `Release` do istio-gateway + NLB provisionado | ~2-3 min |
+| `99-route53-wildcard` | `Record` A-alias wildcard → NLB | ~1 min |
+| `100-cert-manager-pod-identity` | Role + inline policy + association | ~1-2 min |
+| `102-cert-manager` | `Release` do chart cert-manager | ~2 min |
+| `104-cert-manager-issuer` | `ClusterIssuer` ACME DNS-01 | ~1 min |
+| `105-cert-manager-wildcard` | `Certificate` wildcard (ciclo ACME DNS-01) | ~2-4 min |
+| `106-cert-manager-smoke` | `Certificate` de smoke (ciclo ACME completo) | ~2-4 min |
 
-**Total:** base (`10`→`65`) **~28-30 min** (control plane é o gargalo); camada ESO
-(`72`→`84`) **~6-8 min**. Reusar o k3d/Crossplane já de pé (`make up` prévio) poupa só o
-bootstrap local — o control plane EKS continua sendo ~12-15 min a cada provisão.
+**Total:** base (`10`→`65`) **~28-30 min** (control plane é o gargalo); camada de
+plataforma (`72`→`106` — ESO, external-dns, LB Controller, istio, Route53 sub-zona/wildcard
+e cert-manager) **~20-25 min**. Reusar o k3d/Crossplane já de pé (`make up` prévio) poupa
+só o bootstrap local — o control plane EKS continua sendo ~12-15 min a cada provisão.
 
 ## Nome dos recursos e `.cluster-id`
 
@@ -169,6 +191,13 @@ confirmar que `kubectl get managed` ficou vazio, e só então destruir o k3d —
   (`…:assumed-role/ROLE/SESSION`), mas o EKS exige o ARN da *role* IAM com path SSO
   (`…:role/aws-reserved/sso.amazonaws.com/…`). `configure-access` resolve isso via
   `iam get-role`.
+- **Token STS do ClusterAuth expira em ~15 min — `refreshPeriod: 7m` é obrigatório.**
+  `72-cluster-auth.yaml` grava o kubeconfig do EKS remoto num Secret a partir de um token
+  `aws eks get-token`, que só dura ~15 min. Sem `refreshPeriod`, o `ClusterAuth` só
+  regravava o Secret no poll-interval padrão do provider (10 min–1h) — janela **maior**
+  que o TTL do token, então `provider-helm`/`provider-kubernetes` passavam a falhar com
+  `Unauthorized` depois de um tempo. `refreshPeriod: 7m` dá folga confortável sobre os
+  15 min.
 - **`UnhealthyPackageRevision`** nos providers = versões desalinhadas
   (provider ⇄ provider-family). Ver [`../CLAUDE.md`](../CLAUDE.md).
 - **VPN corporativa quebra o pull dos providers** (`x509: unknown authority` de
@@ -338,16 +367,49 @@ aws secretsmanager delete-secret --secret-id poc-eks/smoke \
   --force-delete-without-recovery --region us-east-1
 ```
 
+## Sub-zona Route53 delegada por ambiente (self-service)
+
+Cada ambiente ganha, via Crossplane (`provider-aws-route53`), uma **sub-zona Route53
+própria**, delegada self-service a partir da zona pai — modelo que substitui uma zona
+compartilhada com registro-por-app (que exigiria um Ingress-fantasma por app, já que o
+external-dns não enxerga `Gateway`/`VirtualService` istio, e deixaria DNS órfão no
+teardown, pois `upsert-only` nunca deleta).
+
+| Fase | MR | Papel |
+|---|---|---|
+| `76-route53-zone` | `Zone` (`route53.aws.upbound.io`) | Cria a hosted zone pública `<clusterId>.<domainSuffix>` (`forceDestroy: true`). Aplicada CEDO (logo após `74`): o `zoneId` publicado em `status.atProvider` é insumo do external-dns (`86`/`88`), cert-manager (`100`/`104`/`105`) e do wildcard (`99`). Route53 é global → sem `forProvider.region`. |
+| `78-route53-delegation` | `Record` NS | Delegação NS na zona **pai** (`route53.parentZoneId`) apontando a sub-zona para os 4 nameservers do Zone (lidos em runtime). Torna a delegação **self-service** — sem chamado a um time central de DNS. Só ADICIONA um registro isolado na pai; não toca em registros de outros ambientes. |
+
+O `provision-eks` lê `zoneId` + `nameServers` do Zone Ready (fase 76) e, mais adiante, o
+hostname do NLB do istio-ingress (fase 98), injetando ambos via `--set` nas fases
+downstream (`externalDns.hostedZoneId`, `certManager.hostedZoneId`,
+`route53.nlbHostname`, `route53.nameServers`) — mesmo padrão do `vpcId`. O `zoneId` deixa
+de ser criado à mão no console e hardcoded no `values.yaml`.
+
+Duas fases fecham o modelo mais adiante no pipeline (ver a seção de ingress abaixo):
+`99-route53-wildcard` (o A-alias wildcard → NLB) e `105-cert-manager-wildcard` (o cert
+wildcard). Com isso, o external-dns **sai do caminho crítico das apps** — cada app publica
+só um `Gateway`+`VirtualService` reusando o Secret TLS wildcard, sem Ingress-fantasma nem
+Certificate próprio (o modo `perApp` legado permanece disponível — ver a seção `echo`
+abaixo).
+
+### ⚠️ Risco: deletar a Zone troca os nameservers
+
+Cada hosted zone recebe **nameservers próprios na criação**. Deletar a `Zone` (fase 76) e
+recriá-la gera **NS diferentes**, invalidando a delegação. Aqui isso é **aceitável**: a
+sub-zona é **efêmera por ambiente** e a delegação NS (fase 78) é recriada self-service a
+cada provisão. O `teardown` remove a Zone junto com o ambiente (com os registros dentro,
+via `forceDestroy: true`) — não há limpeza manual de DNS órfão.
+
 ## Ingress istio + AWS Load Balancer Controller (NLB) + cert-manager (fatia 2)
 
 Terceira peça de plataforma: data plane de ingress via **istio ingress-gateway**, exposto
 publicamente por um **NLB** que o **AWS Load Balancer Controller** materializa a partir do
 `Service type LoadBalancer` do gateway, e **TLS automático** via **cert-manager** +
-`ClusterIssuer` ACME Let's Encrypt (validação **DNS-01** na mesma zona Route53 compartilhada
-do external-dns). Decisões 4a/4b do ADR
-(`docs/superpowers/specs/2026-08-12-eks-stack-aplicacao-fatia2-design.md`).
+`ClusterIssuer` ACME Let's Encrypt (validação **DNS-01** na sub-zona Route53 do próprio
+ambiente — ver a seção acima).
 
-### MRs (fases 90/92 → 94/96/98 → 100/102/104/106)
+### MRs (fases 90/92 → 94/96/98/99 → 100/102/104/105/106)
 
 | Fase | MR | Papel |
 |---|---|---|
@@ -356,15 +418,17 @@ do external-dns). Decisões 4a/4b do ADR
 | `94-istio-base` | `Release` | Chart `istio/base` (repo `istio-release.storage.googleapis.com/charts`, versão 1.30.3) — CRDs do istio, ns `istio-system`. |
 | `96-istiod` | `Release` | Chart `istio/istiod`, mesmo ns/versão — control plane. Depende dos CRDs da fase 94. |
 | `98-istio-gateway` | `Release` | Chart `istio/gateway`, ns próprio `istio-ingress` (paridade com o padrão AKS de referência). `Service type LoadBalancer` com annotations `aws-load-balancer-type: external` + `nlb-target-type: ip` + `scheme: internet-facing` → o LB Controller (fase 92) materializa um **NLB** público. |
-| `100-cert-manager-pod-identity` | `Role` + `RolePolicy` (inline) + `PodIdentityAssociation` | Molde canônico, Role **própria** (não reusa a do external-dns/external-dns) escopada a `route53:ChangeResourceRecordSets` na MESMA `hostedZoneId` do external-dns + `ListHostedZones`/`ListResourceRecordSets`/`GetChange` read-only. Par ns/SA: `cert-manager`/`cert-manager`. **Aplicada antes do Release**. |
+| `99-route53-wildcard` | `Record` (`route53.aws.upbound.io`) | Wildcard `*.<sub-zona>` **A-alias → NLB** (ver seção Route53 acima). Alvo = hostname do NLB do ingressgateway (fase 98, lido em runtime); `alias.zoneId` = canonical zone do ELB `us-east-1` (`route53.albHostedZoneId`). Um único registro estático cobre todos os hosts das apps. |
+| `100-cert-manager-pod-identity` | `Role` + `RolePolicy` (inline) + `PodIdentityAssociation` | Molde canônico, Role **própria** (não reusa a do external-dns) escopada a `route53:ChangeResourceRecordSets` na sub-zona do ambiente (`certManager.hostedZoneId`, dinâmico, fase 76) + `ListHostedZones`/`ListResourceRecordSets`/`GetChange` read-only. Par ns/SA: `cert-manager`/`cert-manager`. **Aplicada antes do Release**. |
 | `102-cert-manager` | `Release` | Chart `jetstack/cert-manager` (repo `charts.jetstack.io`, versão v1.21.1) no ns `cert-manager`. `crds.enabled: true` é o campo **atual** do chart (substitui o `installCRDs` legado). |
-| `104-cert-manager-issuer` | `Object` (`kubernetes.crossplane.io`) | `ClusterIssuer` ACME com solver **DNS-01** via Route53 (**divergência intencional** vs. a referência AKS, que usa HTTP-01/Ingress — decisão 4b do ADR). `server` alterna staging/production por `.Values.certManager.acmeServer`. Sem bloco de credenciais explícito: resolve via Pod Identity da fase 100, igual ao `ClusterSecretStore` do ESO (fase 84). |
+| `104-cert-manager-issuer` | `Object` (`kubernetes.crossplane.io`) | `ClusterIssuer` ACME com solver **DNS-01** via Route53 na sub-zona do ambiente (`hostedZoneID` dinâmico, fase 76). `server` alterna staging/production por `.Values.certManager.acmeServer`. Sem bloco de credenciais explícito: resolve via Pod Identity da fase 100, igual ao `ClusterSecretStore` do ESO (fase 84). |
+| `105-cert-manager-wildcard` | `Object` | `Certificate` **wildcard** `*.<sub-zona>` → Secret `wildcard-<clusterId>-tls` no ns `istio-ingress`. É o cert que as apps reusam (via `Gateway` istio), sem `Certificate` por app. |
 | `106-cert-manager-smoke` | `Object` | `Certificate` de smoke — força um ciclo ACME completo contra o `ClusterIssuer` (ver critérios de aceite abaixo). |
 
-### ⚠️ Pegadinha: Role própria para o cert-manager, mesma zona do external-dns
+### ⚠️ Pegadinha: Role própria para o cert-manager, mesma sub-zona do external-dns
 
-O cert-manager e o external-dns miram a **mesma hosted zone Route53** compartilhada, mas
-**não compartilham Role**: cada serviço tem sua própria (fase `86` vs. `100`), com trust e
+O cert-manager e o external-dns miram a **mesma sub-zona Route53 do ambiente**, mas **não
+compartilham Role**: cada serviço tem sua própria (fase `86` vs. `100`), com trust e
 escopo de policy separados. Reusar a Role do external-dns funcionaria tecnicamente (mesma
 zona), mas acopla dois operadores por uma credencial comum sem necessidade — o padrão
 adotado nas fases anteriores (uma Role por serviço, mesmo mirando o mesmo recurso AWS) é
@@ -419,9 +483,10 @@ rate-limit do Let's Encrypt na PoC — o certificado emitido **não é confiáve
 quando a app for exposta de verdade.
 
 **Limpeza do smoke:** o `Certificate`/`Secret` de smoke ficam até o teardown; o registro TXT
-de desafio ACME (`_acme-challenge.cert-smoke-test.<root-domain>`) na zona
-compartilhada não é removido automaticamente ao deletar o `Certificate` — checar e limpar à
-mão se necessário.
+de desafio ACME (`_acme-challenge.cert-smoke-test.<clusterId>.<root-domain>`) na sub-zona do
+ambiente não é removido automaticamente ao deletar o `Certificate` — checar e limpar à mão
+se necessário (ou simplesmente destruir o ambiente, que apaga a sub-zona inteira via
+`forceDestroy: true`).
 
 ## Aplicações — `echo` (smoke aberto) (fatia 2)
 
@@ -431,36 +496,45 @@ Crossplane: `echo` (httpbin) é instalado por **helm PURO, fora do Crossplane** 
 `aws/eks/apps/echo/` (chart helm) e o deploy é encapsulado em `aws/eks/apps/deploy`.
 
 `echo` é o smoke **aberto** (sem SSO — o gate OIDC entra numa etapa posterior): exercita a plataforma-base
-ponta a ponta com uma app trivial e descartável. Fluxo E2E validado:
-`browser → echo.<root-domain> → Route53 (A) → NLB → istio-ingressgateway →
-VirtualService → httpbin (200)`.
+ponta a ponta com uma app trivial e descartável. Fluxo E2E validado (modo `wildcard`,
+default):
+`browser → echo.<clusterId>.<root-domain> → Route53 (A-alias wildcard) → NLB →
+istio-ingressgateway → VirtualService → httpbin (200)`.
 
 ```bash
-aws/eks/apps/deploy echo         # helm upgrade --install no contexto do EKS
+aws/eks/apps/deploy echo         # helm upgrade --install no contexto do EKS, modo wildcard (default)
 aws/eks/apps/clean  echo         # helm uninstall (não toca na plataforma)
 ```
 
-O script opera contra o **contexto do EKS** (`poc-eks-<id>`), não o k3d — as apps rodam no
-EKS. Ele descobre em runtime, a partir do Service do ingressgateway, o que depende do cluster
+O script opera contra o **contexto do EKS** (a ARN que `aws eks update-kubeconfig`
+grava — ver `-c,--context`/`-r,--region` no `--help`), não o k3d — as apps rodam no EKS.
+Ele descobre em runtime, a partir do Service do ingressgateway, o que depende do cluster
 corrente e injeta via `--set`:
 
 - **`gateway.selector`** — o chart oficial `gateway` do istio-release rotula os pods do
   ingressgateway com `istio: <release-name>` = `poc-eks-<id>-istio-gateway`. **NÃO** é
   `istio: ingress` (padrão do chart AKS de referência) — usar o selector errado faz o Gateway
   não casar nenhum pod e o request morre em 503.
-- **`dns.target`** — o hostname do NLB (do `.status.loadBalancer.ingress[0].hostname` do
-  Service), alvo do Ingress-fantasma abaixo.
+- **`tls.wildcardSecretName`** (modo `wildcard`) — o Secret do cert wildcard já emitido pela
+  plataforma (fase 105), reusado pelo `Gateway` da app.
+- **`dns.target`** (só no modo `perApp` legado) — o hostname do NLB, alvo do Ingress-fantasma
+  da pegadinha abaixo.
 
-### ⚠️ Pegadinha: external-dns não vê Gateway/VirtualService → Ingress-fantasma
+Modo `perApp` (`aws/eks/apps/deploy echo --mode perApp`) preserva o comportamento
+anterior — zona compartilhada + external-dns por-app — mantido para compat/comparação; as
+duas pegadinhas abaixo só se aplicam a ele.
+
+### ⚠️ Pegadinha (modo `perApp` legado): external-dns não vê Gateway/VirtualService → Ingress-fantasma
 
 O external-dns da plataforma roda com `--source=service,ingress` — **não** descobre
-`Gateway`/`VirtualService` istio. Para publicar o A-record, o chart cria um **Ingress
-"fantasma"** (`ingressClassName: istio`, backend inexistente, path que ninguém acessa) com a
-annotation `external-dns.alpha.kubernetes.io/target: <NLB>`. Esse Ingress existe **só** para o
-external-dns criar o registro; o roteamento HTTP real é 100% do `Gateway`+`VirtualService`.
-Mesmo truque do chart istio-gateway da referência AKS.
+`Gateway`/`VirtualService` istio. Para publicar o A-record por app, o chart cria um
+**Ingress "fantasma"** (`ingressClassName: istio`, backend inexistente, path que ninguém
+acessa) com a annotation `external-dns.alpha.kubernetes.io/target: <NLB>`. Esse Ingress
+existe **só** para o external-dns criar o registro; o roteamento HTTP real é 100% do
+`Gateway`+`VirtualService`. É exatamente o custo estrutural que o modo `wildcard` (default)
+elimina — ver a seção "Sub-zona Route53 delegada por ambiente" acima.
 
-### ⚠️ Pegadinha: `IngressClass istio` obrigatória (webhook do LB Controller)
+### ⚠️ Pegadinha (modo `perApp` legado): `IngressClass istio` obrigatória (webhook do LB Controller)
 
 O AWS LB Controller roda um webhook (`vingress.elbv2.k8s.aws`) que valida **todo**
 Ingress e recusa `ingressClassName` desconhecido — só existe a classe `alb` que o próprio
@@ -472,15 +546,14 @@ Ingress-fantasma passar na validação — nenhum controller a processa.
 ### Validação (4 critérios de aceite)
 
 ```bash
-id="$(cat aws/eks/.cluster-id)"; ctx="poc-eks-${id}"; host=echo.<root-domain>
+id="$(cat aws/eks/.cluster-id)"; ctx="poc-eks-${id}"; host="echo.${id}.<root-domain>"
 
-# 1. pod Running (app via helm padrão) + Certificate emitido
+# 1. pod Running (app via helm padrão) + Certificate wildcard da plataforma Ready
 kubectl --context "${ctx}" -n echo get pods
-kubectl --context "${ctx}" -n istio-ingress get certificate echo   # READY=True
+kubectl --context "${ctx}" -n istio-ingress get certificate "wildcard-${id}"   # READY=True
 
-# 2. A-record + TXT de ownership (poc-eks-idp) na zona compartilhada
-aws route53 list-resource-record-sets --hosted-zone-id <hosted-zone-id> \
-  --query "ResourceRecordSets[?contains(Name, 'echo')]"
+# 2. wildcard resolve para o NLB — sem registro Route53 por app
+dig +short A "${host}" @8.8.8.8
 
 # 3. rota pública 200 + cadeia LE staging (cert NÃO confiável no browser é esperado)
 curl -k -s -o /dev/null -w '%{http_code}\n' "https://${host}"          # 200
@@ -491,51 +564,19 @@ echo | openssl s_client -connect "${host}:443" -servername "${host}" 2>/dev/null
 curl -k -s -o /dev/null -w '%{http_code}\n' -L "http://${host}/status/200"   # 200
 ```
 
-**Limpeza do DNS:** `clean echo` faz `helm uninstall`, mas o external-dns roda
-`policy=upsert-only` e **não deleta** o A/TXT do host ao remover o Ingress-fantasma. O
-registro órfão na zona compartilhada é esperado — limpar à mão só com autorização p/ mexer na
-zona.
+No modo `wildcard` (default), `clean echo` (helm uninstall) não deixa DNS órfão — o A-alias
+wildcard e o cert são da plataforma, não da app. No modo `perApp` legado, o external-dns
+roda `policy=upsert-only` e **não deleta** o A/TXT do host ao remover o Ingress-fantasma; o
+registro órfão na zona compartilhada é esperado nesse modo — limpar à mão só com
+autorização p/ mexer na zona.
 
-## DNS — sub-zona delegada por ambiente + wildcard (fatia 2)
+## Validação end-to-end da sub-zona + wildcard
 
-Reverte o modelo de DNS da decisão 3 do ADR (zona compartilhada + registro-por-app) para
-**sub-zona Route53 delegada por ambiente + wildcard** (handoff `~/trash/environment-poc-handoff.md`,
-D1/D1.1). Motivação: o modelo por-app pagou dois custos estruturais do modelo compartilhado — o
-**Ingress-fantasma por app** (external-dns não vê Gateway/VS) e o **DNS órfão** no teardown
-(`upsert-only` não deleta). Ver o ADR-delta (2026-08-13) no design da fatia 2.
-
-**Modelo.** A plataforma provisiona, por ambiente, via Crossplane (`provider-aws-route53`):
-
-1. **Sub-zona** `<envid>.<root-domain>` (`Zone`), delegada da pai `aws.flow…` (que é
-   Route53 desta conta — a pai `<parent-domain>` é Azure DNS, fora daqui, por isso a âncora
-   é `aws.flow…` e não `flow…`).
-2. **Record NS** na pai delegando a sub-zona (TTL 60).
-3. **Record wildcard** `*.<envid>.aws…` A-alias → NLB do istio-ingressgateway.
-4. **Certificate wildcard** `*.<envid>.aws…` (cert-manager, DNS-01 na sub-zona).
-
-Com isso o external-dns **sai do caminho crítico das apps**: cada app precisa só de
-`Gateway`+`VirtualService` (reusando o Secret do cert wildcard) — **sem Ingress-fantasma, sem
-IngressClass, sem Certificate próprio**. O chart `apps/echo` ganhou o toggle `dnsMode`
-(`wildcard` default | `perApp` legado); `aws/eks/apps/deploy echo --mode wildcard` monta o host
-`echo.<envid>.aws…` e injeta o Secret wildcard.
-
-### ⚠️ Pegadinha: ClusterIssuer com hostedZoneID fixo escreve o desafio na zona ERRADA
-
-O ClusterIssuer compartilhado (`letsencrypt-dns-route53`, fase 104) tem `hostedZoneID` **fixo
-na pai**. Ao emitir o cert wildcard `*.<envid>…`, o solver DNS-01 escreveu o TXT
-`_acme-challenge.<envid>.aws…` **na pai** — mas quem é autoritativo por `<envid>.aws…` é a
-**sub-zona**, então o Let's Encrypt não achava o TXT e o desafio ficava eterno em
-`Waiting for DNS-01 challenge propagation`. **Fix:** um **ClusterIssuer por ambiente**
-(`letsencrypt-dns-route53-<envid>`, fase 104 via `certManager.subZoneIssuers`) com o
-`hostedZoneID` da **sub-zona** — sem tocar no issuer compartilhado (que outros certs usam). O
-cert wildcard do ambiente aponta para esse issuer. A policy IAM do cert-manager (fase 100,
-`certManager.extraHostedZoneIds`) precisa abranger o ARN da sub-zona, senão `AccessDenied` na
-escrita do TXT.
-
-### Validação (5 critérios — spike no `poc-eks-h11c`)
+Critérios de aceite do modelo self-service (fases `76`/`78`/`99`/`105`, ver a seção
+"Sub-zona Route53 delegada por ambiente" acima):
 
 ```bash
-envid=h11c; sub="${envid}.<root-domain>"; ctx="poc-eks-${envid}"
+id="$(cat aws/eks/.cluster-id)"; sub="${id}.<root-domain>"; ctx="poc-eks-${id}"
 
 # 1. delegação NS da sub-zona efetiva (a pai devolve os NS da sub-zona)
 dig +short NS "${sub}" @8.8.8.8
@@ -545,7 +586,7 @@ dig +short A echo."${sub}" @8.8.8.8
 dig +short A qualquer-coisa."${sub}" @8.8.8.8      # mesmo IP
 
 # 3. cert wildcard Ready + cadeia LE staging
-kubectl --context "${ctx}" -n istio-ingress get certificate wildcard-"${envid}"   # READY=True
+kubectl --context "${ctx}" -n istio-ingress get certificate wildcard-"${id}"   # READY=True
 echo | openssl s_client -connect echo."${sub}":443 -servername echo."${sub}" 2>/dev/null \
   | openssl x509 -noout -issuer -subject                        # CN=*.<sub>, issuer (STAGING) LE
 
@@ -556,12 +597,6 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://echo."${sub}"/get
 #    sobe um Gateway+VS foo.<sub> apontando ao mesmo backend → curl 200, mesmo cert,
 #    e `aws route53 list-resource-record-sets ... contains(Name,'foo')` retorna []
 ```
-
-**Entrega em duas etapas:** este é o **spike** (validado ao vivo no `h11c`; a sub-zona, o
-wildcard, o issuer por-ambiente e o cert foram criados à mão/`kubectl` sobre o cluster de pé).
-O **faseamento definitivo** no `provision-eks` (Zone/NS/wildcard/cert como fases, envid
-dinâmico, IAM por-ambiente gerado, teardown ordenado — gotcha D1: Route53 não deleta zona
-não-vazia) fica como história do modelo definitivo.
 
 ## Fatia 2 — próximas histórias
 

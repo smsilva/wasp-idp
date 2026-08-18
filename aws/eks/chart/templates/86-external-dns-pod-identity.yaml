@@ -34,13 +34,13 @@ spec:
     tags:
       Name: {{ $fullClusterName }}-external-dns-role
 ---
-# Inline policy Route53 escopada à zona compartilhada (3º critério de aceite — alterar OUTRA
-# zona é negado). A escrita (ChangeResourceRecordSets) fica presa ao ARN da hostedZoneId; as
-# ações de leitura (ListHostedZones/ListResourceRecordSets/ListTagsForResources) EXIGEM
-# Resource "*" no Route53 (ListHostedZones não suporta resource-level scoping) — são só
-# leitura, não permitem mutar registro algum, então não abrem brecha de isolamento. Quem
+# Inline policy Route53 escopada à SUB-ZONA do ambiente (alterar OUTRA zona é negado). A
+# escrita (ChangeResourceRecordSets) fica presa ao ARN do zoneId da sub-zona (dinâmico,
+# fase 76); as ações de leitura (ListHostedZones/ListResourceRecordSets/ListTagsForResources)
+# EXIGEM Resource "*" no Route53 (ListHostedZones não suporta resource-level scoping) — são
+# só leitura, não permitem mutar registro algum, então não abrem brecha de isolamento. Quem
 # garante que o external-dns não pisa em registro alheio na zona é o par txtOwnerId +
-# policy=upsert-only (regra 1/2/4 de aceite), não a IAM.
+# policy=upsert-only, não a IAM.
 apiVersion: iam.aws.upbound.io/v1beta1
 kind: RolePolicy
 metadata:

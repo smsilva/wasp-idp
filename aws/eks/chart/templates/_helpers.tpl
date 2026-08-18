@@ -22,6 +22,18 @@ unknown-account
 {{- end -}}
 {{- end -}}
 
+{{- /*
+Nome da sub-zona Route53 do ambiente: <clusterId>.<domainSuffix> (ex.:
+abc12.aws.example.com). O clusterId é o mesmo envid do host das apps
+(echo.<clusterId>.aws…), fechando o desenho de sub-zona delegada por ambiente.
+*/ -}}
+{{- define "eks.zoneName" -}}
+{{- if not .Values.clusterId -}}
+{{- fail "clusterId is empty — generate it once and pass --set clusterId=<id> (see scripts/provision-eks)" -}}
+{{- end -}}
+{{- printf "%s.%s" .Values.clusterId .Values.route53.domainSuffix -}}
+{{- end -}}
+
 {{- define "eks.commonTags" -}}
 {{- range $k, $v := .Values.tags }}
       {{ $k }}: {{ $v | quote }}

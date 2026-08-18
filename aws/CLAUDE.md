@@ -56,11 +56,16 @@ Contexto AWS do PoC EKS via Crossplane (ver plano em
   nunca persistir em arquivo — ver seção "Operação: credenciais AWS via CLI" abaixo.
 - **Nunca** commitar essas credenciais em texto plano no repo; o Secrets Manager é a
   fonte de verdade, não arquivos locais como `/tmp/.crossplane-poc-env`.
-- **Fatia 2 — DNS fixado:** external-dns e cert-manager (DNS-01) usam a hosted zone
-  Route53 **pública existente** `<root-domain>` (id `<hosted-zone-id>`,
-  `us-east-1`). Zona compartilhada com outros times → external-dns SEMPRE com
-  `--txt-owner-id=poc-eks-idp`, `--domain-filter=<root-domain>` e
-  `--zone-id-filter=<hosted-zone-id>`. Secrets da fatia 2 no prefixo `poc-eks/*`.
+- **Fatia 2 — DNS self-service (sub-zona delegada por ambiente):** cada ambiente ganha sua
+  própria hosted zone Route53 pública `<clusterId>.<root-domain>` (`Zone`, `forceDestroy:
+  true`), delegada via Record NS na zona **pai** (`route53.parentZoneId`, id
+  `<hosted-zone-id>`, `us-east-1`). external-dns escreve só DENTRO da sub-zona do próprio
+  ambiente (zoneId dinâmico, lido em runtime do Zone) — isolamento por ambiente em vez de
+  zona compartilhada com `--txt-owner-id`/`--zone-id-filter` fixos. Um único **Record
+  wildcard** `*.<clusterId>.<root-domain>` (A-alias → NLB do istio-ingress) e um único
+  **Certificate wildcard** por ambiente cobrem todas as apps — sem registro nem cert por
+  app. `certManager.hostedZoneId`/`externalDns.hostedZoneId` são strings vazias preenchidas
+  em runtime (`--set`) pelo `provision-eks`. Secrets da fatia 2 no prefixo `poc-eks/*`.
 - Nomenclatura: o Secret de auth do Crossplane chama-se `aws-iam-credential` (não
   `aws-sp-credential` — "SP"/Service Principal é termo Azure, não existe em AWS; a
   credencial vem de um IAM user).

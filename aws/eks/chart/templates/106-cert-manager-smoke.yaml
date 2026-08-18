@@ -1,10 +1,15 @@
 {{- $fullClusterName := include "eks.fullClusterName" . -}}
 {{- $cm := .Values.certManager -}}
+{{- $zoneName := include "eks.zoneName" . -}}
 {{- if $cm.enabled }}
 # Certificate de smoke (mesmo padrão do ExternalSecret de smoke, fase 84): força um ciclo
 # ACME completo (pedido -> desafio DNS-01 -> registro TXT no Route53 -> validação -> emissão)
 # contra o ClusterIssuer da fase 104. Critério de aceite: Secret {{ $cm.smokeSecretName }}
 # no ns {{ $cm.namespace }} com condição Ready=True (ver README para o comando de validação).
+#
+# O host de smoke DEVE viver DENTRO da sub-zona (<smokePrefix>.<sub-zona>) — o issuer
+# (104) resolve o desafio DNS-01 na sub-zona (hostedZoneID dela). Um host na zona pai faria
+# o cert-manager escrever o TXT na zona errada (autoritativa != solver) e a validação travaria.
 ---
 apiVersion: kubernetes.crossplane.io/v1alpha2
 kind: Object
@@ -23,7 +28,7 @@ spec:
       spec:
         secretName: {{ $cm.smokeSecretName | quote }}
         dnsNames:
-          - {{ $cm.smokeDomain | quote }}
+          - {{ printf "%s.%s" $cm.smokePrefix $zoneName | quote }}
         issuerRef:
           kind: ClusterIssuer
           name: {{ $cm.clusterIssuerName | quote }}

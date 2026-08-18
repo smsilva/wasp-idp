@@ -7,8 +7,9 @@
 # imperativo.
 #
 # DIVERGÊNCIA vs. referência AKS: o padrão AKS usa solver HTTP-01 (Ingress); aqui o
-# solver é DNS-01 via Route53 (ADR decisão 4b), reusando a MESMA zona compartilhada da
-# external-dns — não a mesma Role (Pod Identity própria, fase 100). Sem bloco de credenciais
+# solver é DNS-01 via Route53 (ADR decisão 4b), na SUB-ZONA delegada do ambiente
+# (hostedZoneID dinâmico, fase 76) — não a mesma Role (Pod Identity própria, fase 100).
+# Sem bloco de credenciais
 # explícito (accessKeyID/secretAccessKeySecretRef) -> o cert-manager usa a cadeia de
 # credenciais padrão do SDK, que no pod resolve para a Pod Identity da fase 100
 # (AWS_CONTAINER_CREDENTIALS_FULL_URI), igual ao ClusterSecretStore do ESO na fase 84.
@@ -45,43 +46,4 @@ spec:
                 route53:
                   region: {{ .Values.region | quote }}
                   hostedZoneID: {{ $cm.hostedZoneId | quote }}
-{{- if $cm.subZoneIssuers }}
-# ClusterIssuers por-ambiente: um issuer por sub-zona delegada, com
-# hostedZoneID da SUB-ZONA. Necessário porque o issuer compartilhado acima tem o
-# hostedZoneID FIXO na pai — com ele, o solver escreve o TXT de desafio de um sub-host
-# (_acme-challenge.<envid>.aws…) na PAI, mas a autoritativa é a SUB-ZONA, então o LE não
-# o encontra. Issuer separado (sem tocar no compartilhado) escreve o desafio na zona
-# certa. A policy IAM do cert-manager (fase 100) já cobre pai + extraHostedZoneIds.
-{{- range $iss := $cm.subZoneIssuers }}
----
-apiVersion: kubernetes.crossplane.io/v1alpha2
-kind: Object
-metadata:
-  name: {{ $fullClusterName }}-cert-manager-issuer-{{ $iss.envid }}
-spec:
-  providerConfigRef:
-    name: {{ $fullClusterName }}-k8s
-  forProvider:
-    manifest:
-      apiVersion: cert-manager.io/v1
-      kind: ClusterIssuer
-      metadata:
-        name: {{ $cm.clusterIssuerName }}-{{ $iss.envid }}
-      spec:
-        acme:
-          {{- if eq $cm.acmeServer "production" }}
-          server: https://acme-v02.api.letsencrypt.org/directory
-          {{- else }}
-          server: https://acme-staging-v02.api.letsencrypt.org/directory
-          {{- end }}
-          email: {{ $cm.acmeEmail | quote }}
-          privateKeySecretRef:
-            name: {{ $cm.clusterIssuerName }}-{{ $iss.envid }}-account-key
-          solvers:
-            - dns01:
-                route53:
-                  region: {{ $.Values.region | quote }}
-                  hostedZoneID: {{ $iss.hostedZoneId | quote }}
-{{- end }}
-{{- end }}
 {{- end }}

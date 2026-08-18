@@ -1,0 +1,35 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $r53 := .Values.route53 -}}
+{{- $zoneName := include "eks.zoneName" . -}}
+{{- if $r53.enabled }}
+# Sub-zona Route53 delegada por ambiente (fatia 2). Fecha o "Deferido" do plano
+# h-dns-subzona-wildcard: a zona <clusterId>.<domainSuffix> deixa de ser criada à mão no
+# console e vira recurso-filho do provisionamento (deletar => zona some). Aplicada CEDO
+# (após 74-remote-providerconfigs, antes de external-dns/cert-manager): o zoneId
+# publicado aqui é insumo do zone-id-filter do external-dns (88), da policy Route53 do
+# cert-manager (100), do issuer (104) e do wildcard A-alias (99).
+#
+# Route53 é serviço GLOBAL: o schema do Zone NÃO aceita forProvider.region (mesmo gotcha
+# do Record — ver docs/dns/). A região vem do ProviderConfig. Os 4 nameservers
+# autoritativos saem em status.atProvider.nameServers — lidos em runtime pelo
+# provision-eks e injetados na delegação NS (fase 78).
+---
+apiVersion: route53.aws.upbound.io/v1beta1
+kind: Zone
+metadata:
+  name: {{ $fullClusterName }}-zone
+  labels:
+    poc.eks/cluster: {{ include "eks.fullClusterName" . }}
+spec:
+  forProvider:
+    name: {{ $zoneName | quote }}
+    comment: "Delegated per-environment subdomain managed by poc-cloud-idp"
+    # forceDestroy: deleta a hosted zone mesmo com registros dentro. Crítico no teardown: o
+    # external-dns e os desafios DNS-01 do cert-manager criam A/TXT FORA do Crossplane (não
+    # são MRs) — sem forceDestroy a AWS recusa DeleteHostedZone (HostedZoneNotEmpty) e o
+    # teardown trava na fase 76. Seguro aqui: a sub-zona é efêmera por ambiente.
+    forceDestroy: true
+    tags:
+      Name: {{ $zoneName | quote }}
+{{- include "eks.commonTags" . }}
+{{- end }}

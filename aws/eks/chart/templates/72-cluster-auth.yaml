@@ -21,6 +21,13 @@ spec:
     region: {{ .Values.region }}
     clusterNameRef:
       name: {{ $fullClusterName }}
+    # refreshPeriod: renova o token STS ANTES de expirar. O token do `aws eks get-token`
+    # dura ~15 min (limite do EKS); sem refreshPeriod, o ClusterAuth só regrava o Secret no
+    # poll-interval padrão do provider (10 min–1h), janela MAIOR que o TTL -> o token no
+    # kubeconfig vence e provider-helm/provider-kubernetes falham com Unauthorized. 7m dá
+    # folga confortável sobre os 15 min. Ausência deste campo é o bug latente dos repos de
+    # referência.
+    refreshPeriod: 7m
   writeConnectionSecretToRef:
     name: {{ $fullClusterName }}-kubeconfig
     namespace: crossplane-system

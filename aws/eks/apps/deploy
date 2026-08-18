@@ -26,24 +26,33 @@ show_usage() {
 
       -h,  --help              Show this help
       -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
-      -c,  --context           contexto kubectl do EKS (default: poc-eks-<id>)
+      -c,  --context           contexto kubectl do EKS (default: ARN produzido por
+                                'configure-access' — ver abaixo)
       -m,  --mode              wildcard | perApp (default: wildcard)
       -b,  --base-domain       domínio base (default: <root-domain>)
+      -r,  --region            região AWS do cluster (default: us-east-1) — usada só
+                                para derivar o contexto default (ARN), se --context
+                                não for passado
 
     Examples:
 
       ${this_script_name} echo
 
       ${this_script_name} echo \\
-        --cluster-id h11c --mode wildcard
+        --cluster-id abc12 --mode wildcard
 EOF
 }
 
 mode="wildcard"
 base_domain="<root-domain>"
+region="us-east-1"
 
-while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
-  case $1 in
+# App e opções em QUALQUER ordem (o app é o único argumento posicional — o primeiro que
+# não começa com "-"). Loop antigo exigia opções ANTES do app (o while só entrava se $1
+# já começasse com "-"); o próprio Example acima ("echo --cluster-id ...") NUNCA
+# funcionou com esse parsing — as opções depois do app eram silenciosamente ignoradas.
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
     -h | --help )
       show_usage
       exit 1
@@ -69,19 +78,28 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       base_domain="${1}"
       ;;
 
-    * )
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    -- )
+      ;;
+
+    -* )
       echo "Invalid option: ${1}"
       show_usage
       exit 1
       ;;
 
+    * )
+      app="${1}"
+      ;;
   esac
   shift
 done
 
-if [[ "${1}" == '--' ]]; then shift; fi
-
-app="${1:?informe a app a instalar (ex.: ${this_script_name} echo)}"
+app="${app:?informe a app a instalar (ex.: ${this_script_name} echo)}"
 
 set -e
 
@@ -102,7 +120,16 @@ if [ -z "${cluster_id}" ]; then
 fi
 
 full="poc-eks-${cluster_id}"
-context="${context:-${full}}"
+
+# Default do contexto: a ARN que 'aws eks update-kubeconfig' grava por padrão (sem
+# --alias) — é o que 'configure-access'/'make access' produzem de fato (ver README,
+# seção EBS CSI troubleshooting, e aws/eks/scripts/configure-access). "poc-eks-<id>"
+# sozinho NUNCA existe como nome de contexto neste fluxo — só quando --context é passado
+# explicitamente (ex.: um alias customizado).
+if [ -z "${context}" ]; then
+  account_id="$(aws sts get-caller-identity --query Account --output text)"
+  context="arn:aws:eks:${region}:${account_id}:cluster/${full}"
+fi
 
 # O chart oficial `gateway` do istio-release rotula os pods do ingressgateway com
 # `istio: <release-name>`. A plataforma (fase 98) nomeia o Release <full>-istio-gateway,

@@ -15,4 +15,4 @@ spec:
       name: aws-iam-credential
       key: creds
   assumeRoleChain:
-    - roleARN: arn:aws:iam::832721568602:role/crossplane-sandbox
+    - roleARN: arn:aws:iam::<spoke-account-id>:role/crossplane-sandbox

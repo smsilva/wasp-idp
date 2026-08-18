@@ -80,6 +80,41 @@ construir a maquinaria de células agora** — só manter a indireção (`tenant
 barata de adicionar depois. Multi-region e roteamento por geolocalização (relevantes só
 quando houver soberania de dado entre regiões) ficam fora do escopo desta PoC single-region.
 
+## Hub regional — por que "1 por região" não é um detalhe de rodapé
+
+A tabela acima já diz "1 (por região, se multi-região)" — vale explicitar o porquê, porque
+é fácil ler isso como opcional e não como restrição física:
+
+- **TGW é um recurso regional.** Não existe TGW global — cada região precisa do seu
+  próprio hub (VPC hub + TGW), mesmo que a conta de Connectivity seja global e única. A
+  hierarquia real é `Conta Hub → { Hub região A, Hub região B, ... }`, não um TGW único
+  atravessando regiões.
+- **Não centralizar num hub único global.** Um spoke em `eu-west-1` roteando por um TGW em
+  `us-east-1` faz *hairpin*: o tráfego sai da região de origem, atravessa o backbone
+  inter-region, e volta — dobrando latência, adicionando custo por byte transferido entre
+  regiões, criando um SPOF que derruba duas geografias de uma vez, e (se houver dado
+  pessoal em trânsito) violando soberania de dado. Nenhuma dessas consequências é
+  hipotética: são o motivo pelo qual "hub por região" está na tabela como cardinalidade,
+  não como nota.
+- **Peering entre TGWs de regiões diferentes não é transitivo.** Se dois hubs regionais
+  precisarem se falar (ex.: replicação leste-oeste entre duas regiões), cada par de TGWs
+  exige peering direto com rotas estáticas — malha `N×(N-1)/2` entre TGWs, o mesmo
+  problema de escala que a Seção 1 já descartou para VPCs. Até 3-4 regiões isso ainda é
+  viável manualmente; a partir daí, a alternativa é o **AWS Cloud WAN** (Core Network
+  Edges formando malha via BGP, config centralizada num único policy document) — mas essa
+  troca só se justifica na escala oposta a esta PoC.
+- **Roteamento de tráfego de cliente não passa pelo TGW.** O TGW é leste-oeste
+  (attachment↔attachment): replicação, shared services, acesso administrativo. Tráfego
+  norte-sul do usuário final é resolvido por Route 53/CloudFront/Global Accelerator, com
+  roteamento **por geolocalização** quando há soberania de dado envolvida (latency
+  routing pode mandar um tenant europeu para uma célula americana só porque ele está
+  viajando — vazamento de dado pessoal não intencional).
+
+**Esta PoC é single-region, single-hub — as ponderações acima não mudam o desenho atual**;
+ficam registradas aqui para quando um segundo hub regional entrar em pauta, para que a
+decisão não seja "adicionar mais um TGW e apontar tudo pra ele" sem passar por este
+raciocínio primeiro.
+
 ## Fluxo de dados (resumo)
 
 ```text
@@ -103,7 +138,9 @@ daquele spoke. Detalhe em [`03-transit-gateway-isolamento.md`](03-transit-gatewa
 ## Limitações conhecidas nesta fase
 
 - **Failover multi-região** (Hub de uma região assume outra): fora de escopo inicial. A
-  redundância aqui é intra-região (multi-AZ + 2 túneis VPN + BGP).
+  redundância aqui é intra-região (multi-AZ + 2 túneis VPN + BGP). Multi-região de verdade
+  (hub por região + peering ou Cloud WAN entre eles, ver seção acima) é trabalho futuro,
+  não decidido.
 - **Template de criação de account**: enquanto não houver automação de account, o desenho
   opera em **conta única** (hub e spoke na mesma conta) — o código detecta e suprime RAM
   share / attachment accepter. Não é a topologia final, é o degrau de bootstrap.

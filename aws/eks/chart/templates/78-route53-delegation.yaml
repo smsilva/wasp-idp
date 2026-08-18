@@ -1,0 +1,36 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $r53 := .Values.route53 -}}
+{{- $zoneName := include "eks.zoneName" . -}}
+{{- if and $r53.enabled $r53.nameServers }}
+# Delegação NS da sub-zona na zona PAI (fatia 2). Registro NS em {{ $r53.parentZoneId }}
+# (<domainSuffix>, hosted zone DESTA conta) apontando o nome da sub-zona para os 4
+# nameservers autoritativos que o Zone (fase 76) publicou em
+# status.atProvider.nameServers. É o que torna a delegação SELF-SERVICE (mesma conta,
+# sem chamado de TI) — sem isto, dig NS <sub-zona> não resolve e o desafio DNS-01 do cert
+# wildcard falha por zona não-autoritativa.
+#
+# ATENÇÃO à premissa de isolamento do repo: só ADICIONAMOS um registro NOVO e ISOLADO na
+# zona pai (o nome da sub-zona deste ambiente). NÃO tocamos em registros de outros
+# ambientes.
+#
+# Renderizado só quando route53.nameServers está populado — o provision-eks lê os NS do
+# Zone Ready e injeta via --set-json (vazio na primeira passada, quando o Zone ainda não
+# publicou).
+---
+apiVersion: route53.aws.upbound.io/v1beta1
+kind: Record
+metadata:
+  name: {{ $fullClusterName }}-zone-delegation
+  labels:
+    poc.eks/cluster: {{ include "eks.fullClusterName" . }}
+spec:
+  forProvider:
+    zoneId: {{ $r53.parentZoneId | quote }}
+    name: {{ $zoneName | quote }}
+    type: NS
+    ttl: {{ $r53.delegationTtl }}
+    records:
+{{- range $ns := $r53.nameServers }}
+      - {{ $ns | quote }}
+{{- end }}
+{{- end }}

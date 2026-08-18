@@ -1,0 +1,40 @@
+{{- $fullClusterName := include "eks.fullClusterName" . -}}
+{{- $cm := .Values.certManager -}}
+{{- $istio := .Values.istio -}}
+{{- $zoneName := include "eks.zoneName" . -}}
+{{- if and $cm.enabled .Values.route53.enabled }}
+# Certificate WILDCARD *.<sub-zona> (fatia 2). Peça central do desenho-alvo: um único
+# cert por ambiente cobre todos os hosts das apps (echo.<envid>…, foo.<envid>…), então a
+# app precisa só reusar o Secret — sem Certificate próprio por app. Emitido via DNS-01
+# pelo ClusterIssuer da fase 104 (que já aponta para a sub-zona). O Secret nasce no ns
+# istio-ingress porque é lá que o Gateway istio resolve o TLS (credentialName via SDS).
+# Nome do Secret = wildcard-<clusterId>-tls (o mesmo que apps/deploy injeta em
+# tls.wildcardSecretName).
+#
+# Aplicado via provider-kubernetes (Object), depois do issuer (104) e antes do smoke
+# (106). Ready=True exige: delegação NS ativa (fase 78) + issuer pronto — senão o desafio
+# DNS-01 fica Ready=False (benigno) até a delegação propagar.
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  name: {{ $fullClusterName }}-cert-manager-wildcard
+spec:
+  providerConfigRef:
+    name: {{ $fullClusterName }}-k8s
+  forProvider:
+    manifest:
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      metadata:
+        name: wildcard-{{ .Values.clusterId }}
+        namespace: {{ $istio.ingressNamespace | quote }}
+      spec:
+        secretName: wildcard-{{ .Values.clusterId }}-tls
+        commonName: {{ printf "*.%s" $zoneName | quote }}
+        dnsNames:
+          - {{ printf "*.%s" $zoneName | quote }}
+        issuerRef:
+          kind: ClusterIssuer
+          name: {{ $cm.clusterIssuerName | quote }}
+{{- end }}

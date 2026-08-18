@@ -52,11 +52,24 @@ externalSecrets:
   secretPrefix: poc-eks                     # policy escopada a arn:...:secret:<secretPrefix>/*
   smokeSecretName: poc-eks/smoke            # secret de teste (criado à mão; ver README)
   smokeSecretKey: token                      # chave dentro do JSON do secret de smoke
-# external-dns (fatia 2): gerencia registros na hosted zone Route53 existente e
-# COMPARTILHADA <root-domain>. O pod autentica no Route53 via Pod Identity (Role
-# com trust pods.eks.amazonaws.com + inline policy escopada à zona hostedZoneId). Isolamento
-# na zona compartilhada por txtOwnerId + domainFilter + zoneIdFilter (só mexe no que ele
-# mesmo criou, marcado pelo TXT de ownership, e só nessa zona).
+# Route53 sub-zona delegada por ambiente (fatia 2). O provisionamento CRIA a sub-zona
+# <clusterId>.<domainSuffix> (fase 76), delega-a na pai por um Record NS (fase 78) e
+# planta um wildcard A-alias *.<sub-zona> → NLB (fase 99). nameServers/nlbHostname são
+# preenchidos pelo provision-eks via --set (lidos do Zone Ready e do Service do
+# ingressgateway); vazios no render "cru".
+route53:
+  enabled: true
+  parentZoneId: <hosted-zone-id>              # zona PAI <domainSuffix> (desta conta) — recebe só o NS da sub-zona
+  domainSuffix: <root-domain>                 # sub-zona = <clusterId>.<domainSuffix>
+  albHostedZoneId: Z26RNL4JYFTOTI              # canonical hosted zone do ELB us-east-1 (alvo do A-alias — zona interna do NLB, fixa por região)
+  delegationTtl: 60                          # TTL do Record NS de delegação (baixo: sub-zona efêmera)
+  nameServers: []                            # preenchido em runtime (--set) com status.atProvider.nameServers do Zone
+  nlbHostname: ""                            # preenchido em runtime (--set) com o hostname do NLB do istio-ingress
+# external-dns (fatia 2): gerencia registros DENTRO da sub-zona delegada do ambiente (não
+# a zona compartilhada pai). O pod autentica no Route53 via Pod Identity (Role com trust
+# pods.eks.amazonaws.com + inline policy escopada ao zoneId da sub-zona). Isolamento: cada
+# ambiente só enxerga/escreve na sua própria sub-zona (zoneId distinto por clusterId) +
+# txtOwnerId + policy=upsert-only. O zoneId é injetado em runtime.
 externalDns:
   enabled: true
   chartRepository: https://kubernetes-sigs.github.io/external-dns/
@@ -64,9 +77,8 @@ externalDns:
   chartVersion: "1.15.2"
   namespace: external-dns
   serviceAccount: external-dns               # SA criado pelo chart; alvo da PodIdentityAssociation
-  hostedZoneId: <hosted-zone-id>        # zona pública existente; policy escopada a arn:...:hostedzone/<id>
-  domainFilter: <root-domain>      # --domain-filter: só gerencia hosts nesta zona
-  txtOwnerId: poc-eks-idp                   # --txt-owner-id: marca de ownership (isolamento)
+  hostedZoneId: ""                           # zoneId da SUB-ZONA — injetado em runtime (--set) do Zone da fase 76
+  txtOwnerId: poc-eks-idp                     # --txt-owner-id: marca de ownership (isolamento)
   policy: upsert-only                         # nunca deleta registro alheio (reforça o isolamento)
 # AWS Load Balancer Controller (fatia 2): materializa um NLB para o Service
 # LoadBalancer do istio-ingressgateway (ADR decisão 4a). Pod autentica via Pod Identity
@@ -93,10 +105,11 @@ istio:
   systemNamespace: istio-system
   ingressNamespace: istio-ingress
 # cert-manager (fatia 2): ACME Let's Encrypt via ClusterIssuer, validação DNS-01 na
-# MESMA zona/Pod Identity Route53 do external-dns, mas com Role própria (não reusa a Role do external-dns,
-# escopada só a ChangeResourceRecordSets/ListHostedZones/ListResourceRecordSets, e ao SA
-# cert-manager, não ao do external-dns). acmeServer=staging evita rate-limit da PoC (cert
-# não confiável no browser é esperado); trocar para "production" quando for para valer.
+# SUB-ZONA delegada do ambiente (fase 76), com Role própria (não reusa a Role do
+# external-dns, escopada só a ChangeResourceRecordSets/ListHostedZones/ListResourceRecordSets,
+# e ao SA cert-manager, não ao do external-dns). acmeServer=staging evita rate-limit da
+# PoC (cert não confiável no browser é esperado); trocar para "production" quando for
+# para valer.
 certManager:
   enabled: true
   chartRepository: https://charts.jetstack.io
@@ -107,21 +120,13 @@ certManager:
   acmeServer: staging             # staging | production (ver docs/letsencrypt sobre rate-limit)
   acmeEmail: <acme-email>
   clusterIssuerName: letsencrypt-dns-route53
-  hostedZoneId: <hosted-zone-id>   # issuer COMPARTILHADO: zona pai (ingress/TLS, não alterado)
-  # sub-zona wildcard: sub-zonas delegadas por ambiente. O solver DNS-01 do cert wildcard
-  # escreve o TXT de desafio na sub-zona (id próprio, != da pai) -> cada id entra no escopo
-  # da policy Route53 do cert-manager (fase 100). Uma entrada por ambiente/sub-zona. Spike
-  # h11c: <subzone-hosted-zone-id> (sub-zona h11c.<root-domain>).
-  extraHostedZoneIds:
-    - <subzone-hosted-zone-id>
-  # ClusterIssuers por-ambiente (fase 104): um issuer separado por sub-zona, com o
-  # hostedZoneID da SUB-ZONA (o compartilhado acima aponta para a pai). O cert wildcard do
-  # ambiente usa este issuer. clusterIssuerName-<envid> é o nome resultante.
-  subZoneIssuers:
-    - envid: h11c
-      hostedZoneId: <subzone-hosted-zone-id>
-  smokeDomain: cert-smoke-test.<root-domain>  # host de teste do Certificate de smoke
-  smokeSecretName: cert-smoke-test-tls                   # Secret TLS materializado pelo smoke
+  # O solver DNS-01 escreve o TXT de desafio na SUB-ZONA do ambiente (id próprio,
+  # criado pela fase 76). hostedZoneId da sub-zona é injetado em runtime (--set) — antes
+  # era a pai fixa + lista extraHostedZoneIds/subZoneIssuers hardcoded por envid. Agora há
+  # UM único issuer, escopado à sub-zona corrente; nada de envid fixo.
+  hostedZoneId: ""                       # zoneId da SUB-ZONA — injetado em runtime (--set) do Zone da fase 76
+  smokePrefix: cert-smoke-test              # host de smoke = <smokePrefix>.<sub-zona> (DENTRO da sub-zona; ver fase 106)
+  smokeSecretName: cert-smoke-test-tls      # Secret TLS materializado pelo smoke
 providerConfigName: default
 tags:
   managed-by: crossplane

@@ -20,7 +20,11 @@ show_usage() {
 
       -h,  --help              Show this help
       -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
-      -c,  --context           contexto kubectl do EKS (default: poc-eks-<id>)
+      -c,  --context           contexto kubectl do EKS (default: ARN produzido por
+                                'configure-access' — ver aws/eks/apps/deploy)
+      -r,  --region            região AWS do cluster (default: us-east-1) — usada só
+                                para derivar o contexto default (ARN), se --context
+                                não for passado
 
     Examples:
 
@@ -28,8 +32,12 @@ show_usage() {
 EOF
 }
 
-while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
-  case $1 in
+region="us-east-1"
+
+# App e opções em QUALQUER ordem (mesmo parsing do apps/deploy — o loop antigo exigia
+# opções ANTES do app; ver histórico do apps/deploy para o porquê).
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
     -h | --help )
       show_usage
       exit 1
@@ -45,19 +53,28 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       context="${1}"
       ;;
 
-    * )
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    -- )
+      ;;
+
+    -* )
       echo "Invalid option: ${1}"
       show_usage
       exit 1
       ;;
 
+    * )
+      app="${1}"
+      ;;
   esac
   shift
 done
 
-if [[ "${1}" == '--' ]]; then shift; fi
-
-app="${1:?informe a app a remover (ex.: ${this_script_name} echo)}"
+app="${app:?informe a app a remover (ex.: ${this_script_name} echo)}"
 
 set -e
 
@@ -71,7 +88,14 @@ if [ -z "${cluster_id}" ]; then
   cluster_id="$(cat "${id_file}")"
 fi
 
-context="${context:-poc-eks-${cluster_id}}"
+full="poc-eks-${cluster_id}"
+
+# Mesmo default do apps/deploy: a ARN que 'aws eks update-kubeconfig' grava por padrão
+# (sem --alias) — "poc-eks-<id>" sozinho não existe como contexto neste fluxo.
+if [ -z "${context}" ]; then
+  account_id="$(aws sts get-caller-identity --query Account --output text)"
+  context="arn:aws:eks:${region}:${account_id}:cluster/${full}"
+fi
 
 echo "Removendo '${app}' do contexto ${context} (helm uninstall)..."
 helm --kube-context "${context}" uninstall "${app}"

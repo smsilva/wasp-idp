@@ -7,9 +7,10 @@ help: ## Lista os targets
 check: ## Valida binários e credenciais AWS
 	./scripts/check
 
-up: check ## Cria k3d + Crossplane + providers + credenciais AWS
+up: check ## Cria k3d + Crossplane + providers + functions + credenciais AWS
 	./scripts/install-crossplane
 	./scripts/install-providers
+	./scripts/install-functions
 	./scripts/configure-aws-creds
 
 provision: ## Provisiona o EKS (7 fases)

@@ -117,11 +117,16 @@ if [ -n "${cluster_id}" ]; then
 
   echo "Removendo EKS '${full}' (contexto ${context})"
 
+  # As fases 78/99 só renderizam com nameServers/nlbHostname populados (guard `if`). Na
+  # deleção não temos os valores reais, mas basta um placeholder não-vazio para o template
+  # emitir o MR e o kubectl deletar por nome/kind (o conteúdo é irrelevante p/ delete).
   delete_phase() {
     helm template "${chart_dir}" \
       --set "clusterId=${cluster_id}" \
       --set "callerArn=${caller_arn}" \
       --set "crossplaneArn=${caller_arn}" \
+      --set "route53.nlbHostname=placeholder-for-delete" \
+      --set-json 'route53.nameServers=["placeholder-for-delete"]' \
       --show-only "templates/${1}" \
       | kubectl --context "${context}" delete --ignore-not-found=true -f - || true
   }
@@ -131,17 +136,25 @@ if [ -n "${cluster_id}" ]; then
   # logo após o 70-access. Em cada par, o Release (chart/CRDs) ou Object é deletado antes
   # da Pod Identity para os finalizers do operador resolverem enquanto ainda há credencial.
   # O external-dns roda upsert-only (nunca deleta registro na zona), então remover o chart
-  # não apaga os A/TXT já criados no Route53 — limpar registros de smoke à mão se
-  # necessário (ver README). O ClusterIssuer/Certificate de smoke do cert-manager também
-  # deixam o registro TXT de desafio ACME órfão na zona — mesma limpeza manual se preciso.
+  # não apaga os A/TXT que ele criou no Route53. Esses registros ficariam órfãos e a AWS
+  # recusaria DeleteHostedZone (HostedZoneNotEmpty) — por isso o Zone (fase 76) tem
+  # forceDestroy: true, que apaga a zona INTEIRA (com os registros dentro). A sub-zona é
+  # efêmera por ambiente: deletá-la é o comportamento esperado.
+  #
+  # Ordem route53: primeiro os registros que dependem da Zone (99 wildcard A-alias, 78
+  # delegação NS na pai), o cert wildcard (105) junto do cert-manager, e a Zone (76) por
+  # ÚLTIMO entre os DNS — antes de 74, para os finalizers dos Records resolverem primeiro.
   for phase in 70-access.yaml \
-               106-cert-manager-smoke.yaml 104-cert-manager-issuer.yaml \
+               106-cert-manager-smoke.yaml 105-cert-manager-wildcard.yaml 104-cert-manager-issuer.yaml \
                102-cert-manager.yaml 100-cert-manager-pod-identity.yaml \
+               99-route53-wildcard.yaml \
                98-istio-gateway.yaml 96-istiod.yaml 94-istio-base.yaml \
                92-alb-controller.yaml 90-alb-controller-pod-identity.yaml \
                88-external-dns.yaml 86-external-dns-pod-identity.yaml \
                84-eso-config.yaml 82-external-secrets.yaml \
-               80-eso-pod-identity.yaml 74-remote-providerconfigs.yaml 72-cluster-auth.yaml \
+               80-eso-pod-identity.yaml \
+               78-route53-delegation.yaml 76-route53-zone.yaml \
+               74-remote-providerconfigs.yaml 72-cluster-auth.yaml \
                68-ebs-csi-driver.yaml 65-pod-identity.yaml 60-nodegroup.yaml 50-eks.yaml \
                40-iam.yaml 30-network-access.yaml 20-subnets.yaml 10-vpc.yaml; do
     echo "Removendo fase ${phase}…"

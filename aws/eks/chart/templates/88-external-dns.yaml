@@ -1,5 +1,6 @@
 {{- $fullClusterName := include "eks.fullClusterName" . -}}
 {{- $ed := .Values.externalDns -}}
+{{- $zoneName := include "eks.zoneName" . -}}
 {{- if $ed.enabled }}
 # external-dns instalado via provider-helm no EKS remoto (fatia 2). Release = MR do
 # Crossplane (helm.crossplane.io), aplicado pelo mesmo Crossplane que provisiona o EKS (ADR
@@ -8,11 +9,12 @@
 # com a Pod Identity resolvida (sem race/rollout restart, igual ao ESO). NÃO setamos
 # serviceAccount.annotations (Pod Identity não usa annotation de role, ao contrário de IRSA).
 #
-# Isolamento na zona COMPARTILHADA (regras 1/2/4 de aceite): txtOwnerId marca cada registro
-# criado com um TXT de ownership e o external-dns só toca no que carrega essa marca;
-# domainFilters restringe aos hosts de <root-domain>; zoneIdFilters trava na zona
-# Z0624... (regra 3). policy=upsert-only nunca deleta — reforço extra contra apagar registro
-# alheio. wait=true segura o Release até o deployment ficar pronto.
+# Isolamento na SUB-ZONA delegada do ambiente: txtOwnerId marca cada registro com um TXT
+# de ownership e o external-dns só toca no que carrega essa marca; domainFilters
+# restringe aos hosts de <clusterId>.<domainSuffix>; zoneIdFilters trava no zoneId da
+# sub-zona (dinâmico, fase 76). Como cada ambiente tem uma sub-zona própria, o isolamento
+# entre ambientes é estrutural (zoneId distinto). policy=upsert-only nunca deleta.
+# wait=true segura o Release até o deployment ficar pronto.
 ---
 apiVersion: helm.crossplane.io/v1beta1
 kind: Release
@@ -35,11 +37,11 @@ spec:
       registry: txt
       txtOwnerId: {{ $ed.txtOwnerId | quote }}
       domainFilters:
-        - {{ $ed.domainFilter | quote }}
+        - {{ $zoneName | quote }}
       extraArgs:
         # zone-id-filter NÃO é value first-class do chart (só domainFilters é) — vai como
-        # arg cru. Trava o external-dns na zona Z0624... (3º critério de aceite: mirar
-        # outra zona é ignorado). --aws-zone-type=public restringe a zonas públicas.
+        # arg cru. Trava o external-dns no zoneId da sub-zona (dinâmico, fase 76): mirar
+        # outra zona é ignorado. --aws-zone-type=public restringe a zonas públicas.
         - --zone-id-filter={{ $ed.hostedZoneId }}
         - --aws-zone-type=public
       env:
