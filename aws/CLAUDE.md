@@ -65,6 +65,22 @@ Contexto AWS do PoC EKS via Crossplane (ver plano em
   `aws-sp-credential` — "SP"/Service Principal é termo Azure, não existe em AWS; a
   credencial vem de um IAM user).
 
+## Fluxo de bootstrap do hub (k3d) — ordem dos scripts
+
+O hub Crossplane sobe em 4 passos idempotentes (`aws/eks/scripts/`), nesta ordem:
+
+1. **`install-crossplane`** — cria o cluster k3d `poc-idp` (3 servers) + instala o Crossplane.
+2. **`install-providers`** — aplica os 8 Providers (`providers/providers-aws.yaml`) e espera `Healthy`.
+3. **`install-functions`** — aplica as 4 Composition Functions (`providers/functions.yaml`:
+   patch-and-transform, environment-configs, auto-ready, kcl) e espera `Healthy`. **Pré-requisito
+   de qualquer Composition em `resources/`** — todas rodam `mode: Pipeline` e falham sem elas.
+   Só `patch-and-transform` é exigida pela `Network`; as outras 3 são de cluster/environment.
+4. **`configure-aws-creds`** — cria o Secret `aws-iam-credential` (a partir de
+   `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no env) + aplica o `ProviderConfig` default.
+
+Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `resources/network/`
++ `examples/current/01-network.yaml`) — esse passo cria recursos AWS reais (VPC + NAT = custo).
+
 ## Gotcha: VPN corporativa quebra o pull dos pacotes do Crossplane
 
 - Com a VPN da organização ativa, o k3d/Crossplane falha ao baixar os pacotes de

@@ -1,0 +1,78 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Instala as Composition Functions do Crossplane (patch-and-transform,
+  environment-configs, auto-ready, kcl) e espera Healthy.
+
+    Options:
+
+      -h,  --help              Show this help
+      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -t,  --timeout           Timeout de espera por function (default: 300s)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} \\
+        --cluster-name poc-idp \\
+        --timeout 300s
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -c | --cluster-name )
+      shift
+      cluster_name="${1}"
+      ;;
+
+    -t | --timeout )
+      shift
+      timeout="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+cluster_name="${cluster_name:-poc-idp}"
+timeout="${timeout:-300s}"
+
+set -e
+
+context="k3d-${cluster_name}"
+
+kubectl --context "${context}" apply -f "${this_script_directory}/../providers/functions.yaml"
+
+for function in \
+  function-patch-and-transform \
+  function-environment-configs \
+  function-auto-ready \
+  function-kcl; do
+  kubectl --context "${context}" wait "function/${function}" \
+    --for=condition=Healthy \
+    --timeout="${timeout}"
+done
+
+kubectl --context "${context}" get functions
