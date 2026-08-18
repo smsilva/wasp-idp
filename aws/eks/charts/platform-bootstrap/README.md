@@ -79,5 +79,5 @@ Composition da `Network` aplicados (`../../resources/network/`). Ver `aws/CLAUDE
 | `network.prefix` | `poc-eks` | prefixo de naming |
 | `network.region` | `us-east-1` | |
 | `network.vpcCidrSecondOctet` | `1` | N em `10.<N>.0.0/16` (supernet `10.0.0.0/12`) |
-| `waiter.image` | `bitnami/kubectl:1.31` | imagem com `kubectl` |
+| `waiter.image` | `registry.k8s.io/kubectl:v1.35.7` | imagem com `kubectl` (oficial k8s; bitnami deixou de resolver no Docker Hub) |
 | `waiter.timeout` | `600s` | timeout do `kubectl wait` (NAT domina) |
