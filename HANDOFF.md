@@ -50,12 +50,38 @@ barreira). Fatia atual só `Network`. Validado offline (`helm lint`, `helm templ
 `kubectl apply --dry-run=server`) — zero recurso AWS. Ordem entre múltiplos XRs (quando
 somar `Cluster`) decidida depois. Ver `charts/platform-bootstrap/README.md`.
 
-**Próximo passo imediato:** aplicar o `Network` — via `helm install pb
-aws/eks/charts/platform-bootstrap -n crossplane-system` (usa o chart+hooks) OU o claim
-direto `kubectl apply -f examples/current/01-network.yaml`. Qualquer um **cria VPC +
-subnets + NAT reais na conta hub (custo: NAT/EIP por hora)** — primeiro provisionamento AWS
-de verdade. Tudo pronto: hub credenciado, Composition validada. Só falta
-o "go" para aplicar e acompanhar os 16 MRs reconciliarem (`kubectl get managed`).
+Network aplicada e destruída (2026-08-18): via `helm install pb` (chart+hooks) a VPC
+`10.1.0.0/16` + 4 subnets + NAT nasceram REAIS na conta hub — validou o padrão de hook
+(waiter Job bloqueou o Helm até Ready) e revelou 1 bug (imagem `bitnami/kubectl` não
+resolve → trocada por `registry.k8s.io/kubectl:v1.35.7`). Depois `helm uninstall pb`
+destruiu tudo (VPC/NAT confirmados removidos AWS-side) — **validou o teardown limpo** (a
+razão de o XR ser recurso normal, não hook). Grupos 100 (Network) e 200 (Cluster,
+`enabled:false`) escritos no chart. Custo hoje: **zero** (nada provisionado).
+
+Cross-account preparado (2026-08-18, Fases 1-3 de 5 — commit `86c7398`): o EKS deve
+nascer numa conta SPOKE, não na hub (correção do usuário, alinhada a
+`docs/compute/00-cluster-como-spoke`). Feito: (1) role `crossplane-sandbox` na conta
+sandbox (`832721568602`) com trust p/ `crossplane-poc` + PowerUser + inline IAM;
+AssumeRole cross-account validado. (2) 2º ProviderConfig `spoke-sandbox` (assumeRoleChain)
+aplicado no k3d. (3) XRDs/Compositions Network+Cluster parametrizados com
+`spec.providerConfigName` (default=hub; spoke-sandbox=cross-account) — validado por render
+(16/11 MRs recebem o providerConfigRef; PCs remotos helm/k8s intactos).
+
+**Próximo passo imediato (Fases 4-5, pendentes):**
+- **Fase 4 — modelar hub+spokes no chart** (DECISÃO ADIADA): hoje 1 release `pb` = 1
+  Network. Opções: (A) `values.environments: [...]` com `range` (1 release gerencia tudo);
+  (B) 1 release por ambiente — `pb-hub` (Network/default) + `pb-sbx01` (Network+Cluster/
+  spoke-sandbox). Recomendado B (mais simples/idiomático; `id`/`providerConfigName`/CIDR já
+  são values). Endereçamento decidido: hub=`10.1.0.0/16`, spoke sandbox=`10.2.0.0/16` (N=2).
+- **Fase 5 — aplicar** Network spoke (`10.2`, sandbox) → EKS na sandbox. **Custo alto**
+  (NAT + EKS control plane ~US$0,10/h + 3× t3.medium). Só sob autorização.
+
+Contexto para a retomada:
+- Hub Crossplane (k3d) 100% pronto: 8 providers + 4 functions Healthy, 2 ProviderConfigs
+  (`default` hub + `spoke-sandbox`), XRDs/Composições Network+Cluster aplicados.
+- Profiles `~/.aws/config`: `hub` e `sandbox` (assume OrganizationAccountAccessRole via `personal`).
+- Direcionamento hub-and-spoke claro nas docs (`aws/docs/network/00`,`02`,`03`); distinção
+  cell-based vs. rede registrada em `00` + explorações paralelas em `aws/docs/CLAUDE.md`.
 
 Contexto para a retomada:
 - Hub Crossplane (k3d) 100% pronto: 8 providers + 4 functions Healthy, ProviderConfig ok.
