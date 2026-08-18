@@ -243,8 +243,50 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   `*.h11c…` idem. Para roteamento por path no apex (`h11c.aws…/health`): Record A do apex +
   cert com o apex no SAN + Gateway/VS no host apex.
 
-## Gotcha: `network/composition.yaml` tem VPC CIDR HARDCODED (bloqueia hub-and-spoke)
+## CIDR da Network parametrizado (Gap 1 fechado)
 
-- Toda instância de `Network` nasce com `cidrBlock: 172.16.0.0/16` fixo — incompatível com
-  hub-and-spoke (VPCs sobrepostas). Decisão de migração, gap e base de CIDR alvo:
-  `aws/docs/network/07-mapa-crossplane.md` (Gap 1) e `01-enderecamento-cidr.md`.
+- `Network` usa `spec.vpcCidrSecondOctet` (integer 1–15) na supernet `10.0.0.0/12`:
+  VPC `10.<N>.0.0/16`, subnets `10.<N>.{1,2,3,4}.0/24`. N=0 reservado p/ Org.
+- **Gotcha de patch:** o `string.Format` do patch-and-transform precisa de **`%v`**, não
+  `%d` — o integer do XRD chega ao patch como `float64` e `%d` renderiza
+  `10.%!d(float64=1).0.0/16` (lixo). Vale para qualquer patch que formate integer.
+- Spokes de tamanho != `/16` exigiriam cálculo de IP (não string-format) → extensão futura
+  via `function-kcl`.
+
+## Composition Functions: nunca `install-providers` sozinho
+
+- `install-providers` aplica só `kind: Provider`. As Composition Functions
+  (patch-and-transform etc.) que TODA Composition `mode: Pipeline` exige são instaladas por
+  `install-functions` (aplica `providers/functions.yaml`). Rodar sempre os dois.
+
+## Cross-account: EKS/VPC numa conta spoke, não na hub
+
+- Pela topologia-alvo (`docs/compute/00-cluster-como-spoke`), a VPC+EKS de um cluster
+  vivem numa conta **spoke**, não na hub (que é só rede/conectividade). O Crossplane roda na
+  hub e provisiona na spoke via **ProviderConfig com `assumeRoleChain`**.
+- Padrão: role `crossplane-<spoke>` na conta spoke com trust p/ `crossplane-poc` da hub +
+  PowerUserAccess + inline IAM (mesma `bootstrap-iam-policy.json`). Nome pela CONTA/escopo
+  (`crossplane-sandbox`), não por função — a role provisiona tudo daquela conta.
+- XRDs `Network`/`Cluster` têm `spec.providerConfigName` (enum allowlist `[default,
+  spoke-sandbox]`; ajustar por instância). Cada MR AWS recebe via patchSet `provider-config`;
+  os ProviderConfigs remotos helm/kubernetes (in-cluster) NÃO recebem.
+
+## Validação offline sem tocar a AWS
+
+- `crossplane render <xr> <composition> <functions.yaml>` renderiza os MRs via Docker, sem
+  cluster nem AWS — pega bug de patch antes de qualquer custo. Limitação: NÃO injeta
+  defaults do XRD (campo omitido no claim fica sem valor); o default só aparece server-side.
+- `helm template ... | kubectl apply --dry-run=server -f -` valida schema/RBAC contra o
+  cluster real (helm 3.12 não tem `--dry-run=server`).
+
+## Chart platform-bootstrap: XR = recurso normal, waiter = hook
+
+- `aws/eks/charts/platform-bootstrap` orquestra XRs via Helm hooks. XR é recurso NORMAL
+  (upgrade reconcilia, uninstall dispara teardown AWS via Crossplane — validado); só o Job
+  waiter (`kubectl wait ... Ready`) é hook, porque o Helm só bloqueia esperando Job
+  `Complete`, não readiness de recurso normal.
+- Imagem do waiter: `registry.k8s.io/kubectl:v1.35.7`. **`bitnami/kubectl` não resolve mais
+  no Docker Hub** → `ImagePullBackOff` → helm install falha por timeout (mas o Crossplane
+  cria a infra mesmo assim — o hook é só barreira observável).
+- Numeração 100/110/120 (Network) · 200–230 (Cluster) · 300 (ArgoCD); hook-weight = número
+  do arquivo, para inserir fases nos vãos.

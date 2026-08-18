@@ -3,145 +3,106 @@
 ## Why
 
 Exercitar a PoC AWS EKS-via-Crossplane (arquitetura de referência hub-and-spoke) na conta
-AWS **pessoal** do Silvio, de forma genérica, antes de qualquer ambiente corporativo. A pasta
-`aws/` foi copiada de um exemplo interno e teve **todas** as referências de projeto/organização
-removidas (branding, tickets, nomes de sprint, apps não-desejados).
+AWS pessoal do Silvio, genérica, antes de qualquer ambiente corporativo. `aws/` foi copiada
+de um exemplo interno e genericizada (placeholders `<...>` para valores por-conta/segredos;
+valores genéricos concretos como `platform.example.com`/`poc-eks` onde o token é YAML/
+Crossplane executável). Valores reais ficam em `CLAUDE.local.md` (gitignored).
 
-Abordagem de genericização (registrada em `aws/CLAUDE.md`): placeholders `<...>` para
-valores por-conta/segredos; valores genéricos concretos (`platform.example.com`, `poc-eks`)
-onde o token é identificador executável de YAML/Crossplane. Valores reais da conta pessoal
-ficam em `CLAUDE.local.md` (gitignored), não versionados.
-
-Rejeitado: usar `<...>` em campos executáveis (quebraria API groups do k8s); manter apêndices
-`99-apendice-cit.md` (deletados — eram só valores reais internos).
+Topologia decidida: **conta única no bootstrap → hub-and-spoke real via cross-account**. O
+Crossplane roda na conta hub e provisiona VPC+EKS numa conta **spoke** (não na hub, que é só
+rede/conectividade) via ProviderConfig com `assumeRoleChain`. TGW real adiado (Gap 2 —
+migração futura aditiva). Rejeitado: TGW agora; CIDR fixo; `<...>` em campos executáveis.
 
 ## In Progress
 
-Último passo: concluída a limpeza de `aws/` — removidas referências `ciandt`/`flow-*`,
-`litellm`, tickets `FLWP-*` e códigos de história `Hxx` (substituídos pela feature que
-representam). Criado `CLAUDE.local.md` com a estrutura da AWS Organization pessoal (accounts
-já criadas via console). Mudanças de `aws/` estão staged.
+Cross-account preparado (Fases 1-3 de 5). Feito e validado:
+- Role `crossplane-sandbox` na conta sandbox (`832721568602`): trust p/ `crossplane-poc` da
+  hub + PowerUserAccess + inline IAM. AssumeRole cross-account testado (funciona).
+- ProviderConfig `spoke-sandbox` (`assumeRoleChain`) aplicado no k3d, ao lado do `default`.
+- XRDs/Compositions `Network`+`Cluster` parametrizados com `spec.providerConfigName` (enum
+  `[default, spoke-sandbox]`); patchSet `provider-config` nos MRs AWS (16 Network / 11
+  Cluster); ProviderConfigs remotos helm/k8s NÃO recebem. Validado por `crossplane render`.
 
-Bootstrap manual da IAM user `crossplane-poc` executado com sucesso na conta `hub`
-real (`094289743086`) — ver `docs/HANDOFF-done.md` para o registro completo. Criado
-profile local `hub` em `~/.aws/config` (assume `OrganizationAccountAccessRole` a
-partir do profile `personal`) para acesso administrativo à conta `hub` sem SSO
-dedicado.
+Chart `aws/eks/charts/platform-bootstrap` tem grupos 100 (Network) e 200 (Cluster,
+`cluster.enabled:false`). Já provou o ciclo real: `helm install` criou VPC `10.1.0.0/16`+NAT
+na hub, `helm uninstall` destruiu tudo (teardown limpo confirmado AWS-side). Custo atual: **zero**.
 
-Hub Crossplane (k3d `poc-idp`) de pé e credenciado — ver `docs/HANDOFF-done.md`. Os 4
-passos do fluxo de bootstrap concluídos: `install-crossplane` → `install-providers` (8
-providers Healthy) → `install-functions` (4 Composition Functions Healthy) →
-`configure-aws-creds` (credencial autentica como `user/crossplane-poc`). A lacuna das
-Functions foi fechada nesta sessão: criados `aws/eks/providers/functions.yaml` +
-`aws/eks/scripts/install-functions` (não existiam; `install-providers` só cobria os
-`kind: Provider`).
-
-Topologia e CIDR DECIDIDOS + implementados (2026-08-18): **conta única, sem TGW** agora
-(degrau de bootstrap; migração futura a hub-spoke real é aditiva — ligar TGW+attachment —
-já que só o CIDR é irreversível). **Gap 1 fechado:** CIDR parametrizado por
-`spec.vpcCidrSecondOctet` na supernet **`10.0.0.0/12`** (1º spoke N=1 → `10.1.0.0/16`).
-Validado offline com `crossplane render` (gotcha `%d`→`%v` resolvido). Commit `97d7fdd`.
-XRD + Composition já aplicados no k3d (definições, zero recurso AWS).
-
-Exploração Helm hooks (2026-08-18): criado chart `aws/eks/charts/platform-bootstrap` que
-orquestra os XRs de `resources/` em sequência via hooks — **XR = recurso normal** (upgrade/
-uninstall limpos), **Job waiter = hook** (`kubectl wait ... Ready`, bloqueia o Helm = a
-barreira). Fatia atual só `Network`. Validado offline (`helm lint`, `helm template`,
-`kubectl apply --dry-run=server`) — zero recurso AWS. Ordem entre múltiplos XRs (quando
-somar `Cluster`) decidida depois. Ver `charts/platform-bootstrap/README.md`.
-
-Network aplicada e destruída (2026-08-18): via `helm install pb` (chart+hooks) a VPC
-`10.1.0.0/16` + 4 subnets + NAT nasceram REAIS na conta hub — validou o padrão de hook
-(waiter Job bloqueou o Helm até Ready) e revelou 1 bug (imagem `bitnami/kubectl` não
-resolve → trocada por `registry.k8s.io/kubectl:v1.35.7`). Depois `helm uninstall pb`
-destruiu tudo (VPC/NAT confirmados removidos AWS-side) — **validou o teardown limpo** (a
-razão de o XR ser recurso normal, não hook). Grupos 100 (Network) e 200 (Cluster,
-`enabled:false`) escritos no chart. Custo hoje: **zero** (nada provisionado).
-
-Cross-account preparado (2026-08-18, Fases 1-3 de 5 — commit `86c7398`): o EKS deve
-nascer numa conta SPOKE, não na hub (correção do usuário, alinhada a
-`docs/compute/00-cluster-como-spoke`). Feito: (1) role `crossplane-sandbox` na conta
-sandbox (`832721568602`) com trust p/ `crossplane-poc` + PowerUser + inline IAM;
-AssumeRole cross-account validado. (2) 2º ProviderConfig `spoke-sandbox` (assumeRoleChain)
-aplicado no k3d. (3) XRDs/Compositions Network+Cluster parametrizados com
-`spec.providerConfigName` (default=hub; spoke-sandbox=cross-account) — validado por render
-(16/11 MRs recebem o providerConfigRef; PCs remotos helm/k8s intactos).
-
-**Próximo passo imediato (Fases 4-5, pendentes):**
-- **Fase 4 — modelar hub+spokes no chart** (DECISÃO ADIADA): hoje 1 release `pb` = 1
-  Network. Opções: (A) `values.environments: [...]` com `range` (1 release gerencia tudo);
-  (B) 1 release por ambiente — `pb-hub` (Network/default) + `pb-sbx01` (Network+Cluster/
-  spoke-sandbox). Recomendado B (mais simples/idiomático; `id`/`providerConfigName`/CIDR já
-  são values). Endereçamento decidido: hub=`10.1.0.0/16`, spoke sandbox=`10.2.0.0/16` (N=2).
-- **Fase 5 — aplicar** Network spoke (`10.2`, sandbox) → EKS na sandbox. **Custo alto**
-  (NAT + EKS control plane ~US$0,10/h + 3× t3.medium). Só sob autorização.
-
-Contexto para a retomada:
-- Hub Crossplane (k3d) 100% pronto: 8 providers + 4 functions Healthy, 2 ProviderConfigs
-  (`default` hub + `spoke-sandbox`), XRDs/Composições Network+Cluster aplicados.
-- Profiles `~/.aws/config`: `hub` e `sandbox` (assume OrganizationAccountAccessRole via `personal`).
-- Direcionamento hub-and-spoke claro nas docs (`aws/docs/network/00`,`02`,`03`); distinção
-  cell-based vs. rede registrada em `00` + explorações paralelas em `aws/docs/CLAUDE.md`.
-
-Contexto para a retomada:
-- Hub Crossplane (k3d) 100% pronto: 8 providers + 4 functions Healthy, ProviderConfig ok.
-- Direcionamento hub-and-spoke claro nas docs (`aws/docs/network/00`,`02`,`03`); distinção
-  cell-based vs. rede registrada em `00` + explorações paralelas em `aws/docs/CLAUDE.md`.
-- **Extensão futura mapeada:** spokes de tamanho != `/16` exigem `function-kcl` (cálculo de
-  IP); TGW/HubNetwork real é Gap 2 (ainda "futuro" no `07-mapa-crossplane.md`).
+Próximo passo pretendido: **Fase 4 — modelar hub+spokes no chart** (decisão adiada, ver
+Open Questions), depois **Fase 5 — aplicar Network spoke + EKS na sandbox** (custo alto).
 
 ## Open Questions / Hypotheses
 
-- ~~TGW necessário para o 1º par hub↔spoke?~~ **DECIDIDO (2026-08-18):** conta única sem
-  TGW agora; migração futura aditiva. Ver "In Progress".
-- ~~Supernet concreta?~~ **DECIDIDO (2026-08-18):** `10.0.0.0/12`, /16 por spoke via
-  `vpcCidrSecondOctet`. Gap 1 fechado (commit `97d7fdd`).
-- **Base do domínio (a decidir):** `wasp.silvios.me` está em Azure DNS; pode-se delegar
-  subzona para Route53. Definir se a âncora AWS é o domínio inteiro ou uma subzona
-  (ex.: `aws.wasp.silvios.me`). Enquanto não delegado, sem `<hosted-zone-id>` → fatias
-  DNS/ingress/TLS (fases 88+/100+) bloqueadas; rede/EKS/Pod Identity/ESO rodam sem isso.
-- **Como parametrizar** os valores hoje em `CLAUDE.local.md` (chart values? env? EnvironmentConfig?)
-  — decidir depois de ter uma execução ponta a ponta.
+- **Fase 4 — como o chart modela hub + N spokes** (hoje 1 release = 1 Network). Opção A:
+  `values.environments: [...]` com `range` (1 release gerencia tudo, reescreve templates).
+  Opção B (recomendada): 1 release por ambiente — `pb-hub` (Network/`default`) + `pb-sbx01`
+  (Network+Cluster/`spoke-sandbox`); `id`/`providerConfigName`/CIDR já são values, uninstall
+  isola por spoke. Endereçamento fixado: hub=`10.1.0.0/16` (N=1), spoke sandbox=`10.2.0.0/16`
+  (N=2).
+- **Base do domínio:** `wasp.silvios.me` em Azure DNS; delegar subzona (ex.:
+  `aws.wasp.silvios.me`) para Route53 ou o domínio inteiro? Sem `<hosted-zone-id>` as fatias
+  DNS/ingress/TLS ficam bloqueadas; rede/EKS/Pod Identity/ESO rodam sem isso.
+- **Parametrizar** valores de `CLAUDE.local.md` (chart values? env? EnvironmentConfig?) —
+  decidir após execução ponta a ponta.
 - Estrutura de OU pessoal (Infra/Workloads→Production/Sandbox) difere da doc de accounts
   (Infra=hub + conta-por-projeto) — mapear ao parametrizar.
-- Track paralelo (Azure cluster-zero + Backstage multi-tenant) permanece pausado; ver
-  `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`. Não é o foco desta retomada.
+- Track paralelo (Azure cluster-zero + Backstage multi-tenant) pausado; não é o foco.
 
 ## Known Broken
 
-1. `aws/` inteira ainda é **não-executada** além do bootstrap IAM — **intentional**: k3d,
-   Crossplane, providers e network seguem não provisionados/validados contra a conta pessoal.
-2. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — **intentional**: são Helm
+1. VPC+EKS ainda NÃO provisionados numa spoke — *intentional*: Fases 4-5 pendentes, custo
+   alto só sob autorização. Cross-account (Fases 1-3) pronto e validado offline.
+2. `crossplane render` não injeta defaults do XRD (campo omitido no claim fica vazio) —
+   *intentional* (limitação da ferramenta): o default só é aplicado server-side; MR sem
+   providerConfigRef cai no `default` implícito (seguro, hub).
+3. `enum` de `providerConfigName` inclui `spoke-sandbox` (nome específico da conta) nos XRDs
+   versionados — *intentional*: trade-off aceito vs. genericização; comentário instrui
+   ajustar a lista por instância.
+4. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*: Helm
    templates (`{{ }}`).
-3. `idp/app-config.production.yaml` — `guest: {}` presente — **intentional** (PoC).
-4. `idp/packages/backend/src/index.ts` — `allow-all` permission policy — **intentional** (PoC).
-5. `idp/packages/backend/src/googleAuthModule.ts` — `dangerouslyAllowSignInWithoutUserInCatalog:
-   true` — **intentional** (PoC).
+5. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts`
+   `allow-all` policy; `idp/packages/backend/src/googleAuthModule.ts`
+   `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
 
 ## How to Resume
 
+O cluster k3d `poc-idp` foi **destruído** (`k3d cluster delete`) — recriar do zero pelo
+fluxo de bootstrap, depois reaplicar XRDs/Compositions/ProviderConfig cross-account:
+
 ```bash
 cd /home/silvios/git/wasp-idp
-cat CLAUDE.local.md            # valores reais da AWS Organization pessoal
-cat aws/CLAUDE.md              # contexto operacional + convenção de genericização
-cat aws/docs/accounts/CLAUDE.md
+aws/eks/scripts/install-crossplane
+aws/eks/scripts/install-providers --timeout 900s
+aws/eks/scripts/install-functions
+# credencial crossplane-poc inline do Secrets Manager -> configure-aws-creds:
+set -a; source <(AWS_PROFILE=hub aws secretsmanager get-secret-value \
+  --secret-id poc-idp/crossplane-poc-credentials --region us-east-1 \
+  --query SecretString --output text \
+  | jq -r '"AWS_ACCESS_KEY_ID=" + .aws_access_key_id, "AWS_SECRET_ACCESS_KEY=" + .aws_secret_access_key'); set +a
+aws/eks/scripts/configure-aws-creds
+# cross-account + XRs:
+kubectl apply -f aws/eks/providers/provider-config-spoke-sandbox.yaml
+kubectl apply -f aws/eks/resources/network/{xrd,composition}.yaml
+kubectl apply -f aws/eks/resources/cluster/{xrd,composition}.yaml
+cat CLAUDE.local.md                                 # valores reais + role crossplane-sandbox
 ```
+
+A role `crossplane-sandbox` e o secret `crossplane-poc` na AWS **persistem** (não dependem
+do k3d) — não precisam re-bootstrap.
 
 ## Next Steps
 
-- [x] ~~install-crossplane + install-providers + install-functions + configure-aws-creds~~ (feito)
-- [x] ~~Parametrizar CIDR da Network (Gap 1) na supernet 10.0.0.0/12~~ (feito, commit `97d7fdd`)
-- [ ] **Aplicar o claim `Network`** (`kubectl apply -f aws/eks/resources/examples/current/01-network.yaml`)
-      — cria VPC `10.1.0.0/16` + 4 subnets + IGW + NAT (custo) na conta hub. Acompanhar os
-      16 MRs: `kubectl get managed`. Primeiro provisionamento AWS real.
-- [ ] Depois da VPC: aplicar o XR `Cluster` (EKS) — requer `EnvironmentConfig` do hub antes
-      (`aws/eks/resources/environment/environmentconfig.yaml`, 1x).
-- [ ] Decidir base do domínio: delegar `wasp.silvios.me` (ou subzona `aws.wasp.silvios.me`)
-      de Azure DNS → Route53, e registrar a hosted zone antes das fatias DNS/ingress/TLS.
-- [ ] Definir estratégia de parametrização dos valores hoje em `CLAUDE.local.md`.
-- [ ] (nice-to-have) Atribuir permission set SSO (`AdministratorAccess`) à conta `hub` no
-      IAM Identity Center — hoje o acesso é via switch role/named profile
-      (`OrganizationAccountAccessRole`). Passo a passo em
-      `aws/docs/accounts/04-acesso-cross-account.md` (seção TODO).
+- [ ] **Fase 4:** decidir modelagem hub+spokes no chart (Opção B recomendada) e ajustar
+      `platform-bootstrap` (`values`: hub sem cluster / spoke com `providerConfigName:
+      spoke-sandbox`, `vpcCidrSecondOctet: 2`, `cluster.enabled: true`).
+- [ ] **Fase 5:** aplicar Network spoke (`10.2`, sandbox) → esperar Ready → aplicar Cluster
+      (EKS). Custo alto (NAT + control plane ~US$0,10/h + 3× t3.medium). Passar
+      `cluster.crossplaneArn=arn:aws:iam::832721568602:...` ou o da hub conforme a conta que
+      dá admin no EKS. Acompanhar: `kubectl get managed`.
+- [ ] Decidir base do domínio (delegar `wasp.silvios.me`/subzona → Route53) antes das fatias
+      DNS/ingress/TLS.
+- [ ] Definir estratégia de parametrização dos valores de `CLAUDE.local.md`.
+- [ ] (nice-to-have) Permission set SSO (`AdministratorAccess`) para hub/sandbox no IAM
+      Identity Center — hoje acesso via named profile (`OrganizationAccountAccessRole`).
+      Passo a passo em `aws/docs/accounts/04-acesso-cross-account.md`.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
