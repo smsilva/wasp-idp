@@ -77,6 +77,41 @@ Continua sendo credencial **temporária** (STS via role), sem access key de long
 mesma propriedade do SSO. É acesso **de bootstrap**: serve até o permission set SSO da
 conta-membro ser criado, quando o caminho passa a ser o `aws sso login` direto acima.
 
+### Atalho interino no portal (enquanto o SSO não é atribuído)
+
+No console web, a alternativa ao `aws sso login` é o **Switch role** (mesmo
+`OrganizationAccountAccessRole`). Depois da primeira vez, o menu do canto superior direito
+guarda a conta no histórico (1 clique). Dá para favoritar a URL direta:
+
+```text
+https://signin.aws.amazon.com/switchrole?account=<member-account-id>&roleName=OrganizationAccountAccessRole&displayName=<member-alias>&color=<hex>
+```
+
+É só um atalho — não substitui o permission set (a conta-membro continua **fora** do portal
+SSO até receber a atribuição abaixo).
+
+### TODO — atribuir permission set SSO à conta-membro (elimina o switch role)
+
+Passo pendente que faz a conta-membro (ex.: `hub`) aparecer no portal SSO e no `aws sso
+login` direto, tanto no navegador quanto na CLI. Executar **uma vez**, na management
+account → IAM Identity Center:
+
+1. **Create permission set** → `AdministratorAccess` (managed) — ou um custom por função
+   (ver convenção de nomenclatura abaixo).
+2. **Assign** → conta-membro → seu usuário/grupo → esse permission set.
+3. Depois disso, migrar o profile CLI de `role_arn`/`source_profile` (acima) para um bloco
+   SSO nativo:
+   ```ini
+   [profile <member-alias>]
+   sso_session = <sso-session>
+   sso_account_id = <member-account-id>
+   sso_role_name = AdministratorAccess
+   region = <region>
+   ```
+
+Enquanto esse TODO não for feito, o acesso admin à conta-membro é via named profile
+(assume-role) + Switch role no portal — ambos descritos acima.
+
 ## Convenção de nomenclatura de permission sets
 
 | Permission Set | Uso | Contas típicas |
