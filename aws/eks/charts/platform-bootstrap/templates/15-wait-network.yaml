@@ -1,0 +1,32 @@
+{{/*
+Waiter — Job HOOK (post-install,post-upgrade) que bloqueia o Helm até o XR Network
+ficar Ready. É a BARREIRA de sequência: o Helm só conclui a release (e, quando houver
+um próximo XR, só segue para ele) depois deste Job completar.
+
+hook-weight "15" > o XR (recurso normal, aplicado na fase de release) e > o RBAC ("5").
+hook-delete-policy: limpa o Job antes de re-rodar e ao suceder.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-wait-network
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "15"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: {{ include "platform-bootstrap.name" . }}-waiter
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: {{ .Values.waiter.image }}
+          command:
+            - kubectl
+            - wait
+            - network.platform.example.com/{{ include "platform-bootstrap.networkName" . }}
+            - --for=condition=Ready
+            - --timeout={{ .Values.waiter.timeout }}

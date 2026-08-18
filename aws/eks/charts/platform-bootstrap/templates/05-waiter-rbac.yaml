@@ -1,0 +1,31 @@
+{{/*
+RBAC efêmero para o Job waiter: SA + ClusterRoleBinding para o crossplane-view
+(read nos XRs, cluster-scoped). Hook com peso MENOR que o Job (roda antes).
+hook-delete-policy: removido antes de re-rodar e ao concluir — não deixa lixo.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-waiter
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-waiter
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: crossplane-view
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "platform-bootstrap.name" . }}-waiter
+    namespace: {{ .Release.Namespace }}

@@ -43,9 +43,18 @@ já que só o CIDR é irreversível). **Gap 1 fechado:** CIDR parametrizado por
 Validado offline com `crossplane render` (gotcha `%d`→`%v` resolvido). Commit `97d7fdd`.
 XRD + Composition já aplicados no k3d (definições, zero recurso AWS).
 
-**Próximo passo imediato:** aplicar o claim `Network` (`examples/current/01-network.yaml`)
-— **cria a VPC + subnets + NAT reais na conta hub (custo: NAT/EIP por hora)**. É o primeiro
-provisionamento AWS de verdade. Tudo pronto: hub credenciado, Composition validada. Só falta
+Exploração Helm hooks (2026-08-18): criado chart `aws/eks/charts/platform-bootstrap` que
+orquestra os XRs de `resources/` em sequência via hooks — **XR = recurso normal** (upgrade/
+uninstall limpos), **Job waiter = hook** (`kubectl wait ... Ready`, bloqueia o Helm = a
+barreira). Fatia atual só `Network`. Validado offline (`helm lint`, `helm template`,
+`kubectl apply --dry-run=server`) — zero recurso AWS. Ordem entre múltiplos XRs (quando
+somar `Cluster`) decidida depois. Ver `charts/platform-bootstrap/README.md`.
+
+**Próximo passo imediato:** aplicar o `Network` — via `helm install pb
+aws/eks/charts/platform-bootstrap -n crossplane-system` (usa o chart+hooks) OU o claim
+direto `kubectl apply -f examples/current/01-network.yaml`. Qualquer um **cria VPC +
+subnets + NAT reais na conta hub (custo: NAT/EIP por hora)** — primeiro provisionamento AWS
+de verdade. Tudo pronto: hub credenciado, Composition validada. Só falta
 o "go" para aplicar e acompanhar os 16 MRs reconciliarem (`kubectl get managed`).
 
 Contexto para a retomada:

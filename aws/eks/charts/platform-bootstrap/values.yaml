@@ -1,0 +1,17 @@
+# Valores do platform-bootstrap. Espelham o spec do XR Network (resources/network/xrd.yaml).
+network:
+  # id: identificador determinístico (≤5 alfanum). Deriva external-names e o label de
+  # cruzamento environment.example.com/env=<id>.
+  id: net01
+  # prefix e region: defaults do XRD (poc-eks / us-east-1) se omitidos aqui.
+  prefix: poc-eks
+  region: us-east-1
+  # vpcCidrSecondOctet: N em 10.<N>.0.0/16 (supernet 10.0.0.0/12). N=0 reservado p/ Org.
+  vpcCidrSecondOctet: 1
+
+# waiter: Job (hook) que espera o XR ficar Ready antes de o Helm concluir a fase.
+waiter:
+  # imagem com kubectl. Trocar se o cluster tiver mirror/registry próprio.
+  image: bitnami/kubectl:1.31
+  # timeout do kubectl wait no XR Network (NAT Gateway domina; ~2-5 min típico).
+  timeout: 600s
