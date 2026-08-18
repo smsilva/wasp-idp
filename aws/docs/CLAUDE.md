@@ -76,3 +76,23 @@ Trabalho de rede hub-and-spoke maduro (KCL/Crossplane), usado como base:
 - Landing Zone (visão de arquitetura): `<hub-repo>/docs/02-arquitetura/aws-landing-zone.md`
 - Templates KCL: `<assets-repo>/crossplane/providers/aws/{hub_network,spoke_network,tgw,vpn_connection}/`
 - AWS Well-Architected Framework — pilares e best practices (REL02, SEC05, etc.).
+
+## Explorações paralelas (em andamento, nenhuma final)
+
+Materiais do próprio autor que exploram a **mesma visão em outras fatias/maturidades** —
+referência para pensamento e decisão, não especificação a copiar. Nenhum é versão final;
+fazem parte do processo de aprendizado. **Cuidado com o vocabulário:** "hub" significa
+coisas diferentes em cada um (ver a distinção abaixo).
+
+| Material | Fatia que explora | O que "hub" significa lá |
+|---|---|---|
+| `~/trash/arquitetura-cell-based-multi-region.md` | **Raio de impacto / tenancy** (camada app/dados): células como unidade de falha, pooled vs. dedicado, multi-region + cell router | Hub de **rede por região** (VPC + TGW), mais próximo do desta doc |
+| `~/git/aws-saas-platform` | **Identidade + ingress + isolamento pooled** (camada app/auth): Cognito federando IdPs, ALB→WAF→Istio, namespace+claim+`AuthorizationPolicy`, roadmap de fases 1→2→3 | Hub de **identidade** (Cognito) + hub de **ingress** (Global Accelerator) — **NÃO** é hub de rede/conta; é single-account, sem TGW |
+
+**Como se encaixam:** três lentes de uma plataforma-alvo, ainda não unificadas —
+cell-based (raio de impacto), esta doc (conectividade privada hub-spoke de **rede/conta**),
+e aws-saas-platform (identidade/ingress/isolamento **pooled** por namespace). São
+complementares, mas os dois "hubs" (rede vs. identidade) são camadas distintas — não
+confundir. O roadmap de fases do aws-saas-platform (single cluster → platform/customer
+split → regional) é uma escada de maturidade útil para enquadrar decisões desta doc (ex.:
+"o TGW é uma decisão de qual fase?"). Aprofundar/unificar é trabalho futuro, não decidido.

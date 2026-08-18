@@ -57,6 +57,29 @@ aprovação manual por attachment.
 table dedicada. Isso dá isolamento de rede por cluster e permite políticas de roteamento
 independentes (um cluster de dev não enxerga um de prod, mesmo no mesmo TGW).
 
+## Cell-based vs. hub-and-spoke — camadas diferentes, não a mesma decisão
+
+Hub-and-spoke (este tópico) resolve **conectividade privada** — como VPCs se falam. Não
+resolve **raio de impacto** — quantos tenants caem juntos se um componente quebra. Essa
+segunda pergunta é o desenho **cell-based**: uma célula é a unidade de falha (o teste é
+"se eu derrubar isto, quem cai junto?"), e escala-se **adicionando células**, não
+engordando as existentes. As duas camadas coexistem: o TGW é o encanamento; as células
+são os compartimentos que ele conecta.
+
+Na terminologia desta referência, **conta-por-projeto já é, na prática, uma célula** — o
+spoke daquele projeto é o raio de impacto contido por conta AWS + route table dedicada
+(tópico 3). Não há hoje uma segunda camada de contenção *dentro* de uma conta de projeto
+(ex.: múltiplos clusters/tenants pooled na mesma conta) — se/quando isso surgir, vale
+revisitar o antipadrão "namespace como célula" (control plane, etcd e CRDs compartilhados
+não são bulkhead).
+
+**Por que isso não muda a decisão desta fatia:** com um cluster e poucos tenants, a
+postura recomendada (mesmo raciocínio do Gap 2 em
+[`07-mapa-crossplane.md`](07-mapa-crossplane.md), que adia TGW/HubNetwork) é **não
+construir a maquinaria de células agora** — só manter a indireção (`tenant → spoke`)
+barata de adicionar depois. Multi-region e roteamento por geolocalização (relevantes só
+quando houver soberania de dado entre regiões) ficam fora do escopo desta PoC single-region.
+
 ## Fluxo de dados (resumo)
 
 ```text
