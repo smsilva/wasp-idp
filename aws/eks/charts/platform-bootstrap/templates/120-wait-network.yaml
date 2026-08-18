@@ -29,4 +29,4 @@ spec:
             - wait
             - network.platform.example.com/{{ include "platform-bootstrap.networkName" . }}
             - --for=condition=Ready
-            - --timeout={{ .Values.waiter.timeout }}
+            - --timeout={{ .Values.waiter.networkTimeout }}

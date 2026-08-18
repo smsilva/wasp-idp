@@ -1,0 +1,46 @@
+{{- if .Values.cluster.enabled }}
+{{/*
+RBAC efêmero para o Job waiter do Cluster (grupo 200). Mesmo padrão de menor privilégio
+do grupo 100 (110-waiter-rbac): SA + ClusterRole dedicado (get/list/watch só no tipo
+clusters.platform.example.com) + binding, todos hooks weight 220, com delete-policy.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-cluster-waiter
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "220"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-cluster-waiter
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "220"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: ["platform.example.com"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-cluster-waiter
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "220"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "platform-bootstrap.name" . }}-cluster-waiter
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "platform-bootstrap.name" . }}-cluster-waiter
+    namespace: {{ .Release.Namespace }}
+{{- end }}

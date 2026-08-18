@@ -8,7 +8,7 @@ kind: Network
 metadata:
   name: {{ include "platform-bootstrap.networkName" . }}
 spec:
-  id: {{ .Values.network.id }}
-  prefix: {{ .Values.network.prefix }}
-  region: {{ .Values.network.region }}
+  id: {{ .Values.id }}
+  prefix: {{ .Values.prefix }}
+  region: {{ .Values.region }}
   vpcCidrSecondOctet: {{ .Values.network.vpcCidrSecondOctet }}

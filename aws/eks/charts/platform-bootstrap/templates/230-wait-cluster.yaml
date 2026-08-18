@@ -1,0 +1,35 @@
+{{- if .Values.cluster.enabled }}
+{{/*
+Waiter do Cluster — Job HOOK (weight 230) que bloqueia o Helm até o XR Cluster ficar
+Ready. Como o EKS+NodeGroup levam ~28-30 min, o helm install/upgrade fica bloqueado esse
+tempo todo aqui — rodar em background. Timeout longo (clusterTimeout, default 1800s).
+
+weight 230 > o XR Cluster (recurso normal) e > o RBAC ("220"). O grupo 200 roda depois do
+100 (pesos maiores), mas a ORDEM real Network->Cluster é garantida pelo Crossplane (o EKS
+casa as subnets do Network por label e só reconcilia quando elas existem), não pelo Helm.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-wait-cluster
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "230"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: {{ include "platform-bootstrap.name" . }}-cluster-waiter
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: {{ .Values.waiter.image }}
+          command:
+            - kubectl
+            - wait
+            - cluster.platform.example.com/{{ include "platform-bootstrap.clusterName" . }}
+            - --for=condition=Ready
+            - --timeout={{ .Values.waiter.clusterTimeout }}
+{{- end }}
