@@ -28,10 +28,19 @@ profile local `hub` em `~/.aws/config` (assume `OrganizationAccountAccessRole` a
 partir do profile `personal`) para acesso administrativo à conta `hub` sem SSO
 dedicado.
 
-**Próximo passo imediato:** instalar k3d + Crossplane + providers localmente
-(`aws/eks/scripts/install-crossplane` + `install-providers`), depois consumir a
-credencial `crossplane-poc` via `aws/eks/scripts/configure-aws-creds` (passo ⑦ do
-bootstrap) e seguir para Network conforme `aws/eks/` e `aws/docs/network/`.
+Hub Crossplane (k3d `poc-idp`) de pé e credenciado — ver `docs/HANDOFF-done.md`. Os 4
+passos do fluxo de bootstrap concluídos: `install-crossplane` → `install-providers` (8
+providers Healthy) → `install-functions` (4 Composition Functions Healthy) →
+`configure-aws-creds` (credencial autentica como `user/crossplane-poc`). A lacuna das
+Functions foi fechada nesta sessão: criados `aws/eks/providers/functions.yaml` +
+`aws/eks/scripts/install-functions` (não existiam; `install-providers` só cobria os
+`kind: Provider`).
+
+**Próximo passo imediato:** aplicar a `Network` (XRD + Composition + claim
+`examples/current/01-network.yaml`) — **cria VPC + NAT reais na conta hub (custo)**; o
+usuário adiou ("não agora"). O hub já tem todos os pré-requisitos (providers + functions).
+Antes de aplicar, decidir se dá para pular o NAT nesta fatia e revisar o CIDR hardcoded
+(`172.16.0.0/16`, Gap 1 do `aws/docs/network/07-mapa-crossplane.md`).
 
 ## Open Questions / Hypotheses
 
@@ -75,5 +84,9 @@ cat aws/docs/accounts/CLAUDE.md
 - [ ] Decidir base do domínio: delegar `wasp.silvios.me` (ou subzona `aws.wasp.silvios.me`)
       de Azure DNS → Route53, e registrar a hosted zone antes das fatias DNS/ingress/TLS.
 - [ ] Definir estratégia de parametrização dos valores hoje em `CLAUDE.local.md`.
+- [ ] (nice-to-have) Atribuir permission set SSO (`AdministratorAccess`) à conta `hub` no
+      IAM Identity Center — hoje o acesso é via switch role/named profile
+      (`OrganizationAccountAccessRole`). Passo a passo em
+      `aws/docs/accounts/04-acesso-cross-account.md` (seção TODO).
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
