@@ -36,14 +36,39 @@ Functions foi fechada nesta sessão: criados `aws/eks/providers/functions.yaml` 
 `aws/eks/scripts/install-functions` (não existiam; `install-providers` só cobria os
 `kind: Provider`).
 
-**Próximo passo imediato:** aplicar a `Network` (XRD + Composition + claim
-`examples/current/01-network.yaml`) — **cria VPC + NAT reais na conta hub (custo)**; o
-usuário adiou ("não agora"). O hub já tem todos os pré-requisitos (providers + functions).
-Antes de aplicar, decidir se dá para pular o NAT nesta fatia e revisar o CIDR hardcoded
-(`172.16.0.0/16`, Gap 1 do `aws/docs/network/07-mapa-crossplane.md`).
+**Próximo passo imediato (direcionamento decidido 2026-08-17):** desenhar a topologia
+**hub + spoke conectada**, e a partir daí **avaliar se o TGW é necessário** para essa
+conexão ou se há caminho mais simples (VPC peering? conta única com 1 VPC? spoke na mesma
+conta hub?). NÃO aplicar a `Network` como está antes desse desenho — a premissa da PoC é
+Well-Architected hub-and-spoke, e a `Network` atual é uma **VPC isolada, não um spoke**
+(faltam TGW attachment, CIDR parametrizado e rota `<remote-cidr> → TGW`).
+
+Contexto para a retomada (confirmado nesta sessão):
+- **Direcionamento hub-and-spoke ESTÁ claro nas docs** (`aws/docs/network/00`, `02`, `03`):
+  TGW central, isolamento por `tgw-rt-<spoke>`, RAM cross-account, conta-por-projeto.
+- **O que falta decidir** é o *degrau de bootstrap*: começar com hub+1 spoke na PoC pessoal
+  precisa mesmo de TGW? A doc `03` admite "cenário de conta única" onde RAM/attachment são
+  suprimidos. Pesar TGW (alvo, isolamento real, custo/complexidade) vs. peering/conta-única
+  (mais simples, sem isolamento por route-table) para o primeiro par hub↔spoke.
+- **Gap 1 (CIDR fixo `172.16.0.0/16`)** continua sendo pré-requisito irreversível: qualquer
+  spoke real precisa de CIDR parametrizado + alinhado à supernet (`aws/docs/network/01`, `07`).
+  Definir a supernet concreta (hoje placeholder `<supernet>`) faz parte do desenho.
+- Hub Crossplane (k3d) já está 100% pronto para aplicar XRs quando o desenho fechar.
+
+Opções levantadas (não escolhidas): A=aplicar VPC isolada como está (re-endereça depois);
+B=parametrizar CIDR primeiro, aplicar VPC endereçável-como-spoke sem TGW; C=ir ao alvo
+completo (XR HubNetwork+TGW+RAM, marcado "futuro" no mapa). Retomar pela pergunta do TGW.
 
 ## Open Questions / Hypotheses
 
+- **TGW necessário para o 1º par hub↔spoke? (pergunta de retomada):** avaliar se conectar
+  uma spoke à hub na PoC pessoal exige Transit Gateway (alvo WAF, isolamento por route-table,
+  custo/complexidade) ou se um caminho mais simples (VPC peering, ou hub+spoke na mesma conta)
+  basta para o degrau de bootstrap. A doc `network/03` admite "cenário de conta única" com
+  RAM/attachment suprimidos. Decidir antes de aplicar qualquer `Network`.
+- **Supernet concreta (a decidir):** o plano de endereçamento (`network/01`) usa placeholder
+  `<supernet>`; escolher o bloco real (/12–/14) e a alocação por spoke é pré-requisito de
+  parametrizar o CIDR (Gap 1) — irreversível depois do 1º apply.
 - **Base do domínio (a decidir):** `wasp.silvios.me` está em Azure DNS; pode-se delegar
   subzona para Route53. Definir se a âncora AWS é o domínio inteiro ou uma subzona
   (ex.: `aws.wasp.silvios.me`). Enquanto não delegado, sem `<hosted-zone-id>` → fatias
