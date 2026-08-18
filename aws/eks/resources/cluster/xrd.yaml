@@ -50,6 +50,12 @@ spec:
                     conta do crossplane-poc (hub); "spoke-sandbox" (assumeRoleChain) cria na
                     conta spoke. DEVE bater com o providerConfigName do Network de mesmo id.
                     Não afeta os ProviderConfigs remotos helm/kubernetes (in-cluster).
+                    O enum é o ALLOWLIST de ProviderConfigs desta instância (defense-in-depth:
+                    impede um XR mirar um ProviderConfig não pretendido). Ajustar a lista ao
+                    adotar em outra conta/instância — os nomes de spoke são por-instância.
+                  enum:
+                    - default
+                    - spoke-sandbox
                   default: default
                 nodeGroup:
                   type: object

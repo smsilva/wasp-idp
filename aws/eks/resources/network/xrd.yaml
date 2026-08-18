@@ -50,6 +50,12 @@ spec:
                     conta do crossplane-poc (hub); um ProviderConfig cross-account (ex.:
                     "spoke-sandbox", com assumeRoleChain) cria numa conta spoke. Ver
                     aws/eks/providers/provider-config-spoke-sandbox.yaml.
+                    O enum é o ALLOWLIST de ProviderConfigs desta instância (defense-in-depth:
+                    impede um XR mirar um ProviderConfig não pretendido). Ajustar a lista ao
+                    adotar em outra conta/instância — os nomes de spoke são por-instância.
+                  enum:
+                    - default
+                    - spoke-sandbox
                   default: default
                 vpcCidrSecondOctet:
                   type: integer
