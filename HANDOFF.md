@@ -36,39 +36,31 @@ Functions foi fechada nesta sessão: criados `aws/eks/providers/functions.yaml` 
 `aws/eks/scripts/install-functions` (não existiam; `install-providers` só cobria os
 `kind: Provider`).
 
-**Próximo passo imediato (direcionamento decidido 2026-08-17):** desenhar a topologia
-**hub + spoke conectada**, e a partir daí **avaliar se o TGW é necessário** para essa
-conexão ou se há caminho mais simples (VPC peering? conta única com 1 VPC? spoke na mesma
-conta hub?). NÃO aplicar a `Network` como está antes desse desenho — a premissa da PoC é
-Well-Architected hub-and-spoke, e a `Network` atual é uma **VPC isolada, não um spoke**
-(faltam TGW attachment, CIDR parametrizado e rota `<remote-cidr> → TGW`).
+Topologia e CIDR DECIDIDOS + implementados (2026-08-18): **conta única, sem TGW** agora
+(degrau de bootstrap; migração futura a hub-spoke real é aditiva — ligar TGW+attachment —
+já que só o CIDR é irreversível). **Gap 1 fechado:** CIDR parametrizado por
+`spec.vpcCidrSecondOctet` na supernet **`10.0.0.0/12`** (1º spoke N=1 → `10.1.0.0/16`).
+Validado offline com `crossplane render` (gotcha `%d`→`%v` resolvido). Commit `97d7fdd`.
+XRD + Composition já aplicados no k3d (definições, zero recurso AWS).
 
-Contexto para a retomada (confirmado nesta sessão):
-- **Direcionamento hub-and-spoke ESTÁ claro nas docs** (`aws/docs/network/00`, `02`, `03`):
-  TGW central, isolamento por `tgw-rt-<spoke>`, RAM cross-account, conta-por-projeto.
-- **O que falta decidir** é o *degrau de bootstrap*: começar com hub+1 spoke na PoC pessoal
-  precisa mesmo de TGW? A doc `03` admite "cenário de conta única" onde RAM/attachment são
-  suprimidos. Pesar TGW (alvo, isolamento real, custo/complexidade) vs. peering/conta-única
-  (mais simples, sem isolamento por route-table) para o primeiro par hub↔spoke.
-- **Gap 1 (CIDR fixo `172.16.0.0/16`)** continua sendo pré-requisito irreversível: qualquer
-  spoke real precisa de CIDR parametrizado + alinhado à supernet (`aws/docs/network/01`, `07`).
-  Definir a supernet concreta (hoje placeholder `<supernet>`) faz parte do desenho.
-- Hub Crossplane (k3d) já está 100% pronto para aplicar XRs quando o desenho fechar.
+**Próximo passo imediato:** aplicar o claim `Network` (`examples/current/01-network.yaml`)
+— **cria a VPC + subnets + NAT reais na conta hub (custo: NAT/EIP por hora)**. É o primeiro
+provisionamento AWS de verdade. Tudo pronto: hub credenciado, Composition validada. Só falta
+o "go" para aplicar e acompanhar os 16 MRs reconciliarem (`kubectl get managed`).
 
-Opções levantadas (não escolhidas): A=aplicar VPC isolada como está (re-endereça depois);
-B=parametrizar CIDR primeiro, aplicar VPC endereçável-como-spoke sem TGW; C=ir ao alvo
-completo (XR HubNetwork+TGW+RAM, marcado "futuro" no mapa). Retomar pela pergunta do TGW.
+Contexto para a retomada:
+- Hub Crossplane (k3d) 100% pronto: 8 providers + 4 functions Healthy, ProviderConfig ok.
+- Direcionamento hub-and-spoke claro nas docs (`aws/docs/network/00`,`02`,`03`); distinção
+  cell-based vs. rede registrada em `00` + explorações paralelas em `aws/docs/CLAUDE.md`.
+- **Extensão futura mapeada:** spokes de tamanho != `/16` exigem `function-kcl` (cálculo de
+  IP); TGW/HubNetwork real é Gap 2 (ainda "futuro" no `07-mapa-crossplane.md`).
 
 ## Open Questions / Hypotheses
 
-- **TGW necessário para o 1º par hub↔spoke? (pergunta de retomada):** avaliar se conectar
-  uma spoke à hub na PoC pessoal exige Transit Gateway (alvo WAF, isolamento por route-table,
-  custo/complexidade) ou se um caminho mais simples (VPC peering, ou hub+spoke na mesma conta)
-  basta para o degrau de bootstrap. A doc `network/03` admite "cenário de conta única" com
-  RAM/attachment suprimidos. Decidir antes de aplicar qualquer `Network`.
-- **Supernet concreta (a decidir):** o plano de endereçamento (`network/01`) usa placeholder
-  `<supernet>`; escolher o bloco real (/12–/14) e a alocação por spoke é pré-requisito de
-  parametrizar o CIDR (Gap 1) — irreversível depois do 1º apply.
+- ~~TGW necessário para o 1º par hub↔spoke?~~ **DECIDIDO (2026-08-18):** conta única sem
+  TGW agora; migração futura aditiva. Ver "In Progress".
+- ~~Supernet concreta?~~ **DECIDIDO (2026-08-18):** `10.0.0.0/12`, /16 por spoke via
+  `vpcCidrSecondOctet`. Gap 1 fechado (commit `97d7fdd`).
 - **Base do domínio (a decidir):** `wasp.silvios.me` está em Azure DNS; pode-se delegar
   subzona para Route53. Definir se a âncora AWS é o domínio inteiro ou uma subzona
   (ex.: `aws.wasp.silvios.me`). Enquanto não delegado, sem `<hosted-zone-id>` → fatias
@@ -102,10 +94,13 @@ cat aws/docs/accounts/CLAUDE.md
 
 ## Next Steps
 
-- [ ] Rodar `aws/eks/scripts/install-crossplane` + `install-providers` (k3d local).
-- [ ] Consumir a credencial `crossplane-poc` no cluster (passo ⑦ do bootstrap, via
-      `aws/eks/scripts/configure-aws-creds`).
-- [ ] Configurar **network** na `hub` (ver `aws/docs/network/` + `aws/eks/resources/network/`).
+- [x] ~~install-crossplane + install-providers + install-functions + configure-aws-creds~~ (feito)
+- [x] ~~Parametrizar CIDR da Network (Gap 1) na supernet 10.0.0.0/12~~ (feito, commit `97d7fdd`)
+- [ ] **Aplicar o claim `Network`** (`kubectl apply -f aws/eks/resources/examples/current/01-network.yaml`)
+      — cria VPC `10.1.0.0/16` + 4 subnets + IGW + NAT (custo) na conta hub. Acompanhar os
+      16 MRs: `kubectl get managed`. Primeiro provisionamento AWS real.
+- [ ] Depois da VPC: aplicar o XR `Cluster` (EKS) — requer `EnvironmentConfig` do hub antes
+      (`aws/eks/resources/environment/environmentconfig.yaml`, 1x).
 - [ ] Decidir base do domínio: delegar `wasp.silvios.me` (ou subzona `aws.wasp.silvios.me`)
       de Azure DNS → Route53, e registrar a hosted zone antes das fatias DNS/ingress/TLS.
 - [ ] Definir estratégia de parametrização dos valores hoje em `CLAUDE.local.md`.
