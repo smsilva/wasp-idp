@@ -1,7 +1,12 @@
 {{/*
-RBAC efêmero para o Job waiter: SA + ClusterRoleBinding para o crossplane-view
-(read nos XRs, cluster-scoped). Hook com peso MENOR que o Job (roda antes).
-hook-delete-policy: removido antes de re-rodar e ao concluir — não deixa lixo.
+RBAC efêmero para o Job waiter: SA + ClusterRole DEDICADO + binding. Menor privilégio —
+só get/list/watch no TIPO networks.platform.example.com (não o crossplane-view, que dá
+read em TODOS os tipos Crossplane do cluster). Hook peso MENOR que o Job (roda antes);
+hook-delete-policy remove tudo antes de re-rodar e ao concluir.
+
+Nota: `kubectl wait` faz list+watch, e resourceNames no RBAC não restringe `list` — por
+isso o escopo é por tipo de recurso, não por nome do XR. Ainda assim é read-only e limitado
+a um único kind.
 */}}
 apiVersion: v1
 kind: ServiceAccount
@@ -14,6 +19,19 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "platform-bootstrap.name" . }}-waiter
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: ["platform.example.com"]
+    resources: ["networks"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: {{ include "platform-bootstrap.name" . }}-waiter
@@ -24,7 +42,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: crossplane-view
+  name: {{ include "platform-bootstrap.name" . }}-waiter
 subjects:
   - kind: ServiceAccount
     name: {{ include "platform-bootstrap.name" . }}-waiter

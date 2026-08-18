@@ -14,7 +14,7 @@ A decisão de ciclo de vida que molda o chart:
 | Recurso | Tipo no Helm | Porquê |
 |---|---|---|
 | **XR `Network`** (`10-network.yaml`) | **recurso normal** do release | `helm upgrade` reconcilia mudanças (ex.: CIDR); `helm uninstall` deleta o XR → Crossplane faz **teardown da VPC/NAT** na AWS. Se fosse hook, viraria órfão no uninstall (recurso AWS cobrando). |
-| **RBAC do waiter** (`05-waiter-rbac.yaml`) | **hook** (`post-install,post-upgrade`, weight `5`) | SA + binding efêmeros para o Job ler o XR. `crossplane-view` dá read cluster-scoped. |
+| **RBAC do waiter** (`05-waiter-rbac.yaml`) | **hook** (`post-install,post-upgrade`, weight `5`) | SA + ClusterRole dedicado (menor privilégio: `get/list/watch` só no tipo `networks`) + binding, todos efêmeros. Não usa `crossplane-view` (que daria read em todos os tipos Crossplane). |
 | **Job waiter** (`15-wait-network.yaml`) | **hook** (weight `15`) | Roda `kubectl wait ... --for=condition=Ready`. O Helm **bloqueia** no Job → é a barreira. `hook-delete-policy: before-hook-creation,hook-succeeded` não deixa lixo. |
 
 **Por que o waiter precisa ser hook (e não um recurso comum):** `helm install` não espera
