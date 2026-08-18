@@ -47,20 +47,31 @@ banco, subnets de endpoints). Um `/16` por spoke é generoso de propósito — o
 | `<spoke-2-cidr>` | Projeto B / cluster green | dev | us-east-1 | |
 | `<hub-cidr>` | Hub / Connectivity | — | us-east-1 | VNet/VPC de trânsito, se houver |
 
-## ⚠️ Gap conhecido no código atual do PoC
+## Plano de endereçamento decidido (2026-08-18)
 
-A `Network` XR do PoC hoje **hardcoda `172.16.0.0/16`** na Composition
-(`../../eks/resources/network/composition.yaml`). Dois problemas para hub-and-spoke:
+- **Supernet AWS:** `10.0.0.0/12` (`10.0.0.0`–`10.15.255.255`).
+- **Alocação:** um `/16` por spoke; `spec.vpcCidrSecondOctet` (N) escolhe o bloco →
+  `10.<N>.0.0/16`, subnets `10.<N>.{1,2,3,4}.0/24`.
+- **`10.0.0.0/16` (N=0) reservado** para a Org/raiz — spokes usam N=1..15.
+- **Primeiro spoke:** N=1 → `10.1.0.0/16` (claim `examples/current/01-network.yaml`).
 
-1. **Range fora da supernet planejada** — se a referência adotar `10.x` (padrão da organização,
-   ver apêndice), `172.16` fica órfão.
-2. **Fixo → todo spoke nasceria com o mesmo CIDR** → sobreposição imediata; impossível
-   attachar dois ao mesmo TGW.
+| Bloco | Dono | Observação |
+|---|---|---|
+| `10.0.0.0/16` | Org / raiz | **Reservado** — não alocar a spoke |
+| `10.1.0.0/16` | 1º spoke (PoC) | `vpcCidrSecondOctet: 1` |
+| `10.2.0.0/16` … `10.15.0.0/16` | próximos spokes | um N por spoke |
 
-**Direção decidida (brainstorm):** parametrizar o CIDR no spec da `Network`
-(ex.: `spec.vpcCidrSecondOctet`, formato `<base>.<N>.0.0/16`, `N` validado por pattern no
-XRD; 4 subnets derivadas por string-format em patch-and-transform, sem KCL). O caminho de
-migração e o "como" estão em [`07-mapa-crossplane.md`](07-mapa-crossplane.md).
+## ✅ Gap do CIDR hardcoded — RESOLVIDO
+
+A `Network` XR **hardcodava `172.16.0.0/16`** (fora da supernet + fixo → todo spoke
+idêntico → colisão, impossível attachar 2 ao mesmo TGW). **Resolvido em 2026-08-18:**
+CIDR parametrizado via `spec.vpcCidrSecondOctet` na supernet `10.0.0.0/12`, subnets
+derivadas por string-format (`%v`) em `function-patch-and-transform` — sem KCL. Validado
+por `crossplane render` offline. Detalhe do "como" e o gotcha `%d`→`%v` em
+[`07-mapa-crossplane.md`](07-mapa-crossplane.md).
+
+> **Spokes de tamanho != `/16`** (ex.: `/20`) exigiriam cálculo de IP, não string-format →
+> extensão futura via `function-kcl`. Hoje só `/16` alinhado à supernet.
 
 ## Well-Architected — porquê
 

@@ -51,23 +51,25 @@ A `Network` do PoC já segue o padrão composable esperado de um spoke (tópico 
 
 ## Gaps entre atual e alvo
 
-### Gap 1 — CIDR hardcoded (bloqueante para hub-and-spoke)
+### Gap 1 — CIDR hardcoded — ✅ RESOLVIDO (2026-08-18)
 
-**Hoje:** `cidrBlock: 172.16.0.0/16` fixo na Composition; subnets `172.16.{1,2,3,4}.0/24`
-fixas.
+**Era:** `cidrBlock: 172.16.0.0/16` fixo na Composition; subnets `172.16.{1,2,3,4}.0/24`
+fixas → todo spoke nasceria idêntico → sobreposição → impossível attachar 2 ao mesmo TGW.
 
-**Problema:** todo spoke nasceria idêntico → sobreposição → impossível attachar 2 ao mesmo
-TGW (tópico 1). E `172.16` fica fora da supernet `10.x` da referência.
+**Resolvido:** CIDR parametrizado por `spec.vpcCidrSecondOctet` (integer 1–15) na supernet
+**`10.0.0.0/12`**:
+- VPC → `10.<N>.0.0/16`; subnets → `10.<N>.{1,2,3,4}.0/24`.
+- Derivação por `FromCompositeFieldPath` + transform `string.Format` em
+  `function-patch-and-transform` (sem function-kcl). `N=0` reservado para a Org.
+- **Gotcha resolvido:** o `Format` precisa de **`%v`**, não `%d` — o integer do XRD chega
+  ao patch como `float64` e `%d` renderiza `10.%!d(float64=1).0.0/16` (lixo). `%v` formata
+  qualquer tipo corretamente.
 
-**Direção decidida (brainstorm):**
-- Adicionar `spec.vpcCidrSecondOctet` (ou equivalente) — formato `<base>.<N>.0.0/16`, `N`
-  validado por `pattern` no XRD.
-- Derivar as 4 subnets por **string-format em patch-and-transform** (sem function-kcl):
-  `<base>.<N>.1.0/24` … `<base>.<N>.4.0/24`.
-- Alinhar `<base>` à supernet planejada para o ambiente (`<supernet>`).
+**Validação (que estava pendente):** confirmada via `crossplane render` offline (sem tocar
+AWS) — N=1 → `10.1.x`, N=5 → `10.5.x`, 16 MRs gerados. Schema rejeita N>15.
 
-**Validação pendente:** confirmar que o `CombineFromComposite`/string-format monta os `/24`
-corretamente a partir de `N` (o XRD restringe `N` por regex; sem KCL).
+**Extensão futura (não feita):** spokes de tamanho != `/16` exigiriam cálculo de IP
+(não só string-format) → migrar para `function-kcl`. Hoje só `/16` alinhado à supernet.
 
 ### Gap 2 — sem HubNetwork / TGW / VPN
 

@@ -1,13 +1,15 @@
 # Claim de exemplo do Network isolado — teste da 1ª fatia da decomposição.
-# Provisiona SÓ a pegada de rede (16 MRs: VPC→RTA). Sem custo relevante (VPC/subnets/RT são
-# grátis; NAT+EIP têm custo pequeno de hora). external-names determinísticos: poc-eks-net01-*.
+# Provisiona SÓ a pegada de rede (16 MRs: VPC→RTA). Custo pequeno: VPC/subnets/RT são
+# grátis; NAT+EIP cobram por hora. external-names determinísticos: poc-eks-net01-*.
 #
-# Para o teste de comportamento-idêntico com o env01, use id: env01 (mesmos CIDRs/AZs/tags).
-# Aqui usamos net01 para não colidir com a destruição do env01 em andamento.
+# CIDR: vpcCidrSecondOctet=1 → VPC 10.1.0.0/16, subnets 10.1.{1,2,3,4}.0/24.
+# Supernet 10.0.0.0/12; N=0 reservado p/ Org; próximos spokes usam N=2..15.
+# Ver ../../../../docs/network/01-enderecamento-cidr.md.
 apiVersion: platform.example.com/v1alpha1
 kind: Network
 metadata:
   name: net01
 spec:
   id: net01
+  vpcCidrSecondOctet: 1
   # prefix (poc-eks) e region (us-east-1): defaults do XRD.

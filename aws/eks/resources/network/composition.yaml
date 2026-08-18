@@ -9,8 +9,13 @@ spec:
     apiVersion: platform.example.com/v1alpha1
     kind: Network
   # Pegada de REDE durável (16 MRs): VPC, 4 Subnets, IGW, EIP, NAT, 2 RouteTables, 2 Routes,
-  # 4 RouteTableAssociations. Migração 1:1 da Composition monolítica environment-eks,
-  # SEM mudança de comportamento — mesmos CIDRs, AZs, tags, external-names.
+  # 4 RouteTableAssociations. Migração 1:1 da Composition monolítica environment-eks.
+  #
+  # CIDR PARAMETRIZADO (2026-08-18): VPC e subnets derivam de spec.vpcCidrSecondOctet na
+  # supernet 10.0.0.0/12 → 10.<N>.0.0/16 + 10.<N>.{1,2,3,4}.0/24. Substitui o antigo
+  # 172.16.0.0/16 fixo (Gap 1 do docs/network/07-mapa-crossplane.md), que impedia >1 spoke
+  # por colisão. Derivação por string-format (Format) no patch-and-transform — sem cálculo
+  # de IP; por isso só /16 alinhado (spokes de outro tamanho = extensão futura via function-kcl).
   #
   # DUAS diferenças em relação à monolítica, ambas para o cruzamento cross-XR (Network→Cluster):
   #  (1) TODOS os MRs ganham o label environment.example.com/env=<id> (patch de spec.id).
@@ -52,7 +57,9 @@ spec:
                   environment.example.com/role: vpc
               spec:
                 forProvider:
-                  cidrBlock: 172.16.0.0/16
+                  # cidrBlock derivado de spec.vpcCidrSecondOctet (10.<N>.0.0/16),
+                  # patchado abaixo. Valor no base é só placeholder — o patch sobrepõe.
+                  cidrBlock: 10.1.0.0/16
                   enableDnsSupport: true
                   enableDnsHostnames: true
             patches:
@@ -60,6 +67,14 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.vpcCidrSecondOctet
+                toFieldPath: spec.forProvider.cidrBlock
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "10.%v.0.0/16"
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -85,7 +100,7 @@ spec:
               spec:
                 forProvider:
                   availabilityZone: us-east-1a
-                  cidrBlock: 172.16.1.0/24
+                  cidrBlock: 10.1.1.0/24
                   mapPublicIpOnLaunch: true
                   vpcIdSelector:
                     matchControllerRef: true
@@ -96,6 +111,14 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.vpcCidrSecondOctet
+                toFieldPath: spec.forProvider.cidrBlock
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "10.%v.1.0/24"
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -119,7 +142,7 @@ spec:
               spec:
                 forProvider:
                   availabilityZone: us-east-1b
-                  cidrBlock: 172.16.2.0/24
+                  cidrBlock: 10.1.2.0/24
                   mapPublicIpOnLaunch: true
                   vpcIdSelector:
                     matchControllerRef: true
@@ -130,6 +153,14 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.vpcCidrSecondOctet
+                toFieldPath: spec.forProvider.cidrBlock
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "10.%v.2.0/24"
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -153,7 +184,7 @@ spec:
               spec:
                 forProvider:
                   availabilityZone: us-east-1a
-                  cidrBlock: 172.16.3.0/24
+                  cidrBlock: 10.1.3.0/24
                   vpcIdSelector:
                     matchControllerRef: true
                   tags:
@@ -163,6 +194,14 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.vpcCidrSecondOctet
+                toFieldPath: spec.forProvider.cidrBlock
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "10.%v.3.0/24"
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -186,7 +225,7 @@ spec:
               spec:
                 forProvider:
                   availabilityZone: us-east-1b
-                  cidrBlock: 172.16.4.0/24
+                  cidrBlock: 10.1.4.0/24
                   vpcIdSelector:
                     matchControllerRef: true
                   tags:
@@ -196,6 +235,14 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.vpcCidrSecondOctet
+                toFieldPath: spec.forProvider.cidrBlock
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "10.%v.4.0/24"
               - type: CombineFromComposite
                 combine:
                   variables:
