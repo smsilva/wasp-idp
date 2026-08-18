@@ -13,9 +13,24 @@ A decisão de ciclo de vida que molda o chart:
 
 | Recurso | Tipo no Helm | Porquê |
 |---|---|---|
-| **XR `Network`** (`10-network.yaml`) | **recurso normal** do release | `helm upgrade` reconcilia mudanças (ex.: CIDR); `helm uninstall` deleta o XR → Crossplane faz **teardown da VPC/NAT** na AWS. Se fosse hook, viraria órfão no uninstall (recurso AWS cobrando). |
-| **RBAC do waiter** (`05-waiter-rbac.yaml`) | **hook** (`post-install,post-upgrade`, weight `5`) | SA + ClusterRole dedicado (menor privilégio: `get/list/watch` só no tipo `networks`) + binding, todos efêmeros. Não usa `crossplane-view` (que daria read em todos os tipos Crossplane). |
-| **Job waiter** (`15-wait-network.yaml`) | **hook** (weight `15`) | Roda `kubectl wait ... --for=condition=Ready`. O Helm **bloqueia** no Job → é a barreira. `hook-delete-policy: before-hook-creation,hook-succeeded` não deixa lixo. |
+| **XR `Network`** (`100-network.yaml`) | **recurso normal** do release | `helm upgrade` reconcilia mudanças (ex.: CIDR); `helm uninstall` deleta o XR → Crossplane faz **teardown da VPC/NAT** na AWS. Se fosse hook, viraria órfão no uninstall (recurso AWS cobrando). |
+| **RBAC do waiter** (`110-waiter-rbac.yaml`) | **hook** (`post-install,post-upgrade`, weight `110`) | SA + ClusterRole dedicado (menor privilégio: `get/list/watch` só no tipo `networks`) + binding, todos efêmeros. Não usa `crossplane-view` (que daria read em todos os tipos Crossplane). |
+| **Job waiter** (`120-wait-network.yaml`) | **hook** (weight `120`) | Roda `kubectl wait ... --for=condition=Ready`. O Helm **bloqueia** no Job → é a barreira. `hook-delete-policy: before-hook-creation,hook-succeeded` não deixa lixo. |
+
+### Esquema de numeração
+
+Grupos de 100 por XR, passos de 10 dentro do grupo — o `hook-weight` acompanha o número do
+arquivo, então inserir/ajustar uma fase é só escolher um número no vão. Mapeia as 25 fases
+do chart faseado antigo (`../../chart/`) para poucos XRs de alto nível:
+
+| Faixa | Grupo | Fases antigas que colapsa | Estado |
+|---|---|---|---|
+| **100–120** | **Network** (XR + RBAC + waiter) | `10-vpc`, `20-subnets`, `30-network-access` | ✅ esta fatia |
+| **200–220** | **Cluster** (EnvironmentConfig + XR + waiter) | `40-iam`, `50-eks`, `60-nodegroup`, `65/68`, `70/72/74` | ⬜ futuro |
+| **300–310** | **ArgoCDInstance** (XR + waiter) → resto via GitOps | `80`–`98`, `100`–`106` (ESO, external-dns, ALB, istio, cert-manager) | ⬜ futuro |
+
+Dentro de um grupo: `N00` = XR (recurso normal), `N10` = RBAC do waiter (hook), `N20` =
+Job waiter (hook). Os hooks de um grupo têm weight = o próprio número do arquivo.
 
 **Por que o waiter precisa ser hook (e não um recurso comum):** `helm install` não espera
 readiness de um recurso normal — só espera um **Job hook** chegar a `Complete`. Um `apply` de

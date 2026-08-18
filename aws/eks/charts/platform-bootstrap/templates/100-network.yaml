@@ -1,7 +1,7 @@
 {{/*
 XR Network — RECURSO NORMAL do release (não é hook), para que helm upgrade reconcilie
 mudanças e helm uninstall dispare o teardown da VPC/subnets/NAT via Crossplane.
-A ORDEM/barreira é dada pelo waiter hook (15-wait-network.yaml), não por este recurso.
+A ORDEM/barreira é dada pelo waiter hook (120-wait-network.yaml), não por este recurso.
 */}}
 apiVersion: platform.example.com/v1alpha1
 kind: Network
