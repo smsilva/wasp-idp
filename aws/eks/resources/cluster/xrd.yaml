@@ -43,6 +43,14 @@ spec:
                 region:
                   type: string
                   default: us-east-1
+                providerConfigName:
+                  type: string
+                  description: >-
+                    Nome do ProviderConfig AWS que os MRs de IAM/EKS usam. "default" cria na
+                    conta do crossplane-poc (hub); "spoke-sandbox" (assumeRoleChain) cria na
+                    conta spoke. DEVE bater com o providerConfigName do Network de mesmo id.
+                    Não afeta os ProviderConfigs remotos helm/kubernetes (in-cluster).
+                  default: default
                 nodeGroup:
                   type: object
                   description: Configuração do NodeGroup gerenciado.

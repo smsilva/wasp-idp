@@ -56,6 +56,14 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.region
                 toFieldPath: spec.forProvider.region
+          # provider-config: aponta os MRs AWS (IAM/EKS) ao ProviderConfig escolhido
+          # (default=hub; spoke-sandbox=cross-account). NÃO aplicado aos ProviderConfigs
+          # remotos helm/kubernetes (in-cluster) — só aos 11 MRs com env-label.
+          - name: provider-config
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.providerConfigName
+                toFieldPath: spec.providerConfigRef.name
         resources:
           # ---------- 40 IAM (Roles cluster/node + attachments) ----------
           # Role: external-name É o nome da IAM Role (escolhido) → naming determinístico OK.
@@ -83,6 +91,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -114,6 +124,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -136,6 +148,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
           - name: node-policy-worker
             base:
               apiVersion: iam.aws.upbound.io/v1beta1
@@ -150,6 +164,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
           - name: node-policy-ecr
             base:
               apiVersion: iam.aws.upbound.io/v1beta1
@@ -164,6 +180,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
           - name: node-policy-cni
             base:
               apiVersion: iam.aws.upbound.io/v1beta1
@@ -178,6 +196,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
           # ---------- 50 EKS Cluster ----------
           # external-name = nome do cluster (escolhido). CARO (~$0.10/h) e LENTO (~12-15 min).
           # CRUZAMENTO CROSS-XR (1): subnetIdSelector casa as 4 subnets do Network por
@@ -208,6 +228,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
               - type: PatchSet
                 patchSetName: region
               # cross-XR (1): injeta env=<id> no selector de subnets (discrimina o Network certo).
@@ -257,6 +279,8 @@ spec:
               - type: PatchSet
                 patchSetName: env-label
               - type: PatchSet
+                patchSetName: provider-config
+              - type: PatchSet
                 patchSetName: region
               # cross-XR (2): injeta env=<id> no selector de subnets privadas.
               - type: FromCompositeFieldPath
@@ -301,6 +325,8 @@ spec:
               - type: PatchSet
                 patchSetName: env-label
               - type: PatchSet
+                patchSetName: provider-config
+              - type: PatchSet
                 patchSetName: region
               - type: CombineFromComposite
                 combine:
@@ -338,6 +364,8 @@ spec:
               - type: PatchSet
                 patchSetName: env-label
               - type: PatchSet
+                patchSetName: provider-config
+              - type: PatchSet
                 patchSetName: region
               - type: FromEnvironmentFieldPath
                 fromFieldPath: crossplaneArn
@@ -358,6 +386,8 @@ spec:
             patches:
               - type: PatchSet
                 patchSetName: env-label
+              - type: PatchSet
+                patchSetName: provider-config
               - type: PatchSet
                 patchSetName: region
               - type: FromEnvironmentFieldPath

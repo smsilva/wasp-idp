@@ -43,6 +43,14 @@ spec:
                 region:
                   type: string
                   default: us-east-1
+                providerConfigName:
+                  type: string
+                  description: >-
+                    Nome do ProviderConfig AWS que cada MR usa. "default" cria os recursos na
+                    conta do crossplane-poc (hub); um ProviderConfig cross-account (ex.:
+                    "spoke-sandbox", com assumeRoleChain) cria numa conta spoke. Ver
+                    aws/eks/providers/provider-config-spoke-sandbox.yaml.
+                  default: default
                 vpcCidrSecondOctet:
                   type: integer
                   description: >-

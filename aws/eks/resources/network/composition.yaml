@@ -46,6 +46,13 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.region
                 toFieldPath: spec.forProvider.region
+          # provider-config: aponta cada MR ao ProviderConfig escolhido (default=hub;
+          # spoke-sandbox=cross-account). Aplicado a TODOS os 16 MRs via PatchSet.
+          - name: provider-config
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.providerConfigName
+                toFieldPath: spec.providerConfigRef.name
         resources:
           # ---------- 10 VPC ----------
           - name: vpc
@@ -67,6 +74,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.vpcCidrSecondOctet
                 toFieldPath: spec.forProvider.cidrBlock
@@ -111,6 +120,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.vpcCidrSecondOctet
                 toFieldPath: spec.forProvider.cidrBlock
@@ -153,6 +164,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.vpcCidrSecondOctet
                 toFieldPath: spec.forProvider.cidrBlock
@@ -194,6 +207,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.vpcCidrSecondOctet
                 toFieldPath: spec.forProvider.cidrBlock
@@ -235,6 +250,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.vpcCidrSecondOctet
                 toFieldPath: spec.forProvider.cidrBlock
@@ -272,6 +289,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -295,6 +314,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -326,6 +347,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -350,6 +373,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -374,6 +399,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
               - type: CombineFromComposite
                 combine:
                   variables:
@@ -402,6 +429,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
           - name: route-private-nat
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
@@ -422,6 +451,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
           - name: rta-public-1a
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
@@ -441,6 +472,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
           - name: rta-public-1b
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
@@ -460,6 +493,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
           - name: rta-private-1a
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
@@ -479,6 +514,8 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
           - name: rta-private-1b
             base:
               apiVersion: ec2.aws.upbound.io/v1beta1
@@ -498,3 +535,5 @@ spec:
                 patchSetName: env-label
               - type: PatchSet
                 patchSetName: region
+              - type: PatchSet
+                patchSetName: provider-config
