@@ -1,0 +1,15 @@
+{{/*
+XR Network do spoke — RECURSO NORMAL do release: helm upgrade reconcilia, helm uninstall
+dispara o teardown da VPC/subnets/NAT via Crossplane. A barreira é o waiter hook (waiter.yaml).
+Criado NA CONTA SPOKE (providerConfigName: sandbox → assumeRoleChain). Pré-requisito: o
+ProviderConfig "sandbox" aplicado no k3d (aws/eks/scripts/configure-account-access).
+*/}}
+apiVersion: platform.example.com/v1alpha1
+kind: Network
+metadata:
+  name: {{ required "spoke: informe --set name=<metadata.name, ex. saída de aws/eks/scripts/random-id>" .Values.name }}
+spec:
+  prefix: {{ .Values.prefix }}
+  region: {{ .Values.region }}
+  providerConfigName: {{ .Values.providerConfigName }}
+  vpcCidrSecondOctet: {{ .Values.vpcCidrSecondOctet }}

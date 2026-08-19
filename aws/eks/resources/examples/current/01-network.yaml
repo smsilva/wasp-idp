@@ -1,6 +1,10 @@
-# Claim de exemplo do Network isolado — teste da 1ª fatia da decomposição.
+# Exemplo do Network isolado — teste da 1ª fatia da decomposição.
 # Provisiona SÓ a pegada de rede (16 MRs: VPC→RTA). Custo pequeno: VPC/subnets/RT são
 # grátis; NAT+EIP cobram por hora. external-names determinísticos: poc-eks-net01-*.
+#
+# IDENTIDADE = metadata.name (Crossplane v2, sem spec.id): deriva os external-names
+# (poc-eks-<metadata.name>-*) e o label environment.example.com/env=<metadata.name> que o
+# Cluster de MESMO metadata.name usa para casar as subnets.
 #
 # CIDR: vpcCidrSecondOctet=1 → VPC 10.1.0.0/16, subnets 10.1.{1,2,3,4}.0/24.
 # Supernet 10.0.0.0/12; N=0 reservado p/ Org; próximos spokes usam N=2..15.
@@ -10,6 +14,6 @@ kind: Network
 metadata:
   name: net01
 spec:
-  id: net01
+  providerConfigName: hub   # obrigatório: hub (conta do crossplane-poc) | sandbox (cross-account)
   vpcCidrSecondOctet: 1
   # prefix (poc-eks) e region (us-east-1): defaults do XRD.

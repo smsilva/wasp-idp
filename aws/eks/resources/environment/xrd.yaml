@@ -1,3 +1,7 @@
+# ⚠️ BLOCKED / SUPERADO (2026-08-18) — ver banner em environment/composition.yaml.
+# O orquestrador Environment depende de `spec.id` compartilhado (removido na migração para
+# metadata.name). Rework pendente = examples/topology/05-environment.yaml + 06/07. Enquanto
+# isso, use os charts diretos hub/spoke/cluster (aws/platform/charts/).
 apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: spoke
+description: >-
+  Rede spoke — provisiona 1 XR Network numa conta spoke (providerConfigName: sandbox) via
+  assumeRoleChain e bloqueia via Job hook até ficar Ready. NÃO inclui cluster: um spoke pode
+  hospedar um cluster (chart cluster, mesmo name) ou outros recursos. Ver ../../README.md.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

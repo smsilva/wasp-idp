@@ -1,0 +1,9 @@
+apiVersion: v2
+name: hub
+description: >-
+  Rede de conectividade regional (hub) — provisiona 1 XR Network na conta hub
+  (providerConfigName: hub) e bloqueia via Job hook até ficar Ready. Um hub por região.
+  Camada de rede; não é EKS. Ver ../../README.md.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

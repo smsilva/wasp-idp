@@ -1,0 +1,69 @@
+{{/*
+Waiter — barreira de readiness via Helm hook. RBAC efêmero (get/list/watch só no tipo clusters)
++ Job `kubectl wait ... Ready`. O EKS leva ~28-30 min → o helm install/upgrade bloqueia aqui
+esse tempo todo (rodar em background). Nomes por .Release.Name (único → sem colisão).
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-waiter
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-waiter
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: ["platform.example.com"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-waiter
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-waiter
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-waiter
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-wait
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: {{ .Release.Name }}-waiter
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: {{ .Values.waiter.image }}
+          command:
+            - kubectl
+            - wait
+            - cluster.platform.example.com/{{ .Values.name }}
+            - --for=condition=Ready
+            - --timeout={{ .Values.waiter.timeout }}

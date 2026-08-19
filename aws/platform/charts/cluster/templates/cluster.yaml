@@ -1,0 +1,22 @@
+{{/*
+XR Cluster — RECURSO NORMAL do release: helm upgrade reconcilia, helm uninstall dispara o
+teardown do EKS/NodeGroup/IAM via Crossplane. CONSOME a rede do spoke de MESMO metadata.name
+(subnets casadas por matchLabels na Composition). Pré-requisito: o Network do spoke já Ready.
+A barreira é o waiter hook (waiter.yaml).
+
+⚠️ EKS REAL: ~28-30 min, control plane (~$0.10/h) + nodeGroup (3× t3.medium default) + usa o
+NAT do spoke. Só sob autorização explícita.
+*/}}
+apiVersion: platform.example.com/v1alpha1
+kind: Cluster
+metadata:
+  name: {{ required "cluster: informe --set name=<metadata.name, IGUAL ao do spoke>" .Values.name }}
+spec:
+  prefix: {{ .Values.prefix }}
+  region: {{ .Values.region }}
+  providerConfigName: {{ required "cluster: informe --set providerConfigName=<hub|sandbox, IGUAL ao do spoke>" .Values.providerConfigName }}
+  nodeGroup:
+    instanceType: {{ .Values.nodeGroup.instanceType }}
+    desiredSize: {{ .Values.nodeGroup.desiredSize }}
+    minSize: {{ .Values.nodeGroup.minSize }}
+    maxSize: {{ .Values.nodeGroup.maxSize }}

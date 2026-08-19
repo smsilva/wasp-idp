@@ -8,9 +8,13 @@ spec:
   # Cluster). O Environment vira orquestrador fino que compõe Network + Cluster.
   #
   # Contrato de saída (Pilar 5 PE 2.0, "API-first contract"): o Network taggeia TODAS as
-  # subnets com environment.example.com/env=<id> + cluster-subnet/tier, e o Cluster as
-  # seleciona por matchLabels (SEM matchControllerRef, pois atravessam XRs). Publica também
+  # subnets com environment.example.com/env=<metadata.name> + cluster-subnet/tier, e o Cluster
+  # as seleciona por matchLabels (SEM matchControllerRef, pois atravessam XRs). Publica também
   # vpcId/subnetIds no status para diagnóstico sem inspecionar os 16 MRs um a um.
+  #
+  # IDENTIDADE = metadata.name (Crossplane v2, XR namespaced/cluster-scoped SEM claim → nome
+  # estável e controlado por quem cria). Não há spec.id: o metadata.name deriva os external-names
+  # (<prefix>-<metadata.name>-*) e o label env. O Cluster de MESMO metadata.name casa as subnets.
   scope: Cluster
   group: platform.example.com
   names:
@@ -27,15 +31,8 @@ spec:
             spec:
               type: object
               required:
-                - id
+                - providerConfigName
               properties:
-                id:
-                  type: string
-                  description: >-
-                    Identificador determinístico do Environment (≤5 alfanum). Deriva os
-                    external-names (<prefix>-<id>-*) e o label de cruzamento
-                    environment.example.com/env=<id> que o Cluster usa para achar as subnets.
-                  pattern: '^[a-z0-9]{1,5}$'
                 prefix:
                   type: string
                   description: Prefixo do naming (configurável p/ adoção por outros times).
@@ -46,17 +43,16 @@ spec:
                 providerConfigName:
                   type: string
                   description: >-
-                    Nome do ProviderConfig AWS que cada MR usa. "default" cria os recursos na
-                    conta do crossplane-poc (hub); um ProviderConfig cross-account (ex.:
-                    "spoke-sandbox", com assumeRoleChain) cria numa conta spoke. Ver
-                    aws/eks/providers/provider-config-spoke-sandbox.yaml.
-                    O enum é o ALLOWLIST de ProviderConfigs desta instância (defense-in-depth:
-                    impede um XR mirar um ProviderConfig não pretendido). Ajustar a lista ao
-                    adotar em outra conta/instância — os nomes de spoke são por-instância.
+                    Nome do ProviderConfig AWS que cada MR usa. "hub" cria os recursos na conta
+                    do crossplane-poc (hub); "sandbox" (assumeRoleChain) cria na conta spoke.
+                    Ver aws/eks/providers/provider-config-hub.yaml e provider-config-sandbox.yaml.
+                    OBRIGATÓRIO (sem default): um XR sem este campo é rejeitado — falha-fechado,
+                    não vaza para o hub por omissão. O enum é o ALLOWLIST de ProviderConfigs
+                    desta instância (defense-in-depth); ajustar a lista ao adotar em outra
+                    conta/instância — os nomes de spoke são por-instância.
                   enum:
-                    - default
-                    - spoke-sandbox
-                  default: default
+                    - hub
+                    - sandbox
                 vpcCidrSecondOctet:
                   type: integer
                   description: >-

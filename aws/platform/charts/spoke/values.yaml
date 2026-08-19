@@ -1,0 +1,21 @@
+# Valores do chart spoke. Espelham o spec do XR Network (resources/network/).
+#
+# name: metadata.name do XR Network — a IDENTIDADE (Crossplane v2, sem spec.id). Se este spoke
+# hospeda um cluster, o chart cluster DEVE usar o MESMO name (casa as subnets por label).
+# Gere com aws/eks/scripts/random-id (5 chars, ex.: ha13c). Sem default: passe via --set name=...
+name: ""
+
+prefix: poc-eks
+region: us-east-1
+
+# providerConfigName: conta onde os MRs são criados. sandbox = cross-account (assumeRoleChain).
+# O ProviderConfig "sandbox" precisa existir no k3d (configure-account-access).
+providerConfigName: sandbox
+
+# vpcCidrSecondOctet: N em 10.<N>.0.0/16 (supernet 10.0.0.0/12). Cada spoke usa um N distinto
+# (hub=1). Endereçamento é IRREVERSÍVEL (re-endereçar exige recriar a VPC).
+vpcCidrSecondOctet: 2
+
+waiter:
+  image: registry.k8s.io/kubectl:v1.35.7
+  timeout: 600s

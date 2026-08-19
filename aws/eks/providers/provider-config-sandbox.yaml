@@ -1,0 +1,21 @@
+---
+# ProviderConfig cross-account "sandbox": mesma credencial base do crossplane-poc (hub), mas
+# assume a role crossplane-sandbox na conta spoke via STS (assumeRoleChain). Recursos que
+# referenciarem providerConfigName: sandbox são criados NA CONTA SPOKE, não na hub.
+#
+# ${SPOKE_ACCOUNT_ID} é resolvido por envsubst no configure-account-access (o account-id não é
+# versionado — vem de --account-id / CLAUDE.local.md). Bootstrap da role na conta spoke:
+# aws/eks/providers/spoke-trust-policy.json + bootstrap-iam-policy.json.
+apiVersion: aws.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: sandbox
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: aws-iam-credential
+      key: creds
+  assumeRoleChain:
+    - roleARN: arn:aws:iam::${SPOKE_ACCOUNT_ID}:role/crossplane-sandbox

@@ -1,0 +1,88 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Aplica um ProviderConfig cross-account (spoke) no k3d, resolvendo o account-id via envsubst.
+  NÃO cria credencial: reusa o Secret aws-iam-credential (assumeRoleChain parte dele). O
+  ProviderConfig "hub" (credencial direta) é aplicado pelo configure-aws-creds, não por aqui.
+
+  Lê o template providers/provider-config-<name>.yaml e substitui \${SPOKE_ACCOUNT_ID}.
+
+    Options:
+
+      -h,  --help              Show this help
+      -n,  --name              Nome do ProviderConfig/spoke (ex.: sandbox) [obrigatório]
+      -a,  --account-id        Account id da conta spoke (12 dígitos)     [obrigatório]
+      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+
+    Examples:
+
+      ${this_script_name} --name sandbox --account-id 832721568602
+EOF
+}
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -n | --name )
+      shift
+      name="${1}"
+      ;;
+
+    -a | --account-id )
+      shift
+      account_id="${1}"
+      ;;
+
+    -c | --cluster-name )
+      shift
+      cluster_name="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+
+  esac
+  shift
+done
+
+if [[ "${1}" == '--' ]]; then shift; fi
+
+cluster_name="${cluster_name:-poc-idp}"
+
+: "${name?informe --name (ex.: sandbox)}"
+: "${account_id?informe --account-id (12 dígitos da conta spoke)}"
+
+if [[ ! "${account_id}" =~ ^[0-9]{12}$ ]]; then
+  echo "account-id inválido: '${account_id}' (esperado 12 dígitos)" >&2
+  exit 1
+fi
+
+set -e
+
+context="k3d-${cluster_name}"
+template="${this_script_directory}/../providers/provider-config-${name}.yaml"
+
+if [[ ! -f "${template}" ]]; then
+  echo "template não encontrado: ${template}" >&2
+  exit 1
+fi
+
+echo "Aplicando ProviderConfig '${name}' (assumeRoleChain → conta ${account_id})"
+
+SPOKE_ACCOUNT_ID="${account_id}" \
+  envsubst '${SPOKE_ACCOUNT_ID}' < "${template}" \
+  | kubectl --context "${context}" apply -f -

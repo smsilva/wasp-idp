@@ -8,8 +8,9 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria o Secret aws-iam-credential (formato INI) e aplica o ProviderConfig default.
+  Cria o Secret aws-iam-credential (formato INI) e aplica o ProviderConfig "hub".
   Fonte das keys: env AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+  (ProviderConfig cross-account "sandbox": ver configure-account-access.)
 
     Options:
 
@@ -73,4 +74,4 @@ kubectl --context "${context}" create secret generic aws-iam-credential \
   --dry-run=client -o yaml \
   | kubectl --context "${context}" apply -f -
 
-kubectl --context "${context}" apply -f "${this_script_directory}/../providers/provider-config.yaml"
+kubectl --context "${context}" apply -f "${this_script_directory}/../providers/provider-config-hub.yaml"

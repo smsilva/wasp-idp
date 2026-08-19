@@ -14,10 +14,11 @@ spec:
   # environment-eks, comportamento-idêntico.
   #
   # CRUZAMENTOS CROSS-XR (Network→Cluster) — os 2 selectors que atravessam a fronteira do XR
-  # perdem matchControllerRef e casam por matchLabels no label environment.example.com/env=<id>
-  # (as subnets vivem no XR Network, não neste). São os 2 únicos pontos que mudam vs. a monolítica:
-  #   (1) EKS Cluster.vpcConfig.subnetIdSelector → cluster-subnet=true + env=<id> (as 4 subnets)
-  #   (2) NodeGroup.subnetIdSelector            → tier=private     + env=<id> (as 2 privadas)
+  # perdem matchControllerRef e casam por matchLabels no label environment.example.com/env=
+  # <metadata.name> (as subnets vivem no XR Network, não neste). Requer que este Cluster tenha
+  # o MESMO metadata.name do Network. São os 2 únicos pontos que mudam vs. a monolítica:
+  #   (1) EKS Cluster.vpcConfig.subnetIdSelector → cluster-subnet=true + env=<metadata.name>
+  #   (2) NodeGroup.subnetIdSelector            → tier=private     + env=<metadata.name>
   # Todo o resto (role→attachment, cluster→role, nodegroup→cluster/role, ponte→cluster) é INTERNO
   # a este XR → mantém matchControllerRef: true.
   #
@@ -45,11 +46,11 @@ spec:
         apiVersion: pt.fn.crossplane.io/v1beta1
         kind: Resources
         patchSets:
-          # env=<id>: casa com as subnets do Network (cross-XR) e marca os MRs deste XR p/ debug.
+          # env=<metadata.name>: casa com as subnets do Network (cross-XR) e marca os MRs deste XR p/ debug.
           - name: env-label
             patches:
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.id
+                fromFieldPath: metadata.name
                 toFieldPath: metadata.labels[environment.example.com/env]
           - name: region
             patches:
@@ -57,8 +58,9 @@ spec:
                 fromFieldPath: spec.region
                 toFieldPath: spec.forProvider.region
           # provider-config: aponta os MRs AWS (IAM/EKS) ao ProviderConfig escolhido
-          # (default=hub; spoke-sandbox=cross-account). NÃO aplicado aos ProviderConfigs
-          # remotos helm/kubernetes (in-cluster) — só aos 11 MRs com env-label.
+          # (hub=conta do crossplane-poc; sandbox=cross-account via assumeRoleChain). NÃO
+          # aplicado aos ProviderConfigs remotos helm/kubernetes (in-cluster) — só aos 11 MRs
+          # com env-label.
           - name: provider-config
             patches:
               - type: FromCompositeFieldPath
@@ -97,7 +99,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-cluster-role" }
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
@@ -130,7 +132,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-node-role" }
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
@@ -234,13 +236,13 @@ spec:
                 patchSetName: region
               # cross-XR (1): injeta env=<id> no selector de subnets (discrimina o Network certo).
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.id
+                fromFieldPath: metadata.name
                 toFieldPath: spec.forProvider.vpcConfig.subnetIdSelector.matchLabels[environment.example.com/env]
               - type: CombineFromComposite
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s" }
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
@@ -284,7 +286,7 @@ spec:
                 patchSetName: region
               # cross-XR (2): injeta env=<id> no selector de subnets privadas.
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.id
+                fromFieldPath: metadata.name
                 toFieldPath: spec.forProvider.subnetIdSelector.matchLabels[environment.example.com/env]
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.nodeGroup.instanceType
@@ -302,7 +304,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-node-group" }
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
@@ -332,7 +334,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-cluster-auth" }
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
@@ -342,7 +344,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-kubeconfig" }
                 toFieldPath: spec.writeConnectionSecretToRef.name
@@ -411,7 +413,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-helm" }
                 toFieldPath: metadata.name
@@ -419,7 +421,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-kubeconfig" }
                 toFieldPath: spec.credentials.secretRef.name
@@ -440,7 +442,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-k8s" }
                 toFieldPath: metadata.name
@@ -448,7 +450,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-kubeconfig" }
                 toFieldPath: spec.credentials.secretRef.name

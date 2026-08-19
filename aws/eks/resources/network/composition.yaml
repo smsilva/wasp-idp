@@ -18,8 +18,9 @@ spec:
   # de IP; por isso só /16 alinhado (spokes de outro tamanho = extensão futura via function-kcl).
   #
   # DUAS diferenças em relação à monolítica, ambas para o cruzamento cross-XR (Network→Cluster):
-  #  (1) TODOS os MRs ganham o label environment.example.com/env=<id> (patch de spec.id).
-  #      É o discriminador que impede o Cluster de casar subnets de OUTRO Environment no mesmo hub.
+  #  (1) TODOS os MRs ganham o label environment.example.com/env=<metadata.name> (patch de
+  #      metadata.name — a identidade do XR em Crossplane v2, sem spec.id). É o discriminador
+  #      que impede o Cluster de casar subnets de OUTRO Environment no mesmo hub.
   #  (2) Selectors INTERNOS (VPC→subnet, NAT→eip/subnet, route→rt/gw, rta→rt/subnet) mantêm
   #      matchControllerRef: true — são resolvidos DENTRO deste XR (regra 2 do brainstorm).
   #
@@ -34,20 +35,21 @@ spec:
       input:
         apiVersion: pt.fn.crossplane.io/v1beta1
         kind: Resources
-        # patchSets: o label env=<id> é idêntico em todos os MRs → 1 patchSet reusável.
+        # patchSets: o label env=<metadata.name> é idêntico em todos os MRs → 1 patchSet reusável.
         patchSets:
           - name: env-label
             patches:
               - type: FromCompositeFieldPath
-                fromFieldPath: spec.id
+                fromFieldPath: metadata.name
                 toFieldPath: metadata.labels[environment.example.com/env]
           - name: region
             patches:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.region
                 toFieldPath: spec.forProvider.region
-          # provider-config: aponta cada MR ao ProviderConfig escolhido (default=hub;
-          # spoke-sandbox=cross-account). Aplicado a TODOS os 16 MRs via PatchSet.
+          # provider-config: aponta cada MR ao ProviderConfig escolhido (hub=conta do
+          # crossplane-poc; sandbox=cross-account via assumeRoleChain). Aplicado a TODOS os
+          # 16 MRs via PatchSet.
           - name: provider-config
             patches:
               - type: FromCompositeFieldPath
@@ -88,7 +90,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-vpc" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -134,7 +136,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-public-1a" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -178,7 +180,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-public-1b" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -221,7 +223,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-private-1a" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -264,7 +266,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-private-1b" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -295,7 +297,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-igw" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -320,7 +322,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-nat-eip" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -353,7 +355,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-nat" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -379,7 +381,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-rt-public" }
                 toFieldPath: spec.forProvider.tags.Name
@@ -405,7 +407,7 @@ spec:
                 combine:
                   variables:
                     - fromFieldPath: spec.prefix
-                    - fromFieldPath: spec.id
+                    - fromFieldPath: metadata.name
                   strategy: string
                   string: { fmt: "%s-%s-rt-private" }
                 toFieldPath: spec.forProvider.tags.Name

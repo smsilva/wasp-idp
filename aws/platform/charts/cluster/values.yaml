@@ -1,0 +1,29 @@
+# Valores do chart cluster. Espelham o spec do XR Cluster (resources/cluster/).
+#
+# name: metadata.name do XR Cluster — DEVE ser igual ao name do spoke (Network) cuja rede
+# consome (as subnets são casadas por label environment.example.com/env=<name>). Sem default.
+name: ""
+
+prefix: poc-eks
+region: us-east-1
+
+# providerConfigName: OBRIGATÓRIO e explícito (o cluster declara qual conta usa). DEVE bater
+# com o providerConfigName do spoke de mesmo name. hub | sandbox.
+providerConfigName: ""
+
+# crossplaneArn: principal que recebe RBAC admin no EKS (AccessEntry). ATENÇÃO: para um cluster
+# no spoke, é a ROLE ASSUMIDA na conta spoke (ex.: arn:aws:iam::<sandboxAccount>:role/
+# crossplane-sandbox), NÃO o user da hub — o ClusterAuth autentica como a role do assumeRoleChain.
+# Se errar, a ponte Crossplane→EKS (provider-helm/kubernetes) não alcança o cluster.
+crossplaneArn: ""
+
+nodeGroup:
+  instanceType: t3.medium
+  desiredSize: 3
+  minSize: 3
+  maxSize: 4
+
+waiter:
+  image: registry.k8s.io/kubectl:v1.35.7
+  # EKS control plane (~15min) + NodeGroup (~10min) + ponte.
+  timeout: 1800s

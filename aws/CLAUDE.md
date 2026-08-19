@@ -272,9 +272,18 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 - Padrão: role `crossplane-<spoke>` na conta spoke com trust p/ `crossplane-poc` da hub +
   PowerUserAccess + inline IAM (mesma `bootstrap-iam-policy.json`). Nome pela CONTA/escopo
   (`crossplane-sandbox`), não por função — a role provisiona tudo daquela conta.
-- XRDs `Network`/`Cluster` têm `spec.providerConfigName` (enum allowlist `[default,
-  spoke-sandbox]`; ajustar por instância). Cada MR AWS recebe via patchSet `provider-config`;
-  os ProviderConfigs remotos helm/kubernetes (in-cluster) NÃO recebem.
+- **ProviderConfigs nomeados por conta** (convenção Upbound/Crossplane): `hub` (credencial
+  direta, `providers/provider-config-hub.yaml`, aplicado por `configure-aws-creds`) e `sandbox`
+  (assumeRoleChain, `providers/provider-config-sandbox.yaml` com `${SPOKE_ACCOUNT_ID}` via
+  envsubst, aplicado por `configure-account-access --name sandbox --account-id <id>`). Sem PC
+  `default` — abandonado de propósito (falha-fechado).
+- XRDs `Network`/`Cluster` têm `spec.providerConfigName` **OBRIGATÓRIO** (sem default; XR sem
+  ele é rejeitado — falha-fechado, não vaza pro hub), enum allowlist `[hub, sandbox]` (ajustar
+  por instância). Cada MR AWS recebe via patchSet `provider-config`; os ProviderConfigs remotos
+  helm/kubernetes (in-cluster) NÃO recebem.
+- **Identidade = `metadata.name`** (Crossplane v2, sem `spec.id`): deriva external-names
+  (`<prefix>-<metadata.name>-*`) e o label `env`. Spoke e cluster que ele hospeda têm o MESMO
+  `metadata.name` (casa subnets). Gerar com `eks/scripts/random-id`.
 
 ## Validação offline sem tocar a AWS
 
@@ -284,14 +293,23 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 - `helm template ... | kubectl apply --dry-run=server -f -` valida schema/RBAC contra o
   cluster real (helm 3.12 não tem `--dry-run=server`).
 
-## Chart platform-bootstrap: XR = recurso normal, waiter = hook
+## Charts hub/spoke/cluster (`aws/platform/charts/`): XR = recurso normal, waiter = hook
 
-- `aws/eks/charts/platform-bootstrap` orquestra XRs via Helm hooks. XR é recurso NORMAL
-  (upgrade reconcilia, uninstall dispara teardown AWS via Crossplane — validado); só o Job
-  waiter (`kubectl wait ... Ready`) é hook, porque o Helm só bloqueia esperando Job
-  `Complete`, não readiness de recurso normal.
+- Três charts, **um release por célula** da topologia (substituem o antigo `platform-bootstrap`
+  — nome confuso, "bootstrap" já era o setup das contas). `hub` e `spoke` renderizam um XR
+  `Network` (hub=`providerConfigName: hub`; spoke=`sandbox`); `cluster` renderiza
+  `EnvironmentConfig` + XR `Cluster`. Cada release é uma célula independente — uninstall isola
+  o blast radius. Ver `aws/platform/charts/README.md` e `aws/platform/CLAUDE.md`.
+- **spoke ≠ cluster:** spoke é célula de rede (pode existir sem cluster / hospedar outros
+  recursos); cluster é workload que aterrissa num spoke de MESMO `metadata.name`.
+- XR é recurso NORMAL (upgrade reconcilia, uninstall dispara teardown AWS via Crossplane —
+  validado); só o Job waiter (`kubectl wait ... Ready`) é hook, porque o Helm só bloqueia
+  esperando Job `Complete`, não readiness de recurso normal. Nomes do waiter derivam de
+  `.Release.Name` (único → sem colisão cluster-scoped).
+- `--set name=` é a identidade (`metadata.name`); `cluster` exige também `providerConfigName`
+  e `crossplaneArn` (`{{ required }}` — falha o render se omitir). **crossplaneArn de cluster
+  no spoke = a role da conta spoke** (`arn:aws:iam::<spoke>:role/crossplane-sandbox`), não o
+  user da hub.
 - Imagem do waiter: `registry.k8s.io/kubectl:v1.35.7`. **`bitnami/kubectl` não resolve mais
   no Docker Hub** → `ImagePullBackOff` → helm install falha por timeout (mas o Crossplane
   cria a infra mesmo assim — o hook é só barreira observável).
-- Numeração 100/110/120 (Network) · 200–230 (Cluster) · 300 (ArgoCD); hook-weight = número
-  do arquivo, para inserir fases nos vãos.

@@ -1,0 +1,14 @@
+{{/*
+XR Network do hub — RECURSO NORMAL do release (não é hook): helm upgrade reconcilia (ex.: CIDR)
+e helm uninstall dispara o teardown da VPC/subnets/NAT via Crossplane. A barreira de readiness
+é o waiter hook (waiter.yaml).
+*/}}
+apiVersion: platform.example.com/v1alpha1
+kind: Network
+metadata:
+  name: {{ required "hub: informe --set name=<metadata.name do Network, ex. hub-us-east-1>" .Values.name }}
+spec:
+  prefix: {{ .Values.prefix }}
+  region: {{ .Values.region }}
+  providerConfigName: {{ .Values.providerConfigName }}
+  vpcCidrSecondOctet: {{ .Values.vpcCidrSecondOctet }}

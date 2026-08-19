@@ -1,0 +1,22 @@
+# Valores do chart hub. Espelham o spec do XR Network (resources/network/).
+#
+# name: metadata.name do XR Network — a IDENTIDADE (Crossplane v2, sem spec.id). Deriva os
+# external-names (<prefix>-<name>-*) e o label environment.example.com/env=<name>. Sem default:
+# passe via --set name=... (ex.: hub-us-east-1). O release costuma ter o MESMO nome.
+name: ""
+
+prefix: poc-eks
+region: us-east-1
+
+# providerConfigName: conta onde os MRs são criados. hub = conta do crossplane-poc.
+providerConfigName: hub
+
+# vpcCidrSecondOctet: N em 10.<N>.0.0/16 (supernet 10.0.0.0/12). N=0 reservado p/ Org.
+# Hub por convenção usa N=1.
+vpcCidrSecondOctet: 1
+
+waiter:
+  # imagem com kubectl (oficial k8s; bitnami deixou de resolver no Docker Hub).
+  image: registry.k8s.io/kubectl:v1.35.7
+  # timeout do kubectl wait no XR Network (NAT Gateway domina; ~2-5 min típico).
+  timeout: 600s

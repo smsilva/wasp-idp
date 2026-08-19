@@ -1,0 +1,9 @@
+apiVersion: v2
+name: cluster
+description: >-
+  EKS que aterrissa num spoke — provisiona EnvironmentConfig (crossplaneArn) + 1 XR Cluster
+  (EKS + IAM + ponte) e bloqueia via Job hook até ficar Ready (~28-30 min). CONSOME a rede de
+  um spoke de MESMO metadata.name (subnets casadas por label). Ver ../../README.md.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

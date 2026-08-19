@@ -5,9 +5,12 @@ metadata:
 spec:
   # Cluster-scoped, como Environment/Network: um Cluster é o EKS + identidade (IAM) + ponte
   # (ClusterAuth/AccessEntry/ProviderConfigs) de um Environment. Segunda das 2 abstrações da
-  # decomposição. CONSOME a rede de um Network por LABEL (matchLabels env=<id>,
-  # sem matchControllerRef) — não por Ref-by-name (metadata.name é hasheado, imprevisível
-  # entre XRs). Ver brainstorm 2026-08-14 (Decisão 2) + blueprint XEKSCluster.
+  # decomposição. CONSOME a rede de um Network por LABEL (matchLabels env=<metadata.name>,
+  # sem matchControllerRef). IDENTIDADE = metadata.name (Crossplane v2, XR sem claim → nome
+  # estável): este Cluster DEVE ter o MESMO metadata.name do Network cuja rede consome.
+  # (O que o Crossplane hasheia é o nome dos MRs COMPOSTOS, não o do XR — por isso o cruzamento
+  # é por label, mas a identidade do XR em si é o metadata.name.) Ver brainstorm 2026-08-14
+  # (Decisão 2) + blueprint XEKSCluster.
   #
   # Kind "Cluster" colide em nome curto com eks.aws.upbound.io/Cluster e outros — sempre
   # qualificar por grupo (cluster.platform.example.com) em kubectl. Aceito: o brainstorm
@@ -28,15 +31,8 @@ spec:
             spec:
               type: object
               required:
-                - id
+                - providerConfigName
               properties:
-                id:
-                  type: string
-                  description: >-
-                    Identificador do Environment (≤5 alfanum). DEVE bater com o id do Network
-                    correspondente — é o label environment.example.com/env=<id> que casa as
-                    subnets. Deriva os external-names do cluster (<prefix>-<id>).
-                  pattern: '^[a-z0-9]{1,5}$'
                 prefix:
                   type: string
                   default: poc-eks
@@ -46,17 +42,16 @@ spec:
                 providerConfigName:
                   type: string
                   description: >-
-                    Nome do ProviderConfig AWS que os MRs de IAM/EKS usam. "default" cria na
-                    conta do crossplane-poc (hub); "spoke-sandbox" (assumeRoleChain) cria na
-                    conta spoke. DEVE bater com o providerConfigName do Network de mesmo id.
+                    Nome do ProviderConfig AWS que os MRs de IAM/EKS usam. "hub" cria na conta
+                    do crossplane-poc (hub); "sandbox" (assumeRoleChain) cria na conta spoke.
+                    DEVE bater com o providerConfigName do Network de mesmo metadata.name.
                     Não afeta os ProviderConfigs remotos helm/kubernetes (in-cluster).
-                    O enum é o ALLOWLIST de ProviderConfigs desta instância (defense-in-depth:
-                    impede um XR mirar um ProviderConfig não pretendido). Ajustar a lista ao
-                    adotar em outra conta/instância — os nomes de spoke são por-instância.
+                    OBRIGATÓRIO (sem default): um XR sem este campo é rejeitado — falha-fechado.
+                    O enum é o ALLOWLIST de ProviderConfigs desta instância (defense-in-depth);
+                    ajustar a lista ao adotar em outra conta/instância.
                   enum:
-                    - default
-                    - spoke-sandbox
-                  default: default
+                    - hub
+                    - sandbox
                 nodeGroup:
                   type: object
                   description: Configuração do NodeGroup gerenciado.
@@ -81,7 +76,7 @@ spec:
                   type: boolean
                 clusterName:
                   type: string
-                  description: Nome do EKS (<prefix>-<id>).
+                  description: Nome do EKS (<prefix>-<metadata.name>).
                 clusterArn:
                   type: string
                   description: ARN do cluster (status.atProvider.arn).
@@ -94,4 +89,4 @@ spec:
                   type: string
                   description: >-
                     Nome do Secret-kubeconfig publicado pelo MR ClusterAuth em crossplane-system
-                    (<prefix>-<id>-kubeconfig). É o CONTRATO consumido por satélites (ArgoCDInstance).
+                    (<prefix>-<metadata.name>-kubeconfig). É o CONTRATO consumido por satélites (ArgoCDInstance).

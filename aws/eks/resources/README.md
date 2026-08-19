@@ -47,8 +47,13 @@ difícil do ADR). O único Release é o ArgoCD (não depende de Pod Identity).
 A Composition monolítica (~768 linhas, ~30 MRs) foi decomposta em 2 abstrações de
 responsabilidade única + o `Environment` como orquestrador fino. Refatoração de
 **comportamento idêntico** (o claim `Environment` e o resultado provisionado não mudam).
-Cruzamento `Network`→`Cluster` por **selector-by-label** (`environment.example.com/env=<id>`,
-sem `matchControllerRef`, pois os MRs vivem em XRs distintos). Ver
+Cruzamento `Network`→`Cluster` por **selector-by-label** (`environment.example.com/env=<metadata.name>`,
+sem `matchControllerRef`, pois os MRs vivem em XRs distintos).
+
+> **Identidade = `metadata.name`** (Crossplane v2, sem `spec.id` — migrado 2026-08-18). O
+> orquestrador `environment/` está **BLOCKED** (filhos compostos ganham nome hasheado → label
+> não cruza; rework em `examples/topology/05-07`). Use os charts diretos `hub`/`spoke`/`cluster`
+> (`../../platform/charts/`), que instanciam Network+Cluster com o MESMO `metadata.name`. Ver
 `docs/superpowers/specs/2026-08-15-decompor-environment-network-cluster-plano.md` e o brainstorm
 de 2026-08-14. Enquadramento: Pilar 5 "Composable by design" (PE 2.0), princípios *Modular by
 design* + *API-first contracts*.
@@ -60,8 +65,9 @@ design* + *API-first contracts*.
   Crossplane; reusa a mecânica das fases 72/74.
 - **model-04 (Usage):** o `ArgoCDInstance` emite um `Usage`/finalizer que torna o teardown
   gracioso explícito (deletar o ArgoCD antes do Environment).
-- **Naming determinístico (Item C):** cluster = `<prefix>-<id>` (default prefix `poc-eks`);
-  subzona `<id>.<domain>`; external-names derivados → migração/DR por import/adopt.
+- **Naming determinístico (Item C):** cluster = `<prefix>-<metadata.name>` (default prefix
+  `poc-eks`); subzona `<metadata.name>.<domain>`; external-names derivados → migração/DR por
+  import/adopt.
 - **Motor:** function-patch-and-transform (o que o repo já usa; sem function-kcl nesta fatia).
 
 ## Gotchas do modelo novo (a resolver)
@@ -81,7 +87,7 @@ design* + *API-first contracts*.
 - **Refs entre MRs:** `matchControllerRef: true` + `matchLabels` (label
   `environment.example.com/role: <papel>` em cada MR) — idiomático em Composition, dispensa
   os nomes `<full>-<sufixo>` frágeis do chart faseado. Naming determinístico via
-  `CombineFromComposite(spec.prefix, spec.id)` em `metadata.annotations[crossplane.io/external-name]`.
+  `CombineFromComposite(spec.prefix, metadata.name)` em `metadata.annotations[crossplane.io/external-name]`.
 - **Connection secret (model-02):** o MR `cluster-auth` publica `kubeconfig` (via
   `FromConnectionSecretKey` do ClusterAuth) + `id`/`domain`/`clusterName` (patchados em
   annotations do próprio MR e lidos de volta via `FromFieldPath`) no connection secret do XR —

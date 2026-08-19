@@ -1,0 +1,9 @@
+#!/bin/bash
+# Gera um identificador aleatório curto (a-z0-9), usado como metadata.name de um XR
+# (Network/Cluster). Default 5 chars, intercalado (ex.: ha13c, wv32g, x4rt1). Mesma técnica de
+# sufixo aleatório do ~/.scripts/random-name (fold sobre /dev/urandom filtrado).
+length="${1:-5}"
+
+tr --delete --complement 'a-z0-9' < /dev/urandom \
+  | fold --width "${length?}" \
+  | head --lines 1

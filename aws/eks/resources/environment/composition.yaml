@@ -1,3 +1,11 @@
+# ⚠️ BLOCKED / SUPERADO (2026-08-18) — NÃO aplicar como está.
+# Este orquestrador casa os filhos Network↔Cluster por um `spec.id` compartilhado. Com a
+# migração de identidade para `metadata.name` (Crossplane v2), `spec.id` foi REMOVIDO de
+# Network/Cluster, e filhos COMPOSTOS recebem metadata.name hasheado — então não dá para dar
+# aos dois o mesmo nome por patch, e o cruzamento por label quebra. O rework está desenhado
+# em examples/topology/05-environment.yaml + 06/07 (o orquestrador injeta subnetIds do
+# Network.status no Cluster, em vez de casar por label). Até lá, use os charts diretos
+# hub/spoke/cluster (aws/platform/charts/). Mantido só como registro do modelo antigo.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
