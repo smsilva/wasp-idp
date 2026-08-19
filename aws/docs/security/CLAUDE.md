@@ -23,7 +23,7 @@ workload (Pod Identity/IRSA), autenticação de VPN e detecção.
 | 1 | [`01-menor-privilegio-e-policies.md`](01-menor-privilegio-e-policies.md) | Menor privilégio; policies escopadas por ARN; permission boundaries; SCP como teto | Security (SEC03) |
 | 2 | [`02-roles-cross-account.md`](02-roles-cross-account.md) | `sts:AssumeRole`, trust policies, `ExternalId`, confused deputy; sem IAM user duplicado por conta | Security (SEC02/SEC03) |
 | 3 | [`03-perimetro-de-dados-e-ram.md`](03-perimetro-de-dados-e-ram.md) | Resource-based policies; RAM com escopo por Organization; `allowExternalPrincipals=false` | Security (SEC03) |
-| 4 | [`04-identidade-de-workload.md`](04-identidade-de-workload.md) | Automação (Crossplane) sem SSO; IAM user escopado; Pod Identity/IRSA; segredos no Secrets Manager | Security (SEC02/SEC08) |
+| 4 | [`04-identidade-de-workload.md`](04-identidade-de-workload.md) | Automação (Crossplane) sem SSO; IAM user escopado; Pod Identity/IRSA; máquina fora da AWS (Roles Anywhere vs OIDC federation); trajetória k3d→AKS→EKS; segredos no Secrets Manager | Security (SEC02/SEC08) |
 | 5 | [`05-autenticacao-vpn.md`](05-autenticacao-vpn.md) | Client VPN (cert/SSO) e site-to-site (PSK); ciclo de vida da credencial; ponte com `../network/04` | Security (SEC02/SEC05) |
 | 6 | [`06-deteccao-e-auditoria.md`](06-deteccao-e-auditoria.md) | CloudTrail, IAM Access Analyzer, GuardDuty, credential report; achar privilégio excessivo | Security (SEC04) |
 | 7 | [`07-mapa-crossplane.md`](07-mapa-crossplane.md) | O que de IAM é (e não é) provisionável via Crossplane; estado do PoC vs. alvo; bootstrap galinha-e-ovo | — |
