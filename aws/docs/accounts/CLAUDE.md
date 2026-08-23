@@ -75,6 +75,24 @@ bloquear os que criam recursos reais — se bloquear, o usuário roda via `!`).
 **Convenção de execução:** ao rodar um script contra uma conta real, atualizar a doc na
 sequência ANTES do próximo — o tópico correspondente (gotchas/comandos descobertos) e o
 
+## Gotchas de API já descobertos
+
+- **Renomear OU é seguro; renomear conta é meia-medida.** `update-organizational-unit`
+  preserva o Id da OU (SCPs e contas seguem válidas). Já a conta: `account
+  put-account-name` muda só o nome — o **e-mail do root user** (identidade única da conta em
+  toda a AWS) só muda pelo fluxo de root no console da própria conta. Acertar o e-mail na
+  criação.
+- **`put-account-name` cross-account exige trusted access** de `account.amazonaws.com`, que
+  **não** vem habilitado por default (`enable-service-access`).
+- **`sso-admin list-permission-sets` devolve só ARNs** — achar um permission set pelo nome
+  exige `describe-permission-set` em cada ARN. Não existe filtro por nome.
+- **`create-account` não aceita OU de destino** — a conta nasce na Root e é movida depois; o
+  SCP da OU não vale na janela entre os dois passos.
+- **Conta recém-criada não está no portal SSO** — o único gancho é a
+  `OrganizationAccountAccessRole` (assumida da management account) até
+  `assign-permission-set` rodar. Os scripts que agem dentro de conta-membro
+  (`create-log-archive-bucket`) usam essa role, não SSO.
+
 ## Decisões em aberto
 
 | # | Decisão | Por que está aberta | Custo de adiar |

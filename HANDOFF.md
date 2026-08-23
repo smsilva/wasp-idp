@@ -15,6 +15,46 @@ migração futura aditiva). Rejeitado: TGW agora; CIDR fixo; `<...>` em campos e
 
 ## In Progress
 
+### Frente A — bootstrap de contas / Organization (ativa nesta sessão)
+
+Objetivo: desenhar no draw.io um overview da sequência de provisionamento e, ao percorrê-la,
+corrigir doc e scripts contra o whitepaper AWS. **Regra adotada: sempre manter o vocabulário
+de "Organizing Your AWS Environment Using Multiple Accounts"; divergir só com motivo
+registrado.**
+
+Estado real da Organization `o-e4r8ndteju` (management `221047292361`):
+
+```
+Root
+├── Security              ou-f11d-ig5lcrlr
+│   └── log-archive       995122007318   smsilva+log-archive@gmail.com
+├── Infrastructure        ou-f11d-8l7pbxgp   (era "Infra")
+│   └── network           094289743086   e-mail ainda smsilva+hub@gmail.com
+└── Workloads             ou-f11d-j7fnwqmx
+    ├── NonProd           ou-f11d-7nadx2es   (era "Sandbox")
+    │   └── wasp-nonprod  832721568602   smsilva+wasp-nonprod@gmail.com
+    └── Production        ou-f11d-vyxw3s7r   (vazia)
+```
+
+Aplicado de verdade nesta sessão (não é só doc):
+- OUs renomeadas in-place e OU `Security` criada; contas `hub`→`network`, `sandbox`→`wasp-nonprod`.
+- Trusted access habilitado: `account.amazonaws.com`, `cloudtrail.amazonaws.com`.
+- Bucket de auditoria `cloudtrail-o-e4r8ndteju` na `log-archive` (BPA, versionamento, SSE-S3,
+  `BucketOwnerEnforced`, policy do CloudTrail + deny non-TLS).
+- `organization-trail` — multi-region, logging ativo, log file validation on. Custo estimado
+  **< US$ 1/mês** (management events são grátis na 1ª cópia por conta).
+- Identity Center `ssoins-7223e082d350408a` / identity store `d-906609a243`: grupo
+  `platform-admins` criado com `silvios`, `AdministratorAccess` atribuído em `log-archive`.
+
+Nomes das contas seguem `<projeto>-<ambiente>`. **`832721568602` é a mesma conta antes
+chamada `sandbox`** — todo comando da Frente B que cita "sandbox" continua válido.
+
+Próximo passo pretendido: passo ⑥ da sequência — SCPs baseline
+(`aws/docs/accounts/scripts/apply-baseline-service-control-policy`), depois refletir a nova
+ordem no diagrama do draw.io (CloudTrail subiu para o passo ④).
+
+### Frente B — Crossplane / EKS (pausada)
+
 Cross-account + Fase 4 (split de charts + identidade) prontos. Feito e validado:
 - Role `crossplane-sandbox` na conta sandbox (`832721568602`): trust p/ `crossplane-poc` da
   hub + PowerUserAccess + inline IAM. AssumeRole cross-account testado (funciona).
@@ -61,8 +101,19 @@ Próximo passo pretendido: **Fase 5 — aplicar hub + spoke + cluster de verdade
   DNS/ingress/TLS ficam bloqueadas; rede/EKS/Pod Identity/ESO rodam sem isso.
 - **Parametrizar** valores de `CLAUDE.local.md` (chart values? env? EnvironmentConfig?) —
   decidir após execução ponta a ponta.
-- Estrutura de OU pessoal (Infra/Workloads→Production/Sandbox) difere da doc de accounts
-  (Infra=hub + conta-por-projeto) — mapear ao parametrizar.
+- **Estrutura de OU — RESOLVIDA:** conta real e doc convergiram no vocabulário do whitepaper
+  (`Security`/`Infrastructure`/`Workloads/{NonProd,Production}`), com **uma conta por projeto
+  por ambiente**. `Sandbox` fica reservado para o outro conceito (conta de brincar,
+  desconectada da rede, sem attachment no TGW) — não é o ambiente de teste do projeto.
+- **Retenção do bucket de auditoria** (lifecycle → Glacier após N dias, expiração após M
+  anos): decisão de compliance, deliberadamente adiada. É o único custo do CloudTrail que
+  cresce sozinho e para sempre.
+- **`log-archive` está com `AdministratorAccess`** (bootstrap) — deveria virar
+  `ReadOnlyAccess` na rotina, senão quem é auditado pode apagar o acervo.
+- **Conta `security-tooling`** desenhada como slot, não criada — vira pré-requisito quando
+  GuardDuty/Config/Security Hub entrarem.
+- **E-mail do root da conta `network`** ainda é `smsilva+hub@gmail.com`. `put-account-name`
+  muda só o nome; e-mail só pelo fluxo de root no console da própria conta.
 - Track paralelo (Azure cluster-zero + Backstage multi-tenant) pausado; não é o foco.
 
 ## Known Broken
@@ -78,13 +129,28 @@ Próximo passo pretendido: **Fase 5 — aplicar hub + spoke + cluster de verdade
    ajustar a lista `[hub, sandbox]` por instância.
 4. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*: Helm
    templates (`{{ }}`).
-5. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts`
+5. `log-archive` acessível com `AdministratorAccess` pelo grupo `platform-admins` —
+   *intentional* (bootstrap), mas contraria o motivo da conta existir. Trocar por
+   `ReadOnlyAccess` quando houver operação de rotina.
+6. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts`
    `allow-all` policy; `idp/packages/backend/src/googleAuthModule.ts`
    `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
 
 ## How to Resume
 
-O cluster k3d `poc-idp` foi **destruído** (`k3d cluster delete`) — recriar do zero pelo
+**Frente A (contas)** — primeiro comando, com SSO admin da management account ativo:
+
+```bash
+cd /home/silvios/git/wasp-idp/aws/docs/accounts/scripts
+./check                                   # valida CLI, credenciais, feature-set
+aws organizations list-accounts --query 'Accounts[].{Name:Name,Id:Id,Email:Email}' --output table
+aws cloudtrail get-trail-status --region us-east-1 --name organization-trail
+```
+
+Todos os scripts do diretório são idempotentes — reexecutar é seguro e é a forma de conferir
+o estado. Seguir para `./apply-baseline-service-control-policy` (passo ⑥).
+
+**Frente B (Crossplane/EKS)** — o cluster k3d `poc-idp` foi **destruído** (`k3d cluster delete`) — recriar do zero pelo
 fluxo de bootstrap, depois reaplicar XRDs/Compositions/ProviderConfig cross-account:
 
 ```bash
@@ -122,6 +188,23 @@ do k3d) — não precisam re-bootstrap.
 
 ## Next Steps
 
+### Frente A — contas
+
+- [x] Vocabulário do whitepaper aplicado em doc, scripts e na Organization real.
+- [x] CloudTrail organizacional + conta `log-archive` + bucket de auditoria.
+- [ ] **Passo ⑥ — SCPs baseline:** `./apply-baseline-service-control-policy`. Ler antes
+      `aws/docs/accounts/02-guardrails-scp.md`; lembrar que SCP **não** afeta a management
+      account.
+- [ ] Atualizar o diagrama do draw.io com a sequência de 9 passos revisada (CloudTrail passou
+      a ser o ④, antes das demais contas).
+- [ ] Trocar o permission set de rotina da `log-archive` para `ReadOnlyAccess`.
+- [ ] Atribuir permission set às contas `network` e `wasp-nonprod`
+      (`./assign-permission-set --account <conta> --group platform-admins`) — elimina o
+      switch-role via `OrganizationAccountAccessRole`.
+- [ ] Decidir retenção/lifecycle do bucket `cloudtrail-o-e4r8ndteju`.
+
+### Frente B — Crossplane / EKS
+
 - [x] **Fase 4:** split de charts (Opção B) + migração de identidade `metadata.name` + PCs
       `hub`/`sandbox`. Validado offline (`helm template`/`lint` + `crossplane render`).
 - [ ] **Fase 5:** subir k3d + bootstrap (How to Resume) e aplicar `hub` → `spoke` (`10.2`,
@@ -131,8 +214,8 @@ do k3d) — não precisam re-bootstrap.
 - [ ] Decidir base do domínio (delegar `wasp.silvios.me`/subzona → Route53) antes das fatias
       DNS/ingress/TLS.
 - [ ] Definir estratégia de parametrização dos valores de `CLAUDE.local.md`.
-- [ ] (nice-to-have) Permission set SSO (`AdministratorAccess`) para hub/sandbox no IAM
-      Identity Center — hoje acesso via named profile (`OrganizationAccountAccessRole`).
-      Passo a passo em `aws/docs/accounts/04-acesso-cross-account.md`.
+- [ ] Permission set SSO para `network`/`wasp-nonprod` — ver Frente A (script
+      `assign-permission-set` já existe; hoje o acesso ainda é via named profile
+      `OrganizationAccountAccessRole`).
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
