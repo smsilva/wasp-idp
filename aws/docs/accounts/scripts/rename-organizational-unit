@@ -1,0 +1,124 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Renomeia uma OU da Organization (in-place — o Id da OU não muda, então SCPs,
+  contas-membro e referências existentes continuam válidas).
+
+  Idempotente: se a OU já tiver o nome pedido, não faz nada.
+
+    Options:
+
+      -h,  --help              Show this help
+      -n,  --name              Nome ATUAL da OU (obrigatório se --id ausente)
+      -i,  --id                Id da OU (alternativa a --name)
+      -p,  --parent            Nome da OU pai, para desambiguar --name (opcional;
+                                default: Root)
+           --new-name          Novo nome da OU (obrigatório)
+
+    Examples:
+
+      ${this_script_name} --name Infra --new-name Infrastructure
+
+      ${this_script_name} --name Sandbox --parent Workloads --new-name NonProd
+
+      ${this_script_name} --id ou-f11d-8l7pbxgp --new-name Infrastructure
+EOF
+}
+
+name=""
+ou_id=""
+parent=""
+new_name=""
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -n | --name )
+      shift
+      name="${1}"
+      ;;
+
+    -i | --id )
+      shift
+      ou_id="${1}"
+      ;;
+
+    -p | --parent )
+      shift
+      parent="${1}"
+      ;;
+
+    --new-name )
+      shift
+      new_name="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -z "${new_name}" ] || { [ -z "${name}" ] && [ -z "${ou_id}" ]; }; then
+  echo "Faltam argumentos: --new-name e (--name ou --id)." >&2
+  show_usage
+  exit 1
+fi
+
+set -e
+
+check
+
+root_id="$(aws organizations list-roots --query 'Roots[0].Id' --output text)"
+
+if [ -z "${ou_id}" ]; then
+  parent_id="${root_id}"
+
+  if [ -n "${parent}" ]; then
+    parent_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${root_id}" \
+      --query "OrganizationalUnits[?Name=='${parent}'].Id" --output text)"
+
+    if [ -z "${parent_id}" ]; then
+      echo "OU pai '${parent}' não encontrada na Root." >&2
+      exit 1
+    fi
+  fi
+
+  ou_id="$(aws organizations list-organizational-units-for-parent \
+    --parent-id "${parent_id}" \
+    --query "OrganizationalUnits[?Name=='${name}'].Id" --output text)"
+
+  if [ -z "${ou_id}" ]; then
+    echo "OU '${name}' não encontrada em '${parent:-Root}'." >&2
+    exit 1
+  fi
+fi
+
+current_name="$(aws organizations describe-organizational-unit \
+  --organizational-unit-id "${ou_id}" \
+  --query OrganizationalUnit.Name --output text)"
+
+if [ "${current_name}" == "${new_name}" ]; then
+  echo "ok  OU ${ou_id} já se chama '${new_name}' — nada a fazer."
+  exit 0
+fi
+
+echo "Renomeando OU ${ou_id}: '${current_name}' -> '${new_name}'..."
+aws organizations update-organizational-unit \
+  --organizational-unit-id "${ou_id}" --name "${new_name}" > /dev/null
+echo "renomeada  ${ou_id} = ${new_name}"

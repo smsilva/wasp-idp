@@ -100,7 +100,7 @@ aws organizations attach-policy --policy-id "${policy_id}" --target-id <target-i
 
 - **Root da Organization**: guardrails que valem para TODAS as contas, sem exceção (proteção
   de auditoria, impedir saída da Organization).
-- **OU Infra**: guardrails mais restritivos que Workloads — menos serviços habilitados, sem
+- **OU Infrastructure**: guardrails mais restritivos que Workloads — menos serviços habilitados, sem
   necessidade de rodar workloads arbitrários.
 - **OU Workloads**: guardrails de baseline (região, IMDSv2) — o piso comum de todo projeto.
 - **Management Account**: SCPs praticamente não se aplicam a ela mesma por padrão (a Root

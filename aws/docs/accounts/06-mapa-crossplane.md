@@ -44,7 +44,7 @@ gerência) pode reconciliar:
 | Peça | Estado no PoC | Alvo |
 |---|---|---|
 | Organization própria | ❌ não existe — conta única, sem Organizations habilitado | Organization com `feature-set ALL` |
-| OUs / SCPs | ❌ não existem | Infra + Workloads (mínimo), guardrails de região/root/IMDSv2 |
+| OUs / SCPs | ❌ não existem | Security + Infrastructure + Workloads (mínimo), guardrails de região/root/IMDSv2 |
 | Conta Hub dedicada | ❌ não existe — a conta única acumula tudo | Conta própria, só recursos de `../network/` do Hub |
 | Conta por projeto | ❌ não existe — o PoC roda tudo numa conta compartilhada com outros sistemas (`<account-id>`, ver `../../CLAUDE.md`) | 1 conta por projeto |
 | IAM Identity Center | não documentado nesta PoC (uso de SSO já existe no dia a dia, mas fora do escopo do repo) | Permission sets nomeados por função, atribuídos por conta |
@@ -57,10 +57,10 @@ gerência) pode reconciliar:
    conta atual do PoC se torna a gerência depois de migrar seus recursos residentes para uma
    conta-membro própria.
 2. `create-organization --feature-set ALL` (tópico 1).
-3. Criar OUs Infra/Workloads (tópico 1) + SCPs baseline (tópico 2).
-4. `create-account` para a Hub account (tópico 3) → mover para OU Infra.
+3. Criar OUs Security/Infrastructure/Workloads (tópico 1) + SCPs baseline (tópico 2).
+4. `create-account` para a conta network (tópico 3) → mover para OU Infrastructure.
 5. Configurar IAM Identity Center + permission sets (tópico 4).
-6. Dentro da Hub account: instalar o Crossplane/hub k3d **desta** PoC (ou uma instância
+6. Dentro da conta network: instalar o Crossplane/hub k3d **desta** PoC (ou uma instância
    equivalente) e seguir `../network/07-mapa-crossplane.md` para provisionar TGW/VPN.
 7. Por projeto: `create-account` → mover para OU Workloads → provisionar spoke
    (`../network/`).

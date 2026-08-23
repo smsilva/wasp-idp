@@ -31,13 +31,13 @@ O truque do "+" gera e-mails únicos por conta a partir de uma única caixa: a A
 os dois modos:
 
 - **Domínio corporativo com catch-all** (ex.: `<email-domain>`): o nome da conta vira a *base* e
-  `aws` é o tag fixo → `<name>+aws@<domain>`, ex.: `hub+aws@<email-domain>`. Funciona porque o
+  `aws` é o tag fixo → `<name>+aws@<domain>`, ex.: `network+aws@<email-domain>`. Funciona porque o
   catch-all do domínio roteia qualquer base para a caixa certa. É o **default** do script
   (sem `--email-user`).
 
 - **Caixa pessoal Gmail/Workspace** (ex.: `smsilva@gmail.com`): você **não** controla o
   domínio, então a base tem de ser a sua caixa e o nome da conta vira o *tag* →
-  `<email-user>+<name>@<domain>`, ex.: `smsilva+hub@gmail.com`. Passe `--email-user smsilva`.
+  `<email-user>+<name>@<domain>`, ex.: `smsilva+network@gmail.com`. Passe `--email-user smsilva`.
   ⚠️ Não use `<name>+aws@gmail.com` aqui: o Gmail entregaria em `<name>@gmail.com` (uma caixa
   que não é a sua) — nunca chega em você. Validado em execução real: com
   `--email-user smsilva`, o e-mail "Your Amazon Web Services Account is Ready" chegou em
@@ -45,12 +45,12 @@ os dois modos:
 
 ```bash
 # catch-all corporativo (default):
-scripts/create-account --name hub --email-domain <email-domain> --ou infra
-#   -> hub+aws@<email-domain>
+scripts/create-account --name network --email-domain <email-domain> --ou infrastructure
+#   -> network+aws@<email-domain>
 
 # Gmail/Workspace pessoal:
-scripts/create-account --name hub --email-user smsilva --email-domain gmail.com --ou infra
-#   -> smsilva+hub@gmail.com
+scripts/create-account --name network --email-user smsilva --email-domain gmail.com --ou infrastructure
+#   -> smsilva+network@gmail.com
 ```
 
 ## Mover a conta para a OU correta
@@ -64,13 +64,13 @@ aws organizations move-account \
   --destination-parent-id <ou-id>
 ```
 
-Hub account → OU Infra. Conta de projeto → OU Workloads (tópico 1).
+conta network → OU Infrastructure. Conta de projeto → OU Workloads (tópico 1).
 
 > **Gotcha (descoberto em execução real):** `create-account` cria a conta sob a **Root**, então
 > o `move-account` tem de mirar a **OU de destino**, nunca a própria Root. Mover a conta da Root
 > para a Root retorna `DuplicateAccountException` ("already present at the specified
-> destination"). Para o Hub isso significa buscar o ID da OU **Infra** (filha da Root) —
-> `--query "OrganizationalUnits[?Name=='Infra'].Id"` — e não reusar `root_id` como atalho.
+> destination"). Para o Hub isso significa buscar o ID da OU **Infrastructure** (filha da Root) —
+> `--query "OrganizationalUnits[?Name=='Infrastructure'].Id"` — e não reusar `root_id` como atalho.
 > Como o `move-account` roda **depois** de a conta já ter sido criada, o script é **idempotente**:
 > re-executar detecta a conta ACTIVE existente e só refaz o move para a OU correta.
 
@@ -110,7 +110,7 @@ aws sts assume-role \
 ```text
 ① create-account (com e-mail único)
 ② poll até SUCCEEDED
-③ move-account para a OU correta (Infra ou Workloads)
+③ move-account para a OU correta (Security, Infrastructure ou Workloads)
 ④ assume-role OrganizationAccountAccessRole (verificação de acesso)
 ⑤ Configurar permission set do SSO para a conta (tópico 4)
 ⑥ SCPs da OU já se aplicam automaticamente (herdadas — tópico 2, nada a fazer aqui)

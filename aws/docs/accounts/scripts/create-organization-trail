@@ -1,0 +1,136 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria o CloudTrail organizacional na management account, escrevendo no bucket da
+  conta log-archive (ver aws/docs/accounts/07-cloudtrail-e-log-archive.md).
+
+  Captura eventos de TODAS as contas-membro, inclusive as criadas depois — conta
+  nova entra sozinha, sem passo de onboarding.
+
+  Idempotente: se o trail já existir, só garante configuração e logging ligado.
+
+    Options:
+
+      -h,  --help              Show this help
+      -t,  --trail             Nome do trail (default: organization-trail)
+      -b,  --bucket            Bucket de destino (default: cloudtrail-<organization-id>)
+      -r,  --region            Região home do trail (default: us-east-1)
+
+  Pré-requisitos, nesta ordem:
+
+    1. ${this_script_directory}/enable-service-access --service cloudtrail.amazonaws.com
+    2. ${this_script_directory}/create-log-archive-bucket
+
+  Só management events (grátis no 1º trail por conta). Data events NÃO são
+  habilitados aqui — são cobrados por evento e podem dominar a fatura.
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --trail organization-trail --region us-east-1
+EOF
+}
+
+trail="organization-trail"
+bucket=""
+region="us-east-1"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -t | --trail )
+      shift
+      trail="${1}"
+      ;;
+
+    -b | --bucket )
+      shift
+      bucket="${1}"
+      ;;
+
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+organization_id="$(aws organizations describe-organization \
+  --query Organization.Id --output text)"
+
+if [ -z "${bucket}" ]; then
+  bucket="cloudtrail-${organization_id}"
+fi
+
+service_enabled="$(aws organizations list-aws-service-access-for-organization \
+  --query "EnabledServicePrincipals[?ServicePrincipal=='cloudtrail.amazonaws.com'].ServicePrincipal" \
+  --output text)"
+
+if [ -z "${service_enabled}" ]; then
+  echo "Trusted access do CloudTrail não habilitado — rode primeiro:" >&2
+  echo "  ${this_script_directory}/enable-service-access --service cloudtrail.amazonaws.com" >&2
+  exit 1
+fi
+
+existing_trail_arn="$(aws cloudtrail describe-trails --region "${region}" \
+  --trail-name-list "${trail}" \
+  --query 'trailList[0].TrailARN' --output text 2> /dev/null || true)"
+
+if [ -n "${existing_trail_arn}" ] && [ "${existing_trail_arn}" != "None" ]; then
+  echo "ok  trail '${trail}' já existe (${existing_trail_arn})"
+  aws cloudtrail update-trail --region "${region}" --name "${trail}" \
+    --s3-bucket-name "${bucket}" \
+    --is-organization-trail --is-multi-region-trail \
+    --enable-log-file-validation > /dev/null
+  echo "ok  configuração reaplicada (org + multi-region + validação de integridade)"
+else
+  aws cloudtrail create-trail --region "${region}" --name "${trail}" \
+    --s3-bucket-name "${bucket}" \
+    --is-organization-trail --is-multi-region-trail \
+    --enable-log-file-validation > /dev/null
+  echo "criado  trail '${trail}' -> s3://${bucket}"
+fi
+
+# create-trail NÃO começa a gravar — trail parado é indistinguível de trail saudável
+# na listagem, então o start-logging é sempre reafirmado.
+is_logging="$(aws cloudtrail get-trail-status --region "${region}" --name "${trail}" \
+  --query IsLogging --output text)"
+
+if [ "${is_logging}" == "True" ]; then
+  echo "ok  logging já ativo"
+else
+  aws cloudtrail start-logging --region "${region}" --name "${trail}"
+  echo "iniciado  logging"
+fi
+
+cat <<EOF
+
+Trail organizacional ativo.
+
+Verificar (os primeiros objetos levam ~5-15 min para aparecer):
+  aws cloudtrail get-trail-status --region ${region} --name ${trail}
+  aws s3 ls s3://${bucket}/AWSLogs/${organization_id}/ --recursive | head
+EOF

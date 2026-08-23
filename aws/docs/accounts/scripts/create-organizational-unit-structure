@@ -11,10 +11,13 @@ show_usage() {
   Cria a estrutura mínima de OUs (ver aws/docs/accounts/01-organizations-e-ous.md):
 
     Root
-    ├── Infra        (Hub / Connectivity Account)
+    ├── Security          (log-archive, security-tooling)
+    ├── Infrastructure    (network / Connectivity Account, shared-services)
     └── Workloads
-        ├── Sandbox      (criada ANTES de Production — validar aqui primeiro)
+        ├── NonProd       (criada ANTES de Production — validar aqui primeiro)
         └── Production
+
+  Nomes seguem o whitepaper "Organizing Your AWS Environment Using Multiple Accounts".
 
   Idempotente: reaproveita qualquer OU já existente com o mesmo nome no mesmo pai.
 
@@ -74,17 +77,19 @@ find_or_create_ou() {
 root_id="$(aws organizations list-roots --query 'Roots[0].Id' --output text)"
 echo "Root: ${root_id}"
 
-infra_id="$(find_or_create_ou Infra "${root_id}")"
+security_id="$(find_or_create_ou Security "${root_id}")"
+infrastructure_id="$(find_or_create_ou Infrastructure "${root_id}")"
 workloads_id="$(find_or_create_ou Workloads "${root_id}")"
-sandbox_id="$(find_or_create_ou Sandbox "${workloads_id}")"
+nonprod_id="$(find_or_create_ou NonProd "${workloads_id}")"
 production_id="$(find_or_create_ou Production "${workloads_id}")"
 
 cat <<EOF
 
 Estrutura de OUs pronta:
-  Infra:               ${infra_id}
-  Workloads:           ${workloads_id}
-  Workloads/Sandbox:   ${sandbox_id}
+  Security:             ${security_id}
+  Infrastructure:       ${infrastructure_id}
+  Workloads:            ${workloads_id}
+  Workloads/NonProd:    ${nonprod_id}
   Workloads/Production: ${production_id}
 
 Próximo passo: ${this_script_directory}/apply-baseline-service-control-policy

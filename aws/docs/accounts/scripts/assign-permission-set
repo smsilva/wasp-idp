@@ -1,0 +1,285 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria (ou reaproveita) um permission set do IAM Identity Center e o atribui a um
+  usuário/grupo numa conta-membro — o passo que faz a conta aparecer no portal SSO e
+  no 'aws sso login' direto (ver aws/docs/accounts/04-acesso-cross-account.md).
+
+  Idempotente: reaproveita permission set e atribuição já existentes.
+
+    Options:
+
+      -h,  --help              Show this help
+      -a,  --account           Nome ou id da conta-membro (obrigatório)
+      -p,  --permission-set    Nome do permission set (default: AdministratorAccess)
+           --managed-policy    ARN da managed policy anexada ao criar o permission set
+                                (default: arn:aws:iam::aws/policy/AdministratorAccess)
+      -u,  --user              Username no Identity Store (obrigatório se --group ausente)
+      -g,  --group             Nome do grupo no Identity Store (alternativa a --user)
+           --create-group      Cria o --group se ele ainda não existir
+      -m,  --member            Username adicionado ao --group (repetível; implica
+                                --create-group)
+           --session-duration  Duração da sessão, ISO-8601 (default: PT4H)
+
+  Pré-requisito: IAM Identity Center habilitado na management account (console —
+  não há API para habilitar a instância).
+
+  Preferir --group a --user: a atribuição sobrevive a quem entra/sai do time.
+
+    Examples:
+
+      ${this_script_name} --account log-archive --user silvios
+
+      ${this_script_name} --account wasp-nonprod --group platform-admins \\
+        --create-group --member silvios
+
+      ${this_script_name} --account network --group network-engineers \\
+        --permission-set NetworkEngineer \\
+        --managed-policy arn:aws:iam::aws/policy/job-function/NetworkAdministrator
+EOF
+}
+
+account=""
+permission_set="AdministratorAccess"
+managed_policy="arn:aws:iam::aws/policy/AdministratorAccess"
+user=""
+group=""
+create_group=""
+members=()
+session_duration="PT4H"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -a | --account )
+      shift
+      account="${1}"
+      ;;
+
+    -p | --permission-set )
+      shift
+      permission_set="${1}"
+      ;;
+
+    --managed-policy )
+      shift
+      managed_policy="${1}"
+      ;;
+
+    -u | --user )
+      shift
+      user="${1}"
+      ;;
+
+    -g | --group )
+      shift
+      group="${1}"
+      ;;
+
+    --create-group )
+      create_group="yes"
+      ;;
+
+    -m | --member )
+      shift
+      members+=("${1}")
+      create_group="yes"
+      ;;
+
+    --session-duration )
+      shift
+      session_duration="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -z "${account}" ] || { [ -z "${user}" ] && [ -z "${group}" ]; }; then
+  echo "Faltam argumentos: --account e (--user ou --group)." >&2
+  show_usage
+  exit 1
+fi
+
+set -e
+
+check
+
+instance_json="$(aws sso-admin list-instances --query 'Instances[0]' --output json)"
+instance_arn="$(echo "${instance_json}" | jq -r '.InstanceArn // empty')"
+identity_store_id="$(echo "${instance_json}" | jq -r '.IdentityStoreId // empty')"
+
+if [ -z "${instance_arn}" ]; then
+  echo "Nenhuma instância do IAM Identity Center nesta Organization." >&2
+  echo "Habilite pelo console (management account -> IAM Identity Center -> Enable)." >&2
+  exit 1
+fi
+echo "ok  Identity Center ${instance_arn} (identity store ${identity_store_id})"
+
+# --- conta alvo ---------------------------------------------------------------
+if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
+  account_id="${account}"
+else
+  account_id="$(aws organizations list-accounts \
+    --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
+
+  if [ -z "${account_id}" ]; then
+    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    exit 1
+  fi
+fi
+echo "ok  conta alvo ${account} = ${account_id}"
+
+# --- permission set -----------------------------------------------------------
+permission_set_arn=""
+for arn in $(aws sso-admin list-permission-sets --instance-arn "${instance_arn}" \
+  --query 'PermissionSets[]' --output text); do
+  arn_name="$(aws sso-admin describe-permission-set --instance-arn "${instance_arn}" \
+    --permission-set-arn "${arn}" --query PermissionSet.Name --output text)"
+
+  if [ "${arn_name}" == "${permission_set}" ]; then
+    permission_set_arn="${arn}"
+    break
+  fi
+done
+
+if [ -n "${permission_set_arn}" ]; then
+  echo "ok  permission set '${permission_set}' já existe (${permission_set_arn})"
+else
+  permission_set_arn="$(aws sso-admin create-permission-set \
+    --instance-arn "${instance_arn}" \
+    --name "${permission_set}" \
+    --description "${permission_set} (criado por ${this_script_name})" \
+    --session-duration "${session_duration}" \
+    --query PermissionSet.PermissionSetArn --output text)"
+  echo "criado  permission set '${permission_set}' (${permission_set_arn})"
+
+  aws sso-admin attach-managed-policy-to-permission-set \
+    --instance-arn "${instance_arn}" \
+    --permission-set-arn "${permission_set_arn}" \
+    --managed-policy-arn "${managed_policy}"
+  echo "anexada  managed policy ${managed_policy}"
+fi
+
+# --- principal ----------------------------------------------------------------
+find_user_id() {
+  aws identitystore list-users \
+    --identity-store-id "${identity_store_id}" \
+    --filters "AttributePath=UserName,AttributeValue=${1}" \
+    --query 'Users[0].UserId' --output text 2> /dev/null || true
+}
+
+if [ -n "${group}" ]; then
+  principal_type="GROUP"
+  principal_id="$(aws identitystore list-groups \
+    --identity-store-id "${identity_store_id}" \
+    --filters "AttributePath=DisplayName,AttributeValue=${group}" \
+    --query 'Groups[0].GroupId' --output text 2> /dev/null || true)"
+  principal_label="grupo '${group}'"
+
+  if { [ -z "${principal_id}" ] || [ "${principal_id}" == "None" ]; } && [ -n "${create_group}" ]; then
+    principal_id="$(aws identitystore create-group \
+      --identity-store-id "${identity_store_id}" \
+      --display-name "${group}" \
+      --description "${group} (criado por ${this_script_name})" \
+      --query GroupId --output text)"
+    echo "criado  ${principal_label} (${principal_id})"
+  fi
+
+  for member in "${members[@]}"; do
+    member_id="$(find_user_id "${member}")"
+
+    if [ -z "${member_id}" ] || [ "${member_id}" == "None" ]; then
+      echo "usuário '${member}' não encontrado no Identity Store — não adicionado ao grupo." >&2
+      exit 1
+    fi
+
+    existing_membership="$(aws identitystore get-group-membership-id \
+      --identity-store-id "${identity_store_id}" \
+      --group-id "${principal_id}" \
+      --member-id "UserId=${member_id}" \
+      --query MembershipId --output text 2> /dev/null || true)"
+
+    if [ -n "${existing_membership}" ] && [ "${existing_membership}" != "None" ]; then
+      echo "ok  '${member}' já é membro de ${principal_label}"
+      continue
+    fi
+
+    aws identitystore create-group-membership \
+      --identity-store-id "${identity_store_id}" \
+      --group-id "${principal_id}" \
+      --member-id "UserId=${member_id}" > /dev/null
+    echo "adicionado  '${member}' -> ${principal_label}"
+  done
+else
+  principal_type="USER"
+  principal_id="$(find_user_id "${user}")"
+  principal_label="usuário '${user}'"
+fi
+
+if [ -z "${principal_id}" ] || [ "${principal_id}" == "None" ]; then
+  echo "${principal_label} não encontrado no Identity Store ${identity_store_id}." >&2
+  exit 1
+fi
+echo "ok  ${principal_label} = ${principal_id}"
+
+# --- atribuição ---------------------------------------------------------------
+existing="$(aws sso-admin list-account-assignments \
+  --instance-arn "${instance_arn}" \
+  --account-id "${account_id}" \
+  --permission-set-arn "${permission_set_arn}" \
+  --query "AccountAssignments[?PrincipalId=='${principal_id}'].PrincipalId" --output text)"
+
+if [ -n "${existing}" ]; then
+  echo "ok  atribuição já existe — nada a fazer."
+  exit 0
+fi
+
+request_id="$(aws sso-admin create-account-assignment \
+  --instance-arn "${instance_arn}" \
+  --target-id "${account_id}" --target-type AWS_ACCOUNT \
+  --permission-set-arn "${permission_set_arn}" \
+  --principal-type "${principal_type}" --principal-id "${principal_id}" \
+  --query AccountAssignmentCreationStatus.RequestId --output text)"
+
+echo "Aguardando propagação da atribuição (request ${request_id})..."
+for _ in $(seq 1 30); do
+  status="$(aws sso-admin describe-account-assignment-creation-status \
+    --instance-arn "${instance_arn}" --account-assignment-creation-request-id "${request_id}" \
+    --query AccountAssignmentCreationStatus.Status --output text)"
+
+  if [ "${status}" == "SUCCEEDED" ]; then
+    echo "atribuído  ${permission_set} -> ${account} (${account_id}) para ${principal_label}"
+    echo
+    echo "Rode 'aws sso login' de novo para a conta aparecer no portal/CLI."
+    exit 0
+  fi
+
+  if [ "${status}" == "FAILED" ]; then
+    aws sso-admin describe-account-assignment-creation-status \
+      --instance-arn "${instance_arn}" --account-assignment-creation-request-id "${request_id}" \
+      --query AccountAssignmentCreationStatus.FailureReason --output text >&2
+    exit 1
+  fi
+
+  sleep 5
+done
+
+echo "Atribuição não concluiu em tempo — verifique no console do Identity Center." >&2
+exit 1

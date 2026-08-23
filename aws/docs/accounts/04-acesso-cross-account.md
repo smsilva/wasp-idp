@@ -17,7 +17,7 @@ Habilitado **uma vez**, na management account. A partir daí:
 - **Permission Sets** — coleções de policies IAM reutilizáveis (ex.: `AdministratorAccess`,
   `ReadOnlyAccess`, um permission set custom `NetworkEngineer`).
 - **Atribuições** — qual identidade tem qual permission set em qual conta. Uma pessoa pode
-  ter `AdministratorAccess` na conta de projeto A e `ReadOnlyAccess` na Hub account.
+  ter `AdministratorAccess` na conta de projeto A e `ReadOnlyAccess` na conta network.
 
 Login único (`aws sso login`) gera credenciais temporárias por conta — nada de access key de
 longa duração para uso humano interativo.
@@ -90,10 +90,17 @@ https://signin.aws.amazon.com/switchrole?account=<member-account-id>&roleName=Or
 É só um atalho — não substitui o permission set (a conta-membro continua **fora** do portal
 SSO até receber a atribuição abaixo).
 
-### TODO — atribuir permission set SSO à conta-membro (elimina o switch role)
+### Atribuir permission set SSO à conta-membro (elimina o switch role)
 
-Passo pendente que faz a conta-membro (ex.: `hub`) aparecer no portal SSO e no `aws sso
-login` direto, tanto no navegador quanto na CLI. Executar **uma vez**, na management
+Passo que faz a conta-membro (ex.: `network`) aparecer no portal SSO e no `aws sso login`
+direto, tanto no navegador quanto na CLI. Executar **uma vez** por conta:
+
+```bash
+scripts/assign-permission-set --account <conta> --group <grupo>
+```
+
+O script cria/reusa o permission set no Identity Center, resolve o principal no Identity
+Store e cria a atribuição (idempotente nos três passos). Equivalente manual, na management
 account → IAM Identity Center:
 
 1. **Create permission set** → `AdministratorAccess` (managed) — ou um custom por função
@@ -109,8 +116,15 @@ account → IAM Identity Center:
    region = <region>
    ```
 
-Enquanto esse TODO não for feito, o acesso admin à conta-membro é via named profile
+Enquanto a atribuição não existir, o acesso admin à conta-membro é via named profile
 (assume-role) + Switch role no portal — ambos descritos acima.
+
+**`--group` em vez de `--user`.** A atribuição sobrevive a quem entra e sai do time; com
+`--user`, cada pessoa nova exige uma atribuição nova em cada conta.
+
+**Exceção da `log-archive`:** ali o permission set de rotina é `ReadOnlyAccess`, não
+`AdministratorAccess` — o valor da conta vem de ninguém poder apagar o acervo
+(`07-cloudtrail-e-log-archive.md`).
 
 ## Convenção de nomenclatura de permission sets
 

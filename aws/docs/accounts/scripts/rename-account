@@ -1,0 +1,113 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Renomeia uma conta-membro da Organization (Account Management API
+  'put-account-name'), rodando a partir da management account.
+
+  Idempotente: se a conta já tiver o nome pedido, não faz nada.
+
+    Options:
+
+      -h,  --help              Show this help
+      -n,  --name              Nome ATUAL da conta (obrigatório se --account-id ausente)
+      -i,  --account-id        Id da conta (alternativa a --name)
+           --new-name          Novo nome da conta (obrigatório)
+
+  Pré-requisito: trusted access do Account Management habilitado na Organization —
+  ${this_script_directory}/enable-service-access --service account.amazonaws.com
+
+  Só o NOME muda. O e-mail do root user (que é a identidade única da conta em toda a
+  AWS) NÃO é alterado por aqui, então uma conta renomeada continua com o e-mail
+  antigo — trocar exige o fluxo de root user, no console da própria conta.
+
+    Examples:
+
+      ${this_script_name} --name sandbox --new-name wasp-nonprod
+
+      ${this_script_name} --account-id 123456789012 --new-name wasp-nonprod
+EOF
+}
+
+name=""
+account_id=""
+new_name=""
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -n | --name )
+      shift
+      name="${1}"
+      ;;
+
+    -i | --account-id )
+      shift
+      account_id="${1}"
+      ;;
+
+    --new-name )
+      shift
+      new_name="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -z "${new_name}" ] || { [ -z "${name}" ] && [ -z "${account_id}" ]; }; then
+  echo "Faltam argumentos: --new-name e (--name ou --account-id)." >&2
+  show_usage
+  exit 1
+fi
+
+set -e
+
+check
+
+if [ -z "${account_id}" ]; then
+  account_id="$(aws organizations list-accounts \
+    --query "Accounts[?Name=='${name}' && Status=='ACTIVE'].Id" --output text)"
+
+  if [ -z "${account_id}" ]; then
+    echo "Nenhuma conta ACTIVE chamada '${name}' na Organization." >&2
+    exit 1
+  fi
+fi
+
+current_name="$(aws organizations describe-account --account-id "${account_id}" \
+  --query Account.Name --output text)"
+
+if [ "${current_name}" == "${new_name}" ]; then
+  echo "ok  conta ${account_id} já se chama '${new_name}' — nada a fazer."
+  exit 0
+fi
+
+service_enabled="$(aws organizations list-aws-service-access-for-organization \
+  --query "EnabledServicePrincipals[?ServicePrincipal=='account.amazonaws.com'].ServicePrincipal" \
+  --output text)"
+
+if [ -z "${service_enabled}" ]; then
+  echo "Trusted access do Account Management não habilitado — rode primeiro:" >&2
+  echo "  ${this_script_directory}/enable-service-access --service account.amazonaws.com" >&2
+  exit 1
+fi
+
+echo "Renomeando conta ${account_id}: '${current_name}' -> '${new_name}'..."
+aws account put-account-name --account-id "${account_id}" --account-name "${new_name}"
+echo "renomeada  ${account_id} = ${new_name}"

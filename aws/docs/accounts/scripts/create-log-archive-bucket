@@ -1,0 +1,228 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Cria, DENTRO da conta log-archive, o bucket S3 que recebe o CloudTrail
+  organizacional — com Block Public Access, versionamento, criptografia e a bucket
+  policy que autoriza o serviço CloudTrail a escrever (ver
+  aws/docs/accounts/07-cloudtrail-e-log-archive.md).
+
+  Roda a partir da MANAGEMENT account e assume a role indicada por --role na conta
+  de destino (OrganizationAccountAccessRole existe por default em conta criada via
+  'create-account'). Idempotente.
+
+    Options:
+
+      -h,  --help              Show this help
+      -a,  --account           Nome ou id da conta de log (default: log-archive)
+      -b,  --bucket            Nome do bucket (default: cloudtrail-<organization-id>)
+      -t,  --trail             Nome do trail que vai escrever (default: organization-trail)
+      -r,  --region            Região do bucket e do trail (default: us-east-1)
+           --role              Role assumida na conta de destino
+                                (default: OrganizationAccountAccessRole)
+
+  A bucket policy é escopada por 'aws:SourceArn' ao ARN do trail — trocar --trail
+  depois exige rodar este script de novo para a policy acompanhar.
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --account log-archive --region sa-east-1
+EOF
+}
+
+account="log-archive"
+bucket=""
+trail="organization-trail"
+region="us-east-1"
+role="OrganizationAccountAccessRole"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -a | --account )
+      shift
+      account="${1}"
+      ;;
+
+    -b | --bucket )
+      shift
+      bucket="${1}"
+      ;;
+
+    -t | --trail )
+      shift
+      trail="${1}"
+      ;;
+
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    --role )
+      shift
+      role="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+organization_id="$(aws organizations describe-organization \
+  --query Organization.Id --output text)"
+management_account_id="$(aws organizations describe-organization \
+  --query Organization.MasterAccountId --output text)"
+
+if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
+  account_id="${account}"
+else
+  account_id="$(aws organizations list-accounts \
+    --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
+
+  if [ -z "${account_id}" ]; then
+    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    exit 1
+  fi
+fi
+
+if [ -z "${bucket}" ]; then
+  bucket="cloudtrail-${organization_id}"
+fi
+
+trail_arn="arn:aws:cloudtrail:${region}:${management_account_id}:trail/${trail}"
+
+cat <<EOF
+
+Organization:  ${organization_id}
+Management:    ${management_account_id}
+Conta de log:  ${account} (${account_id})
+Bucket:        ${bucket}  [${region}]
+Trail alvo:    ${trail_arn}
+
+EOF
+
+# --- assume role na conta de log (credenciais só na memória deste processo) ----
+credentials_json="$(aws sts assume-role \
+  --role-arn "arn:aws:iam::${account_id}:role/${role}" \
+  --role-session-name "${this_script_name}" \
+  --query Credentials --output json)"
+
+export AWS_ACCESS_KEY_ID="$(echo "${credentials_json}" | jq -r .AccessKeyId)"
+export AWS_SECRET_ACCESS_KEY="$(echo "${credentials_json}" | jq -r .SecretAccessKey)"
+export AWS_SESSION_TOKEN="$(echo "${credentials_json}" | jq -r .SessionToken)"
+export AWS_DEFAULT_REGION="${region}"
+unset AWS_PROFILE
+
+echo "ok  assumida ${role} em ${account_id} ($(aws sts get-caller-identity --query Arn --output text))"
+
+# --- bucket -------------------------------------------------------------------
+if aws s3api head-bucket --bucket "${bucket}" 2> /dev/null; then
+  echo "ok  bucket '${bucket}' já existe"
+else
+  if [ "${region}" == "us-east-1" ]; then
+    aws s3api create-bucket --bucket "${bucket}" --region "${region}" > /dev/null
+  else
+    aws s3api create-bucket --bucket "${bucket}" --region "${region}" \
+      --create-bucket-configuration "LocationConstraint=${region}" > /dev/null
+  fi
+  echo "criado  bucket '${bucket}'"
+fi
+
+aws s3api put-public-access-block --bucket "${bucket}" \
+  --public-access-block-configuration \
+  "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+echo "ok  block public access"
+
+aws s3api put-bucket-versioning --bucket "${bucket}" \
+  --versioning-configuration "Status=Enabled"
+echo "ok  versionamento"
+
+aws s3api put-bucket-encryption --bucket "${bucket}" \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+echo "ok  criptografia SSE-S3"
+
+aws s3api put-bucket-ownership-controls --bucket "${bucket}" \
+  --ownership-controls "Rules=[{ObjectOwnership=BucketOwnerEnforced}]"
+echo "ok  object ownership (ACLs desabilitadas)"
+
+# --- bucket policy ------------------------------------------------------------
+policy="$(jq -n \
+  --arg bucket "${bucket}" \
+  --arg trail_arn "${trail_arn}" \
+  --arg management_account_id "${management_account_id}" \
+  --arg organization_id "${organization_id}" \
+  '{
+    Version: "2012-10-17",
+    Statement: [
+      {
+        Sid: "AWSCloudTrailAclCheck",
+        Effect: "Allow",
+        Principal: { Service: "cloudtrail.amazonaws.com" },
+        Action: "s3:GetBucketAcl",
+        Resource: "arn:aws:s3:::\($bucket)",
+        Condition: { StringEquals: { "aws:SourceArn": $trail_arn } }
+      },
+      {
+        Sid: "AWSCloudTrailWrite",
+        Effect: "Allow",
+        Principal: { Service: "cloudtrail.amazonaws.com" },
+        Action: "s3:PutObject",
+        Resource: [
+          "arn:aws:s3:::\($bucket)/AWSLogs/\($management_account_id)/*",
+          "arn:aws:s3:::\($bucket)/AWSLogs/\($organization_id)/*"
+        ],
+        Condition: {
+          StringEquals: {
+            "s3:x-amz-acl": "bucket-owner-full-control",
+            "aws:SourceArn": $trail_arn
+          }
+        }
+      },
+      {
+        Sid: "DenyInsecureTransport",
+        Effect: "Deny",
+        Principal: "*",
+        Action: "s3:*",
+        Resource: [
+          "arn:aws:s3:::\($bucket)",
+          "arn:aws:s3:::\($bucket)/*"
+        ],
+        Condition: { Bool: { "aws:SecureTransport": "false" } }
+      }
+    ]
+  }')"
+
+aws s3api put-bucket-policy --bucket "${bucket}" --policy "${policy}"
+echo "ok  bucket policy (CloudTrail write + deny insecure transport)"
+
+cat <<EOF
+
+Bucket pronto: s3://${bucket}
+
+Próximo passo (na management account):
+  aws cloudtrail create-trail --name ${trail} \\
+    --s3-bucket-name ${bucket} --is-organization-trail --is-multi-region-trail
+  aws cloudtrail start-logging --name ${trail}
+EOF

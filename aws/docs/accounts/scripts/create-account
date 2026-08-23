@@ -15,31 +15,31 @@ show_usage() {
     Options:
 
       -h,  --help              Show this help
-      -n,  --name              Nome da conta (obrigatório, ex.: hub, sandbox-01, acme-prod)
+      -n,  --name              Nome da conta (obrigatório, ex.: network, log-archive, wasp-prod)
       -e,  --email-domain      Domínio para o e-mail (obrigatório, ex.: example.com)
       -u,  --email-user        Base da caixa (mailbox) para plus-addressing (opcional).
                                 Com ela:  <email-user>+<name>@<email-domain>
                                 Sem ela:  <name>+aws@<email-domain>  (catch-all corporativo)
-           --ou                infra | sandbox | production (obrigatório)
+           --ou                security | infrastructure | nonprod | production (obrigatório)
 
   Dois modos de e-mail (o endereço vira o root user da conta e precisa ser único em
   TODA a AWS, além de válido/controlado por você):
 
-    - Domínio corporativo com catch-all: omita --email-user. Ex.: --name hub
-      --email-domain <email-domain>  ->  hub+aws@<email-domain> (roteia pelo catch-all).
+    - Domínio corporativo com catch-all: omita --email-user. Ex.: --name network
+      --email-domain <email-domain>  ->  network+aws@<email-domain> (roteia pelo catch-all).
 
     - Caixa pessoal (Gmail/Workspace): passe --email-user com a SUA caixa. O Gmail
       entrega qualquer <caixa>+tag@gmail.com em <caixa>@gmail.com, então o nome da
       conta vira o tag e cada conta fica única. Ex.: --email-user smsilva
-      --name hub --email-domain gmail.com  ->  smsilva+hub@gmail.com.
+      --name network --email-domain gmail.com  ->  smsilva+network@gmail.com.
 
     Examples:
 
-      ${this_script_name} --name hub --email-domain example.com --ou infra
+      ${this_script_name} --name network --email-domain example.com --ou infrastructure
 
-      ${this_script_name} --name hub --email-user smsilva --email-domain gmail.com --ou infra
+      ${this_script_name} --name log-archive --email-user smsilva --email-domain gmail.com --ou security
 
-      ${this_script_name} --name acme-sandbox --email-domain example.com --ou sandbox
+      ${this_script_name} --name acme-nonprod --email-domain example.com --ou nonprod
 
       ${this_script_name} --name acme-prod --email-domain example.com --ou production
 EOF
@@ -93,16 +93,16 @@ if [ -z "${name}" ] || [ -z "${email_domain}" ] || [ -z "${ou}" ]; then
 fi
 
 case "${ou}" in
-  infra | sandbox | production ) ;;
+  security | infrastructure | nonprod | production ) ;;
   * )
-    echo "--ou inválido: '${ou}' (use infra, sandbox ou production)" >&2
+    echo "--ou inválido: '${ou}' (use security, infrastructure, nonprod ou production)" >&2
     exit 1
     ;;
 esac
 
 if [ "${ou}" == "production" ]; then
   echo "ATENÇÃO: criando conta na OU Production." >&2
-  echo "Confirme que já validou o mesmo setup em Sandbox antes de prosseguir aqui." >&2
+  echo "Confirme que já validou o mesmo setup em NonProd antes de prosseguir aqui." >&2
 fi
 
 set -e
@@ -117,17 +117,22 @@ fi
 root_id="$(aws organizations list-roots --query 'Roots[0].Id' --output text)"
 
 case "${ou}" in
-  infra )
-    ou_name="Infra"
+  security )
+    ou_name="Security"
     parent_id="$(aws organizations list-organizational-units-for-parent \
-      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Infra'].Id" --output text)"
+      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Security'].Id" --output text)"
     ;;
-  sandbox )
-    ou_name="Sandbox"
+  infrastructure )
+    ou_name="Infrastructure"
+    parent_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Infrastructure'].Id" --output text)"
+    ;;
+  nonprod )
+    ou_name="NonProd"
     workloads_id="$(aws organizations list-organizational-units-for-parent \
       --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Workloads'].Id" --output text)"
     parent_id="$(aws organizations list-organizational-units-for-parent \
-      --parent-id "${workloads_id}" --query "OrganizationalUnits[?Name=='Sandbox'].Id" --output text)"
+      --parent-id "${workloads_id}" --query "OrganizationalUnits[?Name=='NonProd'].Id" --output text)"
     ;;
   production )
     ou_name="Production"

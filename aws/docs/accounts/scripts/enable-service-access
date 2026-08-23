@@ -1,0 +1,76 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Habilita trusted access de um serviço AWS na Organization — pré-requisito para a
+  management account operar aquele serviço nas contas-membro (ver
+  aws/docs/accounts/03-provisionamento-de-contas.md).
+
+  Idempotente: se o service principal já estiver habilitado, não faz nada.
+
+    Options:
+
+      -h,  --help              Show this help
+      -s,  --service           Service principal (default: account.amazonaws.com)
+
+  Service principals usados por esta referência:
+
+    account.amazonaws.com      Account Management — permite renomear contas-membro
+                               e gerir contatos a partir da management account
+                               (usado por ${this_script_directory}/rename-account)
+    cloudtrail.amazonaws.com   CloudTrail organizacional
+    sso.amazonaws.com          IAM Identity Center
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --service cloudtrail.amazonaws.com
+EOF
+}
+
+service="account.amazonaws.com"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -s | --service )
+      shift
+      service="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+already_enabled="$(aws organizations list-aws-service-access-for-organization \
+  --query "EnabledServicePrincipals[?ServicePrincipal=='${service}'].ServicePrincipal" \
+  --output text)"
+
+if [ -n "${already_enabled}" ]; then
+  echo "ok  trusted access já habilitado para '${service}'"
+  exit 0
+fi
+
+echo "Habilitando trusted access para '${service}'..."
+aws organizations enable-aws-service-access --service-principal "${service}"
+echo "habilitado  ${service}"
