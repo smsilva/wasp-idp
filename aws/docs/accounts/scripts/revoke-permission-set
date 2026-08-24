@@ -1,0 +1,219 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Remove a atribuição de um permission set a um usuário/grupo numa conta-membro — o
+  inverso de ${this_script_directory}/assign-permission-set.
+
+  DESTRUTIVO: quem depender dessa atribuição perde o acesso pelo portal SSO. Pede
+  confirmação salvo com --yes. O permission set em si NÃO é apagado (outras contas podem
+  usá-lo); só a atribuição nesta conta some.
+
+  Idempotente: se a atribuição já não existir, sai sem erro.
+
+  Uso típico — rebaixar uma conta de admin para leitura, sem janela sem acesso:
+
+    assign-permission-set --account log-archive --group platform-admins \\
+      --permission-set ReadOnlyAccess \\
+      --managed-policy arn:aws:iam::aws/policy/ReadOnlyAccess
+    ${this_script_name} --account log-archive --group platform-admins \\
+      --permission-set AdministratorAccess
+
+    Options:
+
+      -h,  --help              Show this help
+      -a,  --account           Nome ou id da conta-membro (obrigatório)
+      -p,  --permission-set    Nome do permission set (obrigatório)
+      -u,  --user              Username no Identity Store (obrigatório se --group ausente)
+      -g,  --group             Nome do grupo no Identity Store (alternativa a --user)
+      -y,  --yes               Não pedir confirmação
+
+    Examples:
+
+      ${this_script_name} --account log-archive --group platform-admins \\
+        --permission-set AdministratorAccess
+EOF
+}
+
+account=""
+permission_set=""
+user=""
+group=""
+assume_yes=""
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -a | --account )
+      shift
+      account="${1}"
+      ;;
+
+    -p | --permission-set )
+      shift
+      permission_set="${1}"
+      ;;
+
+    -u | --user )
+      shift
+      user="${1}"
+      ;;
+
+    -g | --group )
+      shift
+      group="${1}"
+      ;;
+
+    -y | --yes )
+      assume_yes="yes"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -z "${account}" ] || [ -z "${permission_set}" ] || { [ -z "${user}" ] && [ -z "${group}" ]; }; then
+  echo "Faltam argumentos: --account, --permission-set e (--user ou --group)." >&2
+  show_usage
+  exit 1
+fi
+
+set -e
+
+check
+
+instance_json="$(aws sso-admin list-instances --query 'Instances[0]' --output json)"
+instance_arn="$(echo "${instance_json}" | jq -r '.InstanceArn // empty')"
+identity_store_id="$(echo "${instance_json}" | jq -r '.IdentityStoreId // empty')"
+
+if [ -z "${instance_arn}" ]; then
+  echo "Nenhuma instância do IAM Identity Center nesta Organization." >&2
+  exit 1
+fi
+echo "ok  Identity Center ${instance_arn} (identity store ${identity_store_id})"
+
+# --- conta alvo ---------------------------------------------------------------
+if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
+  account_id="${account}"
+else
+  account_id="$(aws organizations list-accounts \
+    --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
+
+  if [ -z "${account_id}" ]; then
+    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    exit 1
+  fi
+fi
+echo "ok  conta alvo ${account} = ${account_id}"
+
+# --- permission set -----------------------------------------------------------
+permission_set_arn=""
+for arn in $(aws sso-admin list-permission-sets --instance-arn "${instance_arn}" \
+  --query 'PermissionSets[]' --output text); do
+  arn_name="$(aws sso-admin describe-permission-set --instance-arn "${instance_arn}" \
+    --permission-set-arn "${arn}" --query PermissionSet.Name --output text)"
+
+  if [ "${arn_name}" == "${permission_set}" ]; then
+    permission_set_arn="${arn}"
+    break
+  fi
+done
+
+if [ -z "${permission_set_arn}" ]; then
+  echo "ok  permission set '${permission_set}' não existe — nada a revogar."
+  exit 0
+fi
+echo "ok  permission set '${permission_set}' (${permission_set_arn})"
+
+# --- principal ----------------------------------------------------------------
+if [ -n "${group}" ]; then
+  principal_type="GROUP"
+  principal_id="$(aws identitystore list-groups \
+    --identity-store-id "${identity_store_id}" \
+    --filters "AttributePath=DisplayName,AttributeValue=${group}" \
+    --query 'Groups[0].GroupId' --output text 2> /dev/null || true)"
+  principal_label="grupo '${group}'"
+else
+  principal_type="USER"
+  principal_id="$(aws identitystore list-users \
+    --identity-store-id "${identity_store_id}" \
+    --filters "AttributePath=UserName,AttributeValue=${user}" \
+    --query 'Users[0].UserId' --output text 2> /dev/null || true)"
+  principal_label="usuário '${user}'"
+fi
+
+if [ -z "${principal_id}" ] || [ "${principal_id}" == "None" ]; then
+  echo "${principal_label} não encontrado no Identity Store ${identity_store_id}." >&2
+  exit 1
+fi
+echo "ok  ${principal_label} = ${principal_id}"
+
+# --- atribuição ---------------------------------------------------------------
+existing="$(aws sso-admin list-account-assignments \
+  --instance-arn "${instance_arn}" \
+  --account-id "${account_id}" \
+  --permission-set-arn "${permission_set_arn}" \
+  --query "AccountAssignments[?PrincipalId=='${principal_id}'].PrincipalId" --output text)"
+
+if [ -z "${existing}" ]; then
+  echo "ok  atribuição não existe — nada a fazer."
+  exit 0
+fi
+
+if [ -z "${assume_yes}" ]; then
+  echo
+  echo "Revogar '${permission_set}' de ${principal_label} na conta ${account} (${account_id})?"
+  echo "Depois disso o acesso a essa conta pelo portal SSO some para esse principal."
+  read -r -p "Digite 'yes' para confirmar: " answer
+
+  if [ "${answer}" != "yes" ]; then
+    echo "Abortado."
+    exit 1
+  fi
+fi
+
+request_id="$(aws sso-admin delete-account-assignment \
+  --instance-arn "${instance_arn}" \
+  --target-id "${account_id}" --target-type AWS_ACCOUNT \
+  --permission-set-arn "${permission_set_arn}" \
+  --principal-type "${principal_type}" --principal-id "${principal_id}" \
+  --query AccountAssignmentDeletionStatus.RequestId --output text)"
+
+echo "Aguardando propagação da revogação (request ${request_id})..."
+for _ in $(seq 1 30); do
+  status="$(aws sso-admin describe-account-assignment-deletion-status \
+    --instance-arn "${instance_arn}" --account-assignment-deletion-request-id "${request_id}" \
+    --query AccountAssignmentDeletionStatus.Status --output text)"
+
+  if [ "${status}" == "SUCCEEDED" ]; then
+    echo "revogado  ${permission_set} -> ${account} (${account_id}) de ${principal_label}"
+    exit 0
+  fi
+
+  if [ "${status}" == "FAILED" ]; then
+    aws sso-admin describe-account-assignment-deletion-status \
+      --instance-arn "${instance_arn}" --account-assignment-deletion-request-id "${request_id}" \
+      --query AccountAssignmentDeletionStatus.FailureReason --output text >&2
+    exit 1
+  fi
+
+  sleep 5
+done
+
+echo "Revogação não concluiu em tempo — verifique no console do Identity Center." >&2
+exit 1

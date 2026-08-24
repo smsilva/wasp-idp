@@ -1,0 +1,147 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Mostra o estado do IAM Identity Center: permission sets existentes e, para cada conta
+  da Organization, quem tem qual acesso (ver aws/docs/accounts/04-acesso-cross-account.md).
+
+  Somente leitura — não altera nada. É a forma de conferir o resultado de
+  ${this_script_directory}/assign-permission-set e de revoke-permission-set.
+
+    Options:
+
+      -h,  --help              Show this help
+      -a,  --account           Restringe a uma conta (nome ou id); default: todas
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --account log-archive
+EOF
+}
+
+account=""
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -a | --account )
+      shift
+      account="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+instance_json="$(aws sso-admin list-instances --query 'Instances[0]' --output json)"
+instance_arn="$(echo "${instance_json}" | jq -r '.InstanceArn // empty')"
+identity_store_id="$(echo "${instance_json}" | jq -r '.IdentityStoreId // empty')"
+
+if [ -z "${instance_arn}" ]; then
+  echo "Nenhuma instância do IAM Identity Center nesta Organization." >&2
+  exit 1
+fi
+
+echo "Identity Center ${instance_arn}"
+echo "Identity store  ${identity_store_id}"
+echo
+
+# Cache nome<-permission set arn: list-permission-sets devolve só ARNs (sem filtro por nome).
+declare -A permission_set_name
+
+echo "Permission sets:"
+for arn in $(aws sso-admin list-permission-sets --instance-arn "${instance_arn}" \
+  --query 'PermissionSets[]' --output text); do
+  name="$(aws sso-admin describe-permission-set --instance-arn "${instance_arn}" \
+    --permission-set-arn "${arn}" --query PermissionSet.Name --output text)"
+  permission_set_name["${arn}"]="${name}"
+
+  policies="$(aws sso-admin list-managed-policies-in-permission-set \
+    --instance-arn "${instance_arn}" --permission-set-arn "${arn}" \
+    --query 'AttachedManagedPolicies[].Name' --output text)"
+
+  printf '  %-28s %s\n' "${name}" "${policies:-(sem managed policy)}"
+done
+echo
+
+principal_label() {
+  local type="${1}"
+  local id="${2}"
+
+  if [ "${type}" == "GROUP" ]; then
+    echo "grupo $(aws identitystore describe-group \
+      --identity-store-id "${identity_store_id}" --group-id "${id}" \
+      --query DisplayName --output text 2> /dev/null || echo "${id}")"
+    return
+  fi
+
+  echo "usuário $(aws identitystore describe-user \
+    --identity-store-id "${identity_store_id}" --user-id "${id}" \
+    --query UserName --output text 2> /dev/null || echo "${id}")"
+}
+
+if [ -n "${account}" ]; then
+  if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
+    accounts="${account}"
+  else
+    accounts="$(aws organizations list-accounts \
+      --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
+  fi
+
+  if [ -z "${accounts}" ]; then
+    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    exit 1
+  fi
+else
+  accounts="$(aws organizations list-accounts \
+    --query "Accounts[?Status=='ACTIVE'].Id" --output text)"
+fi
+
+echo "Atribuições por conta:"
+for account_id in ${accounts}; do
+  account_name="$(aws organizations describe-account --account-id "${account_id}" \
+    --query Account.Name --output text)"
+  echo "  ${account_name} (${account_id})"
+
+  found=""
+  for arn in "${!permission_set_name[@]}"; do
+    assignments="$(aws sso-admin list-account-assignments \
+      --instance-arn "${instance_arn}" --account-id "${account_id}" \
+      --permission-set-arn "${arn}" \
+      --query 'AccountAssignments[].[PrincipalType,PrincipalId]' --output text)"
+
+    [ -z "${assignments}" ] && continue
+
+    while read -r principal_type principal_id; do
+      [ -z "${principal_type}" ] && continue
+      printf '    %-28s %s\n' "${permission_set_name[${arn}]}" \
+        "$(principal_label "${principal_type}" "${principal_id}")"
+      found="yes"
+    done <<< "${assignments}"
+  done
+
+  if [ -z "${found}" ]; then
+    echo "    (nenhuma — acesso só via OrganizationAccountAccessRole)"
+  fi
+done

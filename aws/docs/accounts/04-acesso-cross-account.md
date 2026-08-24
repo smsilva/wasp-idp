@@ -147,6 +147,8 @@ Passo ⑦ parcialmente concluído. Instância do Identity Center e identity stor
 | Conta `log-archive` | `AdministratorAccess` atribuído a `platform-admins` |
 | Contas `network`, `<projeto>-nonprod` | **sem** permission set — acesso ainda via `OrganizationAccountAccessRole` assumida da management account |
 
+Conferir a qualquer momento com `scripts/show-permission-sets` (somente leitura).
+
 Pendências conhecidas:
 
 - **`log-archive` deveria ser `ReadOnlyAccess`, não `AdministratorAccess`.** O admin é
@@ -154,6 +156,26 @@ Pendências conhecidas:
   existir. Trocar quando houver operação de rotina.
 - Rodar `scripts/assign-permission-set --account <conta> --group platform-admins` para
   `network` e `<projeto>-nonprod`, eliminando o switch-role manual.
+
+### Rebaixar uma conta de admin para leitura (reprodutível)
+
+Não existe "update assignment" na API — são duas chamadas. **Atribuir o novo antes de revogar
+o antigo** evita uma janela sem acesso:
+
+```bash
+scripts/assign-permission-set --account log-archive --group platform-admins \
+  --permission-set ReadOnlyAccess \
+  --managed-policy arn:aws:iam::aws/policy/ReadOnlyAccess
+
+scripts/revoke-permission-set --account log-archive --group platform-admins \
+  --permission-set AdministratorAccess
+
+scripts/show-permission-sets --account log-archive   # confere
+```
+
+O `revoke` remove só a **atribuição** naquela conta — o permission set continua existindo
+para as demais. Depois de qualquer mudança, `aws sso login` de novo para o cache local
+refletir o novo acesso.
 
 ## Well-Architected — porquê
 

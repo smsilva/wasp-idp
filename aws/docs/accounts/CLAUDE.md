@@ -53,7 +53,7 @@ registrado.
 ## Scripts (`scripts/`)
 
 Implementação executável dos passos acima. Cada script é idempotente (reaproveita o que já
-existir) e nenhum é destrutivo. Ver `--help` de cada um para detalhes.
+existir). Só `revoke-permission-set` é destrutivo — pede confirmação e está marcado na tabela. Ver `--help` de cada um para detalhes.
 
 | Script | Cobre o passo | O que faz |
 |---|---|---|
@@ -66,6 +66,8 @@ existir) e nenhum é destrutivo. Ver `--help` de cada um para detalhes.
 | `create-account --ou {security\|infrastructure\|nonprod\|production}` | ④ ⑤ ⑧ | Cria 1 conta e move para a OU pedida. `--ou production` avisa explicitamente antes de prosseguir |
 | `apply-baseline-service-control-policy` | ⑥ | Guardrails do tópico 2: restringe região, exige IMDSv2, nega root, protege CloudTrail/saída da Org |
 | `assign-permission-set --account <conta> --user\|--group <principal>` | ⑦ | Cria/reusa permission set do Identity Center e atribui à conta — tira a conta do limbo do switch-role |
+| `show-permission-sets [--account <conta>]` | ⑦ verificação | Somente leitura: permission sets existentes e, por conta, quem tem qual acesso |
+| `revoke-permission-set --account <conta> --permission-set <ps> --user\|--group <principal>` | ⑦ | Remove uma atribuição (inverso do `assign-permission-set`). **Destrutivo** — pede confirmação salvo `--yes` |
 | `rename-account --name <atual> --new-name <novo>` | correção | Renomeia conta-membro via `account put-account-name`. Só o nome; o e-mail do root user **não** muda |
 | `rename-organizational-unit --name <atual> --new-name <novo>` | correção | Renomeia OU in-place — o Id não muda, SCPs e contas seguem válidos |
 
@@ -95,6 +97,9 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
   inexistente — a query devolvia vazio e o script abortava com mensagem enganosa ("rode
   `create-organizational-unit-structure` primeiro"). Depois de renomear qualquer OU, varrer
   `scripts/` por ocorrências do nome antigo.
+- **Trocar o permission set de uma conta são dois passos, não um.** Não existe "update
+  assignment": `assign-permission-set` com o novo e `revoke-permission-set` com o antigo.
+  Atribuir primeiro evita janela sem acesso.
 - **Conta recém-criada não está no portal SSO** — o único gancho é a
   `OrganizationAccountAccessRole` (assumida da management account) até
   `assign-permission-set` rodar. Os scripts que agem dentro de conta-membro
