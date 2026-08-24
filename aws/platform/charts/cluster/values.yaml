@@ -8,12 +8,13 @@ prefix: poc-eks
 region: us-east-1
 
 # providerConfigName: OBRIGATÓRIO e explícito (o cluster declara qual conta usa). DEVE bater
-# com o providerConfigName do spoke de mesmo name. hub | sandbox.
+# com o providerConfigName do spoke de mesmo name. network | wasp-nonprod (nome da CONTA).
 providerConfigName: ""
 
 # crossplaneArn: principal que recebe RBAC admin no EKS (AccessEntry). ATENÇÃO: para um cluster
-# no spoke, é a ROLE ASSUMIDA na conta spoke (ex.: arn:aws:iam::<sandboxAccount>:role/
-# crossplane-sandbox), NÃO o user da hub — o ClusterAuth autentica como a role do assumeRoleChain.
+# no spoke, é a ROLE ASSUMIDA na conta spoke (ex.: arn:aws:iam::<spokeAccount>:role/
+# crossplane-wasp-nonprod), NÃO o user da conta network — o ClusterAuth autentica como a role do
+# assumeRoleChain.
 # Se errar, a ponte Crossplane→EKS (provider-helm/kubernetes) não alcança o cluster.
 crossplaneArn: ""
 

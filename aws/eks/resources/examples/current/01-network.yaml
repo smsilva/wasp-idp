@@ -14,6 +14,6 @@ kind: Network
 metadata:
   name: net01
 spec:
-  providerConfigName: hub   # obrigatório: hub (conta do crossplane-poc) | sandbox (cross-account)
+  providerConfigName: network   # obrigatório: network (conta do crossplane-poc) | wasp-nonprod (cross-account)
   vpcCidrSecondOctet: 1
   # prefix (poc-eks) e region (us-east-1): defaults do XRD.

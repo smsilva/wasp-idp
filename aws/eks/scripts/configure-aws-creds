@@ -8,20 +8,21 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria o Secret aws-iam-credential (formato INI) e aplica o ProviderConfig "hub".
+  Cria o Secret aws-iam-credential (formato INI) e aplica o ProviderConfig "network"
+  (conta onde vive o IAM user crossplane-poc).
   Fonte das keys: env AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
-  (ProviderConfig cross-account "sandbox": ver configure-account-access.)
+  (ProviderConfig cross-account "wasp-nonprod": ver configure-account-access.)
 
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
 
     Examples:
 
       ${this_script_name}
 
-      ${this_script_name} --cluster-name poc-idp
+      ${this_script_name} --cluster-name control-plane
 EOF
 }
 
@@ -49,7 +50,7 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 
 : "${AWS_ACCESS_KEY_ID?exporte AWS_ACCESS_KEY_ID}"
 : "${AWS_SECRET_ACCESS_KEY?exporte AWS_SECRET_ACCESS_KEY}"
@@ -74,4 +75,4 @@ kubectl --context "${context}" create secret generic aws-iam-credential \
   --dry-run=client -o yaml \
   | kubectl --context "${context}" apply -f -
 
-kubectl --context "${context}" apply -f "${this_script_directory}/../providers/provider-config-hub.yaml"
+kubectl --context "${context}" apply -f "${this_script_directory}/../providers/provider-config-network.yaml"

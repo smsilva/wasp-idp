@@ -10,7 +10,7 @@ spec:
     kind: Cluster
   # Cluster + identidade + ponte (14 MRs): 2 IAM Roles + 4 RolePolicyAttachments, EKS Cluster,
   # NodeGroup, ClusterAuth (Secret-kubeconfig), AccessEntry + AccessPolicyAssociation, 2
-  # ProviderConfigs remotos (helm/kubernetes no hub). Migração 1:1 da Composition monolítica
+  # ProviderConfigs remotos (helm/kubernetes no Control Plane). Migração 1:1 da Composition monolítica
   # environment-eks, comportamento-idêntico.
   #
   # CRUZAMENTOS CROSS-XR (Network→Cluster) — os 2 selectors que atravessam a fronteira do XR
@@ -23,9 +23,9 @@ spec:
   # a este XR → mantém matchControllerRef: true.
   #
   # crossplaneArn (decisão b): o step function-environment-configs injeta o EnvironmentConfig do
-  # hub (poc-eks-hub-config), consumido pelos MRs access-entry/access-admin via
+  # Control Plane (control-plane-config), consumido pelos MRs access-entry/access-admin via
   # FromEnvironmentFieldPath. O EnvironmentConfig é o MESMO da monolítica (environmentconfig.yaml,
-  # aplicado 1x no hub) — nenhuma mudança nele.
+  # aplicado 1x no Control Plane) — nenhuma mudança nele.
   mode: Pipeline
   pipeline:
     - step: environment-configs
@@ -38,7 +38,7 @@ spec:
           environmentConfigs:
             - type: Reference
               ref:
-                name: poc-eks-hub-config
+                name: control-plane-config
     - step: patch-and-transform
       functionRef:
         name: function-patch-and-transform
@@ -58,7 +58,7 @@ spec:
                 fromFieldPath: spec.region
                 toFieldPath: spec.forProvider.region
           # provider-config: aponta os MRs AWS (IAM/EKS) ao ProviderConfig escolhido
-          # (hub=conta do crossplane-poc; sandbox=cross-account via assumeRoleChain). NÃO
+          # (network=conta do crossplane-poc; wasp-nonprod=cross-account via assumeRoleChain). NÃO
           # aplicado aos ProviderConfigs remotos helm/kubernetes (in-cluster) — só aos 11 MRs
           # com env-label.
           - name: provider-config
@@ -308,7 +308,7 @@ spec:
                   strategy: string
                   string: { fmt: "%s-%s-node-group" }
                 toFieldPath: metadata.annotations[crossplane.io/external-name]
-          # ---------- 72 Ponte Crossplane(hub) -> EKS remoto (ClusterAuth + AccessEntry) ----------
+          # ---------- 72 Ponte Crossplane(Control Plane) -> EKS remoto (ClusterAuth + AccessEntry) ----------
           # ClusterAuth gera o Secret-contrato (kubeconfig). AccessEntry+APA dão RBAC admin ao
           # IAM user do Crossplane (crossplaneArn do EnvironmentConfig). Todos INTERNOS (cluster).
           - name: cluster-auth

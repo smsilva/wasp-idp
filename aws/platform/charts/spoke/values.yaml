@@ -8,9 +8,9 @@ name: ""
 prefix: poc-eks
 region: us-east-1
 
-# providerConfigName: conta onde os MRs são criados. sandbox = cross-account (assumeRoleChain).
-# O ProviderConfig "sandbox" precisa existir no k3d (configure-account-access).
-providerConfigName: sandbox
+# providerConfigName: conta onde os MRs são criados. wasp-nonprod = cross-account (assumeRoleChain).
+# O ProviderConfig "wasp-nonprod" precisa existir no k3d (configure-account-access).
+providerConfigName: wasp-nonprod
 
 # vpcCidrSecondOctet: N em 10.<N>.0.0/16 (supernet 10.0.0.0/12). Cada spoke usa um N distinto
 # (hub=1). Endereçamento é IRREVERSÍVEL (re-endereçar exige recriar a VPC).

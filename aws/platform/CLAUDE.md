@@ -8,9 +8,12 @@ hub e spoke são **rede**, não EKS.
 
 | Chart | Renderiza | Conta (providerConfigName) | Custo |
 |-------|-----------|----------------------------|-------|
-| `hub` | XR `Network` + waiter | `hub` | VPC grátis; NAT/EIP por hora |
-| `spoke` | XR `Network` + waiter | `sandbox` (cross-account) | idem |
-| `cluster` | `EnvironmentConfig` + XR `Cluster` + waiter | herda (`hub`/`sandbox`) | alto (EKS ~28-30min) |
+| `hub` | XR `Network` + waiter | `network` | VPC grátis; NAT/EIP por hora |
+| `spoke` | XR `Network` + waiter | `wasp-nonprod` (cross-account) | idem |
+| `cluster` | `EnvironmentConfig` + XR `Cluster` + waiter | herda (`network`/`wasp-nonprod`) | alto (EKS ~28-30min) |
+
+**Nome do chart = papel topológico; `providerConfigName` = conta AWS.** O chart `hub` (par de
+`spoke`) provisiona na conta chamada `network` — são eixos distintos, não sinônimos.
 
 Cada release provisiona **uma célula** da topologia. Ver `charts/README.md` para ordem de
 instalação, pré-requisitos e exemplos.
@@ -33,4 +36,4 @@ deriva os external-names (`<prefix>-<metadata.name>-*`) e o label `environment.e
 ## Regra herdada do PoC
 
 Só ADICIONAR recursos isolados; nunca alterar policy/role compartilhada. `providerConfigName`
-é OBRIGATÓRIO nos XRs (falha-fechado: XR sem ele é rejeitado, não vaza para o hub).
+é OBRIGATÓRIO nos XRs (falha-fechado: XR sem ele é rejeitado, não vaza para a conta `network`).

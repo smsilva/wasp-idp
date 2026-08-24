@@ -14,7 +14,7 @@ metadata:
 spec:
   prefix: {{ .Values.prefix }}
   region: {{ .Values.region }}
-  providerConfigName: {{ required "cluster: informe --set providerConfigName=<hub|sandbox, IGUAL ao do spoke>" .Values.providerConfigName }}
+  providerConfigName: {{ required "cluster: informe --set providerConfigName=<network|wasp-nonprod, IGUAL ao do spoke>" .Values.providerConfigName }}
   nodeGroup:
     instanceType: {{ .Values.nodeGroup.instanceType }}
     desiredSize: {{ .Values.nodeGroup.desiredSize }}

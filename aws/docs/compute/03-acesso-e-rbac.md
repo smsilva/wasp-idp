@@ -70,7 +70,7 @@ K8s), ele precisa de um **kubeconfig com RBAC**:
 - Os `ProviderConfig` de helm/kubernetes apontam para esse Secret → o Crossplane passa a
   aplicar `Release`/`Object` no EKS remoto.
 
-É o mecanismo que faz um Crossplane **fora** da AWS (no hub k3d) gerenciar o **interior** de um
+É o mecanismo que faz um Crossplane **fora** da AWS (no Control Plane (k3d)) gerenciar o **interior** de um
 cluster EKS — coerente com as roles cross-boundary de `../security/`.
 
 ## Well-Architected — porquê

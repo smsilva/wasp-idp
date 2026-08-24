@@ -2,7 +2,7 @@
 EnvironmentConfig consumido pela Composition do Cluster (step function-environment-configs)
 para dar acesso admin (AccessEntry/AccessPolicyAssociation) ao principal crossplaneArn.
 
-Nome FIXO poc-eks-hub-config: a Composition (resources/cluster/composition.yaml) referencia o
+Nome FIXO control-plane-config: a Composition (resources/cluster/composition.yaml) referencia o
 EnvironmentConfig por esse nome (type: Reference), não por label. Não renomear.
 
 crossplaneArn OBRIGATÓRIO — ver comentário em values.yaml (para spoke = role da conta spoke).
@@ -10,8 +10,8 @@ crossplaneArn OBRIGATÓRIO — ver comentário em values.yaml (para spoke = role
 apiVersion: apiextensions.crossplane.io/v1beta1
 kind: EnvironmentConfig
 metadata:
-  name: poc-eks-hub-config
+  name: control-plane-config
   labels:
-    platform.example.com/hub: poc-idp
+    platform.example.com/control-plane: control-plane
 data:
   crossplaneArn: {{ required "cluster: informe --set crossplaneArn=<principal p/ admin no EKS; spoke = role da conta spoke>" .Values.crossplaneArn | quote }}

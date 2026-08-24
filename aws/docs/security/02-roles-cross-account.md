@@ -6,7 +6,7 @@
 
 Num hub-and-spoke multi-account, ações cruzam fronteiras de conta o tempo todo: o Hub
 compartilha o TGW com a conta de projeto (`../network/03`), a automação de uma conta cria um
-attachment que a conta Hub precisa aceitar, uma pipeline central faz deploy em contas de
+attachment que a conta `network` precisa aceitar, uma pipeline central faz deploy em contas de
 workload. O antipadrão é **criar um IAM user em cada conta de destino** — N credenciais de
 longa duração a gerenciar e vazar. O padrão AWS é **uma role assumível**.
 
@@ -75,7 +75,7 @@ correto daquela relação.
 | Hub → projeto (raro) | `<prefix>-hub-reader` (projeto) | automação do Hub | leitura de estado do spoke, se necessário |
 
 O provisionamento do spoke (descentralizado — `../network/03`) usa a role do lado Hub para
-criar o `ResourceShare` e o attachment accepter na conta Hub, assumindo-a a partir da conta
+criar o `ResourceShare` e o attachment accepter na conta `network`, assumindo-a a partir da conta
 de projeto. Sem IAM user duplicado no Hub.
 
 ## Nesta PoC (conta única) ainda não há cross-account

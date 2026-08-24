@@ -49,7 +49,7 @@ resources:
           strategy: string
           string: { fmt: "%s,%s,%s,%s" }   # patch-and-transform não monta array nativamente;
         toFieldPath: spec.subnetIds.clusterCsv  # via string+split, OU trocar por function-kcl
-                                                 # (já instalada no hub) se precisar de array real
+                                                 # (já instalada no Control Plane) se precisar de array real
       # só as 2 privadas para o NodeGroup
       # (mesmo caveat de array acima)
 ```
@@ -60,7 +60,7 @@ resources:
 escalares do composite" — `CombineFromComposite` produz uma STRING (via `fmt`), não uma
 lista YAML. Duas saídas, a decidir na implementação:
 
-1. **Trocar o step do orquestrador para `function-kcl`** (já instalada no hub, usada em
+1. **Trocar o step do orquestrador para `function-kcl`** (já instalada no Control Plane, usada em
    outra parte do repo) — ela monta o array de verdade em código KCL:
    `subnetIds.cluster = [network.status.subnetIds.publicA, ...]`. Mais direto, mas introduz
    uma linguagem a mais só neste orquestrador (hoje ele é patch-and-transform puro).

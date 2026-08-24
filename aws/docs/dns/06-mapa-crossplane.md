@@ -40,12 +40,12 @@ Kinds do `provider-aws-route53`: `Zone` (`route53.aws.upbound.io/v1beta1`), `Rec
   `Zone.status.atProvider.nameServers` (os 4 NS reais), TTL baixo (60).
 - **Wildcard opcional** via `nlbHostname` — só materializa o Record wildcard se o hostname do
   NLB for conhecido; senão cria só Zone + NS (o LB pode não existir no momento da criação).
-- **`canonicalNlbZoneId`** vem do config do hub (EnvironmentConfig `hub-config.yaml`, lido via
+- **`canonicalNlbZoneId`** vem do config do Control Plane (EnvironmentConfig `control-plane-config.yaml`, lido via
   `FromEnvironmentFieldPath`), não hardcoded — junto com `parentHostedZoneId` e `prefix`.
 
-## Config do hub que o `DnsZone` consome
+## Config do Control Plane que o `DnsZone` consome
 
-Do `hub-config.yaml` (EnvironmentConfig na raiz de `resources/`, planejado):
+Do `control-plane-config.yaml` (EnvironmentConfig na raiz de `resources/`, planejado):
 
 | Campo | Papel no DNS |
 |---|---|
@@ -73,8 +73,8 @@ Do `hub-config.yaml` (EnvironmentConfig na raiz de `resources/`, planejado):
    wildcard (condicional a `nlbHostname`).
 3. Compor o `DnsZone` como **filho do Cluster** (o Cluster passa `domain`/`nlbHostname`).
 4. Manter external-dns e o issuer por subzona como estão (complementares).
-5. Validar no hub k3d: dry-run → real (reusar a subzona/zona pai existentes).
+5. Validar no Control Plane (k3d): dry-run → real (reusar a subzona/zona pai existentes).
 
-> Depende do refactor maior de `../network/07` (Cluster vira topo, `hub-config.yaml`, grupo de
+> Depende do refactor maior de `../network/07` (Cluster vira topo, `control-plane-config.yaml`, grupo de
 > API novo). O `DnsZone` é o Gap 3 daquele mapa — este domínio é a especificação de DNS que o
 > alimenta.

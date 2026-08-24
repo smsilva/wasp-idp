@@ -7,7 +7,7 @@ kind: CompositeResourceDefinition
 metadata:
   name: environments.platform.example.com
 spec:
-  # Cluster-scoped: um Environment é a pegada AWS durável de um cluster (hub-owned),
+  # Cluster-scoped: um Environment é a pegada AWS durável de um cluster (control-plane-owned),
   # não pertence a um namespace de app. Espelha o escopo das stacks de infra.
   scope: Cluster
   group: platform.example.com

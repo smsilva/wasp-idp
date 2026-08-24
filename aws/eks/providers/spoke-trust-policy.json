@@ -2,10 +2,10 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AllowHubCrossplaneToAssume",
+      "Sid": "AllowNetworkAccountCrossplaneToAssume",
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::<hub-account-id>:user/crossplane-poc"
+        "AWS": "arn:aws:iam::<network-account-id>:user/crossplane-poc"
       },
       "Action": "sts:AssumeRole"
     }

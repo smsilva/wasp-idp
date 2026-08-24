@@ -15,11 +15,33 @@ Contexto AWS do PoC EKS via Crossplane (ver plano em
 > concretos — **nunca** `<...>` em campo executável. Valores reais desta conta ficam em
 > `CLAUDE.local.md` na raiz do repo (gitignored).
 
+## Vocabulário: três eixos que já se chamaram "hub" (leia antes de qualquer coisa)
+
+A palavra "hub" cobria três coisas independentes neste repo. Dois eixos foram renomeados em
+2026/08/24; só um mantém o termo:
+
+| Eixo | Nome correto | Antes |
+|---|---|---|
+| **Conta AWS** de conectividade | **`network`** — Connectivity Account, OU `Infrastructure`. Canônico no whitepaper *Organizing Your AWS Environment*, no AWS SRA e no Landing Zone Accelerator | "conta hub", profile `hub`, ProviderConfig `hub` |
+| **Papel topológico** de rede | **`hub`** — o único uso legítimo. Par de `spoke`; chart `platform/charts/hub`, VPC hub, TGW | (inalterado) |
+| **Control plane** Crossplane (k3d) | **Control Plane** / `control-plane` — `EnvironmentConfig` `control-plane-config`, label `platform.example.com/control-plane` | "hub k3d", `poc-eks-hub-config` |
+
+**Regra:** "hub" só para topologia de rede. A conta chama-se `network`; o cluster k3d é o
+**Control Plane**.
+
+> **Exceção que NÃO é vocabulário:** o prefixo `poc-idp/` no Secrets Manager
+> (`poc-idp/crossplane-poc-credentials`) é o nome real de um secret na AWS, não um apelido —
+> renomeá-lo quebraria o `load-crossplane-creds`. Fica.
+
 ## Conta AWS
 
-- Conta `<account-id>` (pode **não ser isolada** — assumir que já hospeda infra de outros
-  sistemas: RDS, IAM users provisionados via Terraform etc.). Não assumir que é uma conta
-  dedicada ao poc-idp; só os recursos com prefixo `poc-idp/` ou `crossplane-poc` são nossos.
+- Conta `network` (`<network-account-id>`) — onde vivem o IAM user `crossplane-poc`, o
+  Secrets Manager `poc-idp/*` e a VPC de trabalho enquanto a topologia for de conta única.
+  Pela referência (`docs/accounts/`), automação/tooling moraria numa `shared-services`
+  separada; acumular na `network` é degrau de bootstrap consciente, não o alvo.
+- Ela pode **não ser isolada** — assumir que já hospeda infra de outros sistemas: RDS,
+  IAM users provisionados via Terraform etc. Só os recursos com prefixo `poc-idp/` ou
+  `crossplane-poc` são nossos.
 
 ## IAM user dedicada (Crossplane)
 
@@ -70,11 +92,11 @@ Contexto AWS do PoC EKS via Crossplane (ver plano em
   `aws-sp-credential` — "SP"/Service Principal é termo Azure, não existe em AWS; a
   credencial vem de um IAM user).
 
-## Fluxo de bootstrap do hub (k3d) — ordem dos scripts
+## Fluxo de bootstrap do control plane (k3d) — ordem dos scripts
 
-O hub Crossplane sobe em 4 passos idempotentes (`aws/eks/scripts/`), nesta ordem:
+O control plane Crossplane sobe em 4 passos idempotentes (`aws/eks/scripts/`), nesta ordem:
 
-1. **`install-crossplane`** — cria o cluster k3d `poc-idp` (3 servers) + instala o Crossplane.
+1. **`install-crossplane`** — cria o cluster k3d `control-plane` (3 servers) + instala o Crossplane.
 2. **`install-providers`** — aplica os 8 Providers (`providers/providers-aws.yaml`) e espera `Healthy`.
 3. **`install-functions`** — aplica as 4 Composition Functions (`providers/functions.yaml`:
    patch-and-transform, environment-configs, auto-ready, kcl) e espera `Healthy`. **Pré-requisito
@@ -264,23 +286,24 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   (patch-and-transform etc.) que TODA Composition `mode: Pipeline` exige são instaladas por
   `install-functions` (aplica `providers/functions.yaml`). Rodar sempre os dois.
 
-## Cross-account: EKS/VPC numa conta spoke, não na hub
+## Cross-account: EKS/VPC numa conta spoke, não na `network`
 
 - Pela topologia-alvo (`docs/compute/00-cluster-como-spoke`), a VPC+EKS de um cluster
-  vivem numa conta **spoke**, não na hub (que é só rede/conectividade). O Crossplane roda na
-  hub e provisiona na spoke via **ProviderConfig com `assumeRoleChain`**.
-- Padrão: role `crossplane-<spoke>` na conta spoke com trust p/ `crossplane-poc` da hub +
-  PowerUserAccess + inline IAM (mesma `bootstrap-iam-policy.json`). Nome pela CONTA/escopo
-  (`crossplane-sandbox`), não por função — a role provisiona tudo daquela conta.
-- **ProviderConfigs nomeados por conta** (convenção Upbound/Crossplane): `hub` (credencial
-  direta, `providers/provider-config-hub.yaml`, aplicado por `configure-aws-creds`) e `sandbox`
-  (assumeRoleChain, `providers/provider-config-sandbox.yaml` com `${SPOKE_ACCOUNT_ID}` via
-  envsubst, aplicado por `configure-account-access --name sandbox --account-id <id>`). Sem PC
+  vivem numa conta **spoke**, não na `network` (que é só rede/conectividade). O Crossplane
+  roda no control plane k3d, autentica como o user da `network` e provisiona na spoke via
+  **ProviderConfig com `assumeRoleChain`**.
+- Padrão: role `crossplane-<spoke>` na conta spoke com trust p/ o `crossplane-poc` da conta
+  `network` + PowerUserAccess + inline IAM (mesma `bootstrap-iam-policy.json`). Nome pela
+  CONTA/escopo (`crossplane-wasp-nonprod`), não por função — a role provisiona tudo daquela conta.
+- **ProviderConfigs nomeados por conta** (convenção Upbound/Crossplane): `network` (credencial
+  direta, `providers/provider-config-network.yaml`, aplicado por `configure-aws-creds`) e
+  `wasp-nonprod` (assumeRoleChain, `providers/provider-config-wasp-nonprod.yaml` com `${SPOKE_ACCOUNT_ID}`
+  via envsubst, aplicado por `configure-account-access --name wasp-nonprod --account-id <id>`). Sem PC
   `default` — abandonado de propósito (falha-fechado).
 - XRDs `Network`/`Cluster` têm `spec.providerConfigName` **OBRIGATÓRIO** (sem default; XR sem
-  ele é rejeitado — falha-fechado, não vaza pro hub), enum allowlist `[hub, sandbox]` (ajustar
-  por instância). Cada MR AWS recebe via patchSet `provider-config`; os ProviderConfigs remotos
-  helm/kubernetes (in-cluster) NÃO recebem.
+  ele é rejeitado — falha-fechado, não vaza pra conta `network`), enum allowlist
+  `[network, wasp-nonprod]` (ajustar por instância). Cada MR AWS recebe via patchSet
+  `provider-config`; os ProviderConfigs remotos helm/kubernetes (in-cluster) NÃO recebem.
 - **Identidade = `metadata.name`** (Crossplane v2, sem `spec.id`): deriva external-names
   (`<prefix>-<metadata.name>-*`) e o label `env`. Spoke e cluster que ele hospeda têm o MESMO
   `metadata.name` (casa subnets). Gerar com `eks/scripts/random-id`.
@@ -297,7 +320,7 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 
 - Três charts, **um release por célula** da topologia (substituem o antigo `platform-bootstrap`
   — nome confuso, "bootstrap" já era o setup das contas). `hub` e `spoke` renderizam um XR
-  `Network` (hub=`providerConfigName: hub`; spoke=`sandbox`); `cluster` renderiza
+  `Network` (hub=`providerConfigName: network`; spoke=`wasp-nonprod`); `cluster` renderiza
   `EnvironmentConfig` + XR `Cluster`. Cada release é uma célula independente — uninstall isola
   o blast radius. Ver `aws/platform/charts/README.md` e `aws/platform/CLAUDE.md`.
 - **spoke ≠ cluster:** spoke é célula de rede (pode existir sem cluster / hospedar outros
@@ -308,8 +331,8 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   `.Release.Name` (único → sem colisão cluster-scoped).
 - `--set name=` é a identidade (`metadata.name`); `cluster` exige também `providerConfigName`
   e `crossplaneArn` (`{{ required }}` — falha o render se omitir). **crossplaneArn de cluster
-  no spoke = a role da conta spoke** (`arn:aws:iam::<spoke>:role/crossplane-sandbox`), não o
-  user da hub.
+  no spoke = a role da conta spoke** (`arn:aws:iam::<spoke>:role/crossplane-wasp-nonprod`), não o
+  user da conta `network`.
 - Imagem do waiter: `registry.k8s.io/kubectl:v1.35.7`. **`bitnami/kubectl` não resolve mais
   no Docker Hub** → `ImagePullBackOff` → helm install falha por timeout (mas o Crossplane
   cria a infra mesmo assim — o hook é só barreira observável).

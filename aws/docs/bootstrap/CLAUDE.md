@@ -1,4 +1,4 @@
-# CLAUDE.md — `bootstrap/` (Domínio: Bootstrap Manual da Conta Hub)
+# CLAUDE.md — `bootstrap/` (Domínio: Bootstrap Manual da Conta `network`)
 
 > Índice do domínio de **bootstrap** — o único passo imperativo e não-automatizável desta
 > arquitetura de referência: dar à automação (Crossplane) uma primeira identidade na conta
@@ -6,7 +6,7 @@
 
 ## O que este domínio entrega
 
-O passo **anterior** a tudo o mais: sair de uma conta Hub recém-criada (ver
+O passo **anterior** a tudo o mais: sair de uma conta `network` recém-criada (ver
 `../accounts/03-provisionamento-de-contas.md`) e ter uma identidade de máquina
 (`crossplane-poc`) com exatamente o privilégio que ela precisa para o Crossplane começar a
 provisionar rede (`../network/`) e depois cluster (`../compute/`). É o "galinha-e-ovo" descrito
@@ -20,10 +20,10 @@ grant **uma única vez**, manualmente.
 |---|---|---|---|
 | 0 | [`00-iam-user-crossplane.md`](00-iam-user-crossplane.md) | Criar a IAM user `crossplane-poc`, anexar policies, gerar access key, gravar no Secrets Manager | Security (SEC02) |
 
-## Sequência de construção (conta hub vazia → automação com credencial)
+## Sequência de construção (conta `network` vazia → automação com credencial)
 
 ```text
-① Conta Hub criada, vazia (→ ../accounts/03-provisionamento-de-contas.md)
+① Conta `network` criada, vazia (→ ../accounts/03-provisionamento-de-contas.md)
 ② Admin humano (AdministratorAccess) cria a IAM user crossplane-poc
 ③ Anexa PowerUserAccess (managed) — cobre EC2/VPC/EKS, exclui todo o namespace IAM
 ④ Anexa a inline policy CrossplaneEksRoleManagement (bootstrap-iam-policy.json) — fecha o
@@ -48,7 +48,7 @@ Fica de fora do declarativo por design, não por lacuna a fechar depois.
 ## Relação com o resto do repo
 
 - **Conta que hospeda este bootstrap:** `../accounts/03-provisionamento-de-contas.md` (a
-  conta Hub deve existir antes).
+  conta `network` deve existir antes).
 - **Modelo de identidade e o próprio galinha-e-ovo:** `../security/04-identidade-de-workload.md`
   e `../security/07-mapa-crossplane.md` — este domínio é o passo a passo executável do que
   aqueles tópicos descrevem em teoria.

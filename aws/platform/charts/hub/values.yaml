@@ -8,8 +8,10 @@ name: ""
 prefix: poc-eks
 region: us-east-1
 
-# providerConfigName: conta onde os MRs são criados. hub = conta do crossplane-poc.
-providerConfigName: hub
+# providerConfigName: conta onde os MRs são criados (nome do ProviderConfig = nome da CONTA).
+# "network" = Connectivity Account, onde vive o IAM user crossplane-poc.
+# Não confundir com o nome deste chart: "hub" aqui é o papel TOPOLÓGICO (par de spoke).
+providerConfigName: network
 
 # vpcCidrSecondOctet: N em 10.<N>.0.0/16 (supernet 10.0.0.0/12). N=0 reservado p/ Org.
 # Hub por convenção usa N=1.

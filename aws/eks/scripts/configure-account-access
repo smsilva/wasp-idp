@@ -10,20 +10,20 @@ show_usage() {
 
   Aplica um ProviderConfig cross-account (spoke) no k3d, resolvendo o account-id via envsubst.
   NÃO cria credencial: reusa o Secret aws-iam-credential (assumeRoleChain parte dele). O
-  ProviderConfig "hub" (credencial direta) é aplicado pelo configure-aws-creds, não por aqui.
+  ProviderConfig "network" (credencial direta) é aplicado pelo configure-aws-creds, não aqui.
 
   Lê o template providers/provider-config-<name>.yaml e substitui \${SPOKE_ACCOUNT_ID}.
 
     Options:
 
       -h,  --help              Show this help
-      -n,  --name              Nome do ProviderConfig/spoke (ex.: sandbox) [obrigatório]
+      -n,  --name              Nome do ProviderConfig/spoke (ex.: wasp-nonprod) [obrigatório]
       -a,  --account-id        Account id da conta spoke (12 dígitos)     [obrigatório]
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
 
     Examples:
 
-      ${this_script_name} --name sandbox --account-id 832721568602
+      ${this_script_name} --name wasp-nonprod --account-id 832721568602
 EOF
 }
 
@@ -61,9 +61,9 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 
-: "${name?informe --name (ex.: sandbox)}"
+: "${name?informe --name (ex.: wasp-nonprod)}"
 : "${account_id?informe --account-id (12 dígitos da conta spoke)}"
 
 if [[ ! "${account_id}" =~ ^[0-9]{12}$ ]]; then

@@ -12,12 +12,17 @@ AWS). Aqui é provisionamento contínuo da topologia.
 
 | Chart | O que é | XR(s) | Conta |
 |-------|---------|-------|-------|
-| `hub` | rede de conectividade regional (1 por região) | `Network` (`providerConfigName: hub`) | hub |
-| `spoke` | rede spoke anexada ao hub; **pode** hospedar um cluster ou outros recursos | `Network` (`providerConfigName: sandbox`) | spoke |
+| `hub` | rede de conectividade regional (1 por região) | `Network` (`providerConfigName: network`) | `network` |
+| `spoke` | rede spoke anexada ao hub; **pode** hospedar um cluster ou outros recursos | `Network` (`providerConfigName: wasp-nonprod`) | spoke |
 | `cluster` | EKS que **aterrissa** num spoke | `EnvironmentConfig` + `Cluster` | herda do spoke |
 
 **spoke ≠ cluster:** um spoke é uma célula de rede; um cluster é um workload que aterrissa
 nela. Um spoke existe sem cluster (uninstall do cluster não derruba o spoke).
+
+> **Dois "hub" diferentes — não confundir.** O chart `hub` é o **papel topológico** (par de
+> `spoke`, hub-and-spoke). O `providerConfigName: network` é a **conta AWS** de destino
+> (`network`, Connectivity Account, OU `Infrastructure` — nome canônico do whitepaper AWS).
+> Chart `hub` ≠ conta `network`; um é topologia, o outro é onde os MRs nascem.
 
 ## Identidade (`--set name=`)
 
@@ -29,11 +34,11 @@ que ele consome DEVEM ter o mesmo `name`** — é o label que casa as subnets. G
 ID=$(aws/eks/scripts/random-id)     # ex.: ha13c
 ```
 
-## Pré-requisitos (bootstrap do hub, uma vez)
+## Pré-requisitos (bootstrap do control plane, uma vez)
 
 1. Crossplane no k3d + providers + functions (`../../eks/scripts/install-*`).
-2. `configure-aws-creds` → Secret `aws-iam-credential` + ProviderConfig `hub`.
-3. `configure-account-access --name sandbox --account-id <id>` → ProviderConfig `sandbox`
+2. `configure-aws-creds` → Secret `aws-iam-credential` + ProviderConfig `network`.
+3. `configure-account-access --name wasp-nonprod --account-id <id>` → ProviderConfig `wasp-nonprod`
    (cross-account, assumeRoleChain).
 4. XRDs + Compositions aplicados (`../../eks/resources/{network,cluster}/`).
 
@@ -44,7 +49,7 @@ ID=$(aws/eks/scripts/random-id)     # ex.: ha13c
 helm install hub-us-east-1 aws/platform/charts/hub \
   --namespace crossplane-system --set name=hub-us-east-1
 
-# spoke (rede na conta sandbox) — nome aleatório
+# spoke (rede na conta wasp-nonprod) — nome aleatório
 ID=$(aws/eks/scripts/random-id)
 helm install spoke-$ID aws/platform/charts/spoke \
   --namespace crossplane-system --set name=$ID
@@ -52,8 +57,8 @@ helm install spoke-$ID aws/platform/charts/spoke \
 # cluster (EKS aterrissando no spoke) — MESMO name do spoke. CUSTO ALTO, ~28-30 min.
 helm install cluster-$ID aws/platform/charts/cluster \
   --namespace crossplane-system --set name=$ID \
-  --set providerConfigName=sandbox \
-  --set crossplaneArn=arn:aws:iam::<sandboxAccountId>:role/crossplane-sandbox
+  --set providerConfigName=wasp-nonprod \
+  --set crossplaneArn=arn:aws:iam::<spokeAccountId>:role/crossplane-wasp-nonprod
 ```
 
 Cluster longo (~30 min): rodar em background (o helm bloqueia no waiter). O Crossplane
@@ -61,9 +66,9 @@ continua reconciliando mesmo se o `helm install` for interrompido.
 
 ## ⚠️ Gotcha: `crossplaneArn` de um cluster no spoke
 
-É a **role assumida na conta spoke** (`arn:aws:iam::<sandboxAccount>:role/crossplane-sandbox`),
-**não** o user da hub. O `ClusterAuth` gera o kubeconfig autenticando como essa role (via
-`providerConfigName: sandbox` → assumeRoleChain), então é ela que precisa do `AccessEntry`
+É a **role assumida na conta spoke** (`arn:aws:iam::<spokeAccount>:role/crossplane-wasp-nonprod`),
+**não** o user da conta `network`. O `ClusterAuth` gera o kubeconfig autenticando como essa role (via
+`providerConfigName: wasp-nonprod` → assumeRoleChain), então é ela que precisa do `AccessEntry`
 admin. ARN errado → a ponte Crossplane→EKS (provider-helm/kubernetes) não alcança o cluster.
 
 ## Teardown

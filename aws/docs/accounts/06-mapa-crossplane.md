@@ -6,7 +6,7 @@ instância de Crossplane que gerencia as spokes — motivo abaixo.
 
 ## Por que "bootstrap de conta" é uma camada diferente de "provisionar dentro da conta"
 
-O Crossplane hospedado no hub k3d desta PoC (`../../CLAUDE.md`, `../../eks/`) autentica com
+O Crossplane hospedado no Control Plane (k3d) desta PoC (`../../CLAUDE.md`, `../../eks/`) autentica com
 credenciais de **uma** conta AWS (`crossplane-poc`). Ele pode gerenciar recursos
 **dentro** dessa conta (e, com roles cross-account assumíveis, dentro de outras já
 existentes) — mas ele **não pode criar a própria conta em que vai rodar**, nem a
@@ -35,7 +35,7 @@ gerência) pode reconciliar:
   `Network`/`Cluster` fazem hoje para rede/EKS.
 - `OrganizationalUnit`, `Policy` (SCP) — versionar guardrails como código.
 
-**Não confundir com o Crossplane do hub k3d desta PoC** — seria uma instância/provider
+**Não confundir com o Crossplane do Control Plane (k3d) desta PoC** — seria uma instância/provider
 **separado**, rodando com credenciais da conta de gerência, não da `crossplane-poc`
 (que vive dentro de uma conta-membro, não na gerência).
 
@@ -45,7 +45,7 @@ gerência) pode reconciliar:
 |---|---|---|
 | Organization própria | ❌ não existe — conta única, sem Organizations habilitado | Organization com `feature-set ALL` |
 | OUs / SCPs | ❌ não existem | Security + Infrastructure + Workloads (mínimo), guardrails de região/root/IMDSv2 |
-| Conta Hub dedicada | ❌ não existe — a conta única acumula tudo | Conta própria, só recursos de `../network/` do Hub |
+| Conta `network` dedicada | ❌ não existe — a conta única acumula tudo | Conta própria, só recursos de `../network/` do Hub |
 | Conta por projeto | ❌ não existe — o PoC roda tudo numa conta compartilhada com outros sistemas (`<account-id>`, ver `../../CLAUDE.md`) | 1 conta por projeto |
 | IAM Identity Center | não documentado nesta PoC (uso de SSO já existe no dia a dia, mas fora do escopo do repo) | Permission sets nomeados por função, atribuídos por conta |
 | `provider-aws-organizations` no Crossplane | ❌ não instalado em lugar nenhum | Instância separada, rodando na conta de gerência |
@@ -60,7 +60,7 @@ gerência) pode reconciliar:
 3. Criar OUs Security/Infrastructure/Workloads (tópico 1) + SCPs baseline (tópico 2).
 4. `create-account` para a conta network (tópico 3) → mover para OU Infrastructure.
 5. Configurar IAM Identity Center + permission sets (tópico 4).
-6. Dentro da conta network: instalar o Crossplane/hub k3d **desta** PoC (ou uma instância
+6. Dentro da conta network: instalar o Crossplane/Control Plane (k3d) **desta** PoC (ou uma instância
    equivalente) e seguir `../network/07-mapa-crossplane.md` para provisionar TGW/VPN.
 7. Por projeto: `create-account` → mover para OU Workloads → provisionar spoke
    (`../network/`).

@@ -25,7 +25,7 @@ show_usage() {
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
       -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
            --keep-cluster      Preserva o k3d local (só remove os MRs AWS)
            --yes-destroy       OBRIGATÓRIO: confirma a destruição real dos recursos AWS
@@ -85,7 +85,7 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 
 # Guarda de segurança: teardown é destrutivo e irreversível, e o ambiente costuma ser
 # reaproveitado (EKS ~28-30 min para recriar). Recusa sem confirmação explícita. Não

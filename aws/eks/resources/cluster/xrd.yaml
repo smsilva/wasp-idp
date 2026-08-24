@@ -42,16 +42,17 @@ spec:
                 providerConfigName:
                   type: string
                   description: >-
-                    Nome do ProviderConfig AWS que os MRs de IAM/EKS usam. "hub" cria na conta
-                    do crossplane-poc (hub); "sandbox" (assumeRoleChain) cria na conta spoke.
+                    Nome do ProviderConfig AWS que os MRs de IAM/EKS usam = nome da CONTA de
+                    destino. "network" cria na conta do crossplane-poc (Connectivity Account);
+                    "wasp-nonprod" (assumeRoleChain) cria na conta spoke.
                     DEVE bater com o providerConfigName do Network de mesmo metadata.name.
                     Não afeta os ProviderConfigs remotos helm/kubernetes (in-cluster).
                     OBRIGATÓRIO (sem default): um XR sem este campo é rejeitado — falha-fechado.
                     O enum é o ALLOWLIST de ProviderConfigs desta instância (defense-in-depth);
                     ajustar a lista ao adotar em outra conta/instância.
                   enum:
-                    - hub
-                    - sandbox
+                    - network
+                    - wasp-nonprod
                 nodeGroup:
                   type: object
                   description: Configuração do NodeGroup gerenciado.

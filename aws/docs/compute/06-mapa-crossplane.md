@@ -45,7 +45,7 @@ Pontos de design decididos:
   materializa Zone + NS + wildcard.
 - **`nodeGroups[]` shape de lista** já no schema, `[0]` implementado (evita 2ª migração —
   `../compute/01`).
-- **Config do hub** (`hub-config.yaml`, EnvironmentConfig na raiz): `crossplaneArn`, `prefix`,
+- **Config do Control Plane** (`control-plane-config.yaml`, EnvironmentConfig na raiz): `crossplaneArn`, `prefix`,
   `parentHostedZoneId`, `canonicalNlbZoneId` — lidos via `FromEnvironmentFieldPath`.
 
 ## Estado atual do PoC vs. alvo
@@ -71,7 +71,7 @@ Pontos de design decididos:
 3. Remover o **`Environment`** (`environment/{xrd,composition,environmentconfig}.yaml`) — Gap 4.
 4. **Rename** do campo no `ArgoCDInstance` (`environmentConnectionSecretRef` →
    `clusterConnectionSecretRef`).
-5. Validar no hub k3d: dry-run → real (reusar a `Network net01` existente — não reprovisionar).
+5. Validar no Control Plane (k3d): dry-run → real (reusar a `Network net01` existente — não reprovisionar).
 6. **Futuro** (mapeado, não agora): fan-out de N node groups (function-kcl); Karpenter;
    endpoint privado; attachment/RAM ao TGW (`../network/07`, Gap 2).
 

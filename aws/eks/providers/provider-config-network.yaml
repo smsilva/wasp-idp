@@ -1,0 +1,17 @@
+---
+# ProviderConfig "network": credencial direta do IAM user crossplane-poc, que vive na conta
+# `network` (Connectivity Account, OU Infrastructure — nome canônico do whitepaper AWS).
+# Recursos que referenciarem providerConfigName: network são criados NESSA conta. Aplicado
+# pelo configure-aws-creds (junto com o Secret aws-iam-credential).
+# NÃO confundir com "hub" topológico (hub-and-spoke / chart platform/charts/hub).
+apiVersion: aws.upbound.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: network
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: aws-iam-credential
+      key: creds

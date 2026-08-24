@@ -2,7 +2,7 @@
 # Provisiona EKS + IAM + NodeGroup + ponte (14 MRs), CONSUMINDO a rede de um Network com o
 # MESMO metadata.name (as subnets são casadas por label environment.example.com/env=<metadata.name>).
 #
-# PRÉ-REQUISITO: um Network com metadata.name igual ao daqui já Ready no hub (ex.: net01). Sem
+# PRÉ-REQUISITO: um Network com metadata.name igual ao daqui já Ready no Control Plane (ex.: net01). Sem
 # ele, o EKS Cluster/NodeGroup ficam esperando o selector resolver (nenhuma subnet casa).
 #
 # ⚠️ EKS REAL: ~28-30 min, custo control plane (~$0.10/h) + 3×t3.medium + usa o NAT do Network.
@@ -12,5 +12,5 @@ kind: Cluster
 metadata:
   name: net01           # DEVE bater com o metadata.name do Network (casa as subnets por label)
 spec:
-  providerConfigName: hub   # DEVE bater com o providerConfigName do Network de mesmo metadata.name
+  providerConfigName: network   # DEVE bater com o providerConfigName do Network de mesmo metadata.name
   # prefix (poc-eks), region (us-east-1), nodeGroup (t3.medium 3/3/4): defaults do XRD.

@@ -12,8 +12,9 @@
 Descrever, passo a passo, como sair de uma **conta AWS totalmente vazia** e chegar a uma
 topologia **hub-and-spoke** oficial e segura, na qual:
 
-1. Uma **conta AWS dedicada ao Hub** (Connectivity Account) concentra os recursos
-   compartilhados de rede — Transit Gateway, VPNs de acesso, roteamento central.
+1. Uma **conta AWS dedicada**, chamada **`network`** (Connectivity Account), concentra os
+   recursos compartilhados de rede — Transit Gateway, VPNs de acesso, roteamento central.
+   Ela hospeda o **Hub** da topologia.
 2. Cada **projeto ganha sua própria conta AWS** (isolamento de blast radius e billing).
 3. Cada **cluster entra como uma nova spoke** — uma VPC attachada ao TGW do Hub, com
    route table dedicada e isolamento por tenant.
@@ -32,6 +33,22 @@ por qualquer time.
 | **Agnóstico ao ambiente** | O corpo da doc usa **placeholders** (`<hub-cidr>`, `<root-domain>`, `<asn>`) — ninguém precisa dos valores reais de uma organização específica para reusar a referência. |
 | **Nunca alterar config compartilhada** | Só ADICIONAR recursos isolados. Regra herdada do PoC (ver `../../CLAUDE.md`). |
 
+## Vocabulário: "Hub" é topologia; `network` é conta
+
+Distinção deliberada, e a fonte de confusão mais cara desta doc:
+
+| Termo | O que é | Nunca é |
+|---|---|---|
+| **Hub** | Papel **topológico** — a VPC/TGW que concentra o tráfego. Par de *spoke*. Pode haver um Hub por região | Nome de conta |
+| **`network`** | Nome da **conta AWS** (Connectivity Account), na OU `Infrastructure`. Hospeda o(s) Hub(s) | Nome de topologia |
+
+`network` é o nome canônico em todas as referências AWS: o whitepaper *Organizing Your AWS
+Environment Using Multiple Accounts* ("Network account"), o AWS SRA, e o Landing Zone
+Accelerator (conta literalmente `Network`). A AWS **não** nomeia contas como "Hub".
+
+Nos artefatos: `providerConfigName` = nome da **conta** (`network`, `wasp-nonprod`); nome de chart
+Helm = **papel topológico** (`hub`, `spoke`). O chart `hub` provisiona na conta `network`.
+
 ## Como esta documentação é organizada
 
 - **Uma subpasta por domínio.** Cada uma tem um `CLAUDE.md` que indexa seus tópicos.
@@ -47,9 +64,9 @@ por qualquer time.
 
 | # | Domínio | Índice | Estado |
 |---|---|---|---|
-| 0 | **Bootstrap** — conta hub vazia → IAM user da automação com credencial | [`bootstrap/CLAUDE.md`](bootstrap/CLAUDE.md) | ✅ completo |
+| 0 | **Bootstrap** — conta `network` vazia → IAM user da automação com credencial | [`bootstrap/CLAUDE.md`](bootstrap/CLAUDE.md) | ✅ completo |
 | 1 | **Network** — hub-and-spoke, VPC/subnets, TGW, VPN, DNS, CIDR | [`network/CLAUDE.md`](network/CLAUDE.md) | ✅ completo |
-| 2 | **Accounts & Organizations** — conta vazia → hub → contas por projeto | [`accounts/CLAUDE.md`](accounts/CLAUDE.md) | ✅ completo |
+| 2 | **Accounts & Organizations** — conta vazia → `network` → contas por projeto | [`accounts/CLAUDE.md`](accounts/CLAUDE.md) | ✅ completo |
 | 3 | **Security & IAM** — perímetro de identidade, menor privilégio, roles cross-account, RAM, Pod Identity, VPN auth, detecção | [`security/CLAUDE.md`](security/CLAUDE.md) | ✅ completo |
 | 4 | **DNS** — zonas públicas/privadas, delegação, alias/apex/wildcard, resolução cross-account, external-dns + TLS | [`dns/CLAUDE.md`](dns/CLAUDE.md) | ✅ completo |
 | 5 | **Compute** — EKS como spoke, node groups, add-ons + Pod Identity, RBAC, ingress, GitOps | [`compute/CLAUDE.md`](compute/CLAUDE.md) | ✅ completo |

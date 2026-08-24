@@ -14,7 +14,7 @@ show_usage() {
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
       -t,  --timeout           Timeout de espera por provider (default: 300s)
 
     Examples:
@@ -22,7 +22,7 @@ show_usage() {
       ${this_script_name}
 
       ${this_script_name} \\
-        --cluster-name poc-idp \\
+        --cluster-name control-plane \\
         --timeout 300s
 EOF
 }
@@ -56,7 +56,7 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 timeout="${timeout:-300s}"
 
 set -e

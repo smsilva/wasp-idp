@@ -1,6 +1,6 @@
 # Claim de exemplo do Environment — primeiro spoke da fatia walk-skeleton.
 # Pré-requisito de apply: aws/eks/resources/environment/environmentconfig.yaml já aplicado
-# no hub (crossplaneArn) e a function-environment-configs instalada
+# no Control Plane (crossplaneArn) e a function-environment-configs instalada
 # (.claude/skills/kubernetes/assets/crossplane/packages/values-functions.yaml).
 #
 # model-02 no Crossplane v2 (ver argocd/xrd.yaml + docs/superpowers/specs/

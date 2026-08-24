@@ -16,7 +16,7 @@ show_usage() {
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
       -i,  --cluster-id        clusterId (default: reusa aws/eks/.cluster-id ou gera)
 
     Examples:
@@ -24,7 +24,7 @@ show_usage() {
       ${this_script_name}
 
       ${this_script_name} \\
-        --cluster-name poc-idp
+        --cluster-name control-plane
 
       ${this_script_name} \\
         --cluster-id abc12
@@ -60,7 +60,7 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 
 set -e
 
@@ -300,7 +300,7 @@ kubectl --context "${context}" wait "release.helm.crossplane.io/${full}-istio-ga
   --for=condition=Ready --timeout=600s
 
 # Fase 19a — Wildcard A-alias *.<sub-zona> -> NLB. Alvo = hostname do NLB que o Service do
-# ingressgateway (fase 98) materializou. O Service vive no EKS REMOTO, não no hub k3d
+# ingressgateway (fase 98) materializou. O Service vive no EKS REMOTO, não no Control Plane (k3d)
 # (${context}) — precisa de um contexto kubectl próprio para o EKS. As creds do Crossplane
 # já exportadas têm cluster-admin (AccessEntry da fase 72), então usamos
 # `aws eks update-kubeconfig` com um ALIAS próprio (não conflita com o contexto `${full}`

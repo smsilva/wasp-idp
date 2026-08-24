@@ -96,11 +96,11 @@ Decisão: o `Cluster` vira o **CR de topo** (sem `Environment` por cima);
 (`Cluster.spec.networkRef.name`) com patch cross-XR direto, sem label/selector. O
 `Environment` (`environment/{xrd,composition,environmentconfig}.yaml`) sai desta fatia.
 
-## Config compartilhada do hub (EnvironmentConfig)
+## Config compartilhada do Control Plane (EnvironmentConfig)
 
-Valores do hub que a Composition lê (não hardcode): `crossplaneArn`, `prefix`,
+Valores do Control Plane que a Composition lê (não hardcode): `crossplaneArn`, `prefix`,
 `parentHostedZoneId`, `canonicalNlbZoneId`. Vivem num EnvironmentConfig na raiz de
-`resources/` (`hub-config.yaml`, planejado) — o Cluster os lê via `FromEnvironmentFieldPath`.
+`resources/` (`control-plane-config.yaml`, planejado) — o Cluster os lê via `FromEnvironmentFieldPath`.
 Valores reais no apêndice.
 
 ## Ordem de implementação sugerida (quando sair do design)
@@ -110,5 +110,5 @@ Valores reais no apêndice.
 2. `Cluster`: virar topo, `networkRef.name`, `domain`, `nodeGroups[0]`, compor `DnsZone`.
 3. `DnsZone`: XR novo (Gap 3).
 4. Remover `environment/` (Gap 4); renomear campo no `argocd/`.
-5. Validar no hub k3d: dry-run → real (reusar a VPC de teste existente).
+5. Validar no Control Plane (k3d): dry-run → real (reusar a VPC de teste existente).
 6. **Futuro** (mapeado, não agora): `HubNetwork` + attachment/RAM (Gap 2).

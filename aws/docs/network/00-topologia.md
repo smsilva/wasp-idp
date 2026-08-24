@@ -87,7 +87,7 @@ A tabela acima já diz "1 (por região, se multi-região)" — vale explicitar o
 
 - **TGW é um recurso regional.** Não existe TGW global — cada região precisa do seu
   próprio hub (VPC hub + TGW), mesmo que a conta de Connectivity seja global e única. A
-  hierarquia real é `Conta Hub → { Hub região A, Hub região B, ... }`, não um TGW único
+  hierarquia real é `conta network → { Hub região A, Hub região B, ... }`, não um TGW único
   atravessando regiões.
 - **Não centralizar num hub único global.** Um spoke em `eu-west-1` roteando por um TGW em
   `us-east-1` faz *hairpin*: o tráfego sai da região de origem, atravessa o backbone

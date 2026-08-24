@@ -13,7 +13,7 @@ show_usage() {
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
       -p,  --api-port          Porta da API do k3d (default: 6551)
       -s,  --servers           Número de servers do k3d (default: 3)
       -v,  --crossplane-version
@@ -26,7 +26,7 @@ show_usage() {
       ${this_script_name}
 
       ${this_script_name} \\
-        --cluster-name poc-idp \\
+        --cluster-name control-plane \\
         --servers 3 \\
         --crossplane-version 2.3.1
 
@@ -85,7 +85,7 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 api_port="${api_port:-6551}"
 servers="${servers:-3}"
 crossplane_version="${crossplane_version:-2.3.1}"

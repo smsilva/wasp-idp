@@ -10,7 +10,7 @@
 #
 # Namespaced (não cluster-scoped): o claim vive no namespace do time/cliente -> listagem
 # por tenant + RBAC por namespace de graça. Os filhos (infra AWS durável) continuam
-# cluster-scoped/hub-owned, compostos internamente e NÃO claimáveis por clientes.
+# cluster-scoped/control-plane-owned, compostos internamente e NÃO claimáveis por clientes.
 apiVersion: platform.example.com/v1alpha1
 kind: Environment
 metadata:

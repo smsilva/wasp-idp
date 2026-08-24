@@ -5,24 +5,24 @@ segredos).
 
 ## Pré-requisitos
 
-- Conta Hub já criada (`../accounts/03-provisionamento-de-contas.md`) e você com acesso
-  **`AdministratorAccess`** **na própria conta Hub** (não a `crossplane-poc` — ela ainda
+- Conta `network` já criada (`../accounts/03-provisionamento-de-contas.md`) e você com acesso
+  **`AdministratorAccess`** **na própria conta `network`** (não a `crossplane-poc` — ela ainda
   não existe). Sem isso os passos ③ e ⑤ abaixo falham com `AccessDenied`. Há dois caminhos
   para obter esse admin, dependendo do estágio do Identity Center:
 
-  - **(a) Permission set SSO atribuído à conta Hub** (estado-alvo): `aws sso login --profile
-    <hub-profile>` e pronto — a identidade vira `assumed-role/AWSReservedSSO_*`. Requer que
-    o Identity Center já tenha uma atribuição para a conta Hub (ver
+  - **(a) Permission set SSO atribuído à conta `network`** (estado-alvo): `aws sso login --profile
+    <network-profile>` e pronto — a identidade vira `assumed-role/AWSReservedSSO_*`. Requer que
+    o Identity Center já tenha uma atribuição para a conta `network` (ver
     `../accounts/04-acesso-cross-account.md`).
 
   - **(b) Cross-account via `OrganizationAccountAccessRole`** (o que vale enquanto o SSO
     **ainda não foi propagado** para a conta-membro — caso comum logo após criar a conta).
-    A conta Hub nasce com essa role assumível a partir da management account; a forma
+    A conta `network` nasce com essa role assumível a partir da management account; a forma
     reutilizável pela CLI é um **named profile** em `~/.aws/config` que a assume:
 
     ```ini
-    [profile hub]
-    role_arn = arn:aws:iam::<hub-account-id>:role/OrganizationAccountAccessRole
+    [profile network]
+    role_arn = arn:aws:iam::<network-account-id>:role/OrganizationAccountAccessRole
     source_profile = <management-profile>   # profile SSO admin da management account
     role_session_name = bootstrap-crossplane-poc
     region = us-east-1
@@ -31,14 +31,14 @@ segredos).
     O `<management-profile>` precisa de sessão SSO ativa (`aws sso login --profile
     <management-profile>`). Detalhe do padrão em `../accounts/04-acesso-cross-account.md`.
 
-- `aws` CLI apontando para a conta Hub. **Confirme antes de qualquer passo abaixo:**
+- `aws` CLI apontando para a conta `network`. **Confirme antes de qualquer passo abaixo:**
 
   ```bash
-  export AWS_PROFILE=hub          # ou o profile do caminho (a)
-  aws sts get-caller-identity     # Account deve ser o <hub-account-id>
+  export AWS_PROFILE=network      # ou o profile do caminho (a)
+  aws sts get-caller-identity     # Account deve ser o <network-account-id>
   ```
 
-  Todos os comandos das etapas seguintes assumem `AWS_PROFILE` já apontando para a Hub —
+  Todos os comandos das etapas seguintes assumem `AWS_PROFILE` já apontando para a `network` —
   errar a conta aqui cria a IAM user no lugar errado (ex.: na management account).
 
 - `aws/eks/providers/bootstrap-iam-policy.json` já versionado neste repo (fonte de
@@ -83,7 +83,7 @@ amplo por fora — investigar antes de seguir (não é o desenho esperado).
 ## ④ Anexar a inline policy `CrossplaneEksRoleManagement`
 
 Usa o JSON já versionado no repo — ele é a **fonte de verdade** do estado desejado; este
-comando só a aplica. Substituir `<account-id>` pelo ID real da conta Hub (o arquivo em
+comando só a aplica. Substituir `<account-id>` pelo ID real da conta `network` (o arquivo em
 disco mantém o placeholder — não editá-lo, sed só no comando ou via `--policy-document`
 processado):
 

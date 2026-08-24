@@ -9,7 +9,7 @@ decidido no brainstorm `docs/superpowers/specs/2026-08-13-environment-abstracao-
 
 ## Topologia (resumo)
 
-- **HUB** (k3d `k3d-poc-idp` hoje → EKS de management depois): roda o Crossplane que provisiona
+- **CONTROL PLANE** (k3d `k3d-control-plane` hoje → EKS de management depois): roda o Crossplane que provisiona
   a pegada AWS durável (EKS, VPC, IAM, Route53 subzona+NS) e faz bootstrap do ArgoCD no spoke.
 - **SPOKE** (cada Environment): o cluster EKS provisionado; roda ArgoCD (delivery) e, depois,
   Crossplane-no-spoke (AWS do time). Ver o brainstorm para o desenho completo.
@@ -31,7 +31,7 @@ difícil do ADR). O único Release é o ArgoCD (não depende de Pod Identity).
 | `cluster/xrd.yaml` | XRD `Cluster` — EKS+IAM+ponte (id, prefix, region, nodeGroup; status clusterName/Arn/oidc/kubeconfigSecret) |
 | `cluster/composition.yaml` | 14 MRs: 2 Role + 4 RPA, EKS, NodeGroup, ClusterAuth, AccessEntry+APA, 2 PC remotos |
 | `environment/xrd.yaml` | XRD `Environment` — contrato externo (id, prefix, region, domain, nodeGroup); status agrega vpcId+clusterName |
-| `environment/environmentconfig.yaml` | `EnvironmentConfig` do hub (crossplaneArn) — aplicar 1x, antes do 1º claim; consumido pelo `Cluster` |
+| `environment/environmentconfig.yaml` | `EnvironmentConfig` do Control Plane (crossplaneArn) — aplicar 1x no Control Plane, antes do 1º claim; consumido pelo `Cluster` |
 | `environment/composition.yaml` | **orquestrador fino**: compõe `Network` + `Cluster` (XR-compõe-XR), repassa id/prefix/region/nodeGroup, agrega status |
 | `argocd/xrd.yaml` | XRD `ArgoCDInstance` — satélite par (model-02) que referencia o Environment |
 | `argocd/composition.yaml` | cria PC helm próprio do connection secret + Release ArgoCD. Etapa 2 (Usage/model-04) pendente |
@@ -74,7 +74,7 @@ design* + *API-first contracts*.
 
 - **`crossplaneArn` sem `--set` — DECIDIDO (b):** a AccessEntry/APA de Crossplane (fase 72) exige
   o ARN do IAM user do Crossplane. No chart faseado vinha por `--set crossplaneArn=...`; numa
-  Composition NÃO há `--set`. Optamos por **(b) `EnvironmentConfig` do hub**
+  Composition NÃO há `--set`. Optamos por **(b) `EnvironmentConfig` do Control Plane**
   (`environment/environmentconfig.yaml`, aplicado uma vez, fora de qualquer claim), injetado no
   pipeline via o step `function-environment-configs` e consumido pelos MRs
   `access-entry-crossplane`/`access-admin-crossplane` com `FromEnvironmentFieldPath`. Trade-off
@@ -83,7 +83,7 @@ design* + *API-first contracts*.
   adicionada em `.claude/skills/kubernetes/assets/crossplane/packages/values-functions.yaml`) —
   compensado por não repetir o ARN em cada claim `Environment` (útil se/quando existir mais de um
   hub ou id provisionado). **Pré-requisito de apply:** `kubectl apply -f
-  environment/environmentconfig.yaml` no hub ANTES do primeiro claim.
+  environment/environmentconfig.yaml` no Control Plane ANTES do primeiro claim.
 - **Refs entre MRs:** `matchControllerRef: true` + `matchLabels` (label
   `environment.example.com/role: <papel>` em cada MR) — idiomático em Composition, dispensa
   os nomes `<full>-<sufixo>` frágeis do chart faseado. Naming determinístico via
@@ -114,4 +114,4 @@ Environment: `env01`.
   remoto. **Falta:** etapa 2 (Usage/model-04, teardown gracioso).
 
 **Cadeia validada:** 1 CR `Environment` → cluster EKS + ponte → 1 CR `ArgoCDInstance` → ArgoCD
-no spoke. Bootstrap do hub: ver `CLAUDE.md` da raiz (seção "Hub k3d para teste AWS").
+no spoke. Bootstrap do Control Plane: ver `CLAUDE.md` da raiz.

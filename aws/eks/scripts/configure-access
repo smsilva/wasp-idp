@@ -12,12 +12,12 @@ show_usage() {
   kubeconfig do EKS e valida 'kubectl get nodes'. Fecha o walk skeleton.
 
   ATENÇÃO: 'aws eks update-kubeconfig' MUDA o contexto kubectl ativo para o EKS.
-  Ao final o script volta o contexto para k3d-poc-idp.
+  Ao final o script volta o contexto para k3d-control-plane.
 
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: poc-idp)
+      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
       -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
 
     Examples:
@@ -58,7 +58,7 @@ done
 
 if [[ "${1}" == '--' ]]; then shift; fi
 
-cluster_name="${cluster_name:-poc-idp}"
+cluster_name="${cluster_name:-control-plane}"
 
 set -e
 

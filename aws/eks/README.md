@@ -176,7 +176,7 @@ confirmar que `kubectl get managed` ficou vazio, e só então destruir o k3d —
 
 - **Contexto vira EKS após `update-kubeconfig`.** `configure-access` roda
   `aws eks update-kubeconfig`, que **muda o contexto kubectl ativo** para o EKS; o
-  script volta sozinho para `k3d-poc-idp` ao final. Operar o Crossplane apontando
+  script volta sozinho para `k3d-control-plane` ao final. Operar o Crossplane apontando
   para o EKS não funciona — sempre confirme `kubectl config current-context`.
 - **Contexts órfãos no kubeconfig após o teardown.** `update-kubeconfig` deixa dois
   contexts (`poc-eks-<id>` e o ARN completo) que o `teardown` **não** remove. Limpe
@@ -292,7 +292,7 @@ aws iam get-role --role-name "${full}-ebs-csi-role" \
   --query 'Role.AssumeRolePolicyDocument.Statement[0].Principal.Service' --output text
 
 # MRs Ready no Crossplane
-kubectl --context k3d-poc-idp get managed | grep -E 'addon|podidentity|ebs-csi'
+kubectl --context k3d-control-plane get managed | grep -E 'addon|podidentity|ebs-csi'
 ```
 
 ## external-secrets (ESO) + Secrets Manager (fatia 2)
@@ -349,7 +349,7 @@ aws secretsmanager create-secret --name poc-eks/smoke \
   --secret-string '{"token":"h11-smoke-ok"}' --region us-east-1
 
 # 1. Release Ready + pods Running
-kubectl --context k3d-poc-idp get release "${full}-external-secrets"
+kubectl --context k3d-control-plane get release "${full}-external-secrets"
 kubectl --context "<eks-ctx>" -n external-secrets get pods
 
 # 2. ClusterSecretStore Valid
@@ -462,7 +462,7 @@ configurá-las via um `Ingress` separado.
 id="$(cat aws/eks/.cluster-id)"; full="poc-eks-${id}"
 
 # 1. AWS Load Balancer Controller Ready + NLB provisionado para o istio-ingressgateway
-kubectl --context k3d-poc-idp get release "${full}-alb-controller" "${full}-istio-gateway"
+kubectl --context k3d-control-plane get release "${full}-alb-controller" "${full}-istio-gateway"
 kubectl --context "<eks-ctx>" -n istio-ingress get svc -o wide   # EXTERNAL-IP = DNS do NLB
 aws elbv2 describe-load-balancers --region us-east-1 \
   --query "LoadBalancers[?Type=='network'].{Name:LoadBalancerName,DNS:DNSName,Scheme:Scheme}"

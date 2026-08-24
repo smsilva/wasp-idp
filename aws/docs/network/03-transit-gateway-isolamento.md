@@ -49,10 +49,10 @@ Spoke A quer falar com Spoke B?
 
 Para uma VPC de outra account attachar-se ao TGW do Hub, o TGW precisa ser compartilhado
 com aquela account via **Resource Access Manager (RAM)**. Modelo adotado: **descentralizado**
-— o próprio provisionamento do spoke cria o RAM share na conta Hub, com escopo limitado à
+— o próprio provisionamento do spoke cria o RAM share na conta `network`, com escopo limitado à
 account daquele tenant.
 
-- `ResourceShare` — `ram-share-tgw-<region>-<tenant>` na conta Hub
+- `ResourceShare` — `ram-share-tgw-<region>-<tenant>` na conta `network`
 - `ResourceAssociation` — associa o TGW ao share
 - `PrincipalAssociation` — associa o account ID do spoke ao share
 - `allowExternalPrincipals=false` — só contas da mesma Organization aceitam

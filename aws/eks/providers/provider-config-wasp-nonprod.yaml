@@ -1,7 +1,8 @@
 ---
-# ProviderConfig cross-account "sandbox": mesma credencial base do crossplane-poc (hub), mas
-# assume a role crossplane-sandbox na conta spoke via STS (assumeRoleChain). Recursos que
-# referenciarem providerConfigName: sandbox são criados NA CONTA SPOKE, não na hub.
+# ProviderConfig cross-account "wasp-nonprod": mesma credencial base do crossplane-poc (que vive na
+# conta `network`), mas assume a role crossplane-wasp-nonprod na conta spoke via STS
+# (assumeRoleChain). Recursos que referenciarem providerConfigName: wasp-nonprod são criados NA CONTA
+# SPOKE, não na `network`.
 #
 # ${SPOKE_ACCOUNT_ID} é resolvido por envsubst no configure-account-access (o account-id não é
 # versionado — vem de --account-id / CLAUDE.local.md). Bootstrap da role na conta spoke:
@@ -9,7 +10,7 @@
 apiVersion: aws.upbound.io/v1beta1
 kind: ProviderConfig
 metadata:
-  name: sandbox
+  name: wasp-nonprod
 spec:
   credentials:
     source: Secret
@@ -18,4 +19,4 @@ spec:
       name: aws-iam-credential
       key: creds
   assumeRoleChain:
-    - roleARN: arn:aws:iam::${SPOKE_ACCOUNT_ID}:role/crossplane-sandbox
+    - roleARN: arn:aws:iam::${SPOKE_ACCOUNT_ID}:role/crossplane-wasp-nonprod

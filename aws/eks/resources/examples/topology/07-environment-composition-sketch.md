@@ -32,7 +32,7 @@ _nodegroups = [{
 ```
 
 - Prós: fan-out de verdade (N variável), monta arrays de subnet nativamente (resolve os 2
-  caveats de uma vez). function-kcl já está instalada no hub.
+  caveats de uma vez). function-kcl já está instalada no Control Plane.
 - Contras: o orquestrador deixa de ser patch-and-transform puro; introduz KCL nesta camada.
 
 ### Opção B — patch-and-transform com slots fixos
@@ -70,4 +70,4 @@ o KCL emite o Cluster sem subnetIds (inválido) OU o omite até o status chegar.
 implementação se function-kcl consegue condicionar a emissão do Cluster à presença do status
 do Network (provavelmente sim: `if oxr.status?.subnetIds`). Este é o mesmo tipo de
 dependência intra-Composition que o modelo atual resolve com selector (que espera
-naturalmente). Trade-off a medir no hub.
+naturalmente). Trade-off a medir no Control Plane.

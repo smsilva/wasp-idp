@@ -20,7 +20,7 @@ spec:
   # DUAS diferenças em relação à monolítica, ambas para o cruzamento cross-XR (Network→Cluster):
   #  (1) TODOS os MRs ganham o label environment.example.com/env=<metadata.name> (patch de
   #      metadata.name — a identidade do XR em Crossplane v2, sem spec.id). É o discriminador
-  #      que impede o Cluster de casar subnets de OUTRO Environment no mesmo hub.
+  #      que impede o Cluster de casar subnets de OUTRO Environment no mesmo Control Plane.
   #  (2) Selectors INTERNOS (VPC→subnet, NAT→eip/subnet, route→rt/gw, rta→rt/subnet) mantêm
   #      matchControllerRef: true — são resolvidos DENTRO deste XR (regra 2 do brainstorm).
   #
@@ -47,8 +47,8 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.region
                 toFieldPath: spec.forProvider.region
-          # provider-config: aponta cada MR ao ProviderConfig escolhido (hub=conta do
-          # crossplane-poc; sandbox=cross-account via assumeRoleChain). Aplicado a TODOS os
+          # provider-config: aponta cada MR ao ProviderConfig escolhido (network=conta do
+          # crossplane-poc; wasp-nonprod=cross-account via assumeRoleChain). Aplicado a TODOS os
           # 16 MRs via PatchSet.
           - name: provider-config
             patches:

@@ -74,7 +74,7 @@ spec:
 ```
 
 > **Fan-out de N node groups é deferido:** `function-patch-and-transform` não itera arrays — N
-> node groups exigem function-kcl (já instalada no hub) ou status-arrays prontos. Por isso a
+> node groups exigem function-kcl (já instalada no Control Plane) ou status-arrays prontos. Por isso a
 > fatia fixa `nodeGroups[0]` no código, mantendo o **schema** de lista. Detalhe em
 > `../network/07` (open questions) e no tópico 6.
 

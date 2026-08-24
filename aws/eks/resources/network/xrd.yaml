@@ -4,7 +4,7 @@ metadata:
   name: networks.platform.example.com
 spec:
   # Cluster-scoped, como o Environment: um Network é a pegada de REDE durável de um
-  # cluster (hub-owned). Primeira das 2 abstrações da decomposição (a outra é
+  # cluster (control-plane-owned). Primeira das 2 abstrações da decomposição (a outra é
   # Cluster). O Environment vira orquestrador fino que compõe Network + Cluster.
   #
   # Contrato de saída (Pilar 5 PE 2.0, "API-first contract"): o Network taggeia TODAS as
@@ -43,16 +43,17 @@ spec:
                 providerConfigName:
                   type: string
                   description: >-
-                    Nome do ProviderConfig AWS que cada MR usa. "hub" cria os recursos na conta
-                    do crossplane-poc (hub); "sandbox" (assumeRoleChain) cria na conta spoke.
-                    Ver aws/eks/providers/provider-config-hub.yaml e provider-config-sandbox.yaml.
+                    Nome do ProviderConfig AWS que cada MR usa = nome da CONTA de destino.
+                    "network" cria na conta do crossplane-poc (Connectivity Account);
+                    "wasp-nonprod" (assumeRoleChain) cria na conta spoke.
+                    Ver aws/eks/providers/provider-config-network.yaml e provider-config-wasp-nonprod.yaml.
                     OBRIGATÓRIO (sem default): um XR sem este campo é rejeitado — falha-fechado,
-                    não vaza para o hub por omissão. O enum é o ALLOWLIST de ProviderConfigs
-                    desta instância (defense-in-depth); ajustar a lista ao adotar em outra
-                    conta/instância — os nomes de spoke são por-instância.
+                    não vaza para a conta network por omissão. O enum é o ALLOWLIST de
+                    ProviderConfigs desta instância (defense-in-depth); ajustar a lista ao adotar
+                    em outra conta/instância — os nomes de spoke são por-instância.
                   enum:
-                    - hub
-                    - sandbox
+                    - network
+                    - wasp-nonprod
                 vpcCidrSecondOctet:
                   type: integer
                   description: >-
