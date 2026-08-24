@@ -165,7 +165,7 @@ o antigo** evita uma janela sem acesso:
 ```bash
 scripts/assign-permission-set --account log-archive --group platform-admins \
   --permission-set ReadOnlyAccess \
-  --managed-policy arn:aws:iam::aws/policy/ReadOnlyAccess
+  --managed-policy arn:aws:iam::aws:policy/ReadOnlyAccess
 
 scripts/revoke-permission-set --account log-archive --group platform-admins \
   --permission-set AdministratorAccess

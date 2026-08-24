@@ -97,6 +97,12 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
   inexistente — a query devolvia vazio e o script abortava com mensagem enganosa ("rode
   `create-organizational-unit-structure` primeiro"). Depois de renomear qualquer OU, varrer
   `scripts/` por ocorrências do nome antigo.
+- **ARN de managed policy da AWS é `arn:aws:iam::aws:policy/<Nome>`** — `aws:policy`, com
+  dois-pontos, não `aws/policy`. A grafia errada só falha no
+  `attach-managed-policy-to-permission-set`, **depois** de o permission set já ter sido
+  criado: sobra um permission set órfão, sem policy nenhuma.
+- **Permission set alterado precisa de `provision-permission-set`** em cada conta onde já
+  está atribuído — anexar a policy não propaga sozinho.
 - **Trocar o permission set de uma conta são dois passos, não um.** Não existe "update
   assignment": `assign-permission-set` com o novo e `revoke-permission-set` com o antigo.
   Atribuir primeiro evita janela sem acesso.

@@ -20,7 +20,7 @@ show_usage() {
       -a,  --account           Nome ou id da conta-membro (obrigatório)
       -p,  --permission-set    Nome do permission set (default: AdministratorAccess)
            --managed-policy    ARN da managed policy anexada ao criar o permission set
-                                (default: arn:aws:iam::aws/policy/AdministratorAccess)
+                                (default: arn:aws:iam::aws:policy/AdministratorAccess)
       -u,  --user              Username no Identity Store (obrigatório se --group ausente)
       -g,  --group             Nome do grupo no Identity Store (alternativa a --user)
            --create-group      Cria o --group se ele ainda não existir
@@ -42,13 +42,13 @@ show_usage() {
 
       ${this_script_name} --account network --group network-engineers \\
         --permission-set NetworkEngineer \\
-        --managed-policy arn:aws:iam::aws/policy/job-function/NetworkAdministrator
+        --managed-policy arn:aws:iam::aws:policy/job-function/NetworkAdministrator
 EOF
 }
 
 account=""
 permission_set="AdministratorAccess"
-managed_policy="arn:aws:iam::aws/policy/AdministratorAccess"
+managed_policy="arn:aws:iam::aws:policy/AdministratorAccess"
 user=""
 group=""
 create_group=""
@@ -169,12 +169,34 @@ else
     --session-duration "${session_duration}" \
     --query PermissionSet.PermissionSetArn --output text)"
   echo "criado  permission set '${permission_set}' (${permission_set_arn})"
+fi
 
+# Fora do else de propósito: se o attach falhar (ARN inválido, por exemplo), o permission
+# set já existe e a reexecução precisa conseguir consertá-lo — dentro do else o script
+# pularia o attach para sempre, deixando um permission set órfão sem policy nenhuma.
+attached="$(aws sso-admin list-managed-policies-in-permission-set \
+  --instance-arn "${instance_arn}" --permission-set-arn "${permission_set_arn}" \
+  --query "AttachedManagedPolicies[?Arn=='${managed_policy}'].Arn" --output text)"
+
+if [ -n "${attached}" ]; then
+  echo "ok  managed policy ${managed_policy} já anexada"
+else
   aws sso-admin attach-managed-policy-to-permission-set \
     --instance-arn "${instance_arn}" \
     --permission-set-arn "${permission_set_arn}" \
     --managed-policy-arn "${managed_policy}"
   echo "anexada  managed policy ${managed_policy}"
+
+  # Permission set alterado precisa ser reprovisionado nas contas onde já está atribuído.
+  for provisioned_account in $(aws sso-admin list-accounts-for-provisioned-permission-set \
+    --instance-arn "${instance_arn}" --permission-set-arn "${permission_set_arn}" \
+    --query 'AccountIds[]' --output text); do
+    aws sso-admin provision-permission-set \
+      --instance-arn "${instance_arn}" \
+      --permission-set-arn "${permission_set_arn}" \
+      --target-id "${provisioned_account}" --target-type AWS_ACCOUNT > /dev/null
+    echo "reprovisionado  em ${provisioned_account}"
+  done
 fi
 
 # --- principal ----------------------------------------------------------------

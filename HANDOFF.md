@@ -44,7 +44,7 @@ Aplicado de verdade nesta sessão (não é só doc):
 - `organization-trail` — multi-region, logging ativo, log file validation on. Custo estimado
   **< US$ 1/mês** (management events são grátis na 1ª cópia por conta).
 - Identity Center `ssoins-7223e082d350408a` / identity store `d-906609a243`: grupo
-  `platform-admins` criado com `silvios`, `AdministratorAccess` atribuído em `log-archive`.
+  `platform-admins` criado com `silvios`, `ReadOnlyAccess` atribuído em `log-archive` (era `AdministratorAccess`; ver passo ⑦).
 
 Nomes das contas seguem `<projeto>-<ambiente>`. **`832721568602` é a mesma conta antes
 chamada `sandbox`** — todo comando da Frente B que cita "sandbox" continua válido.
@@ -63,8 +63,25 @@ buscava o nome antigo `Infra` (abortava com mensagem enganosa) e a OU `Security`
 contemplada. Doc de `accounts/` atualizada — estado real registrado em `02` (SCPs) e `04`
 (Identity Center), seção "Estado atual vs. alvo" do `CLAUDE.md` reescrita.
 
-Próximo passo pretendido: trocar o permission set de rotina da `log-archive` para
-`ReadOnlyAccess` e atribuir permission sets a `network`/`wasp-nonprod` (passo ⑦).
+**Passo ⑦ parcial** — `log-archive` rebaixada de `AdministratorAccess` para
+`ReadOnlyAccess` (grupo `platform-admins`), aplicado e verificado:
+
+```
+Silvio Silva (221047292361)   AdministratorAccess  usuário silvios
+log-archive  (995122007318)   ReadOnlyAccess       grupo platform-admins
+wasp-nonprod (832721568602)   (nenhuma — só OrganizationAccountAccessRole)
+network      (094289743086)   (nenhuma — só OrganizationAccountAccessRole)
+```
+
+Dois scripts novos fecham a reprodutibilidade do passo: `show-permission-sets` (leitura) e
+`revoke-permission-set` (destrutivo, confirma salvo `--yes`). Dois bugs corrigidos no
+`assign-permission-set`: ARN de managed policy grafado `iam::aws/policy/` em vez de
+`iam::aws:policy/`, e o attach da policy estava dentro do `else` do "permission set já
+existe" — se o attach falhasse, a reexecução pulava o conserto e o permission set ficava
+órfão para sempre. Agora o attach é idempotente e reprovisiona nas contas atribuídas.
+
+Próximo passo pretendido: atribuir permission set a `network` e `wasp-nonprod`, eliminando o
+switch-role via `OrganizationAccountAccessRole`.
 
 ### Frente B — Crossplane / EKS (pausada)
 
@@ -121,8 +138,6 @@ Próximo passo pretendido: **Fase 5 — aplicar hub + spoke + cluster de verdade
 - **Retenção do bucket de auditoria** (lifecycle → Glacier após N dias, expiração após M
   anos): decisão de compliance, deliberadamente adiada. É o único custo do CloudTrail que
   cresce sozinho e para sempre.
-- **`log-archive` está com `AdministratorAccess`** (bootstrap) — deveria virar
-  `ReadOnlyAccess` na rotina, senão quem é auditado pode apagar o acervo.
 - **Conta `security-tooling`** desenhada como slot, não criada — vira pré-requisito quando
   GuardDuty/Config/Security Hub entrarem.
 - **E-mail do root da conta `network`** ainda é `smsilva+hub@gmail.com`. `put-account-name`
@@ -142,9 +157,9 @@ Próximo passo pretendido: **Fase 5 — aplicar hub + spoke + cluster de verdade
    ajustar a lista `[hub, sandbox]` por instância.
 4. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*: Helm
    templates (`{{ }}`).
-5. `log-archive` acessível com `AdministratorAccess` pelo grupo `platform-admins` —
-   *intentional* (bootstrap), mas contraria o motivo da conta existir. Trocar por
-   `ReadOnlyAccess` quando houver operação de rotina.
+5. `revoke-permission-set` só foi exercido no caminho feliz (revogação real da
+   `log-archive`); os ramos "atribuição inexistente" e "permission set inexistente" nunca
+   rodaram.
 6. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts`
    `allow-all` policy; `idp/packages/backend/src/googleAuthModule.ts`
    `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
@@ -208,7 +223,7 @@ do k3d) — não precisam re-bootstrap.
 - [x] **Passo ⑥ — SCPs baseline** aplicadas em Root/Security/Infrastructure/Workloads
       (`us-east-1`); script corrigido (`Infra`→`Infrastructure`, cobertura de `Security`).
       SCP **não** afeta a management account.
-- [ ] Trocar o permission set de rotina da `log-archive` para `ReadOnlyAccess`.
+- [x] Permission set de rotina da `log-archive` trocado para `ReadOnlyAccess`.
 - [ ] Atribuir permission set às contas `network` e `wasp-nonprod`
       (`./assign-permission-set --account <conta> --group platform-admins`) — elimina o
       switch-role via `OrganizationAccountAccessRole`.
