@@ -107,6 +107,28 @@ aws organizations attach-policy --policy-id "${policy_id}" --target-id <target-i
   Organizational Unit as aplica às contas-membro, não à management account) — reforça por
   que ela não deve rodar workload (tópico 0): não há guardrail de SCP a proteger o que roda ali.
 
+## Estado aplicado nesta Organization
+
+Baseline aplicada por `scripts/apply-baseline-service-control-policy` (idempotente —
+reexecutar é a forma de conferir). Regiões aprovadas: **`us-east-1`**.
+
+| Target | SCPs anexadas |
+|---|---|
+| Root | `DenyLeaveOrganization`, `ProtectCloudTrail` |
+| OU `Infrastructure` | `DenyOutsideApprovedRegions`, `RequireImdsv2`, `DenyRootUser` |
+| OU `Workloads` | `DenyOutsideApprovedRegions`, `RequireImdsv2`, `DenyRootUser` |
+| OU `Security` | `DenyOutsideApprovedRegions`, `RequireImdsv2`, `DenyRootUser` |
+
+`FullAWSAccess` (AWS-managed) permanece anexada em todos os targets — sem ela, o modelo
+deny-list do SCP negaria tudo.
+
+Sub-OUs herdam: `Workloads/NonProd` e `Workloads/Production` recebem os guardrails de
+`Workloads` sem attach próprio.
+
+**`DenyRootUser` vs. trocar o e-mail de root de uma conta:** o e-mail do root só muda pelo
+fluxo de root no console da própria conta. Se o guardrail bloquear esse fluxo, destacar a
+policy do target, fazer a troca e reanexar — não remover a policy em definitivo.
+
 ## Well-Architected — porquê
 
 | Best practice | Como atende |

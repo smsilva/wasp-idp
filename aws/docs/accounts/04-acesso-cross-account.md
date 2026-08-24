@@ -136,6 +136,25 @@ Enquanto a atribuição não existir, o acesso admin à conta-membro é via name
 
 Nomear por **função**, não por pessoa — o permission set sobrevive a quem entra/sai do time.
 
+## Estado aplicado nesta Organization
+
+Passo ⑦ parcialmente concluído. Instância do Identity Center e identity store: ver
+`CLAUDE.local.md`.
+
+| Item | Estado |
+|---|---|
+| Grupo `platform-admins` | criado, com o usuário admin da plataforma |
+| Conta `log-archive` | `AdministratorAccess` atribuído a `platform-admins` |
+| Contas `network`, `<projeto>-nonprod` | **sem** permission set — acesso ainda via `OrganizationAccountAccessRole` assumida da management account |
+
+Pendências conhecidas:
+
+- **`log-archive` deveria ser `ReadOnlyAccess`, não `AdministratorAccess`.** O admin é
+  bootstrap; mantido assim, quem é auditado pode apagar o acervo — anula o motivo de a conta
+  existir. Trocar quando houver operação de rotina.
+- Rodar `scripts/assign-permission-set --account <conta> --group platform-admins` para
+  `network` e `<projeto>-nonprod`, eliminando o switch-role manual.
+
 ## Well-Architected — porquê
 
 | Best practice | Como atende |

@@ -17,8 +17,8 @@ migração futura aditiva). Rejeitado: TGW agora; CIDR fixo; `<...>` em campos e
 
 ### Frente A — bootstrap de contas / Organization (ativa nesta sessão)
 
-Objetivo: desenhar no draw.io um overview da sequência de provisionamento e, ao percorrê-la,
-corrigir doc e scripts contra o whitepaper AWS. **Regra adotada: sempre manter o vocabulário
+Objetivo: percorrer a sequência de provisionamento passo a passo, corrigindo doc e scripts
+contra o whitepaper AWS conforme cada passo é executado de verdade. **Regra adotada: sempre manter o vocabulário
 de "Organizing Your AWS Environment Using Multiple Accounts"; divergir só com motivo
 registrado.**
 
@@ -49,9 +49,22 @@ Aplicado de verdade nesta sessão (não é só doc):
 Nomes das contas seguem `<projeto>-<ambiente>`. **`832721568602` é a mesma conta antes
 chamada `sandbox`** — todo comando da Frente B que cita "sandbox" continua válido.
 
-Próximo passo pretendido: passo ⑥ da sequência — SCPs baseline
-(`aws/docs/accounts/scripts/apply-baseline-service-control-policy`), depois refletir a nova
-ordem no diagrama do draw.io (CloudTrail subiu para o passo ④).
+**Passo ⑥ concluído** — SCPs baseline aplicadas e verificadas em todos os targets:
+
+| Target | SCPs (além de `FullAWSAccess`) |
+|---|---|
+| Root `r-f11d` | `DenyLeaveOrganization`, `ProtectCloudTrail` |
+| `Security` `ou-f11d-ig5lcrlr` | `DenyOutsideApprovedRegions`, `RequireImdsv2`, `DenyRootUser` |
+| `Infrastructure` `ou-f11d-8l7pbxgp` | idem |
+| `Workloads` `ou-f11d-j7fnwqmx` | idem (herdado por `NonProd`/`Production`) |
+
+Região aprovada: `us-east-1`. Duas correções no script no caminho: a query da OU ainda
+buscava o nome antigo `Infra` (abortava com mensagem enganosa) e a OU `Security` não era
+contemplada. Doc de `accounts/` atualizada — estado real registrado em `02` (SCPs) e `04`
+(Identity Center), seção "Estado atual vs. alvo" do `CLAUDE.md` reescrita.
+
+Próximo passo pretendido: trocar o permission set de rotina da `log-archive` para
+`ReadOnlyAccess` e atribuir permission sets a `network`/`wasp-nonprod` (passo ⑦).
 
 ### Frente B — Crossplane / EKS (pausada)
 
@@ -192,11 +205,9 @@ do k3d) — não precisam re-bootstrap.
 
 - [x] Vocabulário do whitepaper aplicado em doc, scripts e na Organization real.
 - [x] CloudTrail organizacional + conta `log-archive` + bucket de auditoria.
-- [ ] **Passo ⑥ — SCPs baseline:** `./apply-baseline-service-control-policy`. Ler antes
-      `aws/docs/accounts/02-guardrails-scp.md`; lembrar que SCP **não** afeta a management
-      account.
-- [ ] Atualizar o diagrama do draw.io com a sequência de 9 passos revisada (CloudTrail passou
-      a ser o ④, antes das demais contas).
+- [x] **Passo ⑥ — SCPs baseline** aplicadas em Root/Security/Infrastructure/Workloads
+      (`us-east-1`); script corrigido (`Infra`→`Infrastructure`, cobertura de `Security`).
+      SCP **não** afeta a management account.
 - [ ] Trocar o permission set de rotina da `log-archive` para `ReadOnlyAccess`.
 - [ ] Atribuir permission set às contas `network` e `wasp-nonprod`
       (`./assign-permission-set --account <conta> --group platform-admins`) — elimina o

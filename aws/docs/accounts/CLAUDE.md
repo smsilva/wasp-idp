@@ -74,6 +74,8 @@ bloquear os que criam recursos reais — se bloquear, o usuário roda via `!`).
 
 **Convenção de execução:** ao rodar um script contra uma conta real, atualizar a doc na
 sequência ANTES do próximo — o tópico correspondente (gotchas/comandos descobertos) e o
+quadro "Estado atual" abaixo. Doc que descreve um estado já superado custa mais caro que doc
+ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de nome.
 
 ## Gotchas de API já descobertos
 
@@ -88,6 +90,11 @@ sequência ANTES do próximo — o tópico correspondente (gotchas/comandos desc
   exige `describe-permission-set` em cada ARN. Não existe filtro por nome.
 - **`create-account` não aceita OU de destino** — a conta nasce na Root e é movida depois; o
   SCP da OU não vale na janela entre os dois passos.
+- **Renomear OU preserva o Id mas quebra script que busca a OU pelo nome.** O rename
+  `Infra` → `Infrastructure` deixou `apply-baseline-service-control-policy` procurando uma OU
+  inexistente — a query devolvia vazio e o script abortava com mensagem enganosa ("rode
+  `create-organizational-unit-structure` primeiro"). Depois de renomear qualquer OU, varrer
+  `scripts/` por ocorrências do nome antigo.
 - **Conta recém-criada não está no portal SSO** — o único gancho é a
   `OrganizationAccountAccessRole` (assumida da management account) até
   `assign-permission-set` rodar. Os scripts que agem dentro de conta-membro
@@ -103,12 +110,21 @@ sequência ANTES do próximo — o tópico correspondente (gotchas/comandos desc
 
 ## Estado atual vs. alvo (resumo)
 
-- **Hoje no PoC:** uma única conta AWS (`<account-id>`, ver `../../CLAUDE.md`), **não
-  dedicada** e **não organizada** — hospeda também infra de outros sistemas/domains, sem
-  Organization própria.
-- **Alvo desta referência:** Organization própria, conta de gerência apenas administrativa,
-  conta network dedicada, conta por projeto.
-- **Gap crítico:** a conta atual do PoC não pode virar a "conta network" da referência sem
-  antes ser isolada — ela já tem residentes de outros domínios. A adoção da referência a
-  partir do PoC exige migrar para uma Organization nova (ou uma OU dedicada, se a Organization
-  já existir), não reaproveitar a conta como está.
+- **Passos ①–⑦ aplicados** numa Organization real (`feature-set=ALL`), com a estrutura de OUs
+  e contas do whitepaper: `Security/log-archive`, `Infrastructure/network`,
+  `Workloads/NonProd/<projeto>-nonprod`, `Workloads/Production` (vazia). Ids reais em
+  `CLAUDE.local.md`.
+- **④ CloudTrail organizacional** ativo: trail multi-region com log file validation, bucket
+  de auditoria na `log-archive` (BPA, versionamento, SSE-S3, `BucketOwnerEnforced`, deny
+  non-TLS). Custo estimado < US$ 1/mês.
+- **⑥ SCPs baseline aplicadas** — ver quadro no `02-guardrails-scp.md`.
+- **⑦ Identity Center** habilitado: grupo `platform-admins`, permission set atribuído na
+  `log-archive` — ver `04-acesso-cross-account.md`.
+- **Pendente:** ⑧ conta de produção do projeto; ⑨ spokes de rede (→ domínio `../network/`).
+
+### Gap conhecido: a conta pré-existente do PoC
+
+A conta AWS que o PoC usava antes desta Organization **não** é dedicada nem isolada — hospeda
+infra de outros sistemas. Ela não pode virar a conta `network` da referência sem antes ser
+esvaziada: adotar a referência a partir dela exige contas novas na Organization, não
+reaproveitar a conta como está.
