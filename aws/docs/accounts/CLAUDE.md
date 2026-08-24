@@ -47,6 +47,10 @@ registrado.
 - **⑤ e ⑧:** `create-account` **não** aceita OU de destino — a conta nasce na Root e é movida
   depois. São dois passos, e o SCP da OU não vale na janela entre eles.
 - **⑥:** SCP não afeta a conta de gerência. Por isso ela não hospeda nada.
+- **⑦ "sem usar root" só é verdade se houver caminho de emergência definido.** Toda conta
+  criada em ⑤/⑧ nasce com um root indestrutível e imune a SCP — o único controle é não usá-lo.
+  Isso exige um break-glass escrito antes do incidente, não improvisado nele
+  (`04-acesso-cross-account.md`, SEC03-BP03).
 - **⑧ uma conta por projeto POR AMBIENTE** (`<projeto>-nonprod`, `<projeto>-prod`) — a conta
   é o único limite forte de quota, SCP, IAM e billing (ver `01-organizations-e-ous.md`).
 
@@ -81,11 +85,15 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
 
 ## Gotchas de API já descobertos
 
-- **Renomear OU é seguro; renomear conta é meia-medida.** `update-organizational-unit`
-  preserva o Id da OU (SCPs e contas seguem válidas). Já a conta: `account
-  put-account-name` muda só o nome — o **e-mail do root user** (identidade única da conta em
-  toda a AWS) só muda pelo fluxo de root no console da própria conta. Acertar o e-mail na
-  criação.
+- **Renomear OU é seguro; renomear conta são dois caminhos distintos.**
+  `update-organizational-unit` preserva o Id da OU (SCPs e contas seguem válidas). Já a conta
+  tem duas identidades independentes:
+  - **Nome:** `account put-account-name` (API, cross-account com trusted access).
+  - **E-mail do root user** (identidade única da conta em toda a AWS): **não existe API** —
+    só pelo fluxo de root no console da própria conta (login como root → Account settings →
+    editar e-mail → confirmar nos dois endereços). É trabalhoso, mas **reversível**; já
+    executado nesta Organization (`+hub@` → `+network@`). Ainda assim, acertar na criação
+    economiza o passo.
 - **`put-account-name` cross-account exige trusted access** de `account.amazonaws.com`, que
   **não** vem habilitado por default (`enable-service-access`).
 - **`sso-admin list-permission-sets` devolve só ARNs** — achar um permission set pelo nome
@@ -116,10 +124,16 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
 | # | Decisão | Por que está aberta | Custo de adiar |
 |---|---|---|---|
 | 1 | **Retenção do bucket de auditoria** — lifecycle rule (Standard → Glacier após N dias, expiração após M anos) | Janela de retenção é decisão de compliance, não técnica | Único custo do CloudTrail que cresce sozinho e para sempre. Baixo hoje (centavos/mês); revisitar antes de o acervo passar de alguns GB |
-| 2 | **Permission set de rotina na `log-archive`** — hoje está `AdministratorAccess` (bootstrap); deveria ser `ReadOnlyAccess` | Ainda não há operação de rotina ali | Enquanto for admin, quem é auditado pode apagar o acervo — anula o motivo de a conta existir |
+| 2 | **Atribuição da management account é a usuário, não a grupo** | Herança do bootstrap do Identity Center | Contraria a regra `--group` na conta mais privilegiada; cada pessoa nova exigiria atribuição própria |
 | 3 | **Conta `security-tooling`** — slot desenhado, conta não criada | Sem GuardDuty/Config/Security Hub habilitados ainda | Nenhum hoje; vira pré-requisito quando a detecção entrar |
+| 4 | **MFA no root** da management account e das contas-membro | Não verificado; `create-account` não configura | Root sem MFA é a credencial mais privilegiada da conta protegida só por senha |
+| 5 | **Alarme de uso de root** (CloudTrail → EventBridge → notificação) | Acervo já existe (④); falta a regra | Sem alarme, uso de root é auditoria post-mortem, não controle detectivo |
 
 ## Estado atual vs. alvo (resumo)
+
+> **Antes de confiar neste resumo, conferir na API** — ele é retrato datado, não fonte de
+> verdade. Árvore de OUs/contas: `list-organizational-units-for-parent` +
+> `list-accounts-for-parent` a partir da Root. Acesso: `scripts/show-permission-sets`.
 
 - **Passos ①–⑦ aplicados** numa Organization real (`feature-set=ALL`), com a estrutura de OUs
   e contas do whitepaper: `Security/log-archive`, `Infrastructure/network`,
@@ -129,8 +143,10 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
   de auditoria na `log-archive` (BPA, versionamento, SSE-S3, `BucketOwnerEnforced`, deny
   non-TLS). Custo estimado < US$ 1/mês.
 - **⑥ SCPs baseline aplicadas** — ver quadro no `02-guardrails-scp.md`.
-- **⑦ Identity Center** habilitado: grupo `platform-admins`, permission set atribuído na
-  `log-archive` — ver `04-acesso-cross-account.md`.
+- **⑦ Identity Center** habilitado: grupo `platform-admins` com `ReadOnlyAccess` na
+  `log-archive`; `network` e `<projeto>-nonprod` ainda sem permission set — ver
+  `04-acesso-cross-account.md`. Break-glass **documentado**, controles (MFA no root, alarme de
+  uso) **pendentes** — decisões 4 e 5 acima.
 - **Pendente:** ⑧ conta de produção do projeto; ⑨ spokes de rede (→ domínio `../network/`).
 
 ### Gap conhecido: a conta pré-existente do PoC

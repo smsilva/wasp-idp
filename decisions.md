@@ -272,11 +272,11 @@ de impacto regional e perde-se a autonomia de time.
 ① Login na 1ª conta → vira a conta de GERÊNCIA da Organization
 ② Habilitar AWS Organizations (all features, não "consolidated billing only")
 ③ CloudTrail organizacional + conta Log Archive   ← ANTES das OUs
-④ Criar OUs: Infra, Workloads/Sandbox, Workloads/Production
-⑤ Criar a conta Hub/Connectivity → nasce na Root, MOVER para a OU Infra
+④ Criar OUs: Security, Infrastructure, Workloads/NonProd, Workloads/Production
+⑤ Criar a conta Hub/Connectivity → nasce na Root, MOVER para a OU Infrastructure
 ⑥ Aplicar SCPs baseline na Organization/OUs
 ⑦ IAM Identity Center (SSO) — permission sets por conta, sem usar root
-⑧ Por projeto: create-account em Sandbox → validar → só então Production
+⑧ Por projeto: create-account em NonProd → validar → só então Production
 ⑨ Dentro da conta do projeto: provisionar a(s) spoke(s) de rede
 ```
 
@@ -286,8 +286,14 @@ Notas:
   é movida depois — dois passos, e o SCP da OU não vale na janela entre eles.
 - **⑥:** SCP não afeta a conta de gerência. Por isso ela não hospeda nada.
 
-**[ABERTO]** No ⑧: uma conta por projeto **por ambiente** (projeto-sandbox +
-projeto-prod), ou uma conta por projeto com os dois dentro?
+**[DECIDIDO]** No ⑧: uma conta por projeto **por ambiente** (`<projeto>-nonprod` +
+`<projeto>-prod`) — a conta é o único limite forte de quota, SCP, IAM e billing.
+
+> **Esta Fase −1 já foi executada.** A sequência autoritativa, com o que foi de fato
+> aplicado e os gotchas de API descobertos, vive em `aws/docs/accounts/CLAUDE.md`. O bloco
+> acima é o desenho original; onde divergir, a doc do domínio ganha. Duas diferenças já
+> conhecidas: os nomes de OU seguem o whitepaper (`Infrastructure`/`NonProd`, não
+> `Infra`/`Sandbox`), e as OUs foram criadas **antes** da conta `log-archive`, não depois.
 
 ### Fase 0 — Fundação (Terraform, um state, uma vez)
 1. Organization, OUs, SCPs (fase acima)

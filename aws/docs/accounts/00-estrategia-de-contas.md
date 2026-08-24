@@ -64,7 +64,8 @@ conta nova dedicada a ser a gerência.
 
 | Best practice | Como atende |
 |---|---|
-| **SEC01-BP01** operar Organization | Fundação de identidade e conta desde o início, não como retrofit |
+| **SEC01-BP01** *Separate workloads using accounts* | A conta como unidade de isolamento — multi-account desde o início, não como retrofit |
+| **SEC01-BP02** *Secure account root user and properties* | Cada conta nasce com um root indestrutível e imune a SCP; o plano para ele é o passo ⑦ (`04-acesso-cross-account.md`) |
 | **OPS** menor superfície privilegiada | Management account sem workload reduz o que uma falha ali pode afetar |
 | **REL/COST** isolamento de cota e billing | Cotas de serviço e custo são por conta, não globais |
 

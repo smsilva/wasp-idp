@@ -35,7 +35,7 @@ Identity Center, não de uma credencial IAM de longa duração — é o padrão 
 
 ## Acesso automatizado (Crossplane, CI/CD) — não é humano, não usa SSO
 
-Para automação (o Crossplane hospedado no hub k3d, por exemplo), o padrão é diferente:
+Para automação (o Crossplane hospedado no control plane k3d, por exemplo), o padrão é diferente:
 **IAM user dedicado com policy escopada**, não SSO (SSO é para humanos com sessão
 interativa). Ver `../../CLAUDE.md` para o padrão adotado nesta PoC — `crossplane-poc` é
 esse exemplo concreto, incluindo o problema de bootstrap (a própria automação não pode se
@@ -131,7 +131,7 @@ Enquanto a atribuição não existir, o acesso admin à conta-membro é via name
 | Permission Set | Uso | Contas típicas |
 |---|---|---|
 | `AdministratorAccess` | Bootstrap, emergências, dono do projeto | todas, mas atribuição restrita a poucas pessoas |
-| `<project>NetworkEngineer` | Operar rede do projeto (VPC, subnets, TGW attachment) | conta do projeto + Hub (leitura) |
+| `<project>NetworkEngineer` | Operar rede do projeto (VPC, subnets, TGW attachment) | conta do projeto + `network` (leitura) |
 | `ReadOnlyAccess` | Auditoria, observabilidade | todas |
 
 Nomear por **função**, não por pessoa — o permission set sobrevive a quem entra/sai do time.
@@ -143,24 +143,28 @@ Passo ⑦ parcialmente concluído. Instância do Identity Center e identity stor
 
 | Item | Estado |
 |---|---|
+| Permission sets existentes | `AdministratorAccess`, `ReadOnlyAccess` |
 | Grupo `platform-admins` | criado, com o usuário admin da plataforma |
-| Conta `log-archive` | `AdministratorAccess` atribuído a `platform-admins` |
+| Management account | `AdministratorAccess` atribuído **ao usuário**, não ao grupo |
+| Conta `log-archive` | ✅ `ReadOnlyAccess` atribuído a `platform-admins` — já rebaixado do admin de bootstrap |
 | Contas `network`, `<projeto>-nonprod` | **sem** permission set — acesso ainda via `OrganizationAccountAccessRole` assumida da management account |
 
-Conferir a qualquer momento com `scripts/show-permission-sets` (somente leitura).
+Conferir a qualquer momento com `scripts/show-permission-sets` (somente leitura) — é a fonte
+de verdade; esta tabela é retrato datado.
 
 Pendências conhecidas:
 
-- **`log-archive` deveria ser `ReadOnlyAccess`, não `AdministratorAccess`.** O admin é
-  bootstrap; mantido assim, quem é auditado pode apagar o acervo — anula o motivo de a conta
-  existir. Trocar quando houver operação de rotina.
+- **Management account atribuída a usuário, não a grupo.** Contraria a regra `--group` acima,
+  e é justamente a conta onde a atribuição mais importa. Migrar para `platform-admins`
+  (atribuir o grupo antes de revogar o usuário).
 - Rodar `scripts/assign-permission-set --account <conta> --group platform-admins` para
   `network` e `<projeto>-nonprod`, eliminando o switch-role manual.
 
 ### Rebaixar uma conta de admin para leitura (reprodutível)
 
 Não existe "update assignment" na API — são duas chamadas. **Atribuir o novo antes de revogar
-o antigo** evita uma janela sem acesso:
+o antigo** evita uma janela sem acesso. A sequência abaixo já foi executada na `log-archive`
+(hoje `ReadOnlyAccess`); fica registrada como receita para as próximas contas:
 
 ```bash
 scripts/assign-permission-set --account log-archive --group platform-admins \
@@ -177,13 +181,73 @@ O `revoke` remove só a **atribuição** naquela conta — o permission set cont
 para as demais. Depois de qualquer mudança, `aws sso login` de novo para o cache local
 refletir o novo acesso.
 
+## Break-glass: acesso de emergência (SEC03-BP03)
+
+O caminho normal — Identity Center → permission set → STS — tem modos de falha que ele
+próprio não resolve: o Identity Center indisponível na região, a última atribuição de admin
+revogada por engano, um SCP que fecha a porta da própria operação. Sem um caminho alternativo
+**definido antes da emergência**, a saída improvisada é sempre a mesma: o root da conta. Que é
+exatamente o que o passo ⑦ existe para evitar.
+
+### Os dois caminhos, em ordem de preferência
+
+| # | Caminho | Alcança | Quando usar |
+|---|---|---|---|
+| 1 | `OrganizationAccountAccessRole` assumida da management account (named profile, acima) | Qualquer conta-membro | Perda de acesso a **uma** conta-membro. Cobre a maioria dos casos |
+| 2 | **Root user da conta afetada** | A própria conta, sem limite de SCP | Só quando (1) não serve: management account inacessível, Identity Center fora, ou ação que exige root (fechar conta, alterar e-mail de root, remover política do S3 que bloqueou todo mundo) |
+
+O caminho 1 **não é** break-glass de verdade — depende da management account estar acessível.
+É o degrau intermediário que evita chegar ao root na maioria dos incidentes.
+
+### Regras do caminho 2 (root)
+
+1. **Credencial não fica com uma pessoa.** Senha e MFA do root de cada conta-membro ficam em
+   custódia (cofre corporativo), separadas — quem tem a senha não tem o dispositivo MFA.
+2. **MFA obrigatório**, preferencialmente hardware (SEC01-BP02).
+3. **Zero access key de root.** A conta não deve ter nenhuma; se tiver, apagar.
+4. **Uso é evento auditável, não operação.** Todo uso gera registro: quem, quando, por quê,
+   o que foi feito, e qual foi a correção que tornou o root desnecessário de novo.
+5. **Rotação depois do uso.** Senha trocada e devolvida à custódia ao fechar o incidente.
+6. **Ensaio periódico.** Um caminho de emergência nunca exercitado é indistinguível de um
+   caminho quebrado. Validar em janela planejada, não durante o incidente.
+
+### Detecção
+
+O CloudTrail organizacional (`07-cloudtrail-e-log-archive.md`) já captura `userIdentity.type
+= Root` em toda a Organization — o acervo existe. Falta o **alarme**: uso de root sem alerta
+é auditoria post-mortem, não controle detectivo.
+
+### Estado nesta Organization
+
+| Item | Estado |
+|---|---|
+| Caminho 1 (`OrganizationAccountAccessRole`) | ✅ funciona — é o acesso corrente às contas sem permission set |
+| MFA no root da management account | ⚠️ verificar |
+| MFA no root das contas-membro | ⚠️ verificar — contas criadas por `create-account` nascem sem |
+| Custódia separada de senha/MFA | ❌ não implementado (conta pessoal, operador único) |
+| Alarme de uso de root | ❌ não implementado |
+| Ensaio | ❌ nunca executado |
+
+> Numa Organization de operador único, "custódia separada" não tem contraparte — mas MFA no
+> root e alarme de uso valem igual, e são os dois itens de menor custo da lista.
+
 ## Well-Architected — porquê
 
 | Best practice | Como atende |
 |---|---|
-| **SEC02-BP01** identidade centralizada | Identity Center como fonte única, sem IAM user por conta |
-| **SEC02-BP02** credenciais temporárias | Login SSO gera STS temporário, nunca access key de longa duração para humanos |
-| **SEC03-BP01** menor privilégio por permission set | Escopar por função, não conceder `AdministratorAccess` por padrão |
+| **SEC01-BP02** *Secure account root user and properties* | Root de cada conta-membro nunca é usado na rotina; o caminho normal é o permission set |
+| **SEC02-BP01** *Use strong sign-in mechanisms* | MFA no Identity Center como porta de entrada única para humanos |
+| **SEC02-BP02** *Use temporary credentials* | Login SSO gera STS temporário, nunca access key de longa duração para humanos |
+| **SEC02-BP04** *Rely on a centralized identity provider* | Identity Center como fonte única, sem IAM user por conta |
+| **SEC02-BP06** *Employ user groups and attributes* | Atribuição a `--group`, não a `--user` |
+| **SEC03-BP01** *Define access requirements* | Permission set nomeado por função (`<project>NetworkEngineer`), não por pessoa |
+| **SEC03-BP02** *Grant least privilege access* | `ReadOnlyAccess` onde a rotina é leitura (ex.: `log-archive`), não `AdministratorAccess` por padrão |
+| **SEC03-BP03** *Establish emergency access process* | Break-glass documentado abaixo |
+| **SEC03-BP04** *Reduce permissions continuously* | Rebaixamento reprodutível (`assign` novo → `revoke` antigo), acima |
+| **SEC03-BP06** *Manage access based on lifecycle* | Atribuição por grupo sobrevive a quem entra/sai do time |
+
+IDs conferidos contra [SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)
+e [SEC03 — Permissions management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html).
 
 ## Próximo
 
