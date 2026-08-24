@@ -94,6 +94,9 @@ A palavra "hub" cobria três coisas independentes neste repo. Dois eixos foram r
 
 ## Fluxo de bootstrap do control plane (k3d) — ordem dos scripts
 
+Todos os scripts aceitam `--cluster-name`, então **o cluster vivo pode não ter o nome default**
+— conferir com `k3d cluster list` antes de assumir o contexto (`k3d-control-plane`).
+
 O control plane Crossplane sobe em 4 passos idempotentes (`aws/eks/scripts/`), nesta ordem:
 
 1. **`install-crossplane`** — cria o cluster k3d `control-plane` (3 servers) + instala o Crossplane.
@@ -307,6 +310,11 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 - **Identidade = `metadata.name`** (Crossplane v2, sem `spec.id`): deriva external-names
   (`<prefix>-<metadata.name>-*`) e o label `env`. Spoke e cluster que ele hospeda têm o MESMO
   `metadata.name` (casa subnets). Gerar com `eks/scripts/random-id`.
+- **Renomear role IAM = recriar.** Não existe rename in-place. Sequência segura: `create-role`
+  com a mesma trust + `attach-role-policy`/`put-role-policy` (copiar a inline via
+  `get-role-policy`) → **validar o `sts:AssumeRole` com a credencial real do consumidor** →
+  só então apagar a antiga (`delete-role-policy` + `detach-role-policy` + `delete-role`).
+  Trocar o `roleARN` do ProviderConfig junto.
 
 ## Validação offline sem tocar a AWS
 
