@@ -83,6 +83,21 @@ regional). Eixos independentes.
 
 ## 3. Modelo de tenancy — pooled e dedicado são o mesmo desenho
 
+> **Vocabulário oficial (AWS).** O que aqui se chama "pooled" e "dedicado" a AWS nomeia
+> **pool** e **silo** na [SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html)
+> do Well-Architected — lens oficial para workloads multi-tenant. Há um terceiro modelo,
+> **bridge**: parte do sistema em silo, parte em pool, decidido **por componente**
+> ([Silo, Pool, and Bridge Models](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/silo-pool-and-bridge-models.html)).
+> A seção "compute e dados são eixos separados", abaixo, descreve exatamente um bridge.
+>
+> **A lens confirma a regra inviolável desta seção**, e por escrito: mesmo com recursos
+> dedicados, um ambiente silo "still relies on a shared identity, onboarding, and operational
+> experience". É isso que, segundo a AWS, diferencia SaaS de *managed service*. A regra abaixo não
+> era preferência de estilo — é requisito da lens.
+>
+> Detalhe, tabela de reconciliação dos dois vocabulários e economia dos tiers em
+> `aws/docs/tenancy/`.
+
 Pooled e dedicado **não são duas arquiteturas**. São o mesmo desenho com
 **densidade variável**:
 
@@ -111,6 +126,27 @@ quando a exigência é isolamento de dados, não de performance.
 ### Ordem de deploy entre células
 Célula interna → pooled menor → pooled maiores → dedicadas por último. O cliente que
 paga por cluster dedicado é o que menos tolera ser cobaia.
+
+### O modelo é escolhido por tier, e a linha é uma conta
+A lens não prescreve silo — prescreve **tiering**: o modelo é decidido por tier comercial, não uma
+vez para todo o produto. Onde a linha cai não é preferência arquitetural, é aritmética: uma célula
+dedicada tem piso de **~US$ 150/mês por tenant-região** antes de qualquer workload (ver §10).
+Ruído para cliente enterprise; margem negativa para cliente de ticket baixo.
+
+Corolário operacional que morde depois: **conta por tenant exige onboarding automatizado desde o
+primeiro cliente**, e o **offboarding é mais limitado que o onboarding** — a AWS restringe quantas
+contas podem ser fechadas por janela móvel, então churn alto acumula contas suspensas que ainda
+contam para a quota. Some-se a isso o que §7 já registra (`Account` do provider-aws não deleta de
+verdade). Tier self-service com churn alto **não** deve morar em conta própria.
+Detalhe em `aws/docs/tenancy/01-conta-por-tenant.md`.
+
+### Região não é eixo de conta
+Conta AWS é global; região é dimensão dentro dela. Um tenant que opera em duas regiões continua em
+**uma** conta e ganha uma segunda VPC. O que precisa variar por jurisdição é a **SCP**, e SCP
+atacha em OU — logo residência de dados vira uma **OU por perfil de residência**
+(`Tenants-US`, `Tenants-EU`, …), nunca uma lista de regiões por cliente. Agrupar por cliente faria
+o número de OUs crescer com as combinações vendidas.
+Detalhe em `aws/docs/tenancy/02-ou-por-geografia.md`.
 
 ---
 
@@ -253,7 +289,14 @@ de impacto regional e perde-se a autonomia de time.
   abstração multi-cloud, essa assimetria vaza; decidir cedo se é um XRD comum ou dois.
 - **Credencial do Crossplane** → role assumida via **EKS Pod Identity**, com o trust
   criado pelo Terraform junto com a spoke. Substitui o IAM user de longa duração que
-  está no código atual (desvio conhecido).
+  está no código atual (desvio conhecido). **Granularidade:** 1 role de *origem* por control
+  plane regional (Pod Identity) + 1 role de *destino* por conta-alvo — IAM é global, então a role
+  de destino é uma só ainda que dois control planes regionais a assumam. O EKS de workload
+  gerenciado não recebe identidade nenhuma. Matriz completa e as três opções de contenção
+  regional em `aws/docs/security/08-identidade-do-control-plane.md`.
+  **Bloqueio:** k3d não suporta Pod Identity — a access key só desaparece quando o control plane
+  virar EKS. Enquanto isso, a mitigação barata é reduzir o IAM user a **só `sts:AssumeRole`**
+  (hoje ele tem `PowerUserAccess` direto).
 - **Ordem inversa no teardown** — destruir o hub antes das spokes deixa órfão. Usar
   Usage API do Crossplane ou fitness function de guarda.
 - **Route 53 recusa deletar zona não-vazia** — workloads têm que sair antes ou o XR
@@ -377,6 +420,7 @@ ArgoCD sincronizado, Crossplane com provider pronto.
 | Região de plataforma ociosa | US$ 150–250/mês | Motivo do ciclo provisiona/destrói |
 | Control plane EKS | ~US$ 73/mês por cluster | Relevante quando a contagem de células cresce |
 | Route 53 Resolver endpoints | 2 ENIs por spoke, cobradas por hora | Com spoke efêmera vira custo fixo relevante |
+| **Célula dedicada (silo) por tenant-região** | **~US$ 150/mês de piso** | EKS ~73 + NAT ~33 + baseline. **É este número que define a linha pool↔silo entre os tiers** (§3), não preferência arquitetural |
 
 **Alternativa aos resolver endpoints (avaliada para PoC):** EKS em `public + private`
 com allowlist de CIDR, VPN em full tunnel saindo pelo NAT do hub → allowlista um
@@ -400,6 +444,11 @@ por spoke.
 | 8 | Sizing de célula (quantos tenants cabem) | Requer medição, não estimativa |
 | 9 | Cloud WAN vs. malha de TGW — a partir de quantas regiões | Só relevante além de ~3 regiões |
 | 10 | Contrato de input/output do módulo `regional-hub` | Se for pequeno, a portabilidade se resolve sozinha |
+| 11 | **Spoke de tenant participa do roteamento central?** | Decide se CIDR de tenant é único ou repetido. O plano atual (`/16` em `10.0.0.0/12`) tem teto de **15 spokes**, e região multiplica — 10 tenants em 2 regiões já estoura. É a única decisão irreversível da cadeia (ver decisão 12) |
+| 12 | **Como levantar o teto de CIDR**: ampliar supernet, CIDR repetido para spoke isolada, VPC IPAM, ou alocação bidimensional | Depende de 11. Ampliar supernet depois de existir spoke é migração; um `/8` colide com qualquer peer externo futuro |
+| 13 | **Tiers do produto e modelo (pool/bridge/silo) por tier** | Decisão comercial que destrava toda estimativa de custo por tenant (§3) |
+| 14 | **Perfis de residência oferecidos** (quais jurisdições) | Definir depois vira reorganização da árvore de OUs, com janela sem SCP durante o `move-account` |
+| 15 | **Contenção regional do control plane**: SCP em OU, session tag na cadeia de assume, ou role destino por região | A opção de session tag depende de o provider-aws propagar tags em `assumeRoleChain` — **não verificado** |
 
 ### Sobre a decisão 6
 Se `auth` roda no cluster de plataforma e está no **caminho da requisição**, o hub
@@ -418,6 +467,13 @@ de operar).
   Infrastructure"** — referência canônica da topologia.
 - **"Organizing Your AWS Environment Using Multiple Accounts"** — estrutura de OU.
 - **"Network Orchestration for AWS Transit Gateway"** — solução de referência.
+- **[SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html)**
+  (Well-Architected, lens oficial, pub. 2023-04-04) — modelos de tenancy e isolamento de tenant.
+  Páginas usadas:
+  [Silo, Pool, and Bridge Models](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/silo-pool-and-bridge-models.html),
+  [Tenant Isolation](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/tenant-isolation.html).
+- **[SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)**
+  — base da decisão de aposentar o IAM user do Crossplane (§7).
 
 ---
 
@@ -426,6 +482,12 @@ de operar).
 - `github.com/smsilva/wasp-idp` — frente de infra AWS. Branch
   `feat/aws-hub-bootstrap-network`, diretório `aws/`. Docs de accounts em
   `aws/docs/accounts/`.
+  - **`aws/docs/` é a referência por domínio** (`bootstrap`, `network`, `accounts`, `security`,
+    `dns`, `compute`, `observability`, `tenancy`); `aws/docs/CLAUDE.md` é o índice mestre. Este
+    documento é a visão de **plataforma**; onde os dois divergirem, **a doc de domínio ganha**
+    (mesma regra da nota em §8).
+  - Material desta seção §3 aprofundado em `aws/docs/tenancy/`; identidade do Crossplane de §7 em
+    `aws/docs/security/08-identidade-do-control-plane.md`.
 - `github.com/smsilva/kubernetes` — origem do aws-saas-platform.
 - Microserviços FastAPI da plataforma: `discovery`, `platform-frontend`,
   `callback-handler`.

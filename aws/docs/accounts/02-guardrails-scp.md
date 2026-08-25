@@ -46,11 +46,22 @@ aws organizations list-roots \
 
 | Guardrail | Aplicado em | Efeito |
 |---|---|---|
-| **Restringir região** | Todas as OUs de workload | Nega ações fora das regiões aprovadas (`<approved-regions>`) — evita recursos esquecidos em região não monitorada |
+| **Restringir região** | Todas as OUs de workload | Nega ações fora das regiões aprovadas (`<approved-regions>`) — evita recursos esquecidos em região não monitorada. **A lista de regiões é propriedade da OU, não da conta** — ver nota abaixo |
 | **Impedir sair da Organization** | Root (toda a Organization) | Nega `organizations:LeaveOrganization` — uma conta-membro não pode se desvincular sozinha |
 | **Proteger a Organization e o CloudTrail** | Root | Nega deletar/desabilitar o CloudTrail e as roles de auditoria |
 | **Exigir IMDSv2** | OU Workloads | Nega `ec2:RunInstances` sem `HttpTokens=required` — mitiga SSRF contra o metadata service |
 | **Negar acesso root** | Todas exceto Management | Nega ações feitas pelo usuário root da conta-membro (uso de root deve ser só emergencial) |
+
+> **A restrição de região é um eixo de particionamento da árvore, não um parâmetro por conta.**
+> Como SCP atacha em OU, qualquer guardrail que precise **variar** entre contas obriga a criar uma
+> OU por variação. Enquanto todas as contas de workload compartilham a mesma lista de regiões
+> aprovadas, uma SCP única resolve. Quando houver clientes com exigências de jurisdição
+> diferentes, a lista deixa de ser global e as OUs de workload precisam ser particionadas por
+> **perfil de residência de dados** — desenho em `../tenancy/02-ou-por-geografia.md`.
+>
+> Essa mesma SCP é também a **primeira linha de contenção regional** para a automação: um control
+> plane regional que receba um XR com a região errada é barrado pela SCP da OU da conta-alvo,
+> antes de qualquer condição na role (`../security/08-identidade-do-control-plane.md`).
 
 ## Exemplo de SCP — restringir região
 

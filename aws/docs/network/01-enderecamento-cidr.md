@@ -72,6 +72,36 @@ por `crossplane render` offline. Detalhe do "como" e o gotcha `%d`→`%v` em
 > **Spokes de tamanho != `/16`** (ex.: `/20`) exigiriam cálculo de IP, não string-format →
 > extensão futura via `function-kcl`. Hoje só `/16` alinhado à supernet.
 
+## ⚠️ Teto do plano: 15 blocos, e região multiplica
+
+O plano acima dá **15 blocos alocáveis** (N=1..15). Suficiente enquanto se conta *projetos*;
+insuficiente assim que se conta **spoke × região**, porque cada conta que opera em duas regiões
+instancia **duas** VPCs e consome **dois** blocos.
+
+| Cenário | Spokes | Blocos |
+|---|---|---|
+| 1 hub + 1 control plane + 3 projetos, 1 região | 5 | 5 / 15 |
+| o mesmo, 2 regiões | 10 | 10 / 15 |
+| 10 tenants dedicados, 1 região | 10 | 10 / 15 |
+| 10 tenants dedicados, 2 regiões | 20 | **estourou** |
+
+O erro de dimensionamento é **contar contas e esquecer regiões**. Nenhuma correção é urgente hoje
+(o consumo real é 1 bloco), mas a escolha precisa ser feita **antes** do spoke que cruzar o teto —
+CIDR é a única decisão irreversível deste domínio.
+
+### Decisão em aberto: como levantar o teto
+
+| Caminho | Custo | Quando é o certo |
+|---|---|---|
+| **Ampliar a supernet** (`/12` → `/10`, `/8`) | Migração se houver spoke; um `/8` come todo o espaço privado classe A e colide com peer externo futuro | Só se **todas** as spokes precisarem de rota central |
+| **CIDR repetido para spoke isolada** | Zero — é reinterpretação, não mudança | Se spoke de tenant não participa do roteamento central. Unicidade só é exigida entre VPCs que se falam |
+| **VPC IPAM** com pools por região/tier | Trabalho novo; substitui o octeto calculado | Alocação em escala com múltiplas regiões e tiers |
+| **Alocação bidimensional** (`/20` por spoke dentro do bloco do tier) | Exige cálculo de IP → `function-kcl` | Muitas spokes pequenas por região |
+
+A escolha depende de uma pergunta ainda aberta: **spoke de tenant precisa de rota privada para o
+hub, ou só é alcançada pela API da AWS e pelo endpoint do cluster?** Análise em
+[`../tenancy/03-cidr-e-tenancy.md`](../tenancy/03-cidr-e-tenancy.md).
+
 ## Well-Architected — porquê
 
 | Best practice | Como o plano atende |

@@ -65,12 +65,19 @@ autentica, o salto Hub→spoke não muda. Só troca o primeiro elo da cadeia.
 |---|---|---|
 | **k3d local** (PoC hoje) | sem issuer público → Roles Anywhere (PKI) **ou** access key de bootstrap | sim — degrau de PoC |
 | **AKS** (undercloud/cluster-zero) | **OIDC federation** (`AssumeRoleWithWebIdentity`) via issuer do AKS | ❌ nenhuma |
-| **EKS** (se o control plane fosse AWS) | **IRSA/Pod Identity** nativo (nem OIDC provider manual) | ❌ nenhuma |
+| **EKS** (**alvo decidido** — spoke de plataforma) | **IRSA/Pod Identity** nativo (nem OIDC provider manual) | ❌ nenhuma |
 
 Ou seja, o cenário "control plane no AKS provisionando EKS numa spoke" é
 `role federada OIDC no AKS` → assume `crossplane-<spoke>` na conta spoke → cria a VPC/EKS. É a
 evolução **aditiva** do bootstrap atual: quando o control plane sair do k3d para um AKS/EKS, a
 credencial-raiz de longa duração **deixa de existir** sem tocar no hop cross-account.
+
+> **O EKS não é mais hipótese.** O desenho de plataforma já decidiu que o control plane roda
+> numa **spoke privilegiada** com EKS + ArgoCD + Crossplane instalados pelo Terraform, com o
+> trust da Pod Identity criado junto (`../../../decisions.md`, §2 e §7). A linha "EKS" acima é
+> o alvo, não um cenário alternativo — e a granularidade de *quantas* identidades isso exige
+> (uma por control plane regional, não uma por cluster gerenciado) está em
+> [`08-identidade-do-control-plane.md`](08-identidade-do-control-plane.md).
 
 > **Decisão registrada (PoC):** para a PoC, a credencial-raiz por **access key** do
 > `crossplane-poc` (k3d fora da AWS) é aceita como **débito consciente** — mesma categoria do

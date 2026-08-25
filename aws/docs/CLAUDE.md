@@ -71,12 +71,21 @@ Helm = **papel topológico** (`hub`, `spoke`). O chart `hub` provisiona na conta
 | 4 | **DNS** — zonas públicas/privadas, delegação, alias/apex/wildcard, resolução cross-account, external-dns + TLS | [`dns/CLAUDE.md`](dns/CLAUDE.md) | ✅ completo |
 | 5 | **Compute** — EKS como spoke, node groups, add-ons + Pod Identity, RBAC, ingress, GitOps | [`compute/CLAUDE.md`](compute/CLAUDE.md) | ✅ completo |
 | 6 | **Observability** — logs, métricas, alertas de conectividade, custo como sinal | [`observability/CLAUDE.md`](observability/CLAUDE.md) | ✅ completo |
+| 7 | **Tenancy & SaaS** — SaaS Lens (silo/pool/bridge), conta por tenant, OU por geografia, CIDR × tenant | [`tenancy/CLAUDE.md`](tenancy/CLAUDE.md) | 🟡 desenho (nada aplicado) |
 
 > A ordem de construção segue a dependência real: **bootstrap primeiro** (dá à automação a
 > credencial que ela usa em todos os domínios seguintes), depois **network** (a fundação
-> sobre a qual contas, clusters e VPNs se apoiam). Os **7 domínios estão completos** — o
-> próximo passo do projeto é retomar o schema detalhado e a spec de implementação (ver
-> `../../HANDOFF.md`).
+> sobre a qual contas, clusters e VPNs se apoiam). Os domínios **0–6 estão completos**; o
+> **7 (tenancy)** é o único puramente prospectivo — desenho sem nada aplicado numa conta real.
+>
+> **Tenancy decide antes de `accounts/` executar.** Quando houver cliente externo, os tiers e os
+> perfis de residência (`tenancy/`) precisam estar definidos **antes** de criar contas de tenant —
+> definir depois vira reorganização da árvore de OUs, com janela sem SCP durante o move. Para a
+> topologia interna atual (projetos próprios, sem tenant externo), `accounts/` basta.
+>
+> A visão de plataforma correspondente — sequência de provisionamento por fases, células,
+> roteamento global — vive em `../../decisions.md`. Onde os dois divergirem, **a doc de domínio
+> ganha** (regra registrada em `decisions.md` §8).
 
 ## Relação com o resto do repo
 
@@ -93,6 +102,9 @@ Trabalho de rede hub-and-spoke maduro (KCL/Crossplane), usado como base:
 - Landing Zone (visão de arquitetura): `<hub-repo>/docs/02-arquitetura/aws-landing-zone.md`
 - Templates KCL: `<assets-repo>/crossplane/providers/aws/{hub_network,spoke_network,tgw,vpn_connection}/`
 - AWS Well-Architected Framework — pilares e best practices ([REL02 — Plan your network topology](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html), [SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html), etc.).
+- **[SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html)** —
+  lens oficial do Well-Architected para workloads SaaS multi-tenant (pub. 2023-04-04). Fonte
+  primária do domínio `tenancy/`; complementa os pilares em vez de substituí-los.
 
 ## Explorações paralelas (em andamento, nenhuma final)
 

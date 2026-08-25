@@ -27,6 +27,7 @@ workload (Pod Identity/IRSA), autenticação de VPN e detecção.
 | 5 | [`05-autenticacao-vpn.md`](05-autenticacao-vpn.md) | Client VPN (cert/SSO) e site-to-site (PSK); ciclo de vida da credencial; ponte com `../network/04` | Security ([SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)/[SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)) |
 | 6 | [`06-deteccao-e-auditoria.md`](06-deteccao-e-auditoria.md) | CloudTrail, IAM Access Analyzer, GuardDuty, credential report; achar privilégio excessivo | Security ([SEC04 — Detection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html)) |
 | 7 | [`07-mapa-crossplane.md`](07-mapa-crossplane.md) | O que de IAM é (e não é) provisionável via Crossplane; estado do PoC vs. alvo; bootstrap galinha-e-ovo | — |
+| 8 | [`08-identidade-do-control-plane.md`](08-identidade-do-control-plane.md) | Quantas identidades para N control planes regionais; role origem vs. role destino; contenção de região; aposentar o IAM user | Security ([SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)) |
 
 ## Sequência de construção (perímetro de identidade)
 
@@ -37,6 +38,7 @@ workload (Pod Identity/IRSA), autenticação de VPN e detecção.
 ④ Roles cross-account com trust policy escopada (Hub↔projeto) — em vez de duplicar credenciais
 ⑤ RAM shares com allowExternalPrincipals=false (perímetro: só a própria Organization)
 ⑥ Identidade de workload no cluster (Pod Identity/IRSA) — pods assumem role, sem access key montada
+  ⑥b Identidade do próprio control plane: 1 role origem por control plane regional (→ tópico 8)
 ⑦ Autenticação de VPN (cert/SSO para client; PSK para site-to-site) fechando no Hub
 ⑧ Detecção sempre ligada (CloudTrail + Access Analyzer + GuardDuty) — violação vira sinal
 ```
@@ -45,13 +47,18 @@ workload (Pod Identity/IRSA), autenticação de VPN e detecção.
 
 - **Hoje no PoC:** um IAM user dedicado (`crossplane-poc`) com `PowerUserAccess` +
   inline policy escopada às roles `poc-eks-*` opera o Crossplane; humanos entram via SSO
-  `AdministratorAccess`. Sem permission boundary, sem Access Analyzer, sem roles
-  cross-account (conta única). Ver `../../CLAUDE.md` e `../../eks/providers/bootstrap-iam-policy.json`.
+  `AdministratorAccess`. **Cross-account já existe:** uma role na conta de workload com trust
+  para esse user, assumida via `assumeRoleChain` do ProviderConfig — o hop Hub→spoke está
+  validado. Ainda sem permission boundary e sem Access Analyzer. Ver `../../CLAUDE.md` e
+  `../../eks/providers/bootstrap-iam-policy.json`.
 - **Alvo desta referência:** perímetro completo — boundaries por conta, roles cross-account
   escopadas Hub↔projeto, Pod Identity para os workloads do cluster, RAM restrito à
   Organization, detecção sempre ligada.
 - **Gap crítico já mapeado:** o bootstrap galinha-e-ovo do IAM (a automação não pode
   auto-conceder IAM) é um passo manual de admin, não automatizável — tópico 7.
+- **Gap estrutural:** a credencial-raiz ainda é uma **access key de longa duração**, o que
+  contraria [SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html).
+  Aceitável para um control plane; insustentável para N control planes regionais — tópico 8.
 
 ## Relação com o resto do repo
 

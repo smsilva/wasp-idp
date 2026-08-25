@@ -26,24 +26,49 @@ essas ferramentas diretamente — os princípios são os mesmos).
 | Papel | Quantas | Hospeda | Nunca hospeda |
 |---|---|---|---|
 | **Management Account** (gerência) | 1 | A Organization em si: OUs, SCPs, billing consolidado, IAM Identity Center | **Nenhum workload.** Nem VPC, nem EC2, nem Crossplane. |
-| **Hub / Connectivity Account** | 1 (por região, se multi-região) | Transit Gateway, VPN Connections, RAM shares — os recursos compartilhados de `../network/` | Workloads de projeto |
-| **Project Account** | 1 por projeto | A(s) spoke(s) daquele projeto — VPC, subnets, EKS, apps | Recursos de outro projeto |
+| **`network`** (Connectivity Account) | **1, para todas as regiões** | O(s) Hub(s) — Transit Gateway, VPN Connections, RAM shares de `../network/`. Um conjunto desses recursos **por região**, todos na mesma conta | Workloads de projeto |
+| **`log-archive`** | 1 | Bucket de auditoria do trail organizacional (`07-cloudtrail-e-log-archive.md`) | Qualquer coisa além de logs |
+| **Control plane / plataforma** | 1 por ambiente | A spoke privilegiada que roda EKS + Crossplane + ArgoCD e provisiona as demais spokes (`../compute/00-cluster-como-spoke.md`) | Workload de aplicação de tenant |
+| **Project / workload account** | 1 por projeto **por ambiente** | A(s) spoke(s) daquele projeto-ambiente — VPC, subnets, EKS, apps | Recursos de outro projeto ou de outro ambiente |
 
 > **A regra mais importante deste tópico:** a conta de gerência **nunca** hospeda
 > workload. É a recomendação nº1 da AWS para Organizations — reduzir o escopo da conta mais
 > privilegiada ao mínimo possível (só administra, não roda nada). Ver `01-organizations-e-ous.md`.
 
-## Por que não "uma conta por ambiente" em vez de "uma conta por projeto"?
+## Conta não tem região
 
-Ambas são válidas; a escolha depende do eixo de isolamento que mais importa:
+Uma conta AWS é **global**. Região é uma dimensão *dentro* dela, não um eixo de particionamento
+entre contas. Consequências que costumam ser lidas ao contrário:
 
-| Eixo | Quando escolher |
+- A conta `network` é **uma só** mesmo com hub em três regiões — o que se repete por região é o
+  conjunto Hub VPC + TGW + egress, não a conta.
+- IAM é global: uma role criada numa conta vale para qualquer região dela. Logo **não existe**
+  "role de us-east-1" — se você quer contenção regional, ela vem de condição
+  (`aws:RequestedRegion`) ou de SCP, nunca de conta separada.
+- Um projeto que expande para uma segunda região **continua na mesma conta**; ganha outra VPC,
+  não outra conta.
+
+Criar conta por região só se justifica quando o eixo real é outro (residência de dados,
+compliance por jurisdição) — e nesse caso o agrupamento correto é por **perfil de residência**
+via OU, não por região solta. Ver `../tenancy/02-ou-por-geografia.md`.
+
+## Conta por projeto **e** por ambiente
+
+A referência prescreve **uma conta por projeto por ambiente** (`<projeto>-nonprod`,
+`<projeto>-prod`) — não é decisão delegada ao projeto. A razão: a conta é o **único** limite
+forte simultâneo de cota, SCP, IAM e billing. Ambiente separado por VPC dentro de uma conta
+compartilha todos os quatro, então "prod" e "nonprod" competem pela mesma cota de EIP e caem
+sob a mesma SCP.
+
+O eixo por projeto e o eixo por ambiente **não competem** — compõem:
+
+| Eixo | O que isola |
 |---|---|
-| **Por projeto** (esta referência) | Blast radius e billing por time/produto importam mais que por estágio (dev/prod). Cada projeto pode ter múltiplos ambientes como spokes distintos dentro da mesma conta, ou contas próprias por ambiente — decisão do projeto, não da plataforma. |
-| **Por ambiente** | Quando compliance exige separação regulatória rígida entre dev/staging/prod (ex.: PCI-DSS). |
+| **Por projeto** | Blast radius e billing por time/produto; cota de um projeto não vira teto de outro |
+| **Por ambiente** | Guardrail diferenciado (SCP mais restritiva em prod), cota independente, e a garantia de que um erro em nonprod não alcança prod por IAM |
 
-Nada impede combinar: conta por projeto **e** spoke por ambiente dentro dela. A referência
-não prescreve isso — é decisão de cada projeto.
+Dentro de cada conta projeto-ambiente, cada cluster continua sendo uma spoke própria — a
+granularidade fina segue em `../network/00-topologia.md`.
 
 ## Bootstrap: a "conta vazia" que você já tem
 

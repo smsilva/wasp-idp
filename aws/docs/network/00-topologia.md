@@ -44,9 +44,13 @@ design consolidado da organização (ver `<hub-repo>/.../2026-05-26-hub-spoke-de
 
 | Camada | Conta | Contém | Ciclo de vida |
 |---|---|---|---|
-| **Hub** | Connectivity Account (dedicada) | Transit Gateway, `tgw-rt-hub`, VPN GW/CGW, VPN Connections, RAM shares | Estável — provisionado 1× por região |
-| **Projeto** | Uma account por projeto | Recursos do projeto; pode ter 1+ spokes | Por projeto |
+| **Hub** | `network` (Connectivity, **uma para todas as regiões**) | Transit Gateway, `tgw-rt-hub`, VPN GW/CGW, VPN Connections, RAM shares | Estável — **um conjunto desses recursos por região**, dentro da mesma conta |
+| **Projeto** | Uma account por projeto **por ambiente** | Recursos daquele projeto-ambiente; pode ter 1+ spokes | Por projeto-ambiente |
 | **Spoke** | Dentro da account de projeto | VPC + subnets + attachment ao TGW + `tgw-rt-<spoke>` | Por cluster (cada cluster = 1 spoke) |
+
+> **Não confundir conta com região.** "1× por região" acima descreve o **conjunto de recursos**
+> do Hub, não a conta: a conta `network` é uma só e é global. Ver
+> `../accounts/00-estrategia-de-contas.md`, seção "Conta não tem região".
 
 **Por que account por projeto?** Isolamento de blast radius, billing por projeto, e cotas
 AWS que são por-conta (VPCs, EIPs) deixam de ser limite arquitetural global. Todas as
@@ -82,8 +86,9 @@ quando houver soberania de dado entre regiões) ficam fora do escopo desta PoC s
 
 ## Hub regional — por que "1 por região" não é um detalhe de rodapé
 
-A tabela acima já diz "1 (por região, se multi-região)" — vale explicitar o porquê, porque
-é fácil ler isso como opcional e não como restrição física:
+A tabela acima já diz "um conjunto desses recursos por região, dentro da mesma conta" — vale
+explicitar o porquê, porque é fácil ler isso como opcional e não como restrição física (e ainda
+mais fácil concluir, erradamente, que seriam contas diferentes):
 
 - **TGW é um recurso regional.** Não existe TGW global — cada região precisa do seu
   próprio hub (VPC hub + TGW), mesmo que a conta de Connectivity seja global e única. A

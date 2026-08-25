@@ -62,6 +62,18 @@ Root
   no TGW do hub), limite de gasto próprio. `NonProd` valida o caminho para produção;
   `Sandbox` não valida nada, só explora. Opcional nesta referência.
 
+### Se houver tenants externos: OU por perfil de residência
+
+A estrutura acima particiona `Workloads` por **SDLC stage**, o que é correto para projetos
+próprios. Com **clientes externos**, aparece um segundo eixo, e ele não pode ser um campo por
+conta: **SCP atacha em OU**, então a lista de regiões permitidas a um cliente tem de ser uma
+propriedade da árvore.
+
+O agrupamento correto é por **perfil de residência de dados** (`Tenants-US`, `Tenants-EU`,
+`Tenants-BR`), não por cliente — agrupar por cliente faria o número de OUs crescer com as
+combinações de regiões vendidas, não com a base. Desenho completo, incluindo a armadilha dos
+serviços globais na SCP de região, em `../tenancy/02-ou-por-geografia.md`.
+
 ### Por que uma conta por ambiente, e não um ambiente por VPC
 
 A **conta** é o único limite forte da AWS: quota de serviço, SCP, IAM e billing são todos
