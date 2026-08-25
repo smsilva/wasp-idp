@@ -48,9 +48,9 @@ variable "enable_nat_gateway" {
 }
 
 variable "kubernetes_version" {
-  description = "Versao do Kubernetes."
+  description = "Versao do Kubernetes. O terraform.tfvars gerado por scripts/generate-tfvars sobrescreve com a versao default do EKS descoberta na hora."
   type        = string
-  default     = "1.34"
+  default     = "1.36"
 }
 
 variable "network_account_id" {

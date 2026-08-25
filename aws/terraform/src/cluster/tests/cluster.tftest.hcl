@@ -27,8 +27,8 @@ run "versao_default_do_kubernetes" {
   command = plan
 
   assert {
-    condition     = aws_eks_cluster.this.version == "1.34"
-    error_message = "versao default do kubernetes: esperado 1.34, recebido ${aws_eks_cluster.this.version}"
+    condition     = aws_eks_cluster.this.version == "1.36"
+    error_message = "versao default do kubernetes: esperado 1.36, recebido ${aws_eks_cluster.this.version}"
   }
 }
 

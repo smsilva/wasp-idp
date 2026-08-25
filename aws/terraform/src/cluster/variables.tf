@@ -4,9 +4,9 @@ variable "name" {
 }
 
 variable "kubernetes_version" {
-  description = "Versao do Kubernetes do control plane."
+  description = "Versao do Kubernetes do control plane. Default = versao default do EKS em 2026-08-25; conferir com 'aws eks describe-cluster-versions' antes de criar cluster novo."
   type        = string
-  default     = "1.34"
+  default     = "1.36"
 }
 
 variable "subnet_ids" {
