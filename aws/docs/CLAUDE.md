@@ -28,7 +28,7 @@ por qualquer time.
 
 | Princípio | O que significa aqui |
 |---|---|
-| **Well-Architected** | Cada decisão é justificada contra os pilares AWS WAF (com foco em Security, Reliability, Operational Excellence e Cost). Referências REL/SEC/OPS citadas nos tópicos. **Conferir o ID contra a página oficial antes de citar** — nunca de memória: numeração e títulos mudam entre revisões do framework, e IDs errados já passaram batido em três tabelas. |
+| **Well-Architected** | Cada decisão é justificada contra os pilares AWS WAF (com foco em Security, Reliability, Operational Excellence e Cost). Referências REL/SEC/OPS citadas nos tópicos. **Conferir o ID contra a página oficial antes de citar** — nunca de memória: numeração e títulos mudam entre revisões do framework, e IDs errados já passaram batido em três tabelas. **O WAF nomeia zero contas e zero OUs** — nome de conta vem do AWS SRA, nome de OU vem do whitepaper *Organizing Your AWS Environment*; ver a tabela de hierarquia de fontes em `accounts/01-organizations-and-ous.md`. |
 | **Composable by design** | Cada peça é uma abstração componível (Crossplane XR): Network, Cluster, DnsZone. Um recurso de alto nível compõe os de baixo; nada é monolítico. (Pilar 5 do "Platform Engineering 2.0".) |
 | **Agnóstico ao ambiente** | O corpo da doc usa **placeholders** (`<hub-cidr>`, `<root-domain>`, `<asn>`) — ninguém precisa dos valores reais de uma organização específica para reusar a referência. |
 | **Nunca alterar config compartilhada** | Só ADICIONAR recursos isolados. Regra herdada do PoC (ver `../../CLAUDE.md`). |
@@ -59,6 +59,33 @@ Helm = **papel topológico** (`hub`, `spoke`). O chart `hub` provisiona na conta
   o que já existe no repo e o gap até o alvo).
 - **Placeholders no corpo.** Convenção: `<algo-entre-angle-brackets>` é um valor que o
   adotante preenche com os dados da sua própria conta.
+- **Nome de arquivo e H1 em inglês**; headings `##` e corpo na língua do projeto (pt-BR). Não
+  repetir o nome da pasta no arquivo (`dns/05-security.md`, não `dns/05-dns-security.md`).
+
+### Ao renomear um arquivo desta pasta
+
+Varrer **todos os arquivos versionados**, não só `*.md`. Referências a caminhos de doc vivem
+também em: texto de `--help` dos scripts em `accounts/scripts/`, comentários de YAML em
+`../eks/resources/`, e campos `description` de XRD. Uma varredura restrita a `*.md` deixa esses
+apontando para arquivo inexistente — já aconteceu, com 13 referências quebradas em 10 arquivos.
+
+```bash
+git ls-files | xargs grep -l '<nome-antigo>.md'   # sem filtro de extensão
+```
+
+Depois de qualquer `sed` amplo, conferir `git status` por arquivos tocados que ficaram **fora do
+stage** — `git add` por caminho explícito já perdeu uma correção silenciosamente.
+
+### Ao verificar uma citação nas docs da AWS
+
+As páginas de whitepaper do `docs.aws.amazon.com` nem sempre têm um slug por seção: a OU
+`Deployments`, por exemplo, mora em `advanced-ous.html`, não em `deployments-ou.html` (esse
+retorna vazio). Descobrir o slug real pelo índice em vez de adivinhar:
+
+```bash
+curl -s https://docs.aws.amazon.com/whitepapers/latest/<guia>/toc-contents.json \
+  | grep -oE '"[a-z0-9_-]+\.html"' | sort -u
+```
 
 ## Domínios
 

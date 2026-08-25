@@ -14,6 +14,21 @@ provisiona VPC+EKS numa conta **spoke** (não na `network`, que é só rede/cone
 ProviderConfig com `assumeRoleChain`. TGW real adiado (Gap 2 — migração futura aditiva).
 Rejeitado: TGW agora; CIDR fixo; `<...>` em campos executáveis.
 
+**Sequência de provisionamento vigente: −1 → 0 → 2 → 5** (`decisions.md` §8). A Fase 1
+(Global Accelerator + tenant registry) está **pulada**: escopo atual é só projetos internos,
+sem cliente externo. Pular a Fase 1 **não** autoriza assumir região fixa — a indireção do §5
+(nome sem região no que o usuário vê, TTL curto de DNS, tenant na chave primária) continua
+obrigatória.
+
+**Alvo do próximo trabalho de código: módulo Terraform que substitui o bootstrap feito hoje
+pelo k3d.** Escopo **fino** decidido: Terraform entrega VPC hub + VPC spoke + EKS + nodegroup
++ Pod Identity base + ArgoCD + Crossplane, e para. Addons (istio, cert-manager, external-dns,
+ESO, ALB controller, route53 zone/wildcard) passam a vir por GitOps. Critério: cardinalidade ×
+churn — Terraform para o que se cria uma vez por região, GitOps para o que muda toda semana.
+Rejeitado: **paridade total** (Terraform instalando os addons, como faz o exemplo Azure de
+referência) e o padrão **seed cluster / hub-of-hubs** (`decisions.md` §7 — cria dependência de
+disponibilidade e não elimina o Terraform, só o esconde).
+
 ## Vocabulário (ler antes de qualquer coisa)
 
 "hub" cobria três eixos independentes e a ambiguidade custou tempo. Dois foram renomeados;
@@ -24,6 +39,7 @@ só o topológico mantém o termo:
 | **Conta AWS** de conectividade | `network` — Connectivity Account, OU `Infrastructure` | "conta hub", profile `hub`, ProviderConfig `hub` |
 | **Papel topológico** de rede | `hub` — único uso legítimo. Par de `spoke`; chart `platform/charts/hub`, VPC hub, TGW | (inalterado) |
 | **Control plane** Crossplane (k3d) | **Control Plane** / `control-plane` | "hub k3d", `poc-eks-hub-config` |
+| **Conta** do Control Plane | `cicd`, na OU `Deployments` | `platform` |
 
 `network` é canônico no whitepaper *Organizing Your AWS Environment Using Multiple Accounts*,
 no AWS SRA e no Landing Zone Accelerator. A AWS **não** nomeia contas como "Hub".
@@ -33,6 +49,17 @@ O chart `platform/charts/hub` **não** foi renomeado de propósito: ali "hub" é
 
 O prefixo `poc-idp/` no Secrets Manager (`poc-idp/crossplane-poc-credentials`) é o nome real
 de um secret na AWS, não apelido do cluster — **não renomear**.
+
+**`cluster-zero` é da trilha Azure (AKS), pausada — não é o Control Plane da AWS.** No contexto
+AWS nunca dizer "cluster zero". O plano `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`
+aponta para `infra/terraform/cluster-zero/README.md`, que **nunca existiu em nenhum branch** —
+é link para artefato não construído, não doc desatualizada. Não apagar: é registro de desenho
+de outra trilha.
+
+**Hierarquia de fontes AWS** (confundi-las já produziu claim sem fonte no repo): **WAF** diz
+*por quê* isolar por conta e **nomeia zero contas e zero OUs**; o **whitepaper** nomeia OUs
+(`Security`, `Infrastructure`, `Workloads`, `Sandbox`, `Deployments`, …); o **SRA** nomeia
+contas (`Shared Services`, `Network`, …). Tabela em `aws/docs/accounts/01-organizations-and-ous.md`.
 
 ## In Progress
 
@@ -58,6 +85,9 @@ Root  r-f11d
     └── OU   Production        ou-f11d-vyxw3s7r   (vazia)
 ```
 
+**A OU `Deployments` e a conta `cicd` NÃO existem ainda** — foram decididas e escritas nos
+scripts nesta sessão, mas nada foi aplicado contra a AWS.
+
 **Passos ①–⑥ concluídos.** SCPs baseline verificadas em todos os targets:
 
 | Target | SCPs (além de `FullAWSAccess`) |
@@ -80,17 +110,17 @@ Network      (094289743086)   (nenhuma — só OrganizationAccountAccessRole)
 wasp-nonprod (832721568602)   (nenhuma — idem)
 ```
 
-Revisão do passo ⑦ contra o WAF nesta sessão: IDs de best practice corrigidos ([SEC02-BP04 — Rely on a centralized identity provider](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html) e
-[SEC03-BP02 — Grant least privilege access](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_least_privileges.html) estavam citados como BP01), e **break-glass ([SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)) documentado** em
-`aws/docs/accounts/04-cross-account-access.md` — não existia processo, então o caminho real de
-emergência era o root, exatamente o que ⑦ existe para evitar.
+Break-glass ([SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html))
+documentado em `aws/docs/accounts/04-cross-account-access.md`; controles (MFA no root, alarme
+de uso) pendentes.
 
 E-mail do root da `Network` migrado de `+hub@` para `+network@` (fluxo de root no console —
 **não existe API** para isso; `put-account-name` muda só o nome).
 
-Próximo passo pretendido: atribuir permission set a `Network` e `wasp-nonprod`, eliminando o
-switch-role via `OrganizationAccountAccessRole`; e migrar a management account de usuário para
-o grupo `platform-admins`.
+**Novo passo ⑤b na sequência:** criar a conta `cicd` na OU `Deployments`. Uma conta só, tratada
+como produção — o whitepaper recomenda rodar CI/CD em *"production deployment accounts"*, então
+**não existe `cicd-nonprod`**. Contas da OU `Infrastructure` também não têm variante de
+ambiente, por recomendação explícita do whitepaper.
 
 ### Frente B — Crossplane / EKS
 
@@ -113,62 +143,97 @@ Cross-account + Fase 4 (split de charts + identidade) prontos e validados offlin
   `k3d-control-plane`) em 8 scripts; `EnvironmentConfig` `control-plane-config` com label
   `platform.example.com/control-plane`.
 
-Identidade da credencial-raiz analisada vs. Well-Architected (registro em
-`aws/docs/security/04-workload-identity.md`): cross-account `network`→spoke
-(`AssumeRole`+STS) já é WAF-aligned; o único cheiro é o **access key de longa duração** do
-`crossplane-poc`, porque o Crossplane roda num k3d fora da AWS. **Decisão (PoC): aceito como
-débito consciente** — resolve-se ao migrar o Control Plane p/ AKS (OIDC federation,
-`AssumeRoleWithWebIdentity`) ou EKS (IRSA); Roles Anywhere é o plano B p/ eliminar o key ainda
-no k3d.
-
 O ciclo real já foi provado antes do rename (com o chart antigo): `helm install` criou VPC
 `10.1.0.0/16`+NAT, `helm uninstall` destruiu tudo (teardown limpo AWS-side). Orquestrador
 `environment/` marcado BLOCKED (incompatível com `metadata.name`; rework = sketches
 `resources/examples/topology/05-07`).
 
-**Custo atual: zero.** O Control Plane k3d foi destruído (chamava-se `flow-idp`, criado com
-`--cluster-name` custom; tinha os 8 providers `Healthy` e **zero managed resources**, então
-não há recurso AWS órfão). Nenhuma VPC/EKS de pé.
+**Custo atual: zero.** Nenhuma VPC/EKS de pé. Cadeia renomeada validada ponta a ponta
+(2026-08-24) recriando o Control Plane do zero: 8 providers `Healthy`, 4 functions `Healthy`,
+XRDs `network`/`cluster` `Established`, ProviderConfigs sem resíduo de nome antigo.
 
-**Cadeia renomeada validada ponta a ponta (2026-08-24), custo zero.** Control Plane recriado do
-zero: 8 providers `Healthy`, 4 functions `Healthy`, XRDs `network`/`cluster` `Established`,
-ProviderConfigs `network`+`wasp-nonprod` sem resíduo de nome antigo. As 4 checagens do "How to
-Resume" passaram.
+**Achado da validação:** `install-crossplane` nascia com `--servers 3` (default herdado do
+track Azure, que só documentava lentidão) e neste host (8 cores) isso quebrava o **quorum do
+etcd** — crash-loop persistente, não simples atraso. Fix: `--servers 1`; providers `Healthy` em
+~4 min sem restart. Default do script alterado. Ver `aws/CLAUDE.md`.
 
-**Achado durante a validação:** `install-crossplane` nascia com `--servers 3` (default herdado
-do track Azure, que só documentava lentidão) e neste host (8 cores) isso quebrava o **quorum do
-etcd** — crash-loop persistente, não simples atraso. Fix: recriar com `--servers 1`; providers
-ficaram `Healthy` em ~4 min sem restart. Default do script alterado para 1. Ver
-`aws/CLAUDE.md`, "Gotcha (RESOLVIDA): k3d com 3 servers quebra o quorum do etcd neste host".
+**Divergência conhecida entre implementação e alvo:** hoje o chart `platform/charts/hub`
+renderiza um XR `Network` — o hub VPC é criado **por Crossplane a partir do k3d**, não por
+Terraform como a Fase 2 prescreve. Interpretação adotada: degrau de bootstrap consciente. É
+justamente essa divergência que o módulo Terraform vem fechar.
 
-Próximo passo pretendido: **Fase 5** — aplicar os charts `hub` → `spoke` → `cluster` (custo
-alto, VPC+EKS reais numa conta spoke). Control Plane atual já está pronto para isso; não
-precisa recriar.
+### Frente C — documentação de arquitetura (`aws/docs/`)
+
+Oito domínios: `bootstrap`, `network`, `accounts`, `security`, `dns`, `compute`,
+`observability`, `tenancy`. Os sete primeiros descrevem estado real ou alvo próximo;
+**`tenancy/` é puramente prospectivo** — desenho, nada aplicado numa conta.
+
+Adicionado nesta sessão:
+
+- **Domínio `tenancy/`** a partir da [SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html)
+  (lens oficial do WAF, pub. 2023-04-04): modelos silo/pool/bridge, conta por tenant, OU por
+  geografia, teto do CIDR.
+- **`security/08-control-plane-identity.md`**: com N control planes regionais são **1 role de
+  origem por control plane** (Pod Identity) + **1 role de destino por conta-alvo** (IAM é
+  global) + **zero** para o EKS de workload gerenciado.
+- **Correções de afirmações erradas**, todas na família conta × região × papel: `accounts/00`
+  dizia que a conta de conectividade é "1 por região" (é uma só, global); a mesma tabela
+  contradizia a decisão de conta por projeto **por ambiente** e omitia o papel de control
+  plane; `security/04` tratava control plane em EKS como hipótese; `security/CLAUDE.md` dizia
+  "sem roles cross-account (conta única)" quando a role já existia e estava validada.
+- **Claim sem fonte corrigido:** `aws/CLAUDE.md` afirmava que automação moraria numa
+  `shared-services`; o SRA define essa conta como AD/messaging/metadata (serviços que times
+  *consomem*). Orquestração de deploy é a OU `Deployments` do whitepaper.
+- Nomes de arquivo e H1 migrados para inglês; corpo segue pt-BR. Slot
+  `Infrastructure/shared-services` removido da árvore (pré-existente, vazio, especulativo).
+
+**A SaaS Lens confirma por escrito uma regra que `decisions.md` §3 já havia derivado sozinho:**
+mesmo com recursos dedicados, um silo *"still relies on a shared identity, onboarding, and
+operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed service*.
 
 ## Open Questions / Hypotheses
 
-- **Cadeia renomeada nunca rodou contra um cluster real.** Validada só por `helm template`,
-  `bash -n`, lint de YAML/JSON e leitura do enum do schema. Suspeita a confirmar no
-  bootstrap: `configure-aws-creds` aplica `provider-config-network.yaml` e
-  `configure-account-access --name wasp-nonprod` resolve o `${SPOKE_ACCOUNT_ID}` sem
-  resíduo do nome antigo.
-- **Renomear o cluster k3d muda o contexto de tudo** (`k3d-control-plane`). Se algum script
-  ou doc ainda assumir `k3d-poc-idp`, só aparece em runtime.
+- **[BLOQUEIA O DESIGN DO MÓDULO] Ovo-e-galinha do ArgoCD.** Com escopo fino, sem
+  istio/cert-manager/external-dns o ArgoCD não tem URL com TLS. Duas saídas: aceitar
+  `port-forward`/LoadBalancer cru no bootstrap, ou puxar esses três para o Terraform (terceira
+  opção que já foi apresentada: "fundação + o que destrava o GitOps"). **É a decisão que
+  interrompeu a sessão.**
+- **Conflação em `decisions.md` §2:** a spoke de plataforma roda *"auth, discovery, ArgoCD,
+  Crossplane"*. `auth` e `discovery` são runtime de aplicação **no caminho da requisição** —
+  não são build/validate/promote/release, logo não pertencem a uma conta de CI/CD pela
+  definição da própria OU. Se ficarem lá, a conta deixa de ser `Deployments`. Mesmo eixo da
+  decisão 6 do §11 (escopo do identity layer); resolver junto.
+- **Em qual conta fica a hosted zone pública** (`network` ou `cicd`): o whitepaper põe Route 53
+  Resolver na `network`; zona pública do produto é discutível. Registrado como `[ABERTO]` na
+  Fase 0 do §8.
+- **Teto do plano de CIDR: 15 spokes.** `/16` por spoke em `10.0.0.0/12`, e **região
+  multiplica** — 10 tenants em 2 regiões estoura. Quatro caminhos em
+  `aws/docs/network/01-cidr-addressing.md`; a escolha depende de saber se spoke de tenant
+  precisa de rota privada para o hub ou só é alcançada pela API da AWS e pelo endpoint do
+  cluster. É a única decisão irreversível da cadeia.
+- **Session tags em `assumeRoleChain`:** a opção 2 de contenção regional
+  (`aws:RequestedRegion` = `aws:PrincipalTag/region`) depende de o provider-aws propagar tags
+  de sessão. **Não verificado.** Se não propagar, a condição nunca casa e tudo é negado.
 - **Base do domínio:** `wasp.silvios.me` em Azure DNS; delegar subzona (ex.:
   `aws.wasp.silvios.me`) para Route53 ou o domínio inteiro? Sem `<hosted-zone-id>` as fatias
   DNS/ingress/TLS ficam bloqueadas; rede/EKS/Pod Identity/ESO rodam sem isso.
 - **Parametrizar** valores de `CLAUDE.local.md` (chart values? env? EnvironmentConfig?) —
   decidir após execução ponta a ponta.
 - **Rework do orquestrador `environment/`** (BLOCKED): sob `metadata.name`, filhos compostos
-  ganham nome hasheado → o cruzamento por label compartilhado não funciona no orquestrador.
-  Conserto desenhado em `resources/examples/topology/05-07` (injetar `subnetIds` do
-  `Network.status` no Cluster em vez de casar por label; exige `function-kcl` ou Network
-  publicar arrays). Adiado — os charts diretos não dependem dele.
+  ganham nome hasheado → o cruzamento por label compartilhado não funciona. Conserto desenhado
+  em `resources/examples/topology/05-07` (injetar `subnetIds` do `Network.status` no Cluster em
+  vez de casar por label; exige `function-kcl` ou Network publicar arrays). Adiado — os charts
+  diretos não dependem dele. `compute/06-crossplane-map.md` registra o alvo: **remover
+  `Environment`; `Cluster` é o topo**.
+- **`tenancy/04-crossplane-map.md` não escrito de propósito** — depende do schema do registry
+  de tenants (§11 decisão 1). Ausência é deliberada, não esquecimento.
 - **Retenção do bucket de auditoria** (lifecycle → Glacier após N dias, expiração após M
   anos): decisão de compliance, deliberadamente adiada. É o único custo do CloudTrail que
   cresce sozinho e para sempre.
 - **Conta `security-tooling`** desenhada como slot, não criada — vira pré-requisito quando
   GuardDuty/Config/Security Hub entrarem.
+- **Contas `Monitoring` / `Operations Tooling`** (OU `Infrastructure`) são os slots canônicos
+  da observabilidade centralizada; nenhuma existe. Registrado em `observability/CLAUDE.md`.
 - **`Sandbox` como conceito** fica reservado para outra coisa (conta de brincar, desconectada
   da rede, sem attachment no TGW) — não é o ambiente de teste do projeto, que é
   `<projeto>-nonprod`.
@@ -183,84 +248,84 @@ precisa recriar.
 2. **Management account com `AdministratorAccess` atribuído a usuário, não a grupo** —
    *unexpected*: viola a própria regra `--group` da doc, na conta mais privilegiada. Migrar
    para `platform-admins` (atribuir o grupo antes de revogar o usuário).
-3. VPC+EKS ainda NÃO provisionados numa spoke — *intentional*: custo alto, só sob autorização
+3. **Credencial-raiz do Crossplane é access key de longa duração** — *intentional*: contraria
+   [SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html).
+   Bloqueado por k3d não suportar Pod Identity; só desaparece quando o Control Plane virar EKS.
+   **Mitigação barata ainda não aplicada:** a própria BP recomenda reduzir o IAM user a só
+   `sts:AssumeRole` para uma role específica — hoje ele tem `PowerUserAccess` direto.
+4. **Link quebrado em `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`** →
+   `infra/terraform/cluster-zero/README.md` — *intentional*: aponta para artefato da trilha
+   Azure que nunca foi construído. Não é doc desatualizada.
+5. **Valores reais em docs genéricas** — *unexpected*: `aws/docs/bootstrap/00-crossplane-iam-user.md:91`
+   tem account id real hardcoded; `accounts/03-provisioning.md` e `accounts/scripts/create-account`
+   têm e-mail real. Contraria a convenção de genericização; pré-existente, fora de escopo até agora.
+6. VPC+EKS ainda NÃO provisionados numa spoke — *intentional*: custo alto, só sob autorização
    explícita.
-4. `crossplane render` não injeta defaults do XRD — *intentional* (limitação da ferramenta):
+7. `crossplane render` não injeta defaults do XRD — *intentional* (limitação da ferramenta):
    passar `providerConfigName`/`metadata.name` explícitos no XR de teste. `providerConfigName`
    é OBRIGATÓRIO (sem default): XR sem ele é rejeitado, não há fallback.
-5. `enum` de `providerConfigName` inclui `wasp-nonprod` (nome específico da conta) nos XRDs
+8. `enum` de `providerConfigName` inclui `wasp-nonprod` (nome específico da conta) nos XRDs
    versionados — *intentional*: trade-off aceito vs. genericização; comentário instrui
    ajustar a lista `[network, wasp-nonprod]` por instância.
-6. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*: Helm
+9. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*: Helm
    templates (`{{ }}`).
-7. `revoke-permission-set` só foi exercido no caminho feliz (revogação real da
-   `log-archive`); os ramos "atribuição inexistente" e "permission set inexistente" nunca
-   rodaram.
-8. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts`
-   `allow-all` policy; `idp/packages/backend/src/googleAuthModule.ts`
-   `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
+10. `revoke-permission-set` só foi exercido no caminho feliz (revogação real da
+    `log-archive`); os ramos "atribuição inexistente" e "permission set inexistente" nunca
+    rodaram.
+11. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts`
+    `allow-all` policy; `idp/packages/backend/src/googleAuthModule.ts`
+    `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
 
 ## How to Resume
 
-**Objetivo desta retomada: Fase 5 — aplicar os charts `hub`→`spoke`→`cluster`.** O Control
-Plane já está de pé e validado (ver "Frente B" acima); não precisa recriar. A partir daqui
-os `helm install` **cobram** (VPC+NAT no `spoke`, EKS+nodegroup no `cluster`).
+**A sessão parou numa decisão de desenho, não numa falha.** Retomar respondendo: no módulo
+Terraform de escopo fino, o ArgoCD sobe sem ingress (acesso por `port-forward`/LoadBalancer
+cru), ou istio + cert-manager + external-dns entram no Terraform para o ArgoCD nascer com URL
+e TLS?
 
-Pré-requisito: VPN corporativa **desconectada** e SSO admin ativo
-(`aws sso login --profile personal`). Se o Control Plane tiver sido destruído desde a última
-sessão, recriar primeiro:
+Contexto necessário para decidir, em ordem de leitura:
 
 ```bash
 cd /home/silvios/git/wasp-idp
-k3d cluster list                       # confirmar estado antes de assumir
+sed -n '/^## 7\. IaC/,/^## 8\./p' decisions.md      # cardinalidade × churn; os dois Crossplanes
+sed -n '/^### Fase 2/,/^### Fase 3/p' decisions.md   # o que a Fase 2 entrega
+ls aws/eks/chart/templates/                          # as 28 fases que o k3d faz hoje
+cat /home/silvios/git/azure-kubernetes/examples/cluster_argocd_ingress_istio/main.tf
+```
 
-aws/eks/scripts/install-crossplane     # cria k3d "control-plane" (1 server) + Crossplane
+O exemplo Azure é a referência de **estrutura** pedida: raiz compõe submódulos de `src/`, com
+flags `local.install_*` e, por addon, o tripé *workload-identity → role assignment → helm
+module*. No lado AWS o tripé equivalente é *Pod Identity association → inline policy → Helm
+release*, que é exatamente como as fases `80/82/84`, `86/88` e `100/102` já estão organizadas.
+
+Decidido isso, o próximo passo é o design do módulo (nada de código antes do design aprovado).
+
+Se o Control Plane k3d tiver sido destruído e for preciso reproduzir o estado atual:
+
+```bash
+k3d cluster list                       # confirmar antes de assumir
+aws/eks/scripts/install-crossplane     # k3d "control-plane" (1 server) + Crossplane
 aws/eks/scripts/install-providers --timeout 900s
 aws/eks/scripts/install-functions      # OBRIGATÓRIO: toda Composition é mode: Pipeline
 
-# credencial do crossplane-poc inline do Secrets Manager (nunca persistir em arquivo):
 set -a; source <(AWS_PROFILE=network aws secretsmanager get-secret-value \
   --secret-id poc-idp/crossplane-poc-credentials --region us-east-1 \
   --query SecretString --output text \
   | jq -r '"AWS_ACCESS_KEY_ID=" + .aws_access_key_id, "AWS_SECRET_ACCESS_KEY=" + .aws_secret_access_key'); set +a
-aws/eks/scripts/configure-aws-creds    # Secret aws-iam-credential + ProviderConfig "network"
+aws/eks/scripts/configure-aws-creds
 aws/eks/scripts/configure-account-access --name wasp-nonprod --account-id 832721568602
-
-kubectl apply -f aws/eks/resources/network/{xrd,composition}.yaml
-kubectl apply -f aws/eks/resources/cluster/{xrd,composition}.yaml
 ```
 
-**Gotcha:** `install-crossplane` default é `--servers 1` (mudado nesta sessão — 3 servers
-quebrou o quorum do etcd neste host, ver `aws/CLAUDE.md`). Não usar `--servers 3` sem motivo.
-
-Checagens que provam o rename (já passaram nesta sessão, repetir só se recriar do zero):
-
-```bash
-kubectl config current-context                                    # k3d-control-plane
-kubectl get providerconfig.aws.upbound.io                          # network + wasp-nonprod, sem "hub"/"sandbox"/"default"
-kubectl get xrd networks.platform.example.com -o jsonpath='{.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.providerConfigName.enum}'
-helm template hub-us-east-1 aws/platform/charts/hub --set name=hub-us-east-1 | grep providerConfigName
-```
+Pré-requisitos: VPN corporativa **desconectada** (senão o pull de `xpkg.upbound.io` falha com
+`x509` e depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`).
+`install-crossplane` default é `--servers 1` — não usar 3 neste host.
 
 Perfis locais: `network` (`094289743086`) e `wasp-nonprod` (`832721568602`), ambos assumindo
 `OrganizationAccountAccessRole` a partir de `personal`. Backup do `~/.aws/config` antes do
 rename dos profiles: `~/.aws/config.bak-20260824`.
 
-Ordem dos charts controla o custo (só `cluster` cobra alto):
-
-```bash
-helm install hub-us-east-1 aws/platform/charts/hub -n crossplane-system --set name=hub-us-east-1
-ID=$(aws/eks/scripts/random-id)
-helm install spoke-$ID aws/platform/charts/spoke -n crossplane-system --set name=$ID
-# cluster: CUSTO ALTO (~30 min, NAT + control plane ~US$0,10/h + 3x t3.medium)
-helm install cluster-$ID aws/platform/charts/cluster -n crossplane-system --set name=$ID \
-  --set providerConfigName=wasp-nonprod \
-  --set crossplaneArn=arn:aws:iam::832721568602:role/crossplane-wasp-nonprod
-```
-
-A role `crossplane-wasp-nonprod` e o secret do `crossplane-poc` **persistem** na AWS (não
-dependem do k3d) — não precisam re-bootstrap. `provision-eks`/`teardown` longos: rodar em
-background, com as creds carregadas inline no mesmo shell.
+Os scripts de `aws/docs/accounts/scripts/` que criam recursos reais devem ser rodados
+manualmente via `! <script>` — o classifier de auto-mode bloqueia.
 
 ## Next Steps
 
@@ -272,7 +337,11 @@ background, com as creds carregadas inline no mesmo shell.
       SCP **não** afeta a management account.
 - [x] Permission set de rotina da `log-archive` em `ReadOnlyAccess`.
 - [x] E-mail do root da `Network` alinhado (`+hub@` → `+network@`).
-- [x] Break-glass ([SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)) documentado; IDs do WAF conferidos contra as páginas oficiais.
+- [x] Break-glass documentado; IDs do WAF conferidos contra as páginas oficiais.
+- [x] OU `Deployments` + `--ou deployments` + SCP baseline escritos nos scripts.
+- [ ] **Aplicar** a OU `Deployments` e criar a conta `cicd`
+      (`./create-organizational-unit-structure` depois
+      `./create-account --name cicd --ou deployments ...`). Nada disso existe na AWS ainda.
 - [ ] Atribuir permission set a `Network` e `wasp-nonprod`
       (`./assign-permission-set --account <conta> --group platform-admins`) — elimina o
       switch-role via `OrganizationAccountAccessRole`.
@@ -282,18 +351,29 @@ background, com as creds carregadas inline no mesmo shell.
 - [ ] Criar a regra de alarme de uso de root (CloudTrail → EventBridge → notificação).
 - [ ] Decidir retenção/lifecycle do bucket `cloudtrail-o-e4r8ndteju`.
 
-### Frente B — Crossplane / EKS
+### Frente B — Terraform + Crossplane / EKS
 
 - [x] **Fase 4:** split de charts + identidade `metadata.name` + PCs por conta.
-- [x] Vocabulário alinhado: conta `network`, conta `wasp-nonprod`, Control Plane; role IAM
-      recriada como `crossplane-wasp-nonprod`.
-- [x] **Validar a cadeia renomeada** recriando o Control Plane do zero (2026-08-24). Custo
-      zero. Achado: `--servers 3` quebrava o quorum do etcd neste host — default mudado
-      para 1 em `install-crossplane`.
-- [ ] **Fase 5:** aplicar `hub` → `spoke` (`10.2`, `wasp-nonprod`) → esperar Ready →
-      `cluster` (EKS). Custo alto. Acompanhar: `kubectl get managed`. É o próximo passo.
+- [x] Validar a cadeia renomeada recriando o Control Plane do zero. Custo zero.
+- [x] Escopo do módulo Terraform: **fino**, com conta `cicd` na OU `Deployments`.
+- [ ] **Decidir a fronteira do ArgoCD** (ingress no Terraform ou não) — bloqueia o design.
+- [ ] Desenhar o módulo Terraform (submódulos no estilo do exemplo Azure), aprovar o design,
+      só então escrever código.
+- [ ] Reduzir o IAM user `crossplane-poc` a só `sts:AssumeRole` (mitigação de SEC02-BP02 que
+      não depende de migrar para EKS).
 - [ ] Decidir base do domínio (delegar `wasp.silvios.me`/subzona → Route53) antes das fatias
       DNS/ingress/TLS.
 - [ ] Definir estratégia de parametrização dos valores de `CLAUDE.local.md`.
+- [ ] **Fase 5** (alternativa se o Terraform for adiado): aplicar `hub` → `spoke` (`10.2`,
+      `wasp-nonprod`) → esperar Ready → `cluster` (EKS). Custo alto.
+
+### Frente C — documentação
+
+- [x] Domínio `tenancy/` (SaaS Lens), `security/08`, correções de conta × região × papel.
+- [x] Nomes de arquivo e H1 em inglês; hierarquia de fontes WAF → whitepaper → SRA.
+- [ ] Resolver a conflação de `decisions.md` §2 (auth/discovery vs. conta de CI/CD) junto com
+      a decisão 6 do §11.
+- [ ] Remover os valores reais que sobraram em docs genéricas (item 5 de Known Broken).
+- [ ] `tenancy/04-crossplane-map.md`, quando o schema do registry de tenants existir.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
