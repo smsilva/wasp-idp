@@ -82,7 +82,7 @@ wasp-nonprod (832721568602)   (nenhuma — idem)
 
 Revisão do passo ⑦ contra o WAF nesta sessão: IDs de best practice corrigidos ([SEC02-BP04 — Rely on a centralized identity provider](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html) e
 [SEC03-BP02 — Grant least privilege access](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_least_privileges.html) estavam citados como BP01), e **break-glass ([SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)) documentado** em
-`aws/docs/accounts/04-acesso-cross-account.md` — não existia processo, então o caminho real de
+`aws/docs/accounts/04-cross-account-access.md` — não existia processo, então o caminho real de
 emergência era o root, exatamente o que ⑦ existe para evitar.
 
 E-mail do root da `Network` migrado de `+hub@` para `+network@` (fluxo de root no console —
@@ -114,7 +114,7 @@ Cross-account + Fase 4 (split de charts + identidade) prontos e validados offlin
   `platform.example.com/control-plane`.
 
 Identidade da credencial-raiz analisada vs. Well-Architected (registro em
-`aws/docs/security/04-identidade-de-workload.md`): cross-account `network`→spoke
+`aws/docs/security/04-workload-identity.md`): cross-account `network`→spoke
 (`AssumeRole`+STS) já é WAF-aligned; o único cheiro é o **access key de longa duração** do
 `crossplane-poc`, porque o Crossplane roda num k3d fora da AWS. **Decisão (PoC): aceito como
 débito consciente** — resolve-se ao migrar o Control Plane p/ AKS (OIDC federation,

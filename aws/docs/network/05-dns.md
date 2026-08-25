@@ -68,4 +68,4 @@ para não pisar em registros de outros donos. Ver apêndice para os valores reai
 
 ## Próximo
 
-→ [`06-seguranca-rede.md`](06-seguranca-rede.md): SG, NACL, Flow Logs e endpoints privados.
+→ [`06-security.md`](06-security.md): SG, NACL, Flow Logs e endpoints privados.

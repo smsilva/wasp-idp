@@ -138,7 +138,7 @@ primeiro cliente**, e o **offboarding é mais limitado que o onboarding** — a 
 contas podem ser fechadas por janela móvel, então churn alto acumula contas suspensas que ainda
 contam para a quota. Some-se a isso o que §7 já registra (`Account` do provider-aws não deleta de
 verdade). Tier self-service com churn alto **não** deve morar em conta própria.
-Detalhe em `aws/docs/tenancy/01-conta-por-tenant.md`.
+Detalhe em `aws/docs/tenancy/01-account-per-tenant.md`.
 
 ### Região não é eixo de conta
 Conta AWS é global; região é dimensão dentro dela. Um tenant que opera em duas regiões continua em
@@ -146,7 +146,7 @@ Conta AWS é global; região é dimensão dentro dela. Um tenant que opera em du
 atacha em OU — logo residência de dados vira uma **OU por perfil de residência**
 (`Tenants-US`, `Tenants-EU`, …), nunca uma lista de regiões por cliente. Agrupar por cliente faria
 o número de OUs crescer com as combinações vendidas.
-Detalhe em `aws/docs/tenancy/02-ou-por-geografia.md`.
+Detalhe em `aws/docs/tenancy/02-ou-per-geography.md`.
 
 ---
 
@@ -293,7 +293,7 @@ de impacto regional e perde-se a autonomia de time.
   plane regional (Pod Identity) + 1 role de *destino* por conta-alvo — IAM é global, então a role
   de destino é uma só ainda que dois control planes regionais a assumam. O EKS de workload
   gerenciado não recebe identidade nenhuma. Matriz completa e as três opções de contenção
-  regional em `aws/docs/security/08-identidade-do-control-plane.md`.
+  regional em `aws/docs/security/08-control-plane-identity.md`.
   **Bloqueio:** k3d não suporta Pod Identity — a access key só desaparece quando o control plane
   virar EKS. Enquanto isso, a mitigação barata é reduzir o IAM user a **só `sts:AssumeRole`**
   (hoje ele tem `PowerUserAccess` direto).
@@ -487,7 +487,7 @@ de operar).
     documento é a visão de **plataforma**; onde os dois divergirem, **a doc de domínio ganha**
     (mesma regra da nota em §8).
   - Material desta seção §3 aprofundado em `aws/docs/tenancy/`; identidade do Crossplane de §7 em
-    `aws/docs/security/08-identidade-do-control-plane.md`.
+    `aws/docs/security/08-control-plane-identity.md`.
 - `github.com/smsilva/kubernetes` — origem do aws-saas-platform.
 - Microserviços FastAPI da plataforma: `discovery`, `platform-frontend`,
   `callback-handler`.

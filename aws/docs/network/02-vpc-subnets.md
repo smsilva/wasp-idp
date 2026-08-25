@@ -1,4 +1,4 @@
-# 02 — VPC e Subnets (o spoke)
+# 02 — VPC and Subnets (the spoke)
 
 **Pilar WAF principal:** Reliability ([REL02-BP01 — Use highly available network connectivity for your workload public endpoints](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)) + Security ([SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)).
 
@@ -60,7 +60,7 @@ sem inspecionar recurso por recurso:
 
 Esse é exatamente o contrato que a `Network` XR do PoC já implementa (publica `vpcId` e
 `subnetIds`, taggeia subnets por papel). Detalhe do mapeamento em
-[`07-mapa-crossplane.md`](07-mapa-crossplane.md).
+[`07-crossplane-map.md`](07-crossplane-map.md).
 
 ## Well-Architected — porquê
 
@@ -73,5 +73,5 @@ Esse é exatamente o contrato que a `Network` XR do PoC já implementa (publica 
 
 ## Próximo
 
-→ [`03-transit-gateway-isolamento.md`](03-transit-gateway-isolamento.md): como o spoke se
+→ [`03-transit-gateway-isolation.md`](03-transit-gateway-isolation.md): como o spoke se
 conecta ao Hub e por que um spoke não enxerga o outro.

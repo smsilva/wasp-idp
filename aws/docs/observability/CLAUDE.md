@@ -24,12 +24,12 @@ camada de compute (Container Insights) e a de conectividade.
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-estrategia-de-observabilidade.md`](00-estrategia-de-observabilidade.md) | Os 3 sinais (logs/métricas/traces); centralização; onde cada fonte já vive | Operational Excellence |
+| 0 | [`00-strategy.md`](00-strategy.md) | Os 3 sinais (logs/métricas/traces); centralização; onde cada fonte já vive | Operational Excellence |
 | 1 | [`01-logs.md`](01-logs.md) | Control plane EKS, container, VPC Flow, CloudTrail, DNS query; retenção e destino | Operational Excellence |
-| 2 | [`02-metricas.md`](02-metricas.md) | Container Insights; métricas de TGW/VPN/NAT; Prometheus vs. CloudWatch | Reliability |
-| 3 | [`03-alertas-de-conectividade.md`](03-alertas-de-conectividade.md) | O modo de falha do hub-and-spoke; alarmes de túnel/attachment/NAT; o que acordar alguém | Reliability |
-| 4 | [`04-custo-como-sinal.md`](04-custo-como-sinal.md) | Budgets, anomaly detection, custo por tag/conta como sinal operacional | Cost Optimization |
-| 5 | [`05-mapa-crossplane.md`](05-mapa-crossplane.md) | O que de observabilidade é provisionável (add-on/MR) vs. habilitação de conta; estado vs. alvo | — |
+| 2 | [`02-metrics.md`](02-metrics.md) | Container Insights; métricas de TGW/VPN/NAT; Prometheus vs. CloudWatch | Reliability |
+| 3 | [`03-connectivity-alerts.md`](03-connectivity-alerts.md) | O modo de falha do hub-and-spoke; alarmes de túnel/attachment/NAT; o que acordar alguém | Reliability |
+| 4 | [`04-cost-as-signal.md`](04-cost-as-signal.md) | Budgets, anomaly detection, custo por tag/conta como sinal operacional | Cost Optimization |
+| 5 | [`05-crossplane-map.md`](05-crossplane-map.md) | O que de observabilidade é provisionável (add-on/MR) vs. habilitação de conta; estado vs. alvo | — |
 
 ## Sequência de construção (plataforma → plataforma observável)
 

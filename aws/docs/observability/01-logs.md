@@ -76,4 +76,4 @@ desnecessárias" até o dia do incidente ([SEC04-BP01 — Configure service and 
 
 ## Próximo
 
-→ [`02-metricas.md`](02-metricas.md): os números — cluster, conectividade e como coletá-los.
+→ [`02-metrics.md`](02-metrics.md): os números — cluster, conectividade e como coletá-los.

@@ -20,13 +20,13 @@ já roda; o texto separa o que existe do que é alvo.
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-cluster-como-spoke.md`](00-cluster-como-spoke.md) | Anatomia do EKS; control plane vs. data plane; por que cada cluster é uma spoke | Reliability |
+| 0 | [`00-cluster-as-spoke.md`](00-cluster-as-spoke.md) | Anatomia do EKS; control plane vs. data plane; por que cada cluster é uma spoke | Reliability |
 | 1 | [`01-node-groups.md`](01-node-groups.md) | Managed node groups; on-demand vs. spot; sizing; 1:N via lista; subnets privadas | Reliability |
-| 2 | [`02-addons-e-identidade.md`](02-addons-e-identidade.md) | Add-ons (EBS CSI, Pod Identity agent); Pod Identity/IRSA; a ordem que evita a race | Security |
-| 3 | [`03-acesso-e-rbac.md`](03-acesso-e-rbac.md) | `authenticationMode: API`; Access Entries; creator sem admin automático; RBAC do Crossplane | Security |
-| 4 | [`04-ingress-e-exposicao.md`](04-ingress-e-exposicao.md) | AWS LB Controller (NLB), Istio gateway, wildcard→NLB, TLS no cluster; exposição via edge | Reliability |
+| 2 | [`02-addons-and-identity.md`](02-addons-and-identity.md) | Add-ons (EBS CSI, Pod Identity agent); Pod Identity/IRSA; a ordem que evita a race | Security |
+| 3 | [`03-access-and-rbac.md`](03-access-and-rbac.md) | `authenticationMode: API`; Access Entries; creator sem admin automático; RBAC do Crossplane | Security |
+| 4 | [`04-ingress-and-exposure.md`](04-ingress-and-exposure.md) | AWS LB Controller (NLB), Istio gateway, wildcard→NLB, TLS no cluster; exposição via edge | Reliability |
 | 5 | [`05-gitops.md`](05-gitops.md) | ArgoCD como satélite; connection secret (kubeconfig) produtor/consumidor; app-of-apps | Operational Excellence |
-| 6 | [`06-mapa-crossplane.md`](06-mapa-crossplane.md) | `Cluster` como CR de topo; modelo faseado vs. abstração; estado vs. alvo | — |
+| 6 | [`06-crossplane-map.md`](06-crossplane-map.md) | `Cluster` como CR de topo; modelo faseado vs. abstração; estado vs. alvo | — |
 
 ## Sequência de construção (rede pronta → cluster com apps)
 

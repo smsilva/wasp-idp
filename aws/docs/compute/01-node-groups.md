@@ -89,5 +89,5 @@ spec:
 
 ## Próximo
 
-→ [`02-addons-e-identidade.md`](02-addons-e-identidade.md): o que transforma um cluster cru num
+→ [`02-addons-and-identity.md`](02-addons-and-identity.md): o que transforma um cluster cru num
 cluster com storage, DNS e identidade.

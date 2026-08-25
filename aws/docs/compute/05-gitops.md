@@ -85,5 +85,5 @@ publicado) é idêntica — muda o produtor (Cluster, não Environment).
 
 ## Próximo
 
-→ [`06-mapa-crossplane.md`](06-mapa-crossplane.md): como o cluster inteiro vira o CR de topo
+→ [`06-crossplane-map.md`](06-crossplane-map.md): como o cluster inteiro vira o CR de topo
 `Cluster`.

@@ -14,14 +14,14 @@ o Well-Architected Framework.
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-topologia.md`](00-topologia.md) | Visão geral hub-and-spoke; por que TGW e não mesh ([REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)); contas e spokes; distinção cell-based (raio de impacto) vs. hub-and-spoke (conectividade) | Reliability |
-| 1 | [`01-enderecamento-cidr.md`](01-enderecamento-cidr.md) | Plano de endereçamento IP: supernet, /16 por spoke, zero sobreposição | Reliability |
+| 0 | [`00-topology.md`](00-topology.md) | Visão geral hub-and-spoke; por que TGW e não mesh ([REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)); contas e spokes; distinção cell-based (raio de impacto) vs. hub-and-spoke (conectividade) | Reliability |
+| 1 | [`01-cidr-addressing.md`](01-cidr-addressing.md) | Plano de endereçamento IP: supernet, /16 por spoke, zero sobreposição | Reliability |
 | 2 | [`02-vpc-subnets.md`](02-vpc-subnets.md) | Estrutura de VPC e subnets (pública/privada por AZ); IGW/NAT; tags EKS | Reliability |
-| 3 | [`03-transit-gateway-isolamento.md`](03-transit-gateway-isolamento.md) | TGW, RAM cross-account, route table por tenant, isolamento inter-spoke | Security |
-| 4 | [`04-vpn-acesso.md`](04-vpn-acesso.md) | VPN site-to-site e client; BGP/ECMP; PSK; fecha sempre no Hub | Security |
+| 3 | [`03-transit-gateway-isolation.md`](03-transit-gateway-isolation.md) | TGW, RAM cross-account, route table por tenant, isolamento inter-spoke | Security |
+| 4 | [`04-vpn-access.md`](04-vpn-access.md) | VPN site-to-site e client; BGP/ECMP; PSK; fecha sempre no Hub | Security |
 | 5 | [`05-dns.md`](05-dns.md) | Zonas Route53 por spoke, delegação, resolução cross-account | Operational Excellence |
-| 6 | [`06-seguranca-rede.md`](06-seguranca-rede.md) | Security Groups, NACLs, VPC Flow Logs, endpoints privados | Security |
-| 7 | [`07-mapa-crossplane.md`](07-mapa-crossplane.md) | Como cada peça vira XRD/Composition; estado atual vs alvo; gap do CIDR e migração | — |
+| 6 | [`06-security.md`](06-security.md) | Security Groups, NACLs, VPC Flow Logs, endpoints privados | Security |
+| 7 | [`07-crossplane-map.md`](07-crossplane-map.md) | Como cada peça vira XRD/Composition; estado atual vs alvo; gap do CIDR e migração | — |
 
 ## Sequência de construção (conta vazia → rede pronta)
 

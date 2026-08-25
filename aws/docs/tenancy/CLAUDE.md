@@ -23,10 +23,10 @@ do Well-Architected — lens oficial para workloads SaaS multi-tenant, complemen
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-modelos-de-tenancy.md`](00-modelos-de-tenancy.md) | SaaS Lens: silo / pool / bridge; a exigência de identidade e pipeline compartilhados mesmo no silo; tiering por tier comercial | [SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html) |
-| 1 | [`01-conta-por-tenant.md`](01-conta-por-tenant.md) | Silo levado à conta AWS: piso de custo ~US$150/mês por tenant-região; quota e rate limit de criação; limite de **fechamento** e o churn | Cost Optimization / Security |
-| 2 | [`02-ou-por-geografia.md`](02-ou-por-geografia.md) | SCP atacha em OU ⇒ residência de dados vira dimensão da árvore; perfil de residência em vez de lista de regiões por cliente | Security ([SEC01-BP03 — Identify and validate control objectives](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_control_objectives.html)) |
-| 3 | [`03-cidr-e-tenancy.md`](03-cidr-e-tenancy.md) | Região × tenant esgota o `/12` em 15 spokes; tenant isolado talvez não precise de CIDR único | Reliability ([REL02 — Plan your network topology](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html)) |
+| 0 | [`00-models.md`](00-models.md) | SaaS Lens: silo / pool / bridge; a exigência de identidade e pipeline compartilhados mesmo no silo; tiering por tier comercial | [SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html) |
+| 1 | [`01-account-per-tenant.md`](01-account-per-tenant.md) | Silo levado à conta AWS: piso de custo ~US$150/mês por tenant-região; quota e rate limit de criação; limite de **fechamento** e o churn | Cost Optimization / Security |
+| 2 | [`02-ou-per-geography.md`](02-ou-per-geography.md) | SCP atacha em OU ⇒ residência de dados vira dimensão da árvore; perfil de residência em vez de lista de regiões por cliente | Security ([SEC01-BP03 — Identify and validate control objectives](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_control_objectives.html)) |
+| 3 | [`03-cidr.md`](03-cidr.md) | Região × tenant esgota o `/12` em 15 spokes; tenant isolado talvez não precise de CIDR único | Reliability ([REL02 — Plan your network topology](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html)) |
 
 ## Sequência de decisão (não é sequência de provisionamento)
 
@@ -40,7 +40,7 @@ passo restringe o seguinte:
 ④ Definir os PERFIS DE RESIDÊNCIA oferecidos (US, EU, BR…) — não regiões por cliente
 ⑤ Criar uma OU por perfil de residência, com SCP de região própria
 ⑥ Decidir se spoke de tenant participa do roteamento central (define se CIDR é único ou repetido)
-⑦ Só então: provisionar contas de tenant (→ ../accounts/03-provisionamento-de-contas.md)
+⑦ Só então: provisionar contas de tenant (→ ../accounts/03-provisioning.md)
 ```
 
 - **② antes de ③** evita a armadilha de escolher silo por instinto e descobrir a margem depois.
@@ -51,14 +51,14 @@ passo restringe o seguinte:
 ## Relação com o resto do repo
 
 - **Consome** `../accounts/` (estrutura de OU, provisionamento de conta, SCP baseline) e
-  `../network/01-enderecamento-cidr.md` (o plano cujo teto este domínio calcula).
-- **Serve** `../security/08-identidade-do-control-plane.md` (a SCP de OU é a primeira linha de
+  `../network/01-cidr-addressing.md` (o plano cujo teto este domínio calcula).
+- **Serve** `../security/08-control-plane-identity.md` (a SCP de OU é a primeira linha de
   contenção regional) e o desenho de plataforma em `../../../decisions.md`.
 - **Vocabulário:** "hub" aqui é sempre **papel topológico** de rede, nunca nome de conta nem hub
   de identidade — a distinção que `../CLAUDE.md` marca como a confusão mais cara da doc.
 - **Convergência com `decisions.md` §3:** os dois descrevem o mesmo desenho com vocabulários
   diferentes (silo/pool/bridge vs. célula/densidade). A tabela de reconciliação está em
-  [`00-modelos-de-tenancy.md`](00-modelos-de-tenancy.md) — nenhum contradiz o outro.
+  [`00-models.md`](00-models.md) — nenhum contradiz o outro.
 
 ## Estado atual vs. alvo (resumo)
 
@@ -75,10 +75,10 @@ passo restringe o seguinte:
 | # | Decisão | Por que está aberta | Custo de adiar |
 |---|---|---|---|
 | 1 | **Quais tiers o produto oferece** e qual modelo (pool/bridge/silo) em cada | Decisão comercial, não técnica | Bloqueia 2–4 abaixo; toda estimativa de custo por tenant fica sem base |
-| 2 | **Spoke de tenant participa do roteamento central?** | Depende de como o control plane alcança a spoke (API pública vs. rede privada) | Define se CIDR de tenant é único ou repetido — a única decisão irreversível da cadeia (`03-cidr-e-tenancy.md`) |
+| 2 | **Spoke de tenant participa do roteamento central?** | Depende de como o control plane alcança a spoke (API pública vs. rede privada) | Define se CIDR de tenant é único ou repetido — a única decisão irreversível da cadeia (`03-cidr.md`) |
 | 3 | **Perfis de residência oferecidos** (quais jurisdições) | Depende do mercado-alvo | Definir depois vira reorganização da árvore de OUs, com janela sem SCP durante o move |
 | 4 | **IPAM agora ou octeto calculado** | Só vale se 2 for "único"; hoje seria trabalho possivelmente descartável | `decisions.md` §7 registra "IPAM cedo" como armadilha — o custo aparece no ambiente 8, não no 2 |
-| 5 | **`04-mapa-crossplane.md` deste domínio** — não escrito de propósito | Depende do schema do registry de tenants (`decisions.md` §11, decisão 1) | Nenhum hoje; o mapa sem o registry seria especulação. **Ausência é deliberada, não esquecimento** |
+| 5 | **`04-crossplane-map.md` deste domínio** — não escrito de propósito | Depende do schema do registry de tenants (`decisions.md` §11, decisão 1) | Nenhum hoje; o mapa sem o registry seria especulação. **Ausência é deliberada, não esquecimento** |
 
 ## Fontes
 

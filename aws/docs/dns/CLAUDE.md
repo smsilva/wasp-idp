@@ -20,13 +20,13 @@ Não repete a topologia de subzona por spoke (isso é `../network/05`); parte da
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-arquitetura-de-zonas.md`](00-arquitetura-de-zonas.md) | Público vs. privado; hierarquia de zonas; por que delegar em vez de zona única | Operational Excellence |
-| 1 | [`01-delegacao-de-subzonas.md`](01-delegacao-de-subzonas.md) | Record NS na pai, TTL, glue; zona pai compartilhada e a regra "só ADICIONAR" | Operational Excellence |
-| 2 | [`02-registros-e-alias.md`](02-registros-e-alias.md) | A-alias vs. CNAME; wildcard; o problema do apex; alias→NLB e `canonicalNlbZoneId` | Reliability |
-| 3 | [`03-dns-privado-cross-account.md`](03-dns-privado-cross-account.md) | Private Hosted Zone; Resolver endpoints; `VPCAssociationAuthorization` cross-account | Security |
-| 4 | [`04-automacao-e-tls.md`](04-automacao-e-tls.md) | external-dns (sources, upsert-only); cert-manager DNS-01 e ACM; issuer por subzona | Operational Excellence |
-| 5 | [`05-seguranca-de-dns.md`](05-seguranca-de-dns.md) | Escopo do external-dns; IAM Route53 (leitura `*`); DNSSEC; query logging | Security |
-| 6 | [`06-mapa-crossplane.md`](06-mapa-crossplane.md) | O XR `DnsZone` (filho do Cluster); external-dns vs. Crossplane; estado vs. alvo | — |
+| 0 | [`00-zone-architecture.md`](00-zone-architecture.md) | Público vs. privado; hierarquia de zonas; por que delegar em vez de zona única | Operational Excellence |
+| 1 | [`01-subzone-delegation.md`](01-subzone-delegation.md) | Record NS na pai, TTL, glue; zona pai compartilhada e a regra "só ADICIONAR" | Operational Excellence |
+| 2 | [`02-records-and-alias.md`](02-records-and-alias.md) | A-alias vs. CNAME; wildcard; o problema do apex; alias→NLB e `canonicalNlbZoneId` | Reliability |
+| 3 | [`03-private-and-cross-account.md`](03-private-and-cross-account.md) | Private Hosted Zone; Resolver endpoints; `VPCAssociationAuthorization` cross-account | Security |
+| 4 | [`04-automation-and-tls.md`](04-automation-and-tls.md) | external-dns (sources, upsert-only); cert-manager DNS-01 e ACM; issuer por subzona | Operational Excellence |
+| 5 | [`05-security.md`](05-security.md) | Escopo do external-dns; IAM Route53 (leitura `*`); DNSSEC; query logging | Security |
+| 6 | [`06-crossplane-map.md`](06-crossplane-map.md) | O XR `DnsZone` (filho do Cluster); external-dns vs. Crossplane; estado vs. alvo | — |
 
 ## Sequência de construção (nome resolvível → app com TLS)
 

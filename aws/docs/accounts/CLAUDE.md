@@ -8,20 +8,20 @@
 Sair de uma **conta AWS vazia** (a primeira que você loga) e chegar a uma **AWS Organization**
 com a estrutura de contas que o hub-and-spoke exige: uma conta de gerência que só administra,
 uma **Hub/Connectivity Account** dedicada, e **uma conta por projeto** — cada uma podendo
-hospedar 1+ spokes (`../network/00-topologia.md`).
+hospedar 1+ spokes (`../network/00-topology.md`).
 
 ## Tópicos
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-estrategia-de-contas.md`](00-estrategia-de-contas.md) | Por que multi-account; papel de cada conta; conta de gerência nunca hospeda workload | Operational Excellence |
-| 1 | [`01-organizations-e-ous.md`](01-organizations-e-ous.md) | AWS Organizations, Organizational Units, billing consolidado | Operational Excellence |
-| 2 | [`02-guardrails-scp.md`](02-guardrails-scp.md) | Service Control Policies — guardrails preventivos por OU | Security |
-| 3 | [`03-provisionamento-de-contas.md`](03-provisionamento-de-contas.md) | Como criar contas de fato: API `create-account`, convenção de e-mail, bootstrap do root | Operational Excellence |
-| 4 | [`04-acesso-cross-account.md`](04-acesso-cross-account.md) | IAM Identity Center (SSO), permission sets, roles cross-account; nunca usar root | Security |
-| 5 | [`05-billing-e-tags.md`](05-billing-e-tags.md) | Billing consolidado, tags de custo por conta/projeto | Cost Optimization |
-| 6 | [`06-mapa-crossplane.md`](06-mapa-crossplane.md) | O que é (e não é) automatizável via Crossplane; estado atual do PoC vs alvo | — |
-| 7 | [`07-cloudtrail-e-log-archive.md`](07-cloudtrail-e-log-archive.md) | Trail organizacional, conta `log-archive`, bucket de auditoria em conta separada | Security |
+| 0 | [`00-strategy.md`](00-strategy.md) | Por que multi-account; papel de cada conta; conta de gerência nunca hospeda workload | Operational Excellence |
+| 1 | [`01-organizations-and-ous.md`](01-organizations-and-ous.md) | AWS Organizations, Organizational Units, billing consolidado | Operational Excellence |
+| 2 | [`02-scp-guardrails.md`](02-scp-guardrails.md) | Service Control Policies — guardrails preventivos por OU | Security |
+| 3 | [`03-provisioning.md`](03-provisioning.md) | Como criar contas de fato: API `create-account`, convenção de e-mail, bootstrap do root | Operational Excellence |
+| 4 | [`04-cross-account-access.md`](04-cross-account-access.md) | IAM Identity Center (SSO), permission sets, roles cross-account; nunca usar root | Security |
+| 5 | [`05-billing-and-tags.md`](05-billing-and-tags.md) | Billing consolidado, tags de custo por conta/projeto | Cost Optimization |
+| 6 | [`06-crossplane-map.md`](06-crossplane-map.md) | O que é (e não é) automatizável via Crossplane; estado atual do PoC vs alvo | — |
+| 7 | [`07-cloudtrail-and-log-archive.md`](07-cloudtrail-and-log-archive.md) | Trail organizacional, conta `log-archive`, bucket de auditoria em conta separada | Security |
 
 **Vocabulário:** nomes de OU e de conta seguem o whitepaper *Organizing Your AWS Environment
 Using Multiple Accounts* (`Security`, `Infrastructure`, `Workloads/NonProd`,
@@ -50,9 +50,9 @@ registrado.
 - **⑦ "sem usar root" só é verdade se houver caminho de emergência definido.** Toda conta
   criada em ⑤/⑧ nasce com um root indestrutível e imune a SCP — o único controle é não usá-lo.
   Isso exige um break-glass escrito antes do incidente, não improvisado nele
-  (`04-acesso-cross-account.md`, [SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)).
+  (`04-cross-account-access.md`, [SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)).
 - **⑧ uma conta por projeto POR AMBIENTE** (`<projeto>-nonprod`, `<projeto>-prod`) — a conta
-  é o único limite forte de quota, SCP, IAM e billing (ver `01-organizations-e-ous.md`).
+  é o único limite forte de quota, SCP, IAM e billing (ver `01-organizations-and-ous.md`).
 
 ## Scripts (`scripts/`)
 
@@ -142,10 +142,10 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
 - **④ CloudTrail organizacional** ativo: trail multi-region com log file validation, bucket
   de auditoria na `log-archive` (BPA, versionamento, SSE-S3, `BucketOwnerEnforced`, deny
   non-TLS). Custo estimado < US$ 1/mês.
-- **⑥ SCPs baseline aplicadas** — ver quadro no `02-guardrails-scp.md`.
+- **⑥ SCPs baseline aplicadas** — ver quadro no `02-scp-guardrails.md`.
 - **⑦ Identity Center** habilitado: grupo `platform-admins` com `ReadOnlyAccess` na
   `log-archive`; `network` e `<projeto>-nonprod` ainda sem permission set — ver
-  `04-acesso-cross-account.md`. Break-glass **documentado**, controles (MFA no root, alarme de
+  `04-cross-account-access.md`. Break-glass **documentado**, controles (MFA no root, alarme de
   uso) **pendentes** — decisões 4 e 5 acima.
 - **Pendente:** ⑧ conta de produção do projeto; ⑨ spokes de rede (→ domínio `../network/`).
 
