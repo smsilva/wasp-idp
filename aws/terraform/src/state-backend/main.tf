@@ -2,6 +2,13 @@ resource "aws_s3_bucket" "this" {
   bucket = var.bucket_name
 
   tags = merge(var.tags, { Name = var.bucket_name })
+
+  lifecycle {
+    # Este bucket guarda o state de TODAS as camadas e regiões. Destruí-lo é perder o
+    # mapa do que existe na AWS. Segunda guarda, natural: force_destroy fica no default
+    # false, e a AWS recusa deletar bucket não-vazio — ele nunca estará vazio.
+    prevent_destroy = true
+  }
 }
 
 # Recupera state corrompido por apply concorrente. Não é opcional num bucket de state.

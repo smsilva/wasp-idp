@@ -1,0 +1,2 @@
+# Copiar para terraform.tfvars (gitignored). Valor real em CLAUDE.local.md.
+bucket_name = "<state-bucket-name>"
