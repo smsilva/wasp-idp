@@ -295,8 +295,18 @@ code docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md
 
 Aprovado, invocar `superpowers:writing-plans`. **Nenhum código antes disso.**
 
-O item mais fácil de cortar na revisão é o driver EBS CSI — é adição ao escopo literal do
-handoff, justificada pela régua do §7, e nada no escopo fino exige PV hoje.
+**A referência funcional é a Composition, não as fases do chart.**
+As Compositions Crossplane do repositório de referência interno (caminho em `CLAUDE.local.md`)
+decompõem o monólito `environment-eks` em três abstrações, que mapeiam 1:1 nos submódulos:
+
+| Abstração | Camadas | Submódulo Terraform |
+|---|---|---|
+| `Network` | L1a (16 MRs, VPC→RTA) | `src/network` |
+| `Cluster` | L1c IAM + L2 EKS/addons/ponte | `src/cluster`, `src/nodegroup`, `src/pod-identity` |
+| `ClusterBootstrap` | L3 Route53 + L4 Releases + L5 Objects | `src/helm/modules/*` — **é aqui que o escopo fino corta** |
+
+Não usar `aws/eks/chart/templates/` como referência: é a mesma coisa menos decomposta e com
+bugs já corrigidos do outro lado.
 
 Contexto de apoio, se for preciso reconstruir o raciocínio:
 
@@ -313,9 +323,23 @@ flags `local.install_*` e, por addon, o tripé *workload-identity → role assig
 module*. No lado AWS o tripé equivalente é *Pod Identity association → inline policy → Helm
 release*, que é exatamente como as fases `80/82/84`, `86/88` e `100/102` já estão organizadas.
 
-**Achado a não reaprender:** o exemplo Azure tem `install_app_of_apps_infra = false`. Mesmo a
-referência de "paridade total" mantém o handoff para GitOps desligado — ela prova a estrutura,
-não a fronteira.
+**Achados a não reaprender:**
+
+- O exemplo Azure tem `install_app_of_apps_infra = false`. Mesmo a referência de "paridade total"
+  mantém o handoff para GitOps desligado — ela prova a estrutura, não a fronteira.
+- **As ~40 `ClusterUsage` do teardown ordenado não têm tradução em Terraform** — são uma aresta de
+  dependência construída à mão porque `Network` e `Cluster` são XRs distintos e
+  `matchControllerRef` só casa o mesmo owner. Terraform destrói em ordem reversa nativamente.
+  **Mas só se rede e cluster estiverem no mesmo state** — por isso o corte de camadas é
+  `hub | spoke+cluster`, nunca `rede | cluster`. Separar reintroduz o bug sem o mecanismo que o
+  compensava.
+- **EBS CSI pertence à abstração `Cluster` (L2b)**, ao lado do `eks-pod-identity-agent`. Não é
+  adição opcional — uma afirmação anterior nesta sessão dizia o contrário e estava errada.
+- Trust de Pod Identity exige `sts:TagSession` além de `sts:AssumeRole`.
+- `authentication_mode = "API"` — sem `aws-auth` ConfigMap.
+- A `Network` de referência tem as 4 subnets **hardcoded** em `172.16.{1,2,3,4}.0/24` e marca
+  parametrizar como follow-up. **Não herdar:** nosso plano é `10.0.0.0/12` com `/16` por spoke, e
+  CIDR é a única decisão irreversível da cadeia. `src/network` calcula com `cidrsubnet()`.
 
 Se o Control Plane k3d tiver sido destruído e for preciso reproduzir o estado atual:
 

@@ -11,15 +11,19 @@ plataforma venham de **Terraform**, não de Crossplane rodando num cluster desca
 Este design define o módulo Terraform que fecha essa divergência. Não existe nenhum `.tf`
 em `aws/` — é greenfield.
 
-Referências:
-- `decisions.md` §7 (cardinalidade × churn; os dois Crossplanes) e §8 (sequência de
-  provisionamento; Fase 0 e Fase 2)
-- `/home/silvios/git/azure-kubernetes/examples/cluster_argocd_ingress_istio/` — referência de
-  **estrutura**: raiz compõe submódulos de `src/`, flags `local.install_*`, e por addon o tripé
-  *workload identity → role assignment → helm module*
-- `aws/eks/chart/templates/` — as 28 fases que o k3d executa hoje; são a especificação
-  funcional do que o módulo precisa reproduzir
-- `aws/docs/compute/05-gitops.md` — ArgoCD como satélite e o padrão de connection secret
+Referências, em ordem de autoridade:
+
+1. **As Compositions Crossplane do repositório de referência interno — a especificação
+   funcional.** A decomposição do monólito `environment-eks` em três abstrações (`Network`,
+   `Cluster`, `ClusterBootstrap`) é o que o Terraform traduz. O caminho local do repo e os IDs
+   dos tickets citados estão em `CLAUDE.local.md` (não versionado). Não usar as fases do chart
+   `aws/eks/chart/templates/` como referência: são a mesma coisa numa forma menos decomposta e
+   com bugs já corrigidos do outro lado.
+2. `/home/silvios/git/azure-kubernetes/examples/cluster_argocd_ingress_istio/` — referência de
+   **estrutura** apenas: raiz compõe submódulos de `src/`, flags `local.install_*`, e por addon o
+   tripé *workload identity → role assignment → helm module*.
+3. `decisions.md` §7 (cardinalidade × churn) e §8 (Fase 0 e Fase 2).
+4. `aws/docs/compute/05-gitops.md` — ArgoCD como satélite e o padrão de connection secret.
 
 ## A decisão que bloqueava o design
 
@@ -56,33 +60,94 @@ cria dependência de disponibilidade e não elimina o Terraform, só o esconde).
 
 ## Escopo
 
-**Dentro:**
+A fronteira do escopo fino cai **exatamente na terceira abstração**. `Network` e `Cluster`
+entram inteiros; da `ClusterBootstrap` entra só um pedaço da camada L4.
 
-| Entrega | Fase equivalente no chart |
-|---|---|
-| VPC hub na conta `network` (subnets, IGW, NAT, route tables) | `10`, `20`, `30` |
-| VPC spoke na conta `cicd` | idem, outro CIDR |
-| EKS + access entries + OIDC provider | `50`, `70`, `72` |
-| Nodegroup | `60` |
-| Pod Identity base (addon `eks-pod-identity-agent`) | `65` |
-| Driver EBS CSI | `68` — **adição minha ao escopo do handoff**, ver nota |
-| ESO (Pod Identity + role + inline policy + Helm release) | `80`, `82`, `84` |
-| ArgoCD (Helm release, sem ingress) | — |
-| Crossplane core (Helm release + Pod Identity para a role de origem) | — |
-| ConfigMap de contrato Terraform→GitOps | — |
+| Abstração | Camadas | No Terraform |
+|---|---|---|
+| `Network` | L1a — 16 MRs, VPC→RTA | **inteira**, duas vezes (hub e spoke) |
+| `Cluster` | L1c IAM + L2 EKS/addons/ponte | **inteira**, com a ponte L2c colapsada |
+| `ClusterBootstrap` | L3 Route53 + L4 Releases + L5 Objects | **só ESO da L4**, + ArgoCD e Crossplane |
 
-**Fora, por GitOps:** istio (`94`–`98`), cert-manager (`100`–`106`), external-dns (`86`, `88`),
-ALB controller (`90`, `92`), zona Route53 e delegação (`76`, `78`), wildcard (`99`, `105`),
-providers e functions do Crossplane, ProviderConfigs, conteúdo do app-of-apps.
+**Dentro:** VPC hub (`network`) e VPC spoke (`cicd`); roles de cluster e de node com seus
+attachments; EKS; node groups; addon `eks-pod-identity-agent`; role + policy + association +
+addon do EBS CSI; `AccessEntry` + `AccessPolicyAssociation`; ESO (Pod Identity + inline policy +
+Helm release); ArgoCD (Helm release, sem ingress); Crossplane core + Pod Identity da role de
+origem; ConfigMap de contrato Terraform→GitOps.
 
-**Nota sobre o driver EBS CSI.** O handoff listava "VPC hub + VPC spoke + EKS + nodegroup + Pod
-Identity base + ArgoCD + Crossplane" — EBS CSI não estava lá. Incluí porque desde o EKS 1.23 não
-há provisionamento dinâmico de volume sem ele, e ele é cardinalidade 1 com churn zero, o que o
-põe do lado Terraform da régua do §7. Nada no escopo fino exige PV hoje (ArgoCD e Crossplane
-rodam sem), então **é o item mais fácil de cortar** se o revisor preferir escopo literal.
+**Fora, por GitOps:** toda a L3 (zona Route53, delegação NS, wildcard A-alias) e toda a L5
+(ClusterIssuers, Certificate wildcard, Gateways). Da L4: istio, cert-manager, external-dns, ALB
+controller, echo. Mais providers, functions e ProviderConfigs do Crossplane.
+
+**Correção ao que eu disse antes:** o driver EBS CSI **não** é adição minha ao escopo. Ele é L2b
+da abstração `Cluster`, ao lado do `eks-pod-identity-agent`, com role própria
+(`<full>-ebs-csi-role`), `AmazonEBSCSIDriverPolicy`, association em
+`kube-system/ebs-csi-controller-sa` e o addon `aws-ebs-csi-driver`. Entra por pertencer à
+abstração, não por julgamento meu — desconsiderar a sugestão de cortá-lo.
 
 **Fora, sem dono ainda:** Global Accelerator e endpoint group (Fase 1, pulada — escopo atual é
 só projetos internos), TGW e attachments (Gap 2, migração aditiva futura), IPAM (Fase 0 item 3).
+
+## Tradução da Composition para Terraform
+
+O inventário abaixo é o que a `Cluster` cria hoje, com o equivalente Terraform. Três linhas
+**colapsam** — não têm recurso correspondente porque resolvem limitações do Crossplane que o
+Terraform não tem.
+
+| Composition (`Cluster`) | Terraform |
+|---|---|
+| `Role` cluster-role + `RolePolicyAttachment` `AmazonEKSClusterPolicy` | `aws_iam_role` + `aws_iam_role_policy_attachment` |
+| `Role` node-role + 3 attachments (`WorkerNode`, `ECRReadOnly`, `EKS_CNI`) | idem — **uma role compartilhada por todos os node groups** |
+| `eks.Cluster`, `accessConfig.authenticationMode: API` | `aws_eks_cluster` com `access_config { authentication_mode = "API" }` |
+| `eks.NodeGroup` (lista) | `aws_eks_node_group` com `for_each` |
+| `Addon` `eks-pod-identity-agent` | `aws_eks_addon` |
+| Role + policy + `PodIdentityAssociation` + `Addon` do EBS CSI | `src/pod-identity` + `aws_eks_addon` |
+| `AccessEntry` + `AccessPolicyAssociation` (`AmazonEKSClusterAdminPolicy`) | `aws_eks_access_entry` + `aws_eks_access_policy_association` |
+| `ClusterAuth` → Secret kubeconfig no hub | **colapsa** → providers `kubernetes`/`helm` a partir de `aws_eks_cluster_auth` |
+| 2 `ProviderConfig` remotos (helm, kubernetes) | **colapsa** → mesmos providers |
+| ~40 `ClusterUsage` (16 papéis de rede × N node groups + caminho de acesso × 2 PCs) | **colapsa** → grafo de dependências implícito |
+
+### Por que as ClusterUsage desaparecem
+
+O grafo de `ClusterUsage` existe por causa do **bug do NLB órfão no teardown**: no teardown, o alb-controller (um
+pod num nó) precisa do egress *pod → subnet privada → NAT → IGW → API do ELB* para deletar o
+NLB. Se a rede sair concorrente, sobra NLB órfão travando a VPC. Como `Network` e `Cluster` são
+XRs distintos, o Crossplane não tem aresta de dependência entre eles — `matchControllerRef` só
+casa o mesmo owner, que era o bug do desenho antigo. As usages são uma aresta construída à mão.
+
+Terraform destrói em ordem reversa de dependência nativamente. **Mas isso só vale se a rede e o
+cluster estiverem no mesmo grafo** — ou seja, no mesmo state.
+
+**Constraint que isso impõe à camada:** a VPC spoke **nunca** pode ser separada do state do
+cluster. O corte de duas camadas é seguro porque é `hub | spoke+cluster`, não
+`rede | cluster`. Separar `network | cluster` reintroduziria esse bug com um mecanismo pior
+(sem `ClusterUsage` para compensar). Está registrado aqui porque é o tipo de refatoração que
+parece inócua depois.
+
+O hub fica em outro state e isso é seguro **hoje** porque não há TGW: os nós não roteiam pelo
+hub. Quando o TGW entrar (Gap 2), a aresta hub↔spoke passa a existir e este raciocínio precisa
+ser revisitado.
+
+### Detalhes concretos herdados da referência
+
+- **`authentication_mode = "API"`** — sem `aws-auth` ConfigMap. Só access entries.
+- **Trust de Pod Identity precisa de `sts:TagSession`**, não só `sts:AssumeRole`. A referência
+  tem os dois; um trust só com `AssumeRole` falha.
+- **`resolve_conflicts_on_create/update = "OVERWRITE"`** nos addons — torna a reaplicação
+  idempotente quando o addon já existe de uma provisão anterior.
+- **Subnets do control plane são as 4** (2 públicas + 2 privadas), mínimo 2 AZs, e a lista é
+  **imutável** depois de criado o cluster. Node groups usam só as 2 privadas.
+- **`public_access_cidrs` vazio significa `0.0.0.0/0`.** Default de SPIKE/dev na referência;
+  restringir é hardening pendente, não default.
+
+### Um gap da referência que não vamos herdar
+
+A `Network` tem `vpcCidr` parametrizável mas as 4 subnets são **fixas** em
+`172.16.{1,2,3,4}.0/24` — trocar o CIDR sem trocar as subnets quebra o provisionamento, e a
+própria doc marca "parametrizar as subnets é follow-up". Nosso plano de CIDR é
+`10.0.0.0/12` com um `/16` por spoke (`aws/docs/network/01`), então `src/network` **calcula as
+subnets a partir do CIDR** com `cidrsubnet()` desde o início. Herdar o hardcode aqui custaria a
+única decisão irreversível da cadeia.
 
 ## Camadas e state
 
@@ -143,12 +208,12 @@ reaberta.
 ```
 aws/terraform/
 ├── src/
-│   ├── network/                  # VPC + subnets + IGW + NAT + route tables (hub e spoke)
+│   ├── network/                  # ≡ XR Network (L1a) — VPC, subnets, IGW, NAT, RTs
 │   ├── state-backend/            # bucket S3 de state (só o foundation usa)
-│   ├── cluster/                  # EKS + access entries + OIDC provider + addons base
-│   ├── nodegroup/
-│   ├── pod-identity/             # role + trust + inline policy + association (reusável)
-│   └── helm/modules/
+│   ├── cluster/                  # ≡ XR Cluster (L1c+L2a) — IAM roles, EKS, access entries
+│   ├── nodegroup/                # ≡ XR Cluster (L2a) — for_each sobre a lista
+│   ├── pod-identity/             # ≡ molde L2b — role + trust + policy + association
+│   └── helm/modules/             # ≡ XR ClusterBootstrap (L4), recortado
 │       ├── external-secrets/
 │       ├── argo-cd/
 │       └── crossplane/
@@ -180,22 +245,32 @@ O equivalente AWS de *workload identity → role assignment → helm* é **Pod I
 organizadas assim. O submódulo `src/pod-identity` encapsula o molde canônico da fase `65`:
 
 ```
-entrada:  cluster_name, namespace, service_account_name, policy_json
+entrada:  cluster_name, namespace, service_account_name,
+          policy_json (inline) | managed_policy_arns (gerenciadas)
 saída:    role_arn
-recursos: aws_iam_role (trust fixo em pods.eks.amazonaws.com)
-          aws_iam_role_policy (inline, escopada)
+recursos: aws_iam_role — trust em pods.eks.amazonaws.com,
+          com Action = ["sts:AssumeRole", "sts:TagSession"]
+          aws_iam_role_policy / aws_iam_role_policy_attachment
           aws_eks_pod_identity_association
 ```
 
+`sts:TagSession` no trust não é opcional — a referência tem as duas actions, e um trust só com
+`AssumeRole` falha.
+
 O trust é **fixo** — não depende do OIDC issuer, que é por-cluster e recriado a cada provisão.
-Propriedade herdada do desenho atual e deliberada: mantém o submódulo estável entre recriações.
+Propriedade herdada da referência e deliberada: mantém o submódulo estável entre recriações.
+
+O submódulo aceita policy inline **ou** ARNs de policy gerenciada porque a referência usa as
+duas formas: EBS CSI usa a gerenciada `AmazonEBSCSIDriverPolicy`, ESO usa inline escopada a
+prefixo do Secrets Manager.
 
 Consumidores no escopo fino:
 
-| Consumidor | Policy inline |
-|---|---|
-| ESO | `secretsmanager:GetSecretValue` no prefixo `poc-idp/*` |
-| Crossplane | `sts:AssumeRole` nas roles de destino, uma por conta-alvo |
+| Consumidor | ns / ServiceAccount | Policy |
+|---|---|---|
+| EBS CSI | `kube-system` / `ebs-csi-controller-sa` | gerenciada `AmazonEBSCSIDriverPolicy` |
+| ESO | `external-secrets` / SA do chart | inline: `secretsmanager:GetSecretValue` em prefixo |
+| Crossplane | `crossplane-system` / SA do chart | inline: `sts:AssumeRole` nas roles de destino |
 
 **A association do ESO é criada antes do Helm release** (mesmo encadeamento das fases 80→82): a
 association é recurso AWS puro, não exige que namespace e ServiceAccount existam, então o pod
@@ -269,14 +344,22 @@ módulo muda.
 
 Ordem obrigatória: **cell antes de foundation**.
 
-Antes de destruir a cell, os XRs criados pelo Crossplane **dentro** do cluster têm de sair — o
-Crossplane é quem os reconcilia, e destruir o cluster primeiro deixa recurso AWS órfão sem
-controlador. É a armadilha "ordem inversa no teardown" do §7.
+Dentro da cell, a ordenação é **de graça** — é o grafo de dependências do Terraform, e é por isso
+que as ~40 `ClusterUsage` do teardown ordenado não têm tradução. Não recriar esse mecanismo à mão.
+
+O que **não** é de graça: os XRs que o Crossplane criar **dentro** do cluster depois do
+bootstrap. Eles não estão no state do Terraform — o Crossplane é quem os reconcilia, e destruir
+o cluster primeiro deixa recurso AWS órfão sem controlador. É a armadilha "ordem inversa no
+teardown" do §7, e o Terraform não a resolve porque não sabe que eles existem.
 
 Decisão: **documentar, não automatizar.** Provisioner de destroy-time é frágil (roda com o
 provider já parcialmente destruído) e a falha dele é pior que a do humano — deixa state
-inconsistente. O `runbook` no README da raiz lista os passos; a guarda automatizada (Usage API
-do Crossplane ou fitness function) fica para quando existirem XRs de verdade em produção.
+inconsistente. O runbook no README da raiz lista os passos; a guarda automatizada (Usage API do
+Crossplane ou fitness function) fica para quando existirem XRs de verdade em produção.
+
+Observação de escopo: como o escopo fino **não** instala istio nem ALB controller, o NLB órfão
+desse bug não existe neste módulo — não há NLB. O problema volta quando a L4 completa chegar
+por GitOps, e aí ele é do GitOps, não do Terraform.
 
 ## Verificação
 
