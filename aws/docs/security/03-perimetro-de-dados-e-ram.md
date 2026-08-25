@@ -1,6 +1,6 @@
 # 03 — Perímetro de Dados e RAM
 
-**Pilar WAF principal:** Security ([SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — permissões; contenção de acesso cross-account).
+**Pilar WAF principal:** Security ([SEC03 — Permissions management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html); contenção de acesso cross-account).
 
 ## Dois lados de toda fronteira: identidade e recurso
 
@@ -87,9 +87,9 @@ conta (`../accounts/`). Hoje: mapa; amanhã: código.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC03-BP07](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_analyze_cross_account.html)** limitar acesso cross-account | resource policy com `Principal` explícito + `aws:PrincipalOrgID` |
-| **[SEC03-BP09](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_share_securely_third_party.html)** compartilhar recursos com segurança | RAM com `allowExternalPrincipals=false` (só a Organization) |
-| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | share escopado por tenant (account ID), não aberto |
+| **[SEC03-BP07 — Analyze public and cross-account access](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_analyze_cross_account.html)** | resource policy com `Principal` explícito + `aws:PrincipalOrgID` |
+| **[SEC03-BP09 — Share resources securely with a third party](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_share_securely_third_party.html)** | RAM com `allowExternalPrincipals=false` (só a Organization) |
+| **[SEC03-BP01 — Define access requirements](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** | share escopado por tenant (account ID), não aberto |
 
 ## Próximo
 

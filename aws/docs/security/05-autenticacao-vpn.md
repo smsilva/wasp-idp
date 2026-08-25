@@ -1,6 +1,6 @@
 # 05 — Autenticação de VPN
 
-**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — identidade no acesso; [SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html) — conectividade privada).
+**Pilar WAF principal:** Security ([SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html); [SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)).
 
 ## O recorte deste tópico
 
@@ -63,10 +63,10 @@ Identity Center (`../accounts/04`), não de credencial local.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_enforce_mechanisms.html)** identidade centralizada | Client VPN federa no Identity Center; sem usuário local por túnel |
-| **[SEC02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html)** confiar em identidade forte | mTLS (posse) + SSO (identidade) no Client VPN |
-| **[SEC08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** proteger segredos | PSK em secret com acesso escopado (RBAC/Secrets Manager) |
-| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** entrada única controlada | toda VPN autentica e termina no Hub |
+| **[SEC02-BP01 — Use strong sign-in mechanisms](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_enforce_mechanisms.html)** | Client VPN federa no Identity Center; sem usuário local por túnel |
+| **[SEC02-BP04 — Rely on a centralized identity provider](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html)** | mTLS (posse) + SSO (identidade) no Client VPN |
+| **[SEC08-BP01 — Implement secure key management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** | PSK em secret com acesso escopado (RBAC/Secrets Manager) |
+| **[SEC05-BP01 — Create network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** | toda VPN autentica e termina no Hub |
 
 ## Próximo
 

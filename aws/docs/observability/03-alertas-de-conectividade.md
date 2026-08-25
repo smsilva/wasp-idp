@@ -1,6 +1,6 @@
 # 03 — Alertas de Conectividade
 
-**Pilar WAF principal:** Reliability ([REL02](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html) — conectividade HA; [REL06](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/monitor-workload-resources.html) — resposta a evento).
+**Pilar WAF principal:** Reliability ([REL02 — Plan your network topology](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html); [REL06 — Monitor workload resources](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/monitor-workload-resources.html)).
 
 ## O modo de falha próprio do hub-and-spoke
 
@@ -81,9 +81,9 @@ Além da conectividade, o baseline inclui:
 
 | Best practice | Como atende |
 |---|---|
-| **[REL06-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_monitor_aws_resources_monitor_resources.html)/BP02** monitorar e alarmar | alarmes sobre tunnel/TGW/NAT antecipam perda de conectividade |
-| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** conectividade HA observável | distinguir HA degradada (aviso) de HA perdida (crítico) |
-| **[OPS10-BP01](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_event_response_event_incident_problem_process.html)** resposta a evento | SNS por severidade → canal certo; auto-remediação onde cabe |
+| **[REL06-BP01 — Monitor all components for the workload](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_monitor_aws_resources_monitor_resources.html)** / **[REL06-BP02 — Define and calculate metrics](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_monitor_aws_resources_notification_aggregation.html)** | alarmes sobre tunnel/TGW/NAT antecipam perda de conectividade |
+| **[REL02-BP01 — Use highly available network connectivity for your workload public endpoints](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** | distinguir HA degradada (aviso) de HA perdida (crítico) |
+| **[OPS10-BP01 — Use a process for event, incident, and problem management](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_event_response_event_incident_problem_process.html)** | SNS por severidade → canal certo; auto-remediação onde cabe |
 | **OPS** reduzir fadiga | severidade separada; INFO para flaps auto-recuperáveis |
 
 ## Próximo

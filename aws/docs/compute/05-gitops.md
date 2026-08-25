@@ -78,8 +78,8 @@ publicado) é idêntica — muda o produtor (Cluster, não Environment).
 
 | Best practice | Como atende |
 |---|---|
-| **[OPS05](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/design-for-operations.html)** estado versionado | apps declaradas em Git; deploy = push, rollback = revert |
-| **[OPS06](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/mitigate-deployment-risks.html)** reconciliação contínua | ArgoCD reverte drift automaticamente para o estado do Git |
+| **[OPS05 — Design for operations](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/design-for-operations.html)** | apps declaradas em Git; deploy = push, rollback = revert |
+| **[OPS06 — Mitigate deployment risks](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/mitigate-deployment-risks.html)** | ArgoCD reverte drift automaticamente para o estado do Git |
 | **Composable** | ArgoCDInstance consome só o connection secret — desacoplado do produtor |
 | **SEC** RBAC do satélite | ArgoCD instala via kubeconfig com Access Entry escopada (`03`) |
 

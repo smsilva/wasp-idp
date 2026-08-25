@@ -53,7 +53,7 @@ Raios aninhados: **Região > Célula > AZ**.
 **O cluster de plataforma é uma spoke privilegiada, não parte do hub.**
 
 - **Hub** = função de rede: TGW, egress/NAT, firewall, resolver, terminação de VPN.
-  Nada executa workload ali. (AWS WAF [REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html) + whitepaper "Building a Scalable
+  Nada executa workload ali. (AWS WAF [REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html) + whitepaper "Building a Scalable
   and Secure Multi-VPC AWS Network Infrastructure".)
 - **Plataforma** = spoke na account `platform`. Roda auth, discovery, ArgoCD, Crossplane.
 - **Cliente** = spoke na account do tenant.
@@ -412,7 +412,7 @@ de operar).
 
 ## 12. Referências AWS
 
-- **[REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** (Well-Architected, Reliability) — preferência por hub-and-spoke.
+- **[REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** (Well-Architected, Reliability).
   Sem diagramas.
 - **Whitepaper "Building a Scalable and Secure Multi-VPC AWS Network
   Infrastructure"** — referência canônica da topologia.

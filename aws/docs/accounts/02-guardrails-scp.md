@@ -1,6 +1,6 @@
 # 02 — Guardrails via Service Control Policies
 
-**Pilar WAF principal:** Security ([SEC01-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_control_objectives.html)/BP04 — controles preventivos centralizados).
+**Pilar WAF principal:** Security ([SEC01-BP03 — Identify and validate control objectives](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_control_objectives.html) / [SEC01-BP04 — Stay up to date with security threats and recommendations](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_updated_threats.html)).
 
 ## SCP em uma frase
 
@@ -133,8 +133,8 @@ policy do target, fazer a troca e reanexar — não remover a policy em definiti
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC01-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_control_objectives.html)** controles preventivos automatizados | SCP nega na API, antes da ação acontecer |
-| **[SEC01-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_updated_threats.html)** limitar acesso não-humano/root | Guardrail dedicado negando ações do usuário root |
+| **[SEC01-BP03 — Identify and validate control objectives](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_control_objectives.html)** | SCP nega na API, antes da ação acontecer |
+| **[SEC01-BP04 — Stay up to date with security threats and recommendations](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_updated_threats.html)** | Guardrail dedicado negando ações do usuário root |
 | **REL/OPS** contenção de erro humano | Restrição de região evita "esqueci um recurso rodando em `sa-east-1`" |
 
 ## Próximo

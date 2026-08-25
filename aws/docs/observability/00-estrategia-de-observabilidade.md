@@ -65,9 +65,9 @@ Não é ou-ou: métrica de **infra AWS** tende a CloudWatch (é onde nasce); mé
 
 | Best practice | Como atende |
 |---|---|
-| **[OPS08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_analyze_workload_metrics.html)** coletar logs e métricas | logs + métricas ligados por padrão em cada spoke |
-| **[OPS08-BP04](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_create_alerts.html)** correlacionar sinais | destino comum permite cruzar Flow Logs × CloudTrail × métricas |
-| **[OPS04](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/implement-observability.html)** telemetria de todos os componentes | cada domínio contribui seu sinal; este consolida |
+| **[OPS08-BP01 — Analyze workload metrics](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_analyze_workload_metrics.html)** | logs + métricas ligados por padrão em cada spoke |
+| **[OPS08-BP04 — Create actionable alerts](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_create_alerts.html)** | destino comum permite cruzar Flow Logs × CloudTrail × métricas |
+| **[OPS04 — Implement observability](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/implement-observability.html)** | cada domínio contribui seu sinal; este consolida |
 | **SEC** leitura centralizada segura | role cross-account escopada, não credencial copiada |
 
 ## Próximo

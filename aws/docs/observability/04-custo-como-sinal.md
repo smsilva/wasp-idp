@@ -1,6 +1,6 @@
 # 04 — Custo como Sinal
 
-**Pilar WAF principal:** Cost Optimization ([COST02](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/governance.html)/[COST05](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/evaluate-cost-when-selecting-services.html) — custo observável e sob controle).
+**Pilar WAF principal:** Cost Optimization ([COST02 — Governance](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/governance.html)/[COST05 — Evaluate cost when selecting services](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/evaluate-cost-when-selecting-services.html)).
 
 ## Custo é telemetria, não só fatura
 
@@ -70,8 +70,8 @@ Observabilidade tem custo (ingestão de logs, métricas custom, retenção). Man
 
 | Best practice | Como atende |
 |---|---|
-| **[COST02-BP05](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_govern_usage_controls.html)** alertas de custo | Budgets por conta/tag pegam desvio antes da fatura |
-| **[COST05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_select_service_requirements.html)** monitorar custo continuamente | Anomaly Detection sobre padrão histórico |
+| **[COST02-BP05 — Implement cost controls](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_govern_usage_controls.html)** | Budgets por conta/tag pegam desvio antes da fatura |
+| **[COST05-BP01 — Identify organization requirements for cost](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_select_service_requirements.html)** | Anomaly Detection sobre padrão histórico |
 | **COST** custo como sinal correlacionável | cruzar custo × NAT metrics × Flow Logs aponta a causa |
 | **OPS** custo do observability sob controle | retenção explícita; métrica custom parcimoniosa |
 

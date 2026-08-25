@@ -1,7 +1,6 @@
 # 01 — Endereçamento e CIDR
 
-**Pilar WAF principal:** Reliability ([REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)/BP02 — planejamento de sub-rede e
-endereçamento não sobreposto).
+**Pilar WAF principal:** Reliability ([REL02-BP01 — Use highly available network connectivity for your workload public endpoints](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html) / [REL02-BP02 — Provision redundant connectivity between private networks in the cloud and on-premises environments](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_private_networks.html)).
 
 ## Por que isto vem antes de tudo
 
@@ -77,9 +76,9 @@ por `crossplane render` offline. Detalhe do "como" e o gotcha `%d`→`%v` em
 
 | Best practice | Como o plano atende |
 |---|---|
-| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** subnets HA | `/24` por AZ, mínimo 2 AZs por spoke |
-| **[REL02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_private_networks.html)** sem sobreposição de IP | supernet única + `/16` fixo por spoke + tabela de alocação |
-| **[REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** hub-and-spoke | endereçamento não-sobreposto é pré-requisito para o TGW rotear |
+| **[REL02-BP01 — Use highly available network connectivity for your workload public endpoints](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** | `/24` por AZ, mínimo 2 AZs por spoke |
+| **[REL02-BP02 — Provision redundant connectivity between private networks in the cloud and on-premises environments](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_private_networks.html)** | supernet única + `/16` fixo por spoke + tabela de alocação |
+| **[REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** | endereçamento não-sobreposto é pré-requisito para o TGW rotear |
 
 ## Próximo
 

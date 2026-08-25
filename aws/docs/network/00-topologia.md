@@ -1,6 +1,6 @@
 # 00 — Topologia Hub-and-Spoke
 
-**Pilar WAF principal:** Reliability ([REL02](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html) — planejamento de topologia de rede).
+**Pilar WAF principal:** Reliability ([REL02 — Plan your network topology](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html)).
 
 ## O problema que a topologia resolve
 
@@ -13,7 +13,7 @@ Quando cada VPC precisa falar com as outras (e com VPNs externas), há dois cami
   central, um ponto para observar, um lugar para inserir firewall/VPN. Escala linearmente.
 
 **Decisão:** hub-and-spoke via **AWS Transit Gateway**. Alinhado ao Well-Architected
-**[REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** ("Prefer hub-and-spoke topologies over many-to-many mesh") e ao próprio
+**[REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** e ao próprio
 design consolidado da organização (ver `<hub-repo>/.../2026-05-26-hub-spoke-design.md`).
 
 ## Visão geral
@@ -130,9 +130,9 @@ daquele spoke. Detalhe em [`03-transit-gateway-isolamento.md`](03-transit-gatewa
 
 | Best practice | Como a topologia atende |
 |---|---|
-| **[REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** hub-and-spoke > mesh | TGW central; N attachments, não N×M peerings |
-| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** conectividade privada altamente disponível | TGW é regional e multi-AZ por design; VPN com 2 túneis + BGP |
-| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** camadas de rede | Contas isolam; route tables por spoke isolam; SG/NACL na VPC (tópico 6) |
+| **[REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** | TGW central; N attachments, não N×M peerings |
+| **[REL02-BP01 — Use highly available network connectivity for your workload public endpoints](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** | TGW é regional e multi-AZ por design; VPN com 2 túneis + BGP |
+| **[SEC05-BP01 — Create network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** | Contas isolam; route tables por spoke isolam; SG/NACL na VPC (tópico 6) |
 | **COST** | Route tables no TGW não têm custo; account por projeto habilita billing granular |
 
 ## Limitações conhecidas nesta fase

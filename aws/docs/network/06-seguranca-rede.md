@@ -1,7 +1,7 @@
 # 06 — Segurança de Rede
 
-**Pilar WAF principal:** Security ([SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html) — proteção de recursos de rede; [SEC06](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-compute.html) — computação;
-[SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html) — detecção).
+**Pilar WAF principal:** Security ([SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html); [SEC06 — Protecting compute](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-compute.html);
+[SEC04 — Detection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html)).
 
 ## Camadas de defesa (defense in depth)
 
@@ -42,7 +42,7 @@ sozinho: tráfego pode chegar por caminhos não previstos. Empilhe camadas:
 - Habilitar Flow Logs na VPC de cada spoke → CloudWatch Logs ou S3.
 - É a fonte de verdade de **o que realmente trafegou** — essencial para investigar
   isolamento ("o spoke A tentou alcançar o B?") e para forense.
-- **[SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)**: sem Flow Logs, uma violação de isolamento é invisível até alguém reclamar.
+- **[SEC04-BP01 — Configure service and application logging](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)**: sem Flow Logs, uma violação de isolamento é invisível até alguém reclamar.
 
 ## VPC Endpoints (reduzir superfície e custo)
 
@@ -56,10 +56,10 @@ sozinho: tráfego pode chegar por caminhos não previstos. Empilhe camadas:
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** múltiplas camadas | conta → TGW RT → SG → NACL |
-| **[SEC05-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_layered.html)** todas controlam tráfego | SG stateful + NACL stateless + rotas |
-| **[SEC05-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_inspection.html)** endpoints privados | Gateway/Interface endpoints evitam exposição pública |
-| **[SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** capturar logs | VPC Flow Logs em todos os spokes |
+| **[SEC05-BP01 — Create network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** | conta → TGW RT → SG → NACL |
+| **[SEC05-BP02 — Control traffic flow within your network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_layered.html)** | SG stateful + NACL stateless + rotas |
+| **[SEC05-BP03 — Implement inspection-based protection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_inspection.html)** | Gateway/Interface endpoints evitam exposição pública |
+| **[SEC04-BP01 — Configure service and application logging](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** | VPC Flow Logs em todos os spokes |
 | **COST** | Gateway endpoints reduzem tráfego NAT (cobrado por GB) |
 
 ## Próximo

@@ -1,6 +1,6 @@
 # 03 — Acesso e RBAC
 
-**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)/[SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — quem acessa o cluster e com qual poder).
+**Pilar WAF principal:** Security ([SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)/[SEC03 — Permissions management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — quem acessa o cluster e com qual poder).
 
 ## Duas camadas de autorização no EKS
 
@@ -77,9 +77,9 @@ cluster EKS — coerente com as roles cross-boundary de `../security/`.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_enforce_mechanisms.html)** identidade forte | Access Entries mapeiam IAM/SSO→RBAC de forma auditável (não aws-auth) |
-| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | Access Policy pode escopar a namespace, não só cluster-admin |
-| **[SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)** sem admin implícito | creator não ganha RBAC automático; acesso é concessão explícita |
+| **[SEC02-BP01 — Use strong sign-in mechanisms](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_enforce_mechanisms.html)** | Access Entries mapeiam IAM/SSO→RBAC de forma auditável (não aws-auth) |
+| **[SEC03-BP01 — Define access requirements](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** | Access Policy pode escopar a namespace, não só cluster-admin |
+| **[SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)** | creator não ganha RBAC automático; acesso é concessão explícita |
 | **OPS** acesso versionável | quem tem acesso é declarativo (Access Entry), não escondido em ConfigMap |
 
 ## Próximo

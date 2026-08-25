@@ -1,6 +1,6 @@
 # 00 — IAM User do Crossplane (`crossplane-poc`)
 
-**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — identidade de máquina; [SEC08](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-data-at-rest.html) — proteção de
+**Pilar WAF principal:** Security ([SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — identidade de máquina; [SEC08 — Protecting data at rest](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-data-at-rest.html) — proteção de
 segredos).
 
 ## Pré-requisitos
@@ -172,10 +172,10 @@ lista de inline policies, secret existente na região `us-east-1`.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** credenciais temporárias | não atende ainda — access key é degrau inevitável (ver `../security/04`); mitigado por escopo e por ser substituída por Pod Identity assim que o cluster existir |
-| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | `PowerUserAccess` exclui IAM; a inline policy escopa o restante a `role/poc-eks-*`, nunca `"*"` |
-| **[SEC08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** proteger segredos em repouso | Secrets Manager como única fonte de verdade da credencial, nunca arquivo em disco/repo |
-| **[OPS05-BP04](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_dev_integ_build_mgmt_sys.html)** reaplicável em conta nova | JSON da policy versionado — o `put-user-policy` é só a aplicação de um estado declarado |
+| **[SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** | não atende ainda — access key é degrau inevitável (ver `../security/04`); mitigado por escopo e por ser substituída por Pod Identity assim que o cluster existir |
+| **[SEC03-BP01 — Define access requirements](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** | `PowerUserAccess` exclui IAM; a inline policy escopa o restante a `role/poc-eks-*`, nunca `"*"` |
+| **[SEC08-BP01 — Implement secure key management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** | Secrets Manager como única fonte de verdade da credencial, nunca arquivo em disco/repo |
+| **[OPS05-BP04 — Use build and deployment management systems](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_dev_integ_build_mgmt_sys.html)** | JSON da policy versionado — o `put-user-policy` é só a aplicação de um estado declarado |
 
 ## Próximo
 

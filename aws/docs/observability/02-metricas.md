@@ -66,8 +66,8 @@ Métrica crua vira operação quando ancorada em objetivo:
 
 | Best practice | Como atende |
 |---|---|
-| **[REL06-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_monitor_aws_resources_monitor_resources.html)** monitorar componentes | Container Insights (cluster) + CloudWatch (TGW/VPN/NAT) |
-| **[OPS08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_analyze_workload_metrics.html)** métricas de negócio e técnicas | infra em CloudWatch, aplicação em Prometheus |
+| **[REL06-BP01 — Monitor all components for the workload](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_monitor_aws_resources_monitor_resources.html)** | Container Insights (cluster) + CloudWatch (TGW/VPN/NAT) |
+| **[OPS08-BP01 — Analyze workload metrics](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_analyze_workload_metrics.html)** | infra em CloudWatch, aplicação em Prometheus |
 | **REL** capacidade | NAT/tunnel/node metrics antecipam saturação |
 | **OPS** medir para melhorar | SLI/SLO ancoram alarme em objetivo, não em ruído |
 

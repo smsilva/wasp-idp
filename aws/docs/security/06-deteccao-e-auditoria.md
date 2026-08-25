@@ -1,6 +1,6 @@
 # 06 — Detecção e Auditoria
 
-**Pilar WAF principal:** Security ([SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html) — detecção).
+**Pilar WAF principal:** Security ([SEC04 — Detection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html)).
 
 ## Prevenção falha em silêncio sem detecção
 
@@ -37,7 +37,7 @@ privilégio real (o inventário de ações de fato usadas), fechando o ciclo do 
 - **Policy validation:** valida a sintaxe/semântica de uma policy antes de aplicar (avisa de
   `Resource: "*"` largo, ações inexistentes, `Sid` duplicado).
 - **Unused access:** aponta roles/permissões não usadas há N dias → candidatos a remover
-  ([SEC03-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html), reduzir permissões continuamente).
+  ([SEC03-BP04 — Reduce permissions continuously](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html)).
 
 ## GuardDuty — anomalia e ameaça
 
@@ -72,10 +72,10 @@ ou uma decisão consciente de aceitar o risco.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** capturar logs/eventos | CloudTrail + VPC Flow Logs (`../network/06`) sempre ligados |
-| **[SEC04-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_logs.html)** analisar centralmente | Access Analyzer por Organization; GuardDuty agregado |
-| **[SEC04-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_security_alerts.html)** automatizar resposta a achados | finding → ajuste de policy (ciclo prevenção↔detecção) |
-| **[SEC03-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html)** reduzir permissões | Access Analyzer unused access + CloudTrail para inventário real |
+| **[SEC04-BP01 — Configure service and application logging](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** | CloudTrail + VPC Flow Logs (`../network/06`) sempre ligados |
+| **[SEC04-BP02 — Capture logs, findings, and metrics in standardized locations](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_logs.html)** | Access Analyzer por Organization; GuardDuty agregado |
+| **[SEC04-BP03 — Correlate and enrich security alerts](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_security_alerts.html)** | finding → ajuste de policy (ciclo prevenção↔detecção) |
+| **[SEC03-BP04 — Reduce permissions continuously](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html)** | Access Analyzer unused access + CloudTrail para inventário real |
 
 ## Próximo
 

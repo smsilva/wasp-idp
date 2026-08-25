@@ -82,9 +82,9 @@ spec:
 
 | Best practice | Como atende |
 |---|---|
-| **[REL10-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_fault_isolation_multiaz_region_system.html)** distribuir por AZ | node groups em ≥2 subnets privadas; `min` ≥ nº de AZs |
-| **[COST07-BP01](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_pricing_model_analysis.html)** modelo de preço certo | spot para carga tolerante; on-demand só no baseline |
-| **[SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** sem exposição | nodes em subnet privada, sem IP público; saída via NAT/endpoints |
+| **[REL10-BP01 — Deploy the workload to multiple locations](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_fault_isolation_multiaz_region_system.html)** | node groups em ≥2 subnets privadas; `min` ≥ nº de AZs |
+| **[COST07-BP01 — Perform pricing model analysis](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_pricing_model_analysis.html)** | spot para carga tolerante; on-demand só no baseline |
+| **[SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** | nodes em subnet privada, sem IP público; saída via NAT/endpoints |
 | **REL** upgrade seguro | managed node group drena/cicla nodes em update |
 
 ## Próximo

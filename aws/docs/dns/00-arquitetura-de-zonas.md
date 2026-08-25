@@ -70,7 +70,7 @@ decisão da PoC de ancorar sob `<root-domain>`, não sob o domínio Azure pai).
 |---|---|
 | **OPS** nomes estáveis | subzona + wildcard = FQDN por app sem mexer na pai a cada deploy |
 | **OPS** hierarquia gerenciável | delegação isola cada spoke; a pai só guarda os NS |
-| **[SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** isolamento | público e privado em árvores separadas; split-horizon quando preciso |
+| **[SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** | público e privado em árvores separadas; split-horizon quando preciso |
 | **REL** resolução global | Route53 é global e HA por design |
 
 ## Próximo

@@ -1,6 +1,6 @@
 # 02 — Roles Cross-Account
 
-**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — identidades; [SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — permissões cross-account).
+**Pilar WAF principal:** Security ([SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html); [SEC03 — Permissions management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html)).
 
 ## O problema: N contas que precisam agir umas nas outras
 
@@ -65,7 +65,7 @@ correto daquela relação.
 
 - **Automação sua, entre suas próprias contas:** `ExternalId` é opcional (você controla os
   dois lados); escopar o `Principal` já basta.
-- **Role assumível por um terceiro/SaaS:** `ExternalId` é **obrigatório** ([SEC03-BP08](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_share_securely.html)).
+- **Role assumível por um terceiro/SaaS:** `ExternalId` é **obrigatório** ([SEC03-BP08 — Share resources securely within your organization](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_share_securely.html)).
 
 ## Padrão nesta referência: Hub ↔ conta de projeto
 
@@ -90,9 +90,9 @@ contas distintas. Documentar aqui é o mapa, não o estado atual.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** credenciais temporárias | STS da conta de destino, sem IAM user duplicado |
-| **[SEC03-BP08](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_share_securely.html)** confused deputy | `ExternalId` obrigatório para roles assumíveis por terceiros |
-| **[SEC03-BP07](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_analyze_cross_account.html)** limitar acesso cross-account | trust policy escopada ao principal, não ao `root` da conta |
+| **[SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** | STS da conta de destino, sem IAM user duplicado |
+| **[SEC03-BP08 — Share resources securely within your organization](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_share_securely.html)** | `ExternalId` obrigatório para roles assumíveis por terceiros |
+| **[SEC03-BP07 — Analyze public and cross-account access](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_analyze_cross_account.html)** | trust policy escopada ao principal, não ao `root` da conta |
 
 ## Próximo
 

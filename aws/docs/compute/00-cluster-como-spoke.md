@@ -61,8 +61,8 @@ O plano de subnets vem de `../network/02`; o cluster só as **referencia** (por 
 
 | Best practice | Como atende |
 |---|---|
-| **[REL01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/manage-service-quotas-and-constraints.html)** control plane HA | AWS gerencia o control plane multi-AZ; nodes em ≥2 AZs |
-| **[SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** isolamento | cluster = spoke: uma conta, uma VPC, uma subzona, IAM escopado |
+| **[REL01 — Manage service quotas and constraints](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/manage-service-quotas-and-constraints.html)** | AWS gerencia o control plane multi-AZ; nodes em ≥2 AZs |
+| **[SEC05 — Protecting networks](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** | cluster = spoke: uma conta, uma VPC, uma subzona, IAM escopado |
 | **SEC** perímetro | endpoint privado (alvo) + acesso via VPN no Hub |
 | **COST/OPS** ciclo de vida consciente | control plane é o gargalo de tempo/custo — não destruir por reflexo |
 
