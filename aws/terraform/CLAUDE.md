@@ -44,6 +44,30 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   dentro do `main.tf`, transformar a validação em assertion de teste — senão vira buraco
   silencioso. Foi o que aconteceu com a checagem de supernet do CIDR.
 
+## Providers `kubernetes` e `helm`
+
+- **Configurar os providers a partir de outputs do módulo do cluster e aplicar tudo num
+  `terraform apply` único funciona** — a configuração do provider só precisa estar resolvida
+  na hora de configurá-lo, já no apply. Não inventar apply em duas fases com `-target`.
+- O que quebra é **data source** desses providers durante o plan. Manter o que for
+  Kubernetes como `resource`.
+- **`-target` volta a ser necessário noutro caso:** um data source que fica "known after
+  apply" cascateia para os providers e faz o Terraform propor recriar **todos** os
+  `helm_release`. Sintoma: plan propondo substituir releases sem motivo.
+- No **provider `helm` 3.x o `kubernetes` virou atributo**, não bloco: `kubernetes = { ... }`
+  com `exec = { ... }` dentro. Exemplo vivo da composição inteira (AKS + ArgoCD + Istio) em
+  `examples/cluster_argocd_ingress_istio` do repo `azure-kubernetes` (caminho em
+  `CLAUDE.local.md`).
+
+## Versões de chart
+
+- **Conferir no repositório, nunca herdar** do repo interno de referência nem dos scripts de
+  `aws/eks/scripts/` — ambos ficaram para trás.
+- **O ArtifactHub indexa o canal `master` do Crossplane**, que publica release candidates.
+  Para o `stable`, ler `https://charts.crossplane.io/stable/index.yaml` direto.
+- ESO 2.9.0 **não serve mais** `external-secrets.io/v1beta1` nem `v1alpha1`. Manifestos
+  `ExternalSecret` têm que ser `v1`.
+
 ## Custo
 
 - **`enable_nat_gateway = false` nos hubs é deliberado**, não esquecimento: sem TGW nada roteia

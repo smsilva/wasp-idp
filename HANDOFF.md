@@ -329,15 +329,16 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
 
 ## How to Resume
 
-**A sessão parou num gate de revisão, não numa falha nem numa decisão pendente.** O design do
-módulo está escrito e commitado; falta o Silvio revisar:
+O design do módulo foi aprovado e o plano de implementação da camada 2 está escrito:
 
 ```bash
 cd /home/silvios/git/wasp-idp
 code docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md
+code docs/superpowers/plans/2026-08-25-terraform-control-plane.md
 ```
 
-Aprovado, invocar `superpowers:writing-plans`. **Nenhum código antes disso.**
+O plano tem 8 tasks. As 1–7 são TDD offline e não tocam a AWS. **A Task 8 aplica na AWS e
+exige autorização explícita do Silvio** — parar nela.
 
 **A referência funcional é a Composition, não as fases do chart.**
 As Compositions Crossplane do repositório de referência interno (caminho em `CLAUDE.local.md`)

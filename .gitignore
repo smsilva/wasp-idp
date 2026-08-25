@@ -22,3 +22,6 @@ crash.log
 crash.*.log
 terraform.tfvars
 !terraform.tfvars.example
+
+# Andaime de contexto derivado de docs versionadas — nao versionar (segunda fonte de verdade)
+docs/superpowers/context/
