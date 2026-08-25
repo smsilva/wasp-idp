@@ -1,4 +1,4 @@
-# CLAUDE.md — `security/` (Domínio: Security & IAM)
+# CLAUDE.md — `security/` (Domain: Security & IAM)
 
 > Índice do domínio de **Segurança e IAM** — o perímetro de identidade e os controles que
 > permeiam todos os outros domínios. Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).

@@ -1,4 +1,4 @@
-# CLAUDE.md — `aws/docs/` (Arquitetura de Referência: Hub-and-Spoke na AWS)
+# CLAUDE.md — `aws/docs/` (Reference Architecture: Hub-and-Spoke on AWS)
 
 > **Índice mestre.** Esta pasta é a documentação **evolutiva** de como montar, do zero,
 > um ambiente AWS completo seguindo o **Well-Architected Framework** — organizada em

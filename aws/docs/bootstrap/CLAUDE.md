@@ -1,4 +1,4 @@
-# CLAUDE.md — `bootstrap/` (Domínio: Bootstrap Manual da Conta `network`)
+# CLAUDE.md — `bootstrap/` (Domain: Manual Bootstrap of the `network` Account)
 
 > Índice do domínio de **bootstrap** — o único passo imperativo e não-automatizável desta
 > arquitetura de referência: dar à automação (Crossplane) uma primeira identidade na conta

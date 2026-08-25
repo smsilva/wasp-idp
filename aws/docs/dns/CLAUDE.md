@@ -1,4 +1,4 @@
-# CLAUDE.md — `dns/` (Domínio: DNS)
+# CLAUDE.md — `dns/` (Domain: DNS)
 
 > Índice do domínio de **DNS** — como nomes estáveis chegam aos serviços de cada spoke, do
 > registro público delegado à resolução privada cross-account, com automação no cluster e

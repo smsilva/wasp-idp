@@ -1,4 +1,4 @@
-# CLAUDE.md — `network/` (Domínio: Rede Hub-and-Spoke)
+# CLAUDE.md — `network/` (Domain: Hub-and-Spoke Network)
 
 > Índice do domínio de **rede** — a fundação da arquitetura de referência. Ordem de leitura
 > = ordem dos arquivos. Corpo genérico (placeholders `<...>`).

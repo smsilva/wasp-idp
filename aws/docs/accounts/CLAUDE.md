@@ -1,4 +1,4 @@
-# CLAUDE.md — `accounts/` (Domínio: Contas e Organizations)
+# CLAUDE.md — `accounts/` (Domain: Accounts and Organizations)
 
 > Índice do domínio **Accounts & Organizations** — o container que hospeda a rede
 > (`../network/`). Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).

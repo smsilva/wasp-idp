@@ -1,4 +1,4 @@
-# CLAUDE.md — `observability/` (Domínio: Observability)
+# CLAUDE.md — `observability/` (Domain: Observability)
 
 > Índice do domínio de **Observabilidade** — a camada transversal que torna todos os outros
 > domínios **visíveis**: o que trafega, o que consome recurso, o que está prestes a falhar.

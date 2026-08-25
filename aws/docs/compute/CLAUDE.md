@@ -1,4 +1,4 @@
-# CLAUDE.md — `compute/` (Domínio: Compute — EKS como Spoke)
+# CLAUDE.md — `compute/` (Domain: Compute — EKS as a Spoke)
 
 > Índice do domínio de **Compute** — o cluster EKS que roda os workloads, modelado como uma
 > **spoke** da topologia hub-and-spoke. Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
