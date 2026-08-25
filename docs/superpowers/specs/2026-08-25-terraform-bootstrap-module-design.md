@@ -155,8 +155,8 @@ Duas camadas, dois states, pelo mesmo eixo que decidiu Terraform vs Crossplane:
 
 | Camada | Conta | Cardinalidade | Churn |
 |---|---|---|---|
-| `network-foundation` | `network` (`094289743086`) | 1 por região | ~zero |
-| `platform-cell` | `cicd` (a criar) | 1 por região | baixo, mas > foundation |
+| `network-foundation` | `network` | 1 por região | ~zero |
+| `platform-cell` | `cicd` | 1 por região | baixo, mas > foundation |
 
 A `platform-cell` lê o foundation por **`data` source** (tag/nome da VPC, não `terraform_
 remote_state`): desacopla o state e sobrevive ao foundation ser reescrito ou migrado.
@@ -182,17 +182,25 @@ antigo.
 
 ## Pré-requisito: a conta `cicd`
 
-O módulo põe o EKS de plataforma na conta `cicd`, OU `Deployments`. Ela **não existe na AWS** —
-foi decidida e escrita nos scripts, nada aplicado. Não há atalho: mover EKS entre contas é
-rebuild, não move.
+O módulo põe o EKS de plataforma na conta `cicd`, OU `Deployments`. Não havia atalho — mover EKS
+entre contas é rebuild, não move — então a conta tinha de existir antes do primeiro
+`terraform apply`.
 
-**A Frente A vira pré-requisito duro da Frente B.** Antes de qualquer `terraform apply`:
+**Cumprido em 2026-08-25.** A ordem importa e foi esta:
 
 ```bash
 cd aws/docs/accounts/scripts
-./create-organizational-unit-structure
-./create-account --name cicd --ou deployments --email <cicd-account-email>
+./create-organizational-unit-structure          # cria a OU Deployments
+./apply-baseline-service-control-policy         # guardrails na OU, ANTES da conta chegar
+./create-account --name cicd --email-user <user> --email-domain <domain> --ou deployments
 ```
+
+A SCP vem no meio de propósito: `create-account` não aceita OU de destino, a conta nasce na Root
+e é movida depois, e a SCP da OU não vale nessa janela. Aplicá-la antes encurta a exposição — não
+a elimina.
+
+IDs e e-mail em `CLAUDE.local.md`. Profile local validado; o deny de região foi **verificado**,
+não presumido.
 
 Rejeitado: subir o control plane em `wasp-nonprod` porque já existe — contradiz a decisão de OU
 e gasta o rebuild depois.
@@ -304,7 +312,7 @@ data:
   hubVpcId:                <id>
   spokeSubnetIds:          <csv>
   crossplaneRoleArn:       <arn da role de origem>
-  networkAccountId:        "094289743086"
+  networkAccountId:        <id da conta network>
   targetAccountIds:        <csv>
 ```
 

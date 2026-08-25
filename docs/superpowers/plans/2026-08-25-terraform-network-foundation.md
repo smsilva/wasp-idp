@@ -1339,16 +1339,13 @@ Custo verificado em zero: nenhum NAT Gateway na conta."
 ## O que este plano NÃO cobre
 
 A spec descreve duas camadas. Esta é a primeira. A segunda vira plano próprio
-(`platform-cell`) e está bloqueada por um passo que não é código: **a conta `cicd` não existe
-na AWS**. Criá-la é item da Frente A no `HANDOFF.md`:
+(`platform-cell`).
 
-```bash
-cd aws/docs/accounts/scripts
-./create-organizational-unit-structure
-./create-account --name cicd --ou deployments --email <cicd-account-email>
-```
+**O bloqueio da camada 2 caiu em 2026-08-25:** a OU `Deployments` e a conta `cicd` foram criadas
+pelos scripts de `aws/docs/accounts/scripts/`, com SCP baseline herdada e profile local `cicd`
+validado. IDs em `CLAUDE.local.md`.
 
-Escopo do plano 2, quando a conta existir: `src/cluster`, `src/nodegroup`,
+Escopo do plano 2: `src/cluster`, `src/nodegroup`,
 `src/pod-identity`, `src/helm/modules/{external-secrets,argo-cd,crossplane}`, a raiz
 `platform-cell`, o ConfigMap de contrato Terraform→GitOps e o `data` source que lê a VPC hub
 desta camada. Custo real: EKS ~US$ 73/mês + NAT ~US$ 32/mês + nós.

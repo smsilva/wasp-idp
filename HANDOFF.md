@@ -37,9 +37,10 @@ OIDC que exige o trio é a URL — e `http://localhost` é exceção aceita pelo
 este repo já prova com o Backstage em `:7007`. Design completo em
 `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`.
 
-**Frente A virou pré-requisito duro da Frente B:** o módulo põe o EKS de plataforma na conta
-`cicd`, que **não existe na AWS**. Mover EKS entre contas é rebuild, não move — a conta tem de
-existir antes do primeiro `terraform apply`.
+**O pré-requisito da Frente B foi cumprido (2026-08-25):** a OU `Deployments` e a conta `cicd`
+**existem na AWS**, com SCP baseline herdada e profile local validado. O módulo põe o EKS de
+plataforma nela, e mover EKS entre contas seria rebuild — por isso a conta tinha de vir antes do
+primeiro `terraform apply`. Veio.
 
 ## Vocabulário (ler antes de qualquer coisa)
 
@@ -82,44 +83,68 @@ contra o whitepaper AWS conforme cada passo é executado de verdade. **Regra ado
 manter o vocabulário de "Organizing Your AWS Environment Using Multiple Accounts"; divergir só
 com motivo registrado.**
 
-Estado real da Organization `o-e4r8ndteju` (management `221047292361`), inspecionado na API:
+Forma da Organization, inspecionada na API. **Account IDs, OU IDs e e-mails ficam em
+`CLAUDE.local.md`** — este arquivo é versionado e a convenção do repo é não carregar valor real.
 
 ```
-Root  r-f11d
-├── ACC  Silvio Silva          221047292361   smsilva@gmail.com          (management)
-├── OU   Security              ou-f11d-ig5lcrlr
-│   └── ACC  log-archive       995122007318   smsilva+log-archive@gmail.com
-├── OU   Infrastructure        ou-f11d-8l7pbxgp
-│   └── ACC  Network           094289743086   smsilva+network@gmail.com
-└── OU   Workloads             ou-f11d-j7fnwqmx
-    ├── OU   NonProd           ou-f11d-7nadx2es
-    │   └── ACC  wasp-nonprod  832721568602   smsilva+wasp-nonprod@gmail.com
-    └── OU   Production        ou-f11d-vyxw3s7r   (vazia)
+Root
+├── ACC  <management>                        (management — não hospeda nada; SCP não a afeta)
+├── OU   Security
+│   └── ACC  log-archive
+├── OU   Infrastructure
+│   └── ACC  Network                         (Connectivity Account)
+├── OU   Deployments
+│   └── ACC  cicd                            (Control Plane — Crossplane + ArgoCD)
+└── OU   Workloads
+    ├── OU   NonProd
+    │   └── ACC  wasp-nonprod
+    └── OU   Production                      (vazia)
 ```
 
-**A OU `Deployments` e a conta `cicd` NÃO existem ainda** — foram decididas e escritas nos
-scripts nesta sessão, mas nada foi aplicado contra a AWS.
+Conferir o estado real a qualquer momento:
+
+```bash
+AWS_PROFILE=personal aws organizations list-roots --query 'Roots[0].Id' --output text
+AWS_PROFILE=personal aws organizations list-accounts \
+  --query 'Accounts[].{Name:Name,Status:Status}' --output table
+```
+
+**A OU `Deployments` e a conta `cicd` foram criadas em 2026-08-25** pelos scripts do repo, nesta
+ordem: `create-organizational-unit-structure` → `apply-baseline-service-control-policy` (para a
+OU já ter guardrails quando a conta chegasse) → `create-account`. A conta nasce na Root e é
+movida; a SCP da OU não vale nessa janela, e aplicá-la antes é o que encurta a exposição.
+
+Profile local `cicd` acrescentado ao `~/.aws/config` (backup em `~/.aws/config.bak-20260825`),
+assume de `OrganizationAccountAccessRole` validado. **SCP comprovada na prática, não presumida:**
+`ec2:DescribeVpcs` em `us-west-2` volta com deny explícito de `DenyOutsideApprovedRegions`, e em
+`us-east-1` funciona.
+
+Pendências da conta nova: **sem permission set** no Identity Center (acesso só por switch-role) e
+**VPC default em toda região**, como qualquer conta nova — a spoke do Terraform é separada, e a
+default fica como candidata a limpeza (security group default aberto).
 
 **Passos ①–⑥ concluídos.** SCPs baseline verificadas em todos os targets:
 
 | Target | SCPs (além de `FullAWSAccess`) |
 |---|---|
-| Root `r-f11d` | `DenyLeaveOrganization`, `ProtectCloudTrail` |
-| `Security` `ou-f11d-ig5lcrlr` | `DenyOutsideApprovedRegions`, `RequireImdsv2`, `DenyRootUser` |
-| `Infrastructure` `ou-f11d-8l7pbxgp` | idem |
-| `Workloads` `ou-f11d-j7fnwqmx` | idem (herdado por `NonProd`/`Production`) |
+| Root | `DenyLeaveOrganization`, `ProtectCloudTrail` |
+| `Security` | `DenyOutsideApprovedRegions`, `RequireImdsv2`, `DenyRootUser` |
+| `Infrastructure` | idem |
+| `Workloads` | idem (herdado por `NonProd`/`Production`) |
+| `Deployments` | idem (anexadas em 2026-08-25, antes da conta `cicd` chegar) |
 
 Região aprovada: `us-east-1`. CloudTrail organizacional `organization-trail` (multi-region,
-log file validation) + bucket `cloudtrail-o-e4r8ndteju` na `log-archive` (BPA, versionamento,
+log file validation) + bucket `cloudtrail-<organization-id>` na `log-archive` (BPA, versionamento,
 SSE-S3, `BucketOwnerEnforced`, deny non-TLS). Custo estimado **< US$ 1/mês**.
 
-**Passo ⑦ parcial.** Identity Center `ssoins-7223e082d350408a` / identity store `d-906609a243`:
+**Passo ⑦ parcial.** Identity Center (IDs da instância e do identity store em `CLAUDE.local.md`):
 
 ```
-Silvio Silva (221047292361)   AdministratorAccess  usuário silvios     <- deveria ser grupo
-log-archive  (995122007318)   ReadOnlyAccess       grupo platform-admins
-Network      (094289743086)   (nenhuma — só OrganizationAccountAccessRole)
-wasp-nonprod (832721568602)   (nenhuma — idem)
+management     AdministratorAccess  usuário nominal     <- deveria ser grupo
+log-archive    ReadOnlyAccess       grupo platform-admins
+Network        (nenhuma — só OrganizationAccountAccessRole)
+wasp-nonprod   (nenhuma — idem)
+cicd           (nenhuma — idem; nasceu assim em 2026-08-25)
 ```
 
 Break-glass ([SEC03-BP03 — Establish emergency access process](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html))
@@ -142,7 +167,7 @@ Cross-account + Fase 4 (split de charts + identidade) prontos e validados offlin
   aplicado por `configure-aws-creds`) e `wasp-nonprod` (assumeRoleChain,
   `provider-config-wasp-nonprod.yaml` com `${SPOKE_ACCOUNT_ID}` via envsubst, aplicado por
   `configure-account-access`). Sem PC `default` — falha-fechado.
-- **Role `crossplane-wasp-nonprod`** na conta `832721568602`: trust p/ `crossplane-poc` da
+- **Role `crossplane-wasp-nonprod`** na conta `wasp-nonprod`: trust p/ `crossplane-poc` da
   `Network` + PowerUserAccess + inline `CrossplaneEksRoleManagement`. Assume validado com as
   creds reais do `crossplane-poc`. Substituiu `crossplane-sandbox` (recriada — IAM não
   renomeia in-place; a antiga foi removida).
@@ -265,9 +290,12 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
    Azure que nunca foi construído. Não é doc desatualizada.
 5. **Valores reais em docs genéricas** — *unexpected*: `aws/docs/bootstrap/00-crossplane-iam-user.md:91`
    tem account id real hardcoded; `accounts/03-provisioning.md` e `accounts/scripts/create-account`
-   têm e-mail real. Contraria a convenção de genericização; pré-existente, fora de escopo até agora.
+   têm e-mail real. Contraria a convenção de genericização; pré-existente.
+   **Parcialmente corrigido em 2026-08-25:** a árvore da Organization neste arquivo tinha os 5
+   account IDs e e-mails; foi genericizada e os valores passaram a `CLAUDE.local.md`. Os três
+   arquivos acima continuam pendentes.
 6. VPC+EKS ainda NÃO provisionados numa spoke — *intentional*: custo alto, só sob autorização
-   explícita.
+   explícita. A conta `cicd` já existe e está vazia — criar a conta não custa nada; o EKS custa.
 7. `crossplane render` não injeta defaults do XRD — *intentional* (limitação da ferramenta):
    passar `providerConfigName`/`metadata.name` explícitos no XR de teste. `providerConfigName`
    é OBRIGATÓRIO (sem default): XR sem ele é rejeitado, não há fallback.
@@ -354,14 +382,14 @@ set -a; source <(AWS_PROFILE=network aws secretsmanager get-secret-value \
   --query SecretString --output text \
   | jq -r '"AWS_ACCESS_KEY_ID=" + .aws_access_key_id, "AWS_SECRET_ACCESS_KEY=" + .aws_secret_access_key'); set +a
 aws/eks/scripts/configure-aws-creds
-aws/eks/scripts/configure-account-access --name wasp-nonprod --account-id 832721568602
+aws/eks/scripts/configure-account-access --name wasp-nonprod --account-id <spoke-account-id>
 ```
 
 Pré-requisitos: VPN corporativa **desconectada** (senão o pull de `xpkg.upbound.io` falha com
 `x509` e depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`).
 `install-crossplane` default é `--servers 1` — não usar 3 neste host.
 
-Perfis locais: `network` (`094289743086`) e `wasp-nonprod` (`832721568602`), ambos assumindo
+Perfis locais: `network`, `wasp-nonprod` e `cicd`, todos assumindo
 `OrganizationAccountAccessRole` a partir de `personal`. Backup do `~/.aws/config` antes do
 rename dos profiles: `~/.aws/config.bak-20260824`.
 
@@ -380,9 +408,10 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
 - [x] E-mail do root da `Network` alinhado (`+hub@` → `+network@`).
 - [x] Break-glass documentado; IDs do WAF conferidos contra as páginas oficiais.
 - [x] OU `Deployments` + `--ou deployments` + SCP baseline escritos nos scripts.
-- [ ] **Aplicar** a OU `Deployments` e criar a conta `cicd`
-      (`./create-organizational-unit-structure` depois
-      `./create-account --name cicd --ou deployments ...`). Nada disso existe na AWS ainda.
+- [x] **Aplicada** a OU `Deployments` + SCP baseline nela + conta `cicd` criada e movida
+      (IDs em `CLAUDE.local.md`). Profile local validado; deny de região comprovado.
+- [ ] Atribuir permission set à conta `cicd` — nasceu sem nenhum.
+- [ ] Decidir se as VPCs default da `cicd` (uma por região) saem. Higiene, não bloqueio.
 - [ ] Atribuir permission set a `Network` e `wasp-nonprod`
       (`./assign-permission-set --account <conta> --group platform-admins`) — elimina o
       switch-role via `OrganizationAccountAccessRole`.
@@ -390,7 +419,7 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
       `platform-admins` (atribuir o grupo **antes** de revogar o usuário).
 - [ ] Verificar/habilitar MFA no root da management account e das contas-membro.
 - [ ] Criar a regra de alarme de uso de root (CloudTrail → EventBridge → notificação).
-- [ ] Decidir retenção/lifecycle do bucket `cloudtrail-o-e4r8ndteju`.
+- [ ] Decidir retenção/lifecycle do bucket `cloudtrail-<organization-id>`.
 
 ### Frente B — Terraform + Crossplane / EKS
 
@@ -401,7 +430,8 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
 - [ ] **Design do módulo escrito — em revisão pelo Silvio.**
       `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`. Aprovado o
       design, o próximo passo é `superpowers:writing-plans`. Nenhum código antes disso.
-- [ ] Criar a conta `cicd` (item da Frente A) — **pré-requisito duro** do `terraform apply`.
+- [x] Conta `cicd` criada — o **pré-requisito duro** do `terraform apply` está cumprido.
+- [ ] Escrever o plano da camada 2 (`platform-cell`) — agora desbloqueado.
 - [ ] Escrever o design do script `follow` determinístico (equivalente ao
       `azure-kubernetes/scripts/follow-creation/follow`) — decidido que ganha spec própria.
 - [ ] Reduzir o IAM user `crossplane-poc` a só `sts:AssumeRole` (mitigação de SEC02-BP02 que
