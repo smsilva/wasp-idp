@@ -1,0 +1,417 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Descobre na AWS os valores que a camada control-plane precisa e gera o
+  terraform.tfvars (gitignored). Somente leitura — nao cria nem altera nada.
+
+  O que e DESCOBERTO (consulta a API):
+
+    network_account_id   sts get-caller-identity no profile da conta network
+    availability_zones   describe-availability-zones da regiao, as N primeiras
+    target_account_ids   organizations list-accounts, resolvendo nome -> id
+    kubernetes_version   describe-cluster-versions, a versao default do EKS
+    <bucket de state>    tfstate-<organization-id>, impresso para o -backend-config
+
+  O que e DECIDIDO (vem por opcao, nao se descobre):
+
+    vpc_cidr             o /16 da spoke dentro do supernet 10.0.0.0/12. CIDR e a
+                         unica decisao irreversivel da cadeia — ver
+                         aws/docs/network/01-cidr-addressing.md
+
+  O que e VALIDADO (falha antes de gerar arquivo, em vez de falhar no apply):
+
+    - a tag Name da VPC hub casa com EXATAMENTE uma VPC na conta network
+    - o vpc_cidr pedido nao colide com nenhuma VPC ja existente na conta alvo
+    - a regiao passa pela SCP DenyOutsideApprovedRegions
+    - o bucket de state existe
+
+    Options:
+
+      -h,  --help                Show this help
+      -r,  --region              Regiao da celula (default: us-east-1)
+      -p,  --profile             Profile da conta cicd, dona do cluster (default: cicd)
+           --network-profile     Profile de leitura na conta network (default: network)
+           --org-profile         Profile da management account, para resolver nomes de
+                                  conta em ids (default: personal)
+           --hub-vpc-name        Tag Name da VPC hub da camada 1 (default: poc-hub-vpc)
+           --vpc-cidr            CIDR da spoke (default: 10.2.0.0/16)
+           --target-account      Conta onde o Crossplane cria recursos. Aceita nome
+                                  ("wasp-nonprod") ou id de 12 digitos. Repetivel.
+                                  (default: wasp-nonprod)
+           --availability-zones  Quantas AZs usar (default: 2)
+           --kubernetes-version  Fixa a versao em vez de descobrir
+           --format              tfvars | json  (default: tfvars)
+      -o,  --output              Arquivo de saida (default: ../terraform.tfvars;
+                                  use - para stdout)
+      -f,  --force               Sobrescreve o arquivo se ja existir
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --target-account wasp-nonprod --target-account cicd
+
+      ${this_script_name} --format json --output -
+
+      ${this_script_name} --region us-west-2 --vpc-cidr 10.4.0.0/16 --hub-vpc-name poc-hub-vpc
+
+EOF
+}
+
+region="us-east-1"
+profile="cicd"
+network_profile="network"
+org_profile="personal"
+hub_vpc_name="poc-hub-vpc"
+vpc_cidr="10.2.0.0/16"
+availability_zone_count="2"
+kubernetes_version=""
+format="tfvars"
+output=""
+force="false"
+target_accounts=()
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    -p | --profile )
+      shift
+      profile="${1}"
+      ;;
+
+    --network-profile )
+      shift
+      network_profile="${1}"
+      ;;
+
+    --org-profile )
+      shift
+      org_profile="${1}"
+      ;;
+
+    --hub-vpc-name )
+      shift
+      hub_vpc_name="${1}"
+      ;;
+
+    --vpc-cidr )
+      shift
+      vpc_cidr="${1}"
+      ;;
+
+    --target-account )
+      shift
+      target_accounts+=("${1}")
+      ;;
+
+    --availability-zones )
+      shift
+      availability_zone_count="${1}"
+      ;;
+
+    --kubernetes-version )
+      shift
+      kubernetes_version="${1}"
+      ;;
+
+    --format )
+      shift
+      format="${1}"
+      ;;
+
+    -o | --output )
+      shift
+      output="${1}"
+      ;;
+
+    -f | --force )
+      force="true"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ "${#target_accounts[@]}" -eq 0 ]; then
+  target_accounts=("wasp-nonprod")
+fi
+
+case "${format}" in
+  tfvars | json ) ;;
+  * )
+    echo "--format invalido: '${format}' (use tfvars ou json)" >&2
+    exit 1
+    ;;
+esac
+
+if [ -z "${output}" ]; then
+  output="${this_script_directory}/../terraform.tfvars"
+fi
+
+# Mascara id de conta na saida de diagnostico. O arquivo gerado leva o valor
+# inteiro — ele e gitignored; o terminal e o transcript nao precisam do id todo.
+mask() {
+  local value="${1?}"
+  echo "***${value: -4}"
+}
+
+log() {
+  echo "  ${1}" >&2
+}
+
+fail() {
+  echo "ERRO: ${1}" >&2
+  exit 1
+}
+
+set -e
+
+for tool in aws jq; do
+  command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
+done
+
+if [ "${output}" != "-" ] && [ -e "${output}" ] && [ "${force}" != "true" ]; then
+  fail "${output} ja existe. Use --force para sobrescrever."
+fi
+
+echo "Descobrindo valores para a celula control-plane em ${region}..." >&2
+
+# --- conta cicd -------------------------------------------------------------
+cicd_account_id="$(aws sts get-caller-identity \
+  --profile "${profile}" \
+  --query Account \
+  --output text)" || fail "profile '${profile}' sem credencial valida. Rode 'aws sso login --profile ${org_profile}'."
+log "conta do cluster (profile ${profile}): $(mask "${cicd_account_id}")"
+
+# --- conta network ----------------------------------------------------------
+network_account_id="$(aws sts get-caller-identity \
+  --profile "${network_profile}" \
+  --query Account \
+  --output text)" || fail "profile '${network_profile}' sem credencial valida."
+log "conta network (profile ${network_profile}): $(mask "${network_account_id}")"
+
+# --- regiao aprovada na SCP -------------------------------------------------
+# Uma chamada de escrita numa regiao negada volta com "explicit deny in a service
+# control policy" so no primeiro Create*, ja com recursos criados atras. Um
+# describe barato aqui antecipa isso para antes de existir tfvars.
+if ! aws ec2 describe-vpcs \
+  --region "${region}" \
+  --profile "${profile}" \
+  --max-items 1 \
+  --output text > /dev/null 2>&1; then
+  fail "a conta '${profile}' nao consegue ler EC2 em ${region}. Provavel deny de DenyOutsideApprovedRegions — aprove a regiao com 'aws/docs/accounts/scripts/apply-baseline-service-control-policy --regions <lista>'."
+fi
+log "regiao ${region} aprovada na SCP"
+
+# --- VPC hub da camada 1 ----------------------------------------------------
+# O data "aws_vpc" do root falha no plan se o filtro por tag nao devolver
+# exatamente um id. Melhor descobrir aqui.
+hub_vpc_ids="$(aws ec2 describe-vpcs \
+  --region "${region}" \
+  --profile "${network_profile}" \
+  --filters "Name=tag:Name,Values=${hub_vpc_name}" \
+  --query 'Vpcs[].VpcId' \
+  --output text)"
+hub_vpc_count="$(echo "${hub_vpc_ids}" | wc -w)"
+
+if [ "${hub_vpc_count}" -eq 0 ]; then
+  fail "nenhuma VPC com tag Name='${hub_vpc_name}' em ${region} na conta network. A camada 1 dessa regiao foi aplicada?"
+fi
+
+if [ "${hub_vpc_count}" -gt 1 ]; then
+  fail "${hub_vpc_count} VPCs com tag Name='${hub_vpc_name}' em ${region}. O filtro tem que ser univoco — o data \"aws_vpc\" quebra no plan."
+fi
+log "VPC hub: ${hub_vpc_ids}"
+
+# --- colisao de CIDR --------------------------------------------------------
+colliding_vpc="$(aws ec2 describe-vpcs \
+  --region "${region}" \
+  --profile "${profile}" \
+  --filters "Name=cidr,Values=${vpc_cidr}" \
+  --query 'Vpcs[].VpcId' \
+  --output text)"
+
+if [ -n "${colliding_vpc}" ]; then
+  fail "${vpc_cidr} ja esta em uso na conta do cluster pela VPC ${colliding_vpc}. Escolha outro /16 do supernet (ver aws/docs/network/01-cidr-addressing.md)."
+fi
+log "CIDR ${vpc_cidr} livre na conta do cluster"
+
+# --- zonas de disponibilidade -----------------------------------------------
+availability_zones="$(aws ec2 describe-availability-zones \
+  --region "${region}" \
+  --profile "${profile}" \
+  --filters "Name=state,Values=available" \
+  --query "AvailabilityZones[:${availability_zone_count}].ZoneName" \
+  --output json | jq --compact-output '.')"
+log "zonas: $(echo "${availability_zones}" | jq --raw-output 'join(", ")')"
+
+# --- contas alvo do Crossplane ----------------------------------------------
+# Aceita nome ou id. Nome exige a management account, porque so ela lista a
+# Organization inteira.
+target_account_ids=()
+organization_accounts=""
+
+for target in "${target_accounts[@]}"; do
+  if [[ "${target}" =~ ^[0-9]{12}$ ]]; then
+    target_account_ids+=("${target}")
+    log "conta alvo (id direto): $(mask "${target}")"
+    continue
+  fi
+
+  if [ -z "${organization_accounts}" ]; then
+    organization_accounts="$(aws organizations list-accounts \
+      --profile "${org_profile}" \
+      --output json)" || fail "profile '${org_profile}' nao consegue listar a Organization. Rode 'aws sso login --profile ${org_profile}'."
+  fi
+
+  resolved="$(echo "${organization_accounts}" \
+    | jq --raw-output --arg name "${target}" \
+      '.Accounts[] | select(.Name == $name and .Status == "ACTIVE") | .Id')"
+
+  if [ -z "${resolved}" ]; then
+    fail "nenhuma conta ACTIVE chamada '${target}' na Organization."
+  fi
+
+  if [ "$(echo "${resolved}" | wc -l)" -gt 1 ]; then
+    fail "mais de uma conta ACTIVE chamada '${target}'. Passe o id de 12 digitos."
+  fi
+
+  target_account_ids+=("${resolved}")
+  log "conta alvo '${target}': $(mask "${resolved}")"
+done
+
+# --- versao do Kubernetes ---------------------------------------------------
+if [ -z "${kubernetes_version}" ]; then
+  kubernetes_version="$(aws eks describe-cluster-versions \
+    --region "${region}" \
+    --profile "${profile}" \
+    --output json 2> /dev/null \
+    | jq --raw-output '[.clusterVersions[] | select(.defaultVersion == true)] | first | .clusterVersion // empty')" || true
+fi
+
+if [ -z "${kubernetes_version}" ]; then
+  fail "nao consegui descobrir a versao default do EKS. Passe --kubernetes-version explicitamente."
+fi
+log "versao do Kubernetes: ${kubernetes_version}"
+
+# --- bucket de state --------------------------------------------------------
+# Nao entra no tfvars: o backend recebe o bucket por -backend-config, justamente
+# para o nome real nao virar arquivo versionado.
+organization_id="$(aws organizations describe-organization \
+  --profile "${org_profile}" \
+  --query Organization.Id \
+  --output text 2> /dev/null)" || organization_id=""
+
+state_bucket=""
+if [ -n "${organization_id}" ]; then
+  state_bucket="tfstate-${organization_id}"
+
+  if ! aws s3api head-bucket \
+    --bucket "${state_bucket}" \
+    --profile "${network_profile}" > /dev/null 2>&1; then
+    log "AVISO: bucket de state '${state_bucket}' nao encontrado na conta network"
+    state_bucket=""
+  else
+    log "bucket de state: ${state_bucket}"
+  fi
+fi
+
+# --- saida ------------------------------------------------------------------
+target_account_ids_json="$(printf '%s\n' "${target_account_ids[@]}" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+
+if [ "${format}" == "json" ]; then
+  rendered="$(jq --null-input \
+    --arg region "${region}" \
+    --arg aws_profile "${profile}" \
+    --arg network_profile "${network_profile}" \
+    --arg hub_vpc_name "${hub_vpc_name}" \
+    --arg hub_vpc_id "${hub_vpc_ids}" \
+    --arg vpc_cidr "${vpc_cidr}" \
+    --arg kubernetes_version "${kubernetes_version}" \
+    --arg network_account_id "${network_account_id}" \
+    --arg cluster_account_id "${cicd_account_id}" \
+    --arg state_bucket "${state_bucket}" \
+    --argjson availability_zones "${availability_zones}" \
+    --argjson target_account_ids "${target_account_ids_json}" \
+    '{
+      region: $region,
+      aws_profile: $aws_profile,
+      network_profile: $network_profile,
+      hub_vpc_name: $hub_vpc_name,
+      vpc_cidr: $vpc_cidr,
+      kubernetes_version: $kubernetes_version,
+      availability_zones: $availability_zones,
+      network_account_id: $network_account_id,
+      target_account_ids: $target_account_ids,
+      discovered: {
+        hub_vpc_id: $hub_vpc_id,
+        cluster_account_id: $cluster_account_id,
+        state_bucket: $state_bucket
+      }
+    }')"
+else
+  rendered="$(cat <<EOF
+# Gerado por ${this_script_name} — nao editar a mao sem saber o porque.
+# Descoberto na AWS; regenerar com:
+#   scripts/${this_script_name} --region ${region} --vpc-cidr ${vpc_cidr} --force
+#
+# VPC hub descoberta: ${hub_vpc_ids}
+
+region             = "${region}"
+aws_profile        = "${profile}"
+network_profile    = "${network_profile}"
+hub_vpc_name       = "${hub_vpc_name}"
+vpc_cidr           = "${vpc_cidr}"
+kubernetes_version = "${kubernetes_version}"
+availability_zones = $(echo "${availability_zones}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
+network_account_id = "${network_account_id}"
+target_account_ids = $(echo "${target_account_ids_json}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
+EOF
+)"
+fi
+
+if [ "${output}" == "-" ]; then
+  echo "${rendered}"
+else
+  echo "${rendered}" > "${output}"
+  echo "" >&2
+  echo "Escrito: $(realpath "${output}")" >&2
+
+  if ! git -C "${this_script_directory}" check-ignore -q "${output}" 2> /dev/null; then
+    echo "" >&2
+    echo "ATENCAO: ${output} NAO esta no .gitignore. Corrija antes de commitar." >&2
+  fi
+fi
+
+if [ -n "${state_bucket}" ] && [ "${output}" != "-" ]; then
+  cat >&2 <<EOF
+
+Proximo passo:
+
+  cd $(realpath "${this_script_directory}/..")
+  terraform init -backend-config="bucket=${state_bucket}"
+  terraform plan -out=control-plane.tfplan
+
+EOF
+fi
