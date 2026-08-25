@@ -1,0 +1,13 @@
+# Copiar para terraform.tfvars (gitignored) e preencher.
+# Valores reais desta conta vivem em CLAUDE.local.md.
+
+prefix      = "poc"
+region      = "us-east-1"
+aws_profile = "network"
+
+# /16 do supernet 10.0.0.0/12. N=0 é reservado para a Organization.
+hub_vpc_cidr       = "10.1.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Globalmente único. Sugestão: tfstate-<organization-id>
+state_bucket_name = "<state-bucket-name>"
