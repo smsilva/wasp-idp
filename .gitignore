@@ -11,3 +11,13 @@ coverage/
 # Personal/local context (not versioned)
 CLAUDE.local.md
 .mcp.json
+
+# Terraform — .terraform.lock.hcl É versionado (fixa o hash do provider)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+terraform.tfvars
+!terraform.tfvars.example
