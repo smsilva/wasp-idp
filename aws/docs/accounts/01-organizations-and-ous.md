@@ -22,6 +22,20 @@ aws organizations create-organization --feature-set ALL
 Organization já existir em modo consolidado, é possível fazer upgrade para `ALL`
 (`enable-all-features`), mas exige aceite de cada conta-membro existente.
 
+## Qual fonte responde o quê (hierarquia de referências)
+
+Três documentos AWS distintos são citados nesta doc, e **cada um responde uma pergunta
+diferente**. Confundi-los produz claim sem fonte:
+
+| Fonte | Responde | Não responde |
+|---|---|---|
+| **Well-Architected Framework** ([SEC01-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_multi_accounts.html)) | *por quê* isolar por conta; desenhar OUs; landing zone; guardrails | **Nome de conta ou de OU** — nenhum. A própria BP delega ao whitepaper |
+| **Whitepaper *Organizing Your AWS Environment Using Multiple Accounts*** ([Recommended OUs](https://docs.aws.amazon.com/whitepapers/latest/organizing-your-aws-environment/recommended-ous-and-accounts.html)) | nomes de **OU**: `Security`, `Infrastructure`, `Workloads`, `Sandbox`, `Deployments`, `Exceptions`, `Transitional`, `Suspended`, `Policy Staging` | detalhe de quais serviços vão em cada conta |
+| **AWS SRA** (prescriptive guidance) | nomes e conteúdo de **conta**: ex. [Shared Services](https://docs.aws.amazon.com/prescriptive-guidance/latest/security-reference-architecture/shared-services.html) na OU `Infrastructure` | escolhas de topologia de rede |
+
+**Regra:** ao citar um nome de conta ou OU, citar o whitepaper ou o SRA — **não** o WAF. O WAF
+não nomeia contas.
+
 ## Organizational Units (OUs) — a estrutura recomendada
 
 OUs são pastas dentro da Organization; SCPs se aplicam a uma OU inteira de uma vez. Estrutura
@@ -35,6 +49,8 @@ Root
 ├── OU: Infrastructure
 │   ├── network                           ← Connectivity Account, papel "Hub" (tópico 0)
 │   └── shared-services                   ← opcional (DNS resolver, AD, imagens)
+├── OU: Deployments                        ← orquestração de deploy cross-account
+│   └── platform                           ← Control Plane: EKS + Crossplane + ArgoCD
 ├── OU: Workloads
 │   ├── OU: NonProd
 │   │   ├── Project A NonProd Account     ← 1 spoke (ou mais) do projeto A
@@ -52,6 +68,15 @@ Root
 - **OU Infrastructure**: recursos compartilhados de plataforma. Guardrails mais restritivos (menos
   serviços habilitados, sem acesso público além do estritamente necessário). A conta de
   auditoria **não** mora aqui: quem opera a rede não deve poder apagar o rastro do que fez.
+  O SRA separa `network` de `shared-services` **dentro** desta OU por segregação de deveres —
+  *"the teams that will manage these services don't need permissions or access to the Network
+  accounts"*.
+- **OU Deployments**: a conta do **Control Plane** — Crossplane + ArgoCD que provisionam infra
+  nas outras contas. É onde vive a identidade mais privilegiada da Org depois da management
+  (`../security/08-control-plane-identity.md`), por isso conta e SCP próprias.
+  **Não confundir com `shared-services`:** aquela hospeda serviços que times *consomem* (AD,
+  resolver, messaging); esta hospeda quem *orquestra deploy*. Classificada como *Advanced OU*
+  no whitepaper — opcional, mas é a definição exata deste papel.
 - **OU Workloads**: onde os projetos vivem, **separada por SDLC stage** (`NonProd` e
   `Production`) — é a recomendação do whitepaper *Organizing Your AWS Environment Using
   Multiple Accounts*: uma conta por workload **e por ambiente**. Guardrails de baseline

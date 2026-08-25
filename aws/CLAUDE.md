@@ -61,8 +61,14 @@ plano é registro de desenho de outra trilha.
 
 - Conta `network` (`<network-account-id>`) — onde vivem o IAM user `crossplane-poc`, o
   Secrets Manager `poc-idp/*` e a VPC de trabalho enquanto a topologia for de conta única.
-  Pela referência (`docs/accounts/`), automação/tooling moraria numa `shared-services`
-  separada; acumular na `network` é degrau de bootstrap consciente, não o alvo.
+  Pelas referências AWS, automação/orquestração de deploy moraria numa conta própria na
+  **OU `Deployments`** — *"accounts that host services and resources used to orchestrate the
+  deployment of applications, services and infrastructure across multiple AWS accounts"*
+  ([whitepaper *Organizing Your AWS Environment*](https://docs.aws.amazon.com/whitepapers/latest/organizing-your-aws-environment/recommended-ous-and-accounts.html)).
+  Acumular na `network` é degrau de bootstrap consciente, não o alvo.
+  **Não é `shared-services`:** no [AWS SRA](https://docs.aws.amazon.com/prescriptive-guidance/latest/security-reference-architecture/shared-services.html)
+  essa conta serve *"directory services (Active Directory), messaging services, and metadata
+  services"* — serviços que times **consomem**, não orquestrador de deploy.
 - Ela pode **não ser isolada** — assumir que já hospeda infra de outros sistemas: RDS,
   IAM users provisionados via Terraform etc. Só os recursos com prefixo `poc-idp/` ou
   `crossplane-poc` são nossos.
