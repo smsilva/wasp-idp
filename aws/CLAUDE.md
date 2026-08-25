@@ -124,6 +124,22 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   ficam `Healthy` sem nenhum patch manual de CA cert ou DNS. Não tente contornar via
   patch de CA/resolv.conf enquanto a VPN estiver ativa; é retrabalho descartável.
 
+## Gotcha (RESOLVIDA): k3d com 3 servers quebra o quorum do etcd neste host
+
+- `install-crossplane` nascia com `--servers 3` (default herdado do track Azure em
+  `scripts/cluster-zero/`, que só documentava lentidão — ver `CLAUDE.md`, "Crossplane
+  provider wait timeout"). Neste host (8 cores) o resultado foi mais grave que lento: o
+  server-0 (initializing server) entrava em **crash-loop** (`failed to wait for apiserver
+  ready: context deadline exceeded`, exit code 1 a cada 1-2,5 min) enquanto server-1/
+  server-2 ficavam travados em `connection refused 127.0.0.1:6443` — perda de quorum do
+  etcd embutido do k3s, não simples atraso de patch pressure. `kubectl get providers`
+  retornava `apiserver not ready`/`etcdserver: request timed out` de forma persistente,
+  mesmo após >15 min.
+- **Fix: `k3d cluster delete` + recriar com 1 server** (`install-crossplane` já tem esse
+  default agora). Sem etcd distribuído para eleger líder, os 8 providers instalaram e
+  ficaram `Healthy` em ~4 min, sem nenhum restart. Para este PoC de single control-plane
+  sem HA real, 1 server é suficiente — 3 servers só faz sentido com CPU/IO sobrando.
+
 ## Gotcha (RESOLVIDA): race de Pod Identity do EBS CSI — fases 65 + 68
 
 - **Era:** a fase `65-pod-identity` aplicava addon + role + association + **driver EBS** num

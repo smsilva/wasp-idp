@@ -15,7 +15,7 @@ show_usage() {
       -h,  --help              Show this help
       -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
       -p,  --api-port          Porta da API do k3d (default: 6551)
-      -s,  --servers           Número de servers do k3d (default: 3)
+      -s,  --servers           Número de servers do k3d (default: 1)
       -v,  --crossplane-version
                                Versão do chart do Crossplane (default: 2.3.1)
       -ct, --cluster-timeout   Timeout de criação do cluster k3d (default: 360s)
@@ -87,7 +87,7 @@ if [[ "${1}" == '--' ]]; then shift; fi
 
 cluster_name="${cluster_name:-control-plane}"
 api_port="${api_port:-6551}"
-servers="${servers:-3}"
+servers="${servers:-1}"
 crossplane_version="${crossplane_version:-2.3.1}"
 cluster_timeout="${cluster_timeout:-360s}"
 install_timeout="${install_timeout:-360s}"

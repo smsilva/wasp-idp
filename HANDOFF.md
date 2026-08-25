@@ -130,9 +130,20 @@ O ciclo real já foi provado antes do rename (com o chart antigo): `helm install
 `--cluster-name` custom; tinha os 8 providers `Healthy` e **zero managed resources**, então
 não há recurso AWS órfão). Nenhuma VPC/EKS de pé.
 
-Próximo passo pretendido: **recriar o Control Plane do zero** para validar a cadeia renomeada
-ponta a ponta (nomes de cluster, ProviderConfigs, enums, role nova) **antes** de qualquer apply
-que cobre.
+**Cadeia renomeada validada ponta a ponta (2026-08-24), custo zero.** Control Plane recriado do
+zero: 8 providers `Healthy`, 4 functions `Healthy`, XRDs `network`/`cluster` `Established`,
+ProviderConfigs `network`+`wasp-nonprod` sem resíduo de nome antigo. As 4 checagens do "How to
+Resume" passaram.
+
+**Achado durante a validação:** `install-crossplane` nascia com `--servers 3` (default herdado
+do track Azure, que só documentava lentidão) e neste host (8 cores) isso quebrava o **quorum do
+etcd** — crash-loop persistente, não simples atraso. Fix: recriar com `--servers 1`; providers
+ficaram `Healthy` em ~4 min sem restart. Default do script alterado para 1. Ver
+`aws/CLAUDE.md`, "Gotcha (RESOLVIDA): k3d com 3 servers quebra o quorum do etcd neste host".
+
+Próximo passo pretendido: **Fase 5** — aplicar os charts `hub` → `spoke` → `cluster` (custo
+alto, VPC+EKS reais numa conta spoke). Control Plane atual já está pronto para isso; não
+precisa recriar.
 
 ## Open Questions / Hypotheses
 
@@ -191,17 +202,19 @@ que cobre.
 
 ## How to Resume
 
-**Objetivo desta retomada: criar o Control Plane do zero e validar a cadeia renomeada.**
-Nada abaixo cobra (k3d local + ProviderConfigs; nenhum recurso AWS).
+**Objetivo desta retomada: Fase 5 — aplicar os charts `hub`→`spoke`→`cluster`.** O Control
+Plane já está de pé e validado (ver "Frente B" acima); não precisa recriar. A partir daqui
+os `helm install` **cobram** (VPC+NAT no `spoke`, EKS+nodegroup no `cluster`).
 
-Pré-requisito: VPN corporativa **desconectada** (quebra o pull dos pacotes do Crossplane) e
-SSO admin ativo (`aws sso login --profile personal`).
+Pré-requisito: VPN corporativa **desconectada** e SSO admin ativo
+(`aws sso login --profile personal`). Se o Control Plane tiver sido destruído desde a última
+sessão, recriar primeiro:
 
 ```bash
 cd /home/silvios/git/wasp-idp
-k3d cluster list                       # deve estar vazio; confirma que nada sobrou
+k3d cluster list                       # confirmar estado antes de assumir
 
-aws/eks/scripts/install-crossplane     # cria k3d "control-plane" (3 servers) + Crossplane
+aws/eks/scripts/install-crossplane     # cria k3d "control-plane" (1 server) + Crossplane
 aws/eks/scripts/install-providers --timeout 900s
 aws/eks/scripts/install-functions      # OBRIGATÓRIO: toda Composition é mode: Pipeline
 
@@ -217,7 +230,10 @@ kubectl apply -f aws/eks/resources/network/{xrd,composition}.yaml
 kubectl apply -f aws/eks/resources/cluster/{xrd,composition}.yaml
 ```
 
-Checagens que provam o rename:
+**Gotcha:** `install-crossplane` default é `--servers 1` (mudado nesta sessão — 3 servers
+quebrou o quorum do etcd neste host, ver `aws/CLAUDE.md`). Não usar `--servers 3` sem motivo.
+
+Checagens que provam o rename (já passaram nesta sessão, repetir só se recriar do zero):
 
 ```bash
 kubectl config current-context                                    # k3d-control-plane
@@ -230,7 +246,7 @@ Perfis locais: `network` (`094289743086`) e `wasp-nonprod` (`832721568602`), amb
 `OrganizationAccountAccessRole` a partir de `personal`. Backup do `~/.aws/config` antes do
 rename dos profiles: `~/.aws/config.bak-20260824`.
 
-Só **depois** de tudo verde, os charts — a ordem controla o custo (só `cluster` cobra alto):
+Ordem dos charts controla o custo (só `cluster` cobra alto):
 
 ```bash
 helm install hub-us-east-1 aws/platform/charts/hub -n crossplane-system --set name=hub-us-east-1
@@ -271,10 +287,11 @@ background, com as creds carregadas inline no mesmo shell.
 - [x] **Fase 4:** split de charts + identidade `metadata.name` + PCs por conta.
 - [x] Vocabulário alinhado: conta `network`, conta `wasp-nonprod`, Control Plane; role IAM
       recriada como `crossplane-wasp-nonprod`.
-- [ ] **Validar a cadeia renomeada** recriando o Control Plane do zero (How to Resume).
-      Custo zero. É o próximo passo.
+- [x] **Validar a cadeia renomeada** recriando o Control Plane do zero (2026-08-24). Custo
+      zero. Achado: `--servers 3` quebrava o quorum do etcd neste host — default mudado
+      para 1 em `install-crossplane`.
 - [ ] **Fase 5:** aplicar `hub` → `spoke` (`10.2`, `wasp-nonprod`) → esperar Ready →
-      `cluster` (EKS). Custo alto. Acompanhar: `kubectl get managed`.
+      `cluster` (EKS). Custo alto. Acompanhar: `kubectl get managed`. É o próximo passo.
 - [ ] Decidir base do domínio (delegar `wasp.silvios.me`/subzona → Route53) antes das fatias
       DNS/ingress/TLS.
 - [ ] Definir estratégia de parametrização dos valores de `CLAUDE.local.md`.
