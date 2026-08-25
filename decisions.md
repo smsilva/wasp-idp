@@ -55,8 +55,24 @@ Raios aninhados: **Região > Célula > AZ**.
 - **Hub** = função de rede: TGW, egress/NAT, firewall, resolver, terminação de VPN.
   Nada executa workload ali. (AWS WAF [REL02-BP04 — Prefer hub-and-spoke topologies over many-to-many mesh](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html) + whitepaper "Building a Scalable
   and Secure Multi-VPC AWS Network Infrastructure".)
-- **Plataforma** = spoke na account `platform`. Roda auth, discovery, ArgoCD, Crossplane.
+- **Plataforma** = spoke na account `cicd`. Roda auth, discovery, ArgoCD, Crossplane.
 - **Cliente** = spoke na account do tenant.
+
+> **[2026-08-25] A conta chama-se `cicd`, na OU `Deployments`.** Nome anterior nesta seção era
+> `platform`. `Deployments` é a OU canônica do whitepaper *Organizing Your AWS Environment*
+> (*"build, validate, promote, and release changes to your workloads"*); o **nome da conta é
+> convenção deste repo** — o whitepaper não prescreve nenhum. Detalhe e citações em
+> `aws/docs/accounts/01-organizations-and-ous.md`. Uma conta só, tratada como produção: o
+> whitepaper recomenda rodar CI/CD em *"production deployment accounts"*, então não existe
+> `cicd-nonprod`.
+>
+> **[ABERTO] Esta seção conflaciona duas coisas sob "plataforma".** `auth` e `discovery` são
+> **runtime de aplicação no caminho da requisição** — não são build/validate/promote/release, logo
+> não pertencem a uma conta de CI/CD pela definição da OU. ArgoCD e Crossplane pertencem. Se auth
+> e discovery ficarem nessa spoke, a conta deixa de ser `Deployments` e passa a hospedar workload,
+> o que muda a OU e a SCP. Isto é o mesmo eixo da **decisão 6** do §11 (escopo do identity layer)
+> e precisa ser resolvido junto com ela. Sem impacto no escopo atual (só projetos internos, sem
+> auth/discovery ainda).
 
 Razões:
 1. **Raio de impacto** — upgrade de EKS no hub ameaçaria a conectividade de todas as spokes.
@@ -67,7 +83,7 @@ Razões:
 ```
 Região us-east-1
 ├── Hub VPC     (account network)   ── TGW, egress, firewall
-├── Spoke: plataforma (account platform)  → auth, discovery, ArgoCD, Crossplane
+├── Spoke: plataforma (account cicd)      → ArgoCD, Crossplane [+ auth/discovery? ver nota]
 └── Spoke: cliente A  (account tenant-a)  → workload dedicado
 ```
 
@@ -340,9 +356,12 @@ Notas:
 
 ### Fase 0 — Fundação (Terraform, um state, uma vez)
 1. Organization, OUs, SCPs (fase acima)
-2. Accounts: `network`, `security/log-archive`, `platform`
+2. Accounts: `network` (OU Infrastructure), `log-archive` (OU Security), `cicd` (OU Deployments)
 3. **IPAM** com escopo global e pools por região — declarar os locales previstos agora
-4. Hosted zone pública `wasp.silvios.me` (global, na account `platform`)
+4. Hosted zone pública `<root-domain>` (global) — **[ABERTO] em qual conta.** O whitepaper põe
+   Route 53 Resolver na conta `network`; zona pública do produto é discutível entre `network`
+   (recurso de rede compartilhado) e `cicd` (quem automatiza a delegação). Mesma classe de
+   conflação da nota do §2
 5. Bucket de state + roles OIDC para CI
 
 ### Fase 1 — Âncoras globais vazias — **[CONDICIONAL: pulada por ora]**

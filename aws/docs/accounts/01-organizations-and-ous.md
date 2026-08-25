@@ -47,10 +47,9 @@ Root
 │   ├── log-archive                       ← trail organizacional (tópico 7)
 │   └── security-tooling                  ← delegated admin de GuardDuty/Config
 ├── OU: Infrastructure
-│   ├── network                           ← Connectivity Account, papel "Hub" (tópico 0)
-│   └── shared-services                   ← opcional (DNS resolver, AD, imagens)
-├── OU: Deployments                        ← orquestração de deploy cross-account
-│   └── platform                           ← Control Plane: EKS + Crossplane + ArgoCD
+│   └── network                           ← Connectivity Account, papel "Hub" (tópico 0)
+├── OU: Deployments                       ← orquestração de deploy cross-account
+│   └── cicd                              ← Control Plane: EKS + Crossplane + ArgoCD
 ├── OU: Workloads
 │   ├── OU: NonProd
 │   │   ├── Project A NonProd Account     ← 1 spoke (ou mais) do projeto A
@@ -68,15 +67,35 @@ Root
 - **OU Infrastructure**: recursos compartilhados de plataforma. Guardrails mais restritivos (menos
   serviços habilitados, sem acesso público além do estritamente necessário). A conta de
   auditoria **não** mora aqui: quem opera a rede não deve poder apagar o rastro do que fez.
-  O SRA separa `network` de `shared-services` **dentro** desta OU por segregação de deveres —
-  *"the teams that will manage these services don't need permissions or access to the Network
-  accounts"*.
+  O whitepaper é explícito: *"**No application accounts or application workloads** are intended
+  to exist within this OU"*.
+  - **Contas canônicas desta OU**, nomeadas pelo whitepaper: **Backup**, **Identity**,
+    **Network**, **Operations Tooling**, **Monitoring**, **Shared Services**. Só `network`
+    existe aqui hoje; os outros são slots reconhecidos, não pendências.
+  - **Sem variantes de ambiente.** O whitepaper: *"it does **not** generally make sense to have
+    production and non-production variants of these accounts within the Infrastructure OU"*. Se
+    um caso exigir nonprod, ele *"should be treated like any other application"* e ir para a OU
+    `Workloads`.
 - **OU Deployments**: a conta do **Control Plane** — Crossplane + ArgoCD que provisionam infra
-  nas outras contas. É onde vive a identidade mais privilegiada da Org depois da management
-  (`../security/08-control-plane-identity.md`), por isso conta e SCP próprias.
-  **Não confundir com `shared-services`:** aquela hospeda serviços que times *consomem* (AD,
-  resolver, messaging); esta hospeda quem *orquestra deploy*. Classificada como *Advanced OU*
-  no whitepaper — opcional, mas é a definição exata deste papel.
+  nas outras contas. Definição do whitepaper: *"contains resources and workloads that support how
+  you **build, validate, promote, and release changes to your workloads**"*.
+  - **Por que conta própria, e não dentro de um workload:** o whitepaper dá três motivos; o que
+    encaixa aqui é *"**CD pipelines affect non-production and production workload environments**
+    — ... if you manage your CI/CD capabilities in your production workload environments, then
+    you must allow the production workload environments to access your non-production
+    environments"*. O Control Plane provisiona em `<projeto>-nonprod` **e** `<projeto>-prod`;
+    numa conta de workload, uma ganharia acesso à outra.
+  - **Uma conta só, tratada como produção.** *"we recommend that you use a set of **production
+    deployment accounts**"* e *"CI jobs and CD pipeline build stages ... perform these activities
+    in a **production environment**"*. Não existe `cicd-nonprod`: o Control Plane é produção
+    mesmo quando provisiona ambientes de teste.
+  - É onde vive a identidade mais privilegiada da Org depois da management
+    (`../security/08-control-plane-identity.md`), por isso SCP própria.
+  - Classificada como *Advanced OU* no whitepaper — opcional, mas é a definição exata do papel.
+  - **O nome `cicd` é convenção deste repo.** O whitepaper **não** prescreve nome de conta para
+    esta OU — usa descrições (*"production deployment accounts"*, *"your CI/CD accounts"*).
+    Escolhido por proximidade com esse vocabulário e para não colidir com `control-plane`, que
+    nomeia o **cluster** (ver `../../CLAUDE.md`, seção de vocabulário).
 - **OU Workloads**: onde os projetos vivem, **separada por SDLC stage** (`NonProd` e
   `Production`) — é a recomendação do whitepaper *Organizing Your AWS Environment Using
   Multiple Accounts*: uma conta por workload **e por ambiente**. Guardrails de baseline

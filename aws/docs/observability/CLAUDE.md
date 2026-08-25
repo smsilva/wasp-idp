@@ -42,6 +42,28 @@ camada de compute (Container Insights) e a de conectividade.
 ⑥ (alvo) Painéis centralizados e correlação cross-domínio
 ```
 
+## Onde a observabilidade centralizada mora (slots canônicos)
+
+Este domínio hoje trata só de *quais sinais* coletar, não de *em qual conta* consolidá-los. O
+whitepaper *Organizing Your AWS Environment* nomeia dois slots na OU `Infrastructure` para isso,
+e **nenhum dos dois existe nesta Organization ainda**:
+
+| Conta canônica | Propósito (whitepaper) | Relevância aqui |
+|---|---|---|
+| **Monitoring** | *"monitor resources, applications, log data, and performance in other AWS accounts"*; CloudWatch cross-account, Managed Grafana, Managed Prometheus, OpenSearch. *"The core concept ... is to only give **read-only** functionality"* | Destino natural dos painéis do ⑥ e da análise do acervo da `log-archive` |
+| **Operations Tooling** | *"hosts tools, dashboards, and services needed to centralize operations where monitoring and metric tracking are hosted"*; delegated admin de Systems Manager, Health, DevOps Guru | Onde ficariam automações operacionais e o delegated admin de SSM |
+
+O whitepaper permite juntar os dois: *"you may choose to manage your monitoring resources and
+services in a single account with your other Operational Tooling services or as a dedicated
+Monitoring account"*.
+
+**Não confundir com `log-archive`** (OU `Security`): aquela **armazena** o acervo imutável e é
+imutável por SCP; `Monitoring` **lê** o acervo para analisar. A separação existe para que quem
+consulta o log não possa apagá-lo (`../accounts/07-cloudtrail-and-log-archive.md`).
+
+Nada disto é pendência hoje — é o slot reconhecido para quando o ⑥ sair do papel. Ver
+`../accounts/01-organizations-and-ous.md` para as contas canônicas da OU `Infrastructure`.
+
 ## Estado atual vs. alvo (resumo)
 
 - **Hoje no PoC:** observabilidade é **pontual e sob demanda** — logs do control plane e de
