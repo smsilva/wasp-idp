@@ -33,6 +33,30 @@ A palavra "hub" cobria três coisas independentes neste repo. Dois eixos foram r
 > (`poc-idp/crossplane-poc-credentials`) é o nome real de um secret na AWS, não um apelido —
 > renomeá-lo quebraria o `load-crossplane-creds`. Fica.
 
+### `cluster-zero` é da trilha Azure — NÃO é o Control Plane da AWS
+
+Quarto termo que já causou confusão, e a fonte é legítima: `cluster-zero` existe no repo e
+descreve um **AKS**, não um EKS.
+
+| | `cluster-zero` | **Control Plane** (este contexto) |
+|---|---|---|
+| Cloud | Azure (AKS, `azurerm ~> 4.x`) | AWS |
+| Onde vive | `scripts/cluster-zero/` (exercício k3d local) e o plano `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md` | `aws/eks/scripts/`, cluster k3d `control-plane` |
+| Estado | **Trilha pausada** — "não é o foco" (`HANDOFF.md`). O diretório `infra/terraform/cluster-zero/` do plano **nunca foi criado** em nenhum branch | Ativo |
+
+O plano de `cluster-zero` referencia `infra/terraform/cluster-zero/README.md`, que não existe —
+é **link para artefato nunca construído**, não doc desatualizada. Não "consertar" apagando: o
+plano é registro de desenho de outra trilha.
+
+**Regra:** no contexto AWS, nunca dizer "cluster zero". O cluster que roda o Crossplane é o
+**Control Plane**; a unidade regional que o entrega é a **Fase 2** de `../decisions.md` §8.
+
+> **Cuidado com a analogia de "cluster inicial que cria os demais":** `decisions.md` §7
+> **descartou** o padrão seed cluster / hub-of-hubs — um Crossplane provisionando os hubs
+> regionais cria dependência de disponibilidade (seed morto = nenhuma região nova) e não
+> elimina o Terraform, só o esconde. Cada Control Plane regional nasce do **mesmo módulo
+> Terraform com input diferente**, independente dos outros.
+
 ## Conta AWS
 
 - Conta `network` (`<network-account-id>`) — onde vivem o IAM user `crossplane-poc`, o

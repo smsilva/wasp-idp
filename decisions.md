@@ -345,10 +345,24 @@ Notas:
 4. Hosted zone pública `wasp.silvios.me` (global, na account `platform`)
 5. Bucket de state + roles OIDC para CI
 
-### Fase 1 — Âncoras globais vazias
+### Fase 1 — Âncoras globais vazias — **[CONDICIONAL: pulada por ora]**
+
+> **[DECIDIDO 2026-08-25] O escopo atual é apenas projetos internos**, sem cliente
+> externo. Os dois itens desta fase existem para servir tenant externo — sem tenant, não
+> há IP para cliente allowlistar nem mapeamento `email → tenant → região-casa` a resolver.
+> **A sequência vigente é −1 → 0 → 2 → 5.**
+>
+> **O que NÃO é adiável junto:** pular a Fase 1 não autoriza assumir região fixa. O §5 já
+> lista como "vira refatoração" — nome de tenant sem região embutida no que o usuário vê,
+> TTL de DNS curto (30–60s), e chave primária do dado incluindo o tenant. A *indireção* é
+> obrigatória no dia 1 mesmo sem registry: o que se adia é o artefato, não o hábito.
+>
+> Reabrir esta fase é o gatilho para a decisão 2 (onde o discovery roda).
+
 6. **Global Accelerator + listener TCP 443, sem endpoint group** → colhe os 2 IPs
    estáticos anycast. Esse é o artefato que cliente coloca em allowlist e que se
    publica no DNS; quanto antes existir, menos coisa fica bloqueada esperando.
+   *Ocioso, cobra por hora sem entregar nada — só criar quando houver cliente.*
 7. Tabela do tenant registry (DynamoDB) — nasce em uma região, vira Global Table
    quando a segunda subir.
 
