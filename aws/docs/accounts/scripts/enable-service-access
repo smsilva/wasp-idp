@@ -10,7 +10,7 @@ show_usage() {
 
   Habilita trusted access de um serviço AWS na Organization — pré-requisito para a
   management account operar aquele serviço nas contas-membro (ver
-  aws/docs/accounts/03-provisionamento-de-contas.md).
+  aws/docs/accounts/03-provisioning.md).
 
   Idempotente: se o service principal já estiver habilitado, não faz nada.
 

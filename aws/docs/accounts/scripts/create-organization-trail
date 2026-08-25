@@ -9,7 +9,7 @@ show_usage() {
   cat <<EOF
 
   Cria o CloudTrail organizacional na management account, escrevendo no bucket da
-  conta log-archive (ver aws/docs/accounts/07-cloudtrail-e-log-archive.md).
+  conta log-archive (ver aws/docs/accounts/07-cloudtrail-and-log-archive.md).
 
   Captura eventos de TODAS as contas-membro, inclusive as criadas depois — conta
   nova entra sozinha, sem passo de onboarding.

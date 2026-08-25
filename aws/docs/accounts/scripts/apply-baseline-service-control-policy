@@ -9,7 +9,7 @@ show_usage() {
   cat <<EOF
 
   Aplica os guardrails baseline via Service Control Policy (ver
-  aws/docs/accounts/02-guardrails-scp.md):
+  aws/docs/accounts/02-scp-guardrails.md):
 
     Root         -> DenyLeaveOrganization, ProtectCloudTrail
     Workloads    -> DenyOutsideApprovedRegions, RequireImdsv2, DenyRootUser
@@ -152,9 +152,11 @@ infra_id="$(aws organizations list-organizational-units-for-parent \
   --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Infrastructure'].Id" --output text)"
 security_id="$(aws organizations list-organizational-units-for-parent \
   --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Security'].Id" --output text)"
+deployments_id="$(aws organizations list-organizational-units-for-parent \
+  --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Deployments'].Id" --output text)"
 
-if [ -z "${workloads_id}" ] || [ -z "${infra_id}" ] || [ -z "${security_id}" ]; then
-  echo "OUs Security/Infrastructure/Workloads não encontradas — rode ${this_script_directory}/create-organizational-unit-structure primeiro." >&2
+if [ -z "${workloads_id}" ] || [ -z "${infra_id}" ] || [ -z "${security_id}" ] || [ -z "${deployments_id}" ]; then
+  echo "OUs Security/Infrastructure/Deployments/Workloads não encontradas — rode ${this_script_directory}/create-organizational-unit-structure primeiro." >&2
   exit 1
 fi
 
@@ -288,6 +290,14 @@ echo "Anexando os mesmos guardrails de baseline em Security..."
 attach_if_missing "${deny_outside_regions_id}" "${security_id}"
 attach_if_missing "${require_imdsv2_id}" "${security_id}"
 attach_if_missing "${deny_root_user_id}" "${security_id}"
+
+# Deployments hospeda a conta do Control Plane, cuja identidade provisiona nas OUTRAS contas.
+# A SCP daqui restringe só o que ele cria LOCALMENTE; o que ele cria na conta-alvo é regido
+# pela SCP da OU de lá (ver aws/docs/security/08-control-plane-identity.md).
+echo "Anexando os mesmos guardrails de baseline em Deployments..."
+attach_if_missing "${deny_outside_regions_id}" "${deployments_id}"
+attach_if_missing "${require_imdsv2_id}" "${deployments_id}"
+attach_if_missing "${deny_root_user_id}" "${deployments_id}"
 
 echo ""
 echo "Guardrails baseline aplicados."

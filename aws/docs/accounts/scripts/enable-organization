@@ -9,11 +9,11 @@ show_usage() {
   cat <<EOF
 
   Habilita AWS Organizations na conta atual com feature-set ALL (pré-requisito para
-  SCPs — ver aws/docs/accounts/01-organizations-e-ous.md). Idempotente: se a
+  SCPs — ver aws/docs/accounts/01-organizations-and-ous.md). Idempotente: se a
   Organization já existir, só valida o feature-set e não recria nada.
 
   A conta em que você roda isto vira a MANAGEMENT ACCOUNT — ela nunca deve hospedar
-  workload depois disso (ver aws/docs/accounts/00-estrategia-de-contas.md).
+  workload depois disso (ver aws/docs/accounts/00-strategy.md).
 
     Options:
 

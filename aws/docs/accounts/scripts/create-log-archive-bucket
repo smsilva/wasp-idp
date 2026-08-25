@@ -11,7 +11,7 @@ show_usage() {
   Cria, DENTRO da conta log-archive, o bucket S3 que recebe o CloudTrail
   organizacional — com Block Public Access, versionamento, criptografia e a bucket
   policy que autoriza o serviço CloudTrail a escrever (ver
-  aws/docs/accounts/07-cloudtrail-e-log-archive.md).
+  aws/docs/accounts/07-cloudtrail-and-log-archive.md).
 
   Roda a partir da MANAGEMENT account e assume a role indicada por --role na conta
   de destino (OrganizationAccountAccessRole existe por default em conta criada via

@@ -10,7 +10,7 @@ show_usage() {
 
   Cria (ou reaproveita) um permission set do IAM Identity Center e o atribui a um
   usuário/grupo numa conta-membro — o passo que faz a conta aparecer no portal SSO e
-  no 'aws sso login' direto (ver aws/docs/accounts/04-acesso-cross-account.md).
+  no 'aws sso login' direto (ver aws/docs/accounts/04-cross-account-access.md).
 
   Idempotente: reaproveita permission set e atribuição já existentes.
 

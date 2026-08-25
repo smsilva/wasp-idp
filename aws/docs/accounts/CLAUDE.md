@@ -33,9 +33,10 @@ registrado.
 ```text
 ① Login na 1ª conta (a que você já tem) — ela vira a conta de GERÊNCIA da Organization
 ② Habilitar AWS Organizations nessa conta (all features, não "consolidated billing only")
-③ Criar OUs: Security, Infrastructure, Workloads/NonProd, Workloads/Production
+③ Criar OUs: Security, Infrastructure, Deployments, Workloads/NonProd, Workloads/Production
 ④ Conta log-archive (OU Security) + CloudTrail organizacional   ← ANTES de tudo o mais
 ⑤ Criar a conta network (Connectivity Account) na OU Infrastructure
+⑤b Criar a conta cicd (Control Plane) na OU Deployments — uma só, sempre produção
 ⑥ Aplicar SCPs baseline na Organization/OUs (guardrails preventivos)
 ⑦ Configurar IAM Identity Center (SSO) — permission sets por conta, sem usar root
 ⑧ Por projeto: create-account em NonProd → validar → só então create-account em Production
@@ -63,11 +64,11 @@ existir). Só `revoke-permission-set` é destrutivo — pede confirmação e est
 |---|---|---|
 | `check` | pré-requisito | Valida `aws`/`jq`, credenciais, feature-set da Organization atual |
 | `enable-organization` | ② | `create-organization --feature-set ALL` (ou upgrade se já existir em modo consolidado) |
-| `create-organizational-unit-structure` | ③ | Cria `Security`, `Infrastructure`, `Workloads/NonProd`, `Workloads/Production` |
+| `create-organizational-unit-structure` | ③ | Cria `Security`, `Infrastructure`, `Deployments`, `Workloads/NonProd`, `Workloads/Production` |
 | `enable-service-access --service <principal>` | ④ pré-requisito | Trusted access de um serviço na Org (`cloudtrail.amazonaws.com` para o trail; `account.amazonaws.com` para o `rename-account`) |
 | `create-log-archive-bucket` | ④ | Assume role na `log-archive` e cria o bucket de auditoria (BPA, versionamento, SSE, policy do CloudTrail) |
 | `create-organization-trail` | ④ | Cria o trail organizacional multi-region + `start-logging` + validação de integridade |
-| `create-account --ou {security\|infrastructure\|nonprod\|production}` | ④ ⑤ ⑧ | Cria 1 conta e move para a OU pedida. `--ou production` avisa explicitamente antes de prosseguir |
+| `create-account --ou {security\|infrastructure\|deployments\|nonprod\|production}` | ④ ⑤ ⑤b ⑧ | Cria 1 conta e move para a OU pedida. `--ou production` avisa explicitamente antes de prosseguir |
 | `apply-baseline-service-control-policy` | ⑥ | Guardrails do tópico 2: restringe região, exige IMDSv2, nega root, protege CloudTrail/saída da Org |
 | `assign-permission-set --account <conta> --user\|--group <principal>` | ⑦ | Cria/reusa permission set do Identity Center e atribui à conta — tira a conta do limbo do switch-role |
 | `show-permission-sets [--account <conta>]` | ⑦ verificação | Somente leitura: permission sets existentes e, por conta, quem tem qual acesso |

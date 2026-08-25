@@ -8,16 +8,19 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria a estrutura mínima de OUs (ver aws/docs/accounts/01-organizations-e-ous.md):
+  Cria a estrutura mínima de OUs (ver aws/docs/accounts/01-organizations-and-ous.md):
 
     Root
     ├── Security          (log-archive, security-tooling)
-    ├── Infrastructure    (network / Connectivity Account, shared-services)
+    ├── Infrastructure    (network / Connectivity Account)
+    ├── Deployments       (cicd / Control Plane: Crossplane + ArgoCD)
     └── Workloads
         ├── NonProd       (criada ANTES de Production — validar aqui primeiro)
         └── Production
 
   Nomes seguem o whitepaper "Organizing Your AWS Environment Using Multiple Accounts".
+  Deployments é classificada lá como Advanced OU (opcional em geral), mas é obrigatória
+  nesta referência: é onde vive a conta do Control Plane, que provisiona nas demais.
 
   Idempotente: reaproveita qualquer OU já existente com o mesmo nome no mesmo pai.
 
@@ -79,6 +82,7 @@ echo "Root: ${root_id}"
 
 security_id="$(find_or_create_ou Security "${root_id}")"
 infrastructure_id="$(find_or_create_ou Infrastructure "${root_id}")"
+deployments_id="$(find_or_create_ou Deployments "${root_id}")"
 workloads_id="$(find_or_create_ou Workloads "${root_id}")"
 nonprod_id="$(find_or_create_ou NonProd "${workloads_id}")"
 production_id="$(find_or_create_ou Production "${workloads_id}")"
@@ -88,6 +92,7 @@ cat <<EOF
 Estrutura de OUs pronta:
   Security:             ${security_id}
   Infrastructure:       ${infrastructure_id}
+  Deployments:          ${deployments_id}
   Workloads:            ${workloads_id}
   Workloads/NonProd:    ${nonprod_id}
   Workloads/Production: ${production_id}

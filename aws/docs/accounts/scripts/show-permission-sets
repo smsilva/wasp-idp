@@ -9,7 +9,7 @@ show_usage() {
   cat <<EOF
 
   Mostra o estado do IAM Identity Center: permission sets existentes e, para cada conta
-  da Organization, quem tem qual acesso (ver aws/docs/accounts/04-acesso-cross-account.md).
+  da Organization, quem tem qual acesso (ver aws/docs/accounts/04-cross-account-access.md).
 
   Somente leitura — não altera nada. É a forma de conferir o resultado de
   ${this_script_directory}/assign-permission-set e de revoke-permission-set.

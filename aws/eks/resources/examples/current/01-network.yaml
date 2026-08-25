@@ -8,7 +8,7 @@
 #
 # CIDR: vpcCidrSecondOctet=1 → VPC 10.1.0.0/16, subnets 10.1.{1,2,3,4}.0/24.
 # Supernet 10.0.0.0/12; N=0 reservado p/ Org; próximos spokes usam N=2..15.
-# Ver ../../../../docs/network/01-enderecamento-cidr.md.
+# Ver ../../../../docs/network/01-cidr-addressing.md.
 apiVersion: platform.example.com/v1alpha1
 kind: Network
 metadata:

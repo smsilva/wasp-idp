@@ -9,7 +9,7 @@ show_usage() {
   cat <<EOF
 
   Cria (ou reaproveita) uma conta-membro da Organization e a move para a OU pedida
-  (ver aws/docs/accounts/03-provisionamento-de-contas.md). Idempotente: se já existir
+  (ver aws/docs/accounts/03-provisioning.md). Idempotente: se já existir
   uma conta ACTIVE com o --name pedido, só garante que está na OU certa.
 
     Options:
@@ -20,7 +20,9 @@ show_usage() {
       -u,  --email-user        Base da caixa (mailbox) para plus-addressing (opcional).
                                 Com ela:  <email-user>+<name>@<email-domain>
                                 Sem ela:  <name>+aws@<email-domain>  (catch-all corporativo)
-           --ou                security | infrastructure | nonprod | production (obrigatório)
+           --ou                security | infrastructure | deployments | nonprod | production
+                                (obrigatório). deployments = conta do Control Plane (cicd);
+                                não existe variante nonprod dela — é sempre produção.
 
   Dois modos de e-mail (o endereço vira o root user da conta e precisa ser único em
   TODA a AWS, além de válido/controlado por você):
@@ -38,6 +40,8 @@ show_usage() {
       ${this_script_name} --name network --email-domain example.com --ou infrastructure
 
       ${this_script_name} --name log-archive --email-user smsilva --email-domain gmail.com --ou security
+
+      ${this_script_name} --name cicd --email-domain example.com --ou deployments
 
       ${this_script_name} --name acme-nonprod --email-domain example.com --ou nonprod
 
@@ -93,9 +97,9 @@ if [ -z "${name}" ] || [ -z "${email_domain}" ] || [ -z "${ou}" ]; then
 fi
 
 case "${ou}" in
-  security | infrastructure | nonprod | production ) ;;
+  security | infrastructure | deployments | nonprod | production ) ;;
   * )
-    echo "--ou inválido: '${ou}' (use security, infrastructure, nonprod ou production)" >&2
+    echo "--ou inválido: '${ou}' (use security, infrastructure, deployments, nonprod ou production)" >&2
     exit 1
     ;;
 esac
@@ -126,6 +130,11 @@ case "${ou}" in
     ou_name="Infrastructure"
     parent_id="$(aws organizations list-organizational-units-for-parent \
       --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Infrastructure'].Id" --output text)"
+    ;;
+  deployments )
+    ou_name="Deployments"
+    parent_id="$(aws organizations list-organizational-units-for-parent \
+      --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Deployments'].Id" --output text)"
     ;;
   nonprod )
     ou_name="NonProd"

@@ -4,7 +4,7 @@ Histórico de itens removidos do `HANDOFF.md` na raiz após conclusão.
 
 ## Bootstrap IAM user `crossplane-poc` na conta `hub` (2026-08-17)
 
-Executado o bootstrap manual descrito em `aws/docs/bootstrap/00-iam-user-crossplane.md`
+Executado o bootstrap manual descrito em `aws/docs/bootstrap/00-crossplane-iam-user.md`
 contra a conta `hub` real (`094289743086`), usando `AWS_PROFILE=hub` (novo profile local
 que assume `OrganizationAccountAccessRole` a partir do profile `personal`).
 

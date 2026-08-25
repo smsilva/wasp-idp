@@ -13,7 +13,7 @@ spec:
   #
   # CIDR PARAMETRIZADO (2026-08-18): VPC e subnets derivam de spec.vpcCidrSecondOctet na
   # supernet 10.0.0.0/12 → 10.<N>.0.0/16 + 10.<N>.{1,2,3,4}.0/24. Substitui o antigo
-  # 172.16.0.0/16 fixo (Gap 1 do docs/network/07-mapa-crossplane.md), que impedia >1 spoke
+  # 172.16.0.0/16 fixo (Gap 1 do docs/network/07-crossplane-map.md), que impedia >1 spoke
   # por colisão. Derivação por string-format (Format) no patch-and-transform — sem cálculo
   # de IP; por isso só /16 alinhado (spokes de outro tamanho = extensão futura via function-kcl).
   #
