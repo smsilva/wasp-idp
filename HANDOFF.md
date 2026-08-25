@@ -22,12 +22,24 @@ obrigatória.
 
 **Alvo do próximo trabalho de código: módulo Terraform que substitui o bootstrap feito hoje
 pelo k3d.** Escopo **fino** decidido: Terraform entrega VPC hub + VPC spoke + EKS + nodegroup
-+ Pod Identity base + ArgoCD + Crossplane, e para. Addons (istio, cert-manager, external-dns,
-ESO, ALB controller, route53 zone/wildcard) passam a vir por GitOps. Critério: cardinalidade ×
++ Pod Identity base + **ESO** + ArgoCD + Crossplane core, e para. istio, cert-manager,
+external-dns, ALB controller e route53 zone/wildcard vêm por GitOps. Critério: cardinalidade ×
 churn — Terraform para o que se cria uma vez por região, GitOps para o que muda toda semana.
 Rejeitado: **paridade total** (Terraform instalando os addons, como faz o exemplo Azure de
 referência) e o padrão **seed cluster / hub-of-hubs** (`decisions.md` §7 — cria dependência de
 disponibilidade e não elimina o Terraform, só o esconde).
+
+**Fronteira do ArgoCD RESOLVIDA (2026-08-25).** ArgoCD sobe **sem ingress** (`ClusterIP` +
+`port-forward`); **ESO entra** no Terraform; o trio DNS fica fora. A binária original estava
+mal-posta: o que destrava OIDC é o **ESO** (entregador do client secret, como no exemplo Azure,
+via merge de `ExternalSecret` em `argocd-secret`), e ESO **não depende de DNS**. A única peça do
+OIDC que exige o trio é a URL — e `http://localhost` é exceção aceita pelo Google, caminho que
+este repo já prova com o Backstage em `:7007`. Design completo em
+`docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`.
+
+**Frente A virou pré-requisito duro da Frente B:** o módulo põe o EKS de plataforma na conta
+`cicd`, que **não existe na AWS**. Mover EKS entre contas é rebuild, não move — a conta tem de
+existir antes do primeiro `terraform apply`.
 
 ## Vocabulário (ler antes de qualquer coisa)
 
@@ -193,11 +205,6 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
 
 ## Open Questions / Hypotheses
 
-- **[BLOQUEIA O DESIGN DO MÓDULO] Ovo-e-galinha do ArgoCD.** Com escopo fino, sem
-  istio/cert-manager/external-dns o ArgoCD não tem URL com TLS. Duas saídas: aceitar
-  `port-forward`/LoadBalancer cru no bootstrap, ou puxar esses três para o Terraform (terceira
-  opção que já foi apresentada: "fundação + o que destrava o GitOps"). **É a decisão que
-  interrompeu a sessão.**
 - **Conflação em `decisions.md` §2:** a spoke de plataforma roda *"auth, discovery, ArgoCD,
   Crossplane"*. `auth` e `discovery` são runtime de aplicação **no caminho da requisição** —
   não são build/validate/promote/release, logo não pertencem a uma conta de CI/CD pela
@@ -278,19 +285,27 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
 
 ## How to Resume
 
-**A sessão parou numa decisão de desenho, não numa falha.** Retomar respondendo: no módulo
-Terraform de escopo fino, o ArgoCD sobe sem ingress (acesso por `port-forward`/LoadBalancer
-cru), ou istio + cert-manager + external-dns entram no Terraform para o ArgoCD nascer com URL
-e TLS?
-
-Contexto necessário para decidir, em ordem de leitura:
+**A sessão parou num gate de revisão, não numa falha nem numa decisão pendente.** O design do
+módulo está escrito e commitado; falta o Silvio revisar:
 
 ```bash
 cd /home/silvios/git/wasp-idp
+code docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md
+```
+
+Aprovado, invocar `superpowers:writing-plans`. **Nenhum código antes disso.**
+
+O item mais fácil de cortar na revisão é o driver EBS CSI — é adição ao escopo literal do
+handoff, justificada pela régua do §7, e nada no escopo fino exige PV hoje.
+
+Contexto de apoio, se for preciso reconstruir o raciocínio:
+
+```bash
 sed -n '/^## 7\. IaC/,/^## 8\./p' decisions.md      # cardinalidade × churn; os dois Crossplanes
 sed -n '/^### Fase 2/,/^### Fase 3/p' decisions.md   # o que a Fase 2 entrega
 ls aws/eks/chart/templates/                          # as 28 fases que o k3d faz hoje
 cat /home/silvios/git/azure-kubernetes/examples/cluster_argocd_ingress_istio/main.tf
+grep -rn oidc /home/silvios/git/azure-kubernetes/src/helm/modules/argo-cd/  # o padrão ESO→argocd-secret
 ```
 
 O exemplo Azure é a referência de **estrutura** pedida: raiz compõe submódulos de `src/`, com
@@ -298,7 +313,9 @@ flags `local.install_*` e, por addon, o tripé *workload-identity → role assig
 module*. No lado AWS o tripé equivalente é *Pod Identity association → inline policy → Helm
 release*, que é exatamente como as fases `80/82/84`, `86/88` e `100/102` já estão organizadas.
 
-Decidido isso, o próximo passo é o design do módulo (nada de código antes do design aprovado).
+**Achado a não reaprender:** o exemplo Azure tem `install_app_of_apps_infra = false`. Mesmo a
+referência de "paridade total" mantém o handoff para GitOps desligado — ela prova a estrutura,
+não a fronteira.
 
 Se o Control Plane k3d tiver sido destruído e for preciso reproduzir o estado atual:
 
@@ -356,9 +373,13 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
 - [x] **Fase 4:** split de charts + identidade `metadata.name` + PCs por conta.
 - [x] Validar a cadeia renomeada recriando o Control Plane do zero. Custo zero.
 - [x] Escopo do módulo Terraform: **fino**, com conta `cicd` na OU `Deployments`.
-- [ ] **Decidir a fronteira do ArgoCD** (ingress no Terraform ou não) — bloqueia o design.
-- [ ] Desenhar o módulo Terraform (submódulos no estilo do exemplo Azure), aprovar o design,
-      só então escrever código.
+- [x] **Fronteira do ArgoCD decidida:** sem ingress, ESO dentro, trio DNS fora.
+- [ ] **Design do módulo escrito — em revisão pelo Silvio.**
+      `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`. Aprovado o
+      design, o próximo passo é `superpowers:writing-plans`. Nenhum código antes disso.
+- [ ] Criar a conta `cicd` (item da Frente A) — **pré-requisito duro** do `terraform apply`.
+- [ ] Escrever o design do script `follow` determinístico (equivalente ao
+      `azure-kubernetes/scripts/follow-creation/follow`) — decidido que ganha spec própria.
 - [ ] Reduzir o IAM user `crossplane-poc` a só `sts:AssumeRole` (mitigação de SEC02-BP02 que
       não depende de migrar para EKS).
 - [ ] Decidir base do domínio (delegar `wasp.silvios.me`/subzona → Route53) antes das fatias
