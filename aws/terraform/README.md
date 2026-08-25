@@ -4,12 +4,41 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`; plano da camada 1 em
 `docs/superpowers/plans/2026-08-25-terraform-network-foundation.md`.
 
-## Camadas
+## Raízes
 
-| Camada | Conta | State | Entrega | Estado |
+| Raiz | Conta | State key | Entrega | Estado |
 |---|---|---|---|---|
-| `network-foundation` | `network` | S3, `network-foundation/terraform.tfstate` | VPC hub, bucket de state | **aplicada** |
-| `control-plane` | `cicd` | S3, `control-plane/terraform.tfstate` | VPC spoke, EKS, ESO, ArgoCD, Crossplane | não escrita |
+| `state-backend/` | `network` | `state-backend/` | O bucket de state, uma vez, sem região | **aplicada** |
+| `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | **aplicada** |
+| `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | **aplicada** |
+| `control-plane/` | `cicd` | `control-plane/` | VPC spoke, EKS, ESO, ArgoCD, Crossplane | não escrita |
+
+### Por que o bucket de state tem raiz própria
+
+Ele guarda o state de **todas** as camadas e regiões. Enquanto vivia junto da
+`network-foundation` de `us-east-1`, um `terraform destroy` daquele hub levaria junto o mapa de
+toda a infraestrutura. Numa raiz própria, nenhum destroy de região o alcança — o bucket não está
+no state de nenhuma delas. Fix estrutural, não guarda por convenção.
+
+Somam-se duas proteções: `prevent_destroy = true` no recurso, e `force_destroy = false` (default)
+— a AWS recusa deletar bucket não-vazio, e ele nunca estará vazio.
+
+### Uma raiz por região, não uma raiz com `-reconfigure`
+
+Cada região tem diretório e state key próprios. A alternativa — uma raiz só, alternando backend
+com `terraform init -reconfigure` — tem um footgun permanente: esquecer de trocar o backend antes
+do apply mistura as regiões, e nada no Terraform pega isso. Os valores de região, CIDR e AZs
+ficam **inline** em cada `main.tf`: são decisões de desenho documentadas
+(`aws/docs/network/01-cidr-addressing.md`), não segredo.
+
+Isolamento verificado: `terraform plan -destroy` em `us-west-2` mostra 13 recursos, zero menção
+ao bucket ou ao CIDR de `us-east-1`.
+
+### Alocação de CIDR
+
+Supernet `10.0.0.0/12`, um `/16` por VPC. N=0 reservado à Organization, N=1 e N=3 em uso, N=2
+para o `control-plane`. **Teto de 15, e região multiplica** — ver
+`aws/docs/network/01-cidr-addressing.md`. É a única decisão irreversível da cadeia.
 
 **A VPC spoke nunca pode ser separada do state do cluster.** No teardown, o egress
 *pod → subnet privada → NAT → IGW → API do ELB* precisa sobreviver até o último nó sair; o grafo
@@ -31,18 +60,35 @@ Quando o TGW entrar, este raciocínio precisa ser revisitado.
 
 | Submódulo | Equivale a | Notas |
 |---|---|---|
-| `src/network` | XR `Network` (L1a) | 16 recursos com NAT ligado. Subnets derivadas do CIDR com `cidrsubnet()`, não fixas |
-| `src/state-backend` | — | Bucket de state endurecido. Só o `network-foundation` usa |
+| `src/network` | XR `Network` (L1a) | 16 recursos com NAT ligado. Subnets derivadas do CIDR com `cidrsubnet()`, não fixas — por isso serve qualquer região sem alteração |
+| `src/state-backend` | — | Bucket de state endurecido, com `prevent_destroy` |
 
-## Ordem de apply
+## Nova região
+
+Duas coisas, nesta ordem. A SCP vem primeiro — sem ela o `apply` falha no `CreateVpc`, não no
+código:
 
 ```bash
-cd network-foundation
-cp terraform.tfvars.example terraform.tfvars   # preencher
-terraform init -backend-config="bucket=<state-bucket-name>"
-terraform plan -out=foundation.tfplan
-terraform apply foundation.tfplan
+cd ../docs/accounts/scripts
+AWS_PROFILE=personal ./apply-baseline-service-control-policy --regions us-east-1,<nova-região>
 ```
+
+Isso vale para a **Organization inteira**, não só para a conta `network`. Depois, copiar um
+diretório de região existente e ajustar região e CIDR (N livre do supernet):
+
+```bash
+cp -r network-foundation/us-west-2 network-foundation/<nova-região>
+# editar main.tf (region, CIDR, AZs) e versions.tf (key do backend)
+cd network-foundation/<nova-região>
+terraform init -backend-config="bucket=<state-bucket-name>"
+terraform plan -out=hub.tfplan
+terraform apply hub.tfplan
+```
+
+Nenhuma linha de `src/network` muda — foi feito reutilizável e há teste provando que a
+aritmética de CIDR acompanha o valor recebido.
+
+## Ordem de apply
 
 O `bucket` do backend fica fora do `versions.tf` porque é valor real; entra por
 `-backend-config`. O `profile` **está** no bloco de backend de propósito: o backend é
@@ -70,12 +116,17 @@ Se não vier vazio, deletar os XRs e esperar a reconciliação terminar **antes*
 Sem credencial, sem chamada à AWS — `mock_provider` + `command = plan`:
 
 ```bash
-for module in src/network src/state-backend network-foundation; do
+for module in src/network src/state-backend \
+              network-foundation/us-east-1 network-foundation/us-west-2; do
   (cd "${module}" && terraform init -backend=false && terraform test)
 done
 ```
 
 Hoje: 17 testes, 0 falhas.
+
+Cada raiz de região testa que seu CIDR **cai dentro do supernet**. Essa validação vivia na
+variável `hub_vpc_cidr` da raiz única; com os valores inline ela viraria um buraco silencioso,
+e um typo no CIDR é irreversível depois de aplicado.
 
 ### Duas limitações do framework que já custaram tempo
 

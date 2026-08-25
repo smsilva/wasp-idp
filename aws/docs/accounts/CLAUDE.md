@@ -47,6 +47,15 @@ registrado.
   que é quando se opera com privilégio máximo.
 - **⑤ e ⑧:** `create-account` **não** aceita OU de destino — a conta nasce na Root e é movida
   depois. São dois passos, e o SCP da OU não vale na janela entre eles.
+- **Aplicar ⑥ ANTES de criar uma conta numa OU nova.** A ordem acima (⑤b antes de ⑥) é do
+  desenho original; na prática, anexar os guardrails à OU primeiro faz a conta encontrar a OU
+  já protegida ao ser movida. Não elimina a janela Root→OU, encurta. `apply-baseline-service-control-policy`
+  é idempotente (`update-policy` + reanexo só do que falta), então rodá-lo várias vezes é seguro.
+- **Aprovar região é `--regions`, e vale para a Organization inteira.**
+  `./apply-baseline-service-control-policy --regions us-east-1,us-west-2` reescreve
+  `DenyOutsideApprovedRegions` em todos os targets — não dá para liberar região só numa conta
+  por esta via. Sem isso, qualquer `terraform apply` fora das regiões aprovadas falha no
+  primeiro `Create*`, com `explicit deny in a service control policy`, e não no código.
 - **⑥:** SCP não afeta a conta de gerência. Por isso ela não hospeda nada.
 - **⑦ "sem usar root" só é verdade se houver caminho de emergência definido.** Toda conta
   criada em ⑤/⑧ nasce com um root indestrutível e imune a SCP — o único controle é não usá-lo.

@@ -226,6 +226,9 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   distinto do caller SSO do `70-access`. O `crossplaneArn` é derivado em runtime por
   `provision-eks` via `aws sts get-caller-identity` (as creds exportadas SÃO do user do
   Crossplane, então o ARN vem direto, sem o rodeio de sessão SSO do `configure-access`).
+- **Trust de Pod Identity exige `sts:TagSession` além de `sts:AssumeRole`.** A Composition de
+  referência tem as duas actions; um trust só com `AssumeRole` falha. Vale para toda role de
+  Pod Identity (EBS CSI, ESO, external-dns, cert-manager, ALB controller, Crossplane).
 - **Creator NÃO ganha admin automático:** o cluster nasce com `authenticationMode: API`
   **sem** `bootstrapClusterCreatorAdminPermissions`, então o `crossplane-poc` (que
   criou o cluster) NÃO tem RBAC até a fase `72` aplicar sua `AccessEntry`. `aws eks

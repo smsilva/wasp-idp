@@ -1,5 +1,9 @@
 # HANDOFF
 
+> **A frente ativa vive em `HANDOFF.local.md`** (não versionado). Este arquivo carrega o que vale
+> para qualquer pessoa: decisões, backlog, gotchas e trabalho entregue. O que está aplicado na
+> máquina de alguém, e qual era o próximo passo dessa pessoa, fica lá.
+
 ## Why
 
 Exercitar a PoC AWS EKS-via-Crossplane (arquitetura de referência hub-and-spoke) na conta
@@ -122,6 +126,17 @@ assume de `OrganizationAccountAccessRole` validado. **SCP comprovada na prática
 Pendências da conta nova: **sem permission set** no Identity Center (acesso só por switch-role) e
 **VPC default em toda região**, como qualquer conta nova — a spoke do Terraform é separada, e a
 default fica como candidata a limpeza (security group default aberto).
+
+**Aprovar uma região é `--regions` e vale para a Organization inteira.**
+`./apply-baseline-service-control-policy --regions <r1>,<r2>` reescreve `DenyOutsideApprovedRegions`
+em todos os targets — não há como liberar região só numa conta por essa via. Sem isso, um
+`terraform apply` fora das regiões aprovadas falha no primeiro `Create*` com
+`explicit deny in a service control policy`, e o erro parece bug de código.
+
+**Ordem que funcionou melhor que a documentada:** aplicar a SCP na OU **antes** de criar a conta
+nela. O desenho original em `aws/docs/accounts/CLAUDE.md` listava ⑤b (criar conta) antes de ⑥
+(SCPs); inverter faz a conta encontrar a OU já protegida ao ser movida. Não elimina a janela
+Root→OU, encurta. O script é idempotente, então rodá-lo de novo é seguro.
 
 **Passos ①–⑥ concluídos.** SCPs baseline verificadas em todos os targets:
 
@@ -428,15 +443,22 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
 - [x] Validar a cadeia renomeada recriando o Control Plane do zero. Custo zero.
 - [x] Escopo do módulo Terraform: **fino**, com conta `cicd` na OU `Deployments`.
 - [x] **Fronteira do ArgoCD decidida:** sem ingress, ESO dentro, trio DNS fora.
-- [ ] **Design do módulo escrito — em revisão pelo Silvio.**
-      `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`. Aprovado o
-      design, o próximo passo é `superpowers:writing-plans`. Nenhum código antes disso.
+- [x] **Design do módulo aprovado.** `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`.
 - [x] Conta `cicd` criada — o **pré-requisito duro** do `terraform apply` está cumprido.
-- [x] **Camada 1 do Terraform (`network-foundation`) APLICADA.** VPC hub na conta `network` +
-      bucket de state; state remoto no S3 com lock nativo. 19 recursos, custo recorrente zero
-      (sem NAT). 17 testes offline, 0 falhas. IDs em `CLAUDE.local.md`.
+- [x] **Camada 1 do Terraform APLICADA**, com state remoto no S3 e lock nativo. Custo recorrente
+      zero (sem NAT). 17 testes offline, 0 falhas.
+- [x] **Bucket de state desacoplado de qualquer região.** Raiz própria `state-backend/`, com
+      `prevent_destroy`. Antes ele vivia no state da `network-foundation` de `us-east-1` e um
+      `terraform destroy` daquele hub levaria o mapa de toda a infraestrutura. Migração por
+      blocos `removed`/`import`, sem cirurgia de state.
+- [x] **`network-foundation` virou uma raiz por região**, cada uma com state key própria —
+      elimina o footgun de alternar backend com `init -reconfigure`.
+- [x] **Reuso do módulo entre regiões PROVADO:** segundo hub aplicado numa segunda região sem
+      alterar uma linha de `src/network`. Isolamento verificado — `plan -destroy` de uma região
+      não alcança a outra nem o bucket.
+- [x] **`us-west-2` aprovada na SCP baseline.** `--regions` reescreve a policy em todos os
+      targets; não dá para liberar região só numa conta por essa via.
 - [ ] Escrever o plano da camada 2 (`control-plane`) — desbloqueado. Custo real: ~US$ 105/mês.
-- [ ] Escrever o design do script `follow` determinístico.
 - [ ] Escrever o design do script `follow` determinístico (equivalente ao
       `azure-kubernetes/scripts/follow-creation/follow`) — decidido que ganha spec própria.
 - [ ] Reduzir o IAM user `crossplane-poc` a só `sts:AssumeRole` (mitigação de SEC02-BP02 que
