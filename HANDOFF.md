@@ -296,6 +296,7 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
    arquivos acima continuam pendentes.
 6. VPC+EKS ainda NÃO provisionados numa spoke — *intentional*: custo alto, só sob autorização
    explícita. A conta `cicd` já existe e está vazia — criar a conta não custa nada; o EKS custa.
+   A VPC **hub** existe (camada 1 do Terraform), mas hub não é spoke e não hospeda workload.
 7. `crossplane render` não injeta defaults do XRD — *intentional* (limitação da ferramenta):
    passar `providerConfigName`/`metadata.name` explícitos no XR de teste. `providerConfigName`
    é OBRIGATÓRIO (sem default): XR sem ele é rejeitado, não há fallback.
@@ -431,7 +432,11 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
       `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`. Aprovado o
       design, o próximo passo é `superpowers:writing-plans`. Nenhum código antes disso.
 - [x] Conta `cicd` criada — o **pré-requisito duro** do `terraform apply` está cumprido.
-- [ ] Escrever o plano da camada 2 (`platform-cell`) — agora desbloqueado.
+- [x] **Camada 1 do Terraform (`network-foundation`) APLICADA.** VPC hub na conta `network` +
+      bucket de state; state remoto no S3 com lock nativo. 19 recursos, custo recorrente zero
+      (sem NAT). 17 testes offline, 0 falhas. IDs em `CLAUDE.local.md`.
+- [ ] Escrever o plano da camada 2 (`platform-cell`) — desbloqueado. Custo real: ~US$ 105/mês.
+- [ ] Escrever o design do script `follow` determinístico.
 - [ ] Escrever o design do script `follow` determinístico (equivalente ao
       `azure-kubernetes/scripts/follow-creation/follow`) — decidido que ganha spec própria.
 - [ ] Reduzir o IAM user `crossplane-poc` a só `sts:AssumeRole` (mitigação de SEC02-BP02 que
