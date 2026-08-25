@@ -1130,7 +1130,7 @@ não têm cobrança por hora, e o NAT está desligado. O bucket cobra por armaze
 
 **Interfaces:**
 - Consumes: a raiz da Task 4 e os outputs `state_bucket_name`, `hub_vpc_id`, `hub_control_plane_subnet_ids`.
-- Produces: state remoto em S3 com lock nativo. Os outputs `hub_vpc_id` e `hub_control_plane_subnet_ids` são o que a camada 2 (`platform-cell`) lerá — por `data` source, não por `terraform_remote_state`.
+- Produces: state remoto em S3 com lock nativo. Os outputs `hub_vpc_id` e `hub_control_plane_subnet_ids` são o que a camada 2 (`control-plane`) lerá — por `data` source, não por `terraform_remote_state`.
 
 - [ ] **Step 1: Preencher o `terraform.tfvars` e confirmar acesso à conta**
 
@@ -1263,7 +1263,7 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 | Camada | Conta | State | Entrega |
 |---|---|---|---|
 | `network-foundation` | `network` | S3 (`network-foundation/terraform.tfstate`) | VPC hub, bucket de state |
-| `platform-cell` | `cicd` | S3 (`platform-cell/terraform.tfstate`) | VPC spoke, EKS, ESO, ArgoCD, Crossplane |
+| `control-plane` | `cicd` | S3 (`control-plane/terraform.tfstate`) | VPC spoke, EKS, ESO, ArgoCD, Crossplane |
 
 **A VPC spoke nunca pode ser separada do state do cluster.** No teardown, o egress
 *pod → subnet privada → NAT → IGW → API do ELB* precisa sobreviver até o último nó sair;
@@ -1290,12 +1290,12 @@ terraform apply foundation.tfplan
 
 ## Ordem de teardown
 
-**Inverso do apply: `platform-cell` antes de `network-foundation`.**
+**Inverso do apply: `control-plane` antes de `network-foundation`.**
 
 Dentro de uma camada a ordem é de graça — é o grafo de dependências do Terraform. O que
 **não** é de graça: XRs que o Crossplane tenha criado dentro do cluster depois do bootstrap.
 Eles não estão no state, e destruir o cluster primeiro deixa recurso AWS órfão sem
-controlador. Antes de destruir a `platform-cell`:
+controlador. Antes de destruir a `control-plane`:
 
 ```bash
 kubectl get managed          # tem de vir vazio
@@ -1339,7 +1339,7 @@ Custo verificado em zero: nenhum NAT Gateway na conta."
 ## O que este plano NÃO cobre
 
 A spec descreve duas camadas. Esta é a primeira. A segunda vira plano próprio
-(`platform-cell`).
+(`control-plane`).
 
 **O bloqueio da camada 2 caiu em 2026-08-25:** a OU `Deployments` e a conta `cicd` foram criadas
 pelos scripts de `aws/docs/accounts/scripts/`, com SCP baseline herdada e profile local `cicd`
@@ -1347,7 +1347,7 @@ validado. IDs em `CLAUDE.local.md`.
 
 Escopo do plano 2: `src/cluster`, `src/nodegroup`,
 `src/pod-identity`, `src/helm/modules/{external-secrets,argo-cd,crossplane}`, a raiz
-`platform-cell`, o ConfigMap de contrato Terraform→GitOps e o `data` source que lê a VPC hub
+`control-plane`, o ConfigMap de contrato Terraform→GitOps e o `data` source que lê a VPC hub
 desta camada. Custo real: EKS ~US$ 73/mês + NAT ~US$ 32/mês + nós.
 
 O script `follow` determinístico de acompanhamento tem design próprio, ainda não escrito.

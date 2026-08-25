@@ -9,7 +9,7 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 | Camada | Conta | State | Entrega | Estado |
 |---|---|---|---|---|
 | `network-foundation` | `network` | S3, `network-foundation/terraform.tfstate` | VPC hub, bucket de state | **aplicada** |
-| `platform-cell` | `cicd` | S3, `platform-cell/terraform.tfstate` | VPC spoke, EKS, ESO, ArgoCD, Crossplane | não escrita |
+| `control-plane` | `cicd` | S3, `control-plane/terraform.tfstate` | VPC spoke, EKS, ESO, ArgoCD, Crossplane | não escrita |
 
 **A VPC spoke nunca pode ser separada do state do cluster.** No teardown, o egress
 *pod → subnet privada → NAT → IGW → API do ELB* precisa sobreviver até o último nó sair; o grafo
@@ -50,12 +50,12 @@ inicializado antes de o provider ser configurado, então não herda `profile` do
 
 ## Ordem de teardown
 
-**Inverso do apply: `platform-cell` antes de `network-foundation`.**
+**Inverso do apply: `control-plane` antes de `network-foundation`.**
 
 Dentro de uma camada a ordem é de graça — é o grafo de dependências do Terraform. O que **não**
 é de graça: XRs que o Crossplane tenha criado dentro do cluster depois do bootstrap. Eles não
 estão no state, e destruir o cluster primeiro deixa recurso AWS órfão sem controlador. Antes de
-destruir a `platform-cell`:
+destruir a `control-plane`:
 
 ```bash
 kubectl get managed     # tem de vir vazio

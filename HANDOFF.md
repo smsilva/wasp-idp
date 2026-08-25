@@ -435,7 +435,7 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
 - [x] **Camada 1 do Terraform (`network-foundation`) APLICADA.** VPC hub na conta `network` +
       bucket de state; state remoto no S3 com lock nativo. 19 recursos, custo recorrente zero
       (sem NAT). 17 testes offline, 0 falhas. IDs em `CLAUDE.local.md`.
-- [ ] Escrever o plano da camada 2 (`platform-cell`) — desbloqueado. Custo real: ~US$ 105/mês.
+- [ ] Escrever o plano da camada 2 (`control-plane`) — desbloqueado. Custo real: ~US$ 105/mês.
 - [ ] Escrever o design do script `follow` determinístico.
 - [ ] Escrever o design do script `follow` determinístico (equivalente ao
       `azure-kubernetes/scripts/follow-creation/follow`) — decidido que ganha spec própria.

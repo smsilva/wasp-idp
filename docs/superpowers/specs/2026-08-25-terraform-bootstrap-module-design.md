@@ -156,16 +156,34 @@ Duas camadas, dois states, pelo mesmo eixo que decidiu Terraform vs Crossplane:
 | Camada | Conta | Cardinalidade | Churn |
 |---|---|---|---|
 | `network-foundation` | `network` | 1 por região | ~zero |
-| `platform-cell` | `cicd` | 1 por região | baixo, mas > foundation |
+| `control-plane` | `cicd` | 1 por região | baixo, mas > foundation |
 
-A `platform-cell` lê o foundation por **`data` source** (tag/nome da VPC, não `terraform_
+A `control-plane` lê o foundation por **`data` source** (tag/nome da VPC, não `terraform_
 remote_state`): desacopla o state e sobrevive ao foundation ser reescrito ou migrado.
-`terraform destroy` da cell não toca no hub — é a armadilha de "ordem inversa no teardown" do
-§7 resolvida por construção, não por disciplina.
+`terraform destroy` dela não toca no hub — é a armadilha de "ordem inversa no teardown" do §7
+resolvida por construção, não por disciplina.
 
-Rejeitado: um módulo único com providers com alias (acopla hub e cluster no mesmo state) e três
-camadas com addons separados (YAGNI — os addons do escopo fino são dois e morrem com o
-cluster).
+**Sobre o nome.** Ambas as camadas nomeiam o **resultado**, não os componentes: assim como
+`network-foundation` também carrega o bucket de state sem virar
+`network-foundation-mais-bucket`, `control-plane` entrega VPC spoke + EKS + ESO + ArgoCD +
+Crossplane e se chama pelo que produz. `control-plane` é o termo canônico da tabela de
+vocabulário do `HANDOFF.md`.
+
+Descartados, e por quê — o registro existe para a discussão não se repetir:
+
+| Candidato | Problema |
+|---|---|
+| `platform-cell` | "cell" é vocabulário do repo (`aws/CLAUDE.md`, `network/00-topology.md`), mas o composto foi inventado nesta sessão sem necessidade |
+| `control-plane-cluster` | redundante: "Control Plane" **já denota um cluster** no vocabulário do repo. E omite a VPC spoke |
+| `control-plane-spoke` | `aws/CLAUDE.md` registra que **spoke ≠ cluster** — spoke é célula de rede. Omite a metade do cluster, espelhando o defeito acima |
+
+Convergir com o nome do k3d atual (`control-plane`, contexto `k3d-control-plane`) é **correto,
+não colisão**: esta camada é o que substitui aquele k3d. Mesmo conceito, implementação
+diferente — e a coincidência de nome documenta a migração em vez de esconder.
+
+Rejeitado no desenho das camadas: um módulo único com providers com alias (acopla hub e cluster
+no mesmo state) e três camadas com addons separados (YAGNI — os addons do escopo fino são dois e
+morrem com o cluster).
 
 ### Bootstrap do state backend
 
@@ -174,7 +192,7 @@ A Fase 0 item 5 (bucket de state + roles OIDC) não existe. Sequência:
 1. `network-foundation` roda com **state local** e cria, entre seus recursos, o bucket S3 de
    state com versionamento, BPA e SSE.
 2. `terraform init -migrate-state` move o próprio state para o bucket que acabou de criar.
-3. `platform-cell` já nasce com backend S3.
+3. `control-plane` já nasce com backend S3.
 
 Bloqueio de state via `use_lockfile = true` no backend S3 — recurso do **backend** do Terraform
 (estável desde 1.11), não do provider AWS. Dispensa a tabela DynamoDB dedicada do padrão
@@ -227,7 +245,7 @@ aws/terraform/
 │       └── crossplane/
 ├── network-foundation/           # raiz camada 1 — conta network
 │   ├── main.tf  variables.tf  outputs.tf  locals.tf
-└── platform-cell/                # raiz camada 2 — conta cicd
+└── control-plane/                # raiz camada 2 — conta cicd
     ├── main.tf  variables.tf  outputs.tf  locals.tf
 ```
 
