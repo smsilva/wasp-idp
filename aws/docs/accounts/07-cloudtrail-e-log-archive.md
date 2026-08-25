@@ -1,6 +1,6 @@
 # 07 — CloudTrail organizacional e conta Log Archive
 
-**Pilar WAF principal:** Security (SEC04 — detecção). Também Operational Excellence
+**Pilar WAF principal:** Security ([SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html) — detecção). Também Operational Excellence
 (rastro de auditoria do próprio bootstrap).
 
 > **Ordem de execução ≠ ordem de leitura.** Este é o último arquivo do domínio, mas na
@@ -145,9 +145,9 @@ isso o bucket nasce sem lifecycle.
 
 | Best practice | Como atende |
 |---|---|
-| **SEC04-BP01** configurar log de serviço | Trail organizacional multi-region, todas as contas, incluindo as futuras |
-| **SEC04-BP02** log centralizado e imutável | Bucket em conta separada, versionado, sem acesso de escrita para quem é auditado |
-| **SEC01-BP01** separação por conta | `log-archive` isolada em OU `Security`, fora de `Infrastructure` e `Workloads` |
+| **[SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** configurar log de serviço | Trail organizacional multi-region, todas as contas, incluindo as futuras |
+| **[SEC04-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_logs.html)** log centralizado e imutável | Bucket em conta separada, versionado, sem acesso de escrita para quem é auditado |
+| **[SEC01-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_multi_accounts.html)** separação por conta | `log-archive` isolada em OU `Security`, fora de `Infrastructure` e `Workloads` |
 
 ## Próximo
 

@@ -81,9 +81,9 @@ on-prem/cross-account de fato. Documentar aqui é o mapa.
 
 | Best practice | Como atende |
 |---|---|
-| **SEC05-BP01** não expor o que é interno | PHZ resolve só dentro da VPC; sem record público |
-| **SEC03-BP07** acesso cross-account controlado | `VPCAssociationAuthorization` exige autorização explícita da dona |
-| **REL02-BP01** resolução HA | Resolver endpoints em ≥2 AZs; forwarding via VPN no Hub |
+| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** não expor o que é interno | PHZ resolve só dentro da VPC; sem record público |
+| **[SEC03-BP07](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_analyze_cross_account.html)** acesso cross-account controlado | `VPCAssociationAuthorization` exige autorização explícita da dona |
+| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** resolução HA | Resolver endpoints em ≥2 AZs; forwarding via VPN no Hub |
 
 ## Próximo
 

@@ -79,6 +79,6 @@ Pontos de design decididos:
 
 | Best practice | Como atende |
 |---|---|
-| **OPS05** infra como código | cluster inteiro num CR declarativo, não sequência de scripts |
+| **[OPS05](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/design-for-operations.html)** infra como código | cluster inteiro num CR declarativo, não sequência de scripts |
 | **Composable** | Cluster compõe Network (por nome) + DnsZone (filho); ArgoCD desacoplado |
 | **REL** reprodutível | 1 claim → cluster completo; readiness declarativo entre MRs |

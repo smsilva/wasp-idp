@@ -18,7 +18,7 @@ grant **uma única vez**, manualmente.
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-iam-user-crossplane.md`](00-iam-user-crossplane.md) | Criar a IAM user `crossplane-poc`, anexar policies, gerar access key, gravar no Secrets Manager | Security (SEC02) |
+| 0 | [`00-iam-user-crossplane.md`](00-iam-user-crossplane.md) | Criar a IAM user `crossplane-poc`, anexar policies, gerar access key, gravar no Secrets Manager | Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)) |
 
 ## Sequência de construção (conta `network` vazia → automação com credencial)
 

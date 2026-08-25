@@ -1,6 +1,6 @@
 # 03 — Transit Gateway e Isolamento
 
-**Pilar WAF principal:** Security (SEC05 — isolamento de rede) + Reliability (REL02-BP04).
+**Pilar WAF principal:** Security ([SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html) — isolamento de rede) + Reliability ([REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)).
 
 ## O papel do Transit Gateway
 
@@ -80,9 +80,9 @@ débito técnico no apêndice).
 
 | Best practice | Como atende |
 |---|---|
-| **SEC05-BP01** múltiplas camadas | conta + TGW route table + VPC route table + SG/NACL |
-| **SEC05-BP02** todas as camadas controlam tráfego | isolamento por `tgw-rt-<spoke>`, não só por SG |
-| **REL02-BP04** hub-and-spoke | TGW central com roteamento explícito |
+| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** múltiplas camadas | conta + TGW route table + VPC route table + SG/NACL |
+| **[SEC05-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_layered.html)** todas as camadas controlam tráfego | isolamento por `tgw-rt-<spoke>`, não só por SG |
+| **[REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** hub-and-spoke | TGW central com roteamento explícito |
 | **COST** route tables grátis | isolamento por route table não adiciona custo |
 
 ## Próximo

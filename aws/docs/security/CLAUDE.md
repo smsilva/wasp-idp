@@ -19,13 +19,13 @@ workload (Pod Identity/IRSA), autenticação de VPN e detecção.
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-modelo-de-identidade.md`](00-modelo-de-identidade.md) | Humano vs. máquina; as 3 perguntas do perímetro (quem/o quê/onde); credenciais temporárias por padrão | Security (SEC02) |
-| 1 | [`01-menor-privilegio-e-policies.md`](01-menor-privilegio-e-policies.md) | Menor privilégio; policies escopadas por ARN; permission boundaries; SCP como teto | Security (SEC03) |
-| 2 | [`02-roles-cross-account.md`](02-roles-cross-account.md) | `sts:AssumeRole`, trust policies, `ExternalId`, confused deputy; sem IAM user duplicado por conta | Security (SEC02/SEC03) |
-| 3 | [`03-perimetro-de-dados-e-ram.md`](03-perimetro-de-dados-e-ram.md) | Resource-based policies; RAM com escopo por Organization; `allowExternalPrincipals=false` | Security (SEC03) |
-| 4 | [`04-identidade-de-workload.md`](04-identidade-de-workload.md) | Automação (Crossplane) sem SSO; IAM user escopado; Pod Identity/IRSA; máquina fora da AWS (Roles Anywhere vs OIDC federation); trajetória k3d→AKS→EKS; segredos no Secrets Manager | Security (SEC02/SEC08) |
-| 5 | [`05-autenticacao-vpn.md`](05-autenticacao-vpn.md) | Client VPN (cert/SSO) e site-to-site (PSK); ciclo de vida da credencial; ponte com `../network/04` | Security (SEC02/SEC05) |
-| 6 | [`06-deteccao-e-auditoria.md`](06-deteccao-e-auditoria.md) | CloudTrail, IAM Access Analyzer, GuardDuty, credential report; achar privilégio excessivo | Security (SEC04) |
+| 0 | [`00-modelo-de-identidade.md`](00-modelo-de-identidade.md) | Humano vs. máquina; as 3 perguntas do perímetro (quem/o quê/onde); credenciais temporárias por padrão | Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)) |
+| 1 | [`01-menor-privilegio-e-policies.md`](01-menor-privilegio-e-policies.md) | Menor privilégio; policies escopadas por ARN; permission boundaries; SCP como teto | Security ([SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html)) |
+| 2 | [`02-roles-cross-account.md`](02-roles-cross-account.md) | `sts:AssumeRole`, trust policies, `ExternalId`, confused deputy; sem IAM user duplicado por conta | Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)/[SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html)) |
+| 3 | [`03-perimetro-de-dados-e-ram.md`](03-perimetro-de-dados-e-ram.md) | Resource-based policies; RAM com escopo por Organization; `allowExternalPrincipals=false` | Security ([SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html)) |
+| 4 | [`04-identidade-de-workload.md`](04-identidade-de-workload.md) | Automação (Crossplane) sem SSO; IAM user escopado; Pod Identity/IRSA; máquina fora da AWS (Roles Anywhere vs OIDC federation); trajetória k3d→AKS→EKS; segredos no Secrets Manager | Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)/[SEC08](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-data-at-rest.html)) |
+| 5 | [`05-autenticacao-vpn.md`](05-autenticacao-vpn.md) | Client VPN (cert/SSO) e site-to-site (PSK); ciclo de vida da credencial; ponte com `../network/04` | Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)/[SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)) |
+| 6 | [`06-deteccao-e-auditoria.md`](06-deteccao-e-auditoria.md) | CloudTrail, IAM Access Analyzer, GuardDuty, credential report; achar privilégio excessivo | Security ([SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html)) |
 | 7 | [`07-mapa-crossplane.md`](07-mapa-crossplane.md) | O que de IAM é (e não é) provisionável via Crossplane; estado do PoC vs. alvo; bootstrap galinha-e-ovo | — |
 
 ## Sequência de construção (perímetro de identidade)

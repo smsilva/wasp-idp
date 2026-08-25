@@ -50,7 +50,7 @@ registrado.
 - **⑦ "sem usar root" só é verdade se houver caminho de emergência definido.** Toda conta
   criada em ⑤/⑧ nasce com um root indestrutível e imune a SCP — o único controle é não usá-lo.
   Isso exige um break-glass escrito antes do incidente, não improvisado nele
-  (`04-acesso-cross-account.md`, SEC03-BP03).
+  (`04-acesso-cross-account.md`, [SEC03-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)).
 - **⑧ uma conta por projeto POR AMBIENTE** (`<projeto>-nonprod`, `<projeto>-prod`) — a conta
   é o único limite forte de quota, SCP, IAM e billing (ver `01-organizations-e-ous.md`).
 

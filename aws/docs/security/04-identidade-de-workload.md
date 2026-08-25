@@ -1,6 +1,6 @@
 # 04 — Identidade de Workload
 
-**Pilar WAF principal:** Security (SEC02 — identidade de máquina; SEC08 — proteção de segredos).
+**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — identidade de máquina; [SEC08](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-data-at-rest.html) — proteção de segredos).
 
 ## O problema: dar identidade a código, não a pessoas
 
@@ -141,10 +141,10 @@ o `put-user-policy` é o ato de bootstrap.
 
 | Best practice | Como atende |
 |---|---|
-| **SEC02-BP02** credenciais temporárias | Pod Identity/IRSA (dentro do EKS) e Roles Anywhere/OIDC federation (fora da AWS) emitem STS; access key só no bootstrap inevitável |
-| **SEC02-BP05** auditar/rotacionar credenciais | access key de bootstrap é efêmera (substituída por Pod Identity) |
-| **SEC08-BP01** proteger segredos em repouso | Secrets Manager como fonte de verdade, escopado por prefixo de ARN |
-| **SEC03-BP01** menor privilégio | role de Pod Identity escopada ao próprio prefixo de secret |
+| **[SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** credenciais temporárias | Pod Identity/IRSA (dentro do EKS) e Roles Anywhere/OIDC federation (fora da AWS) emitem STS; access key só no bootstrap inevitável |
+| **[SEC02-BP05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_audit.html)** auditar/rotacionar credenciais | access key de bootstrap é efêmera (substituída por Pod Identity) |
+| **[SEC08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** proteger segredos em repouso | Secrets Manager como fonte de verdade, escopado por prefixo de ARN |
+| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | role de Pod Identity escopada ao próprio prefixo de secret |
 
 ## Próximo
 

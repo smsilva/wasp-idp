@@ -87,9 +87,9 @@ O wildcard (`../dns/`) é o que torna o legado desnecessário.
 
 | Best practice | Como atende |
 |---|---|
-| **REL10** entrada HA | NLB multi-AZ; `EvaluateTargetHealth` no alias; Istio gateway replicável |
-| **SEC08-BP01** TLS na exposição | cert-manager (cluster) ou ACM (borda); apex no SAN quando preciso |
-| **SEC05** superfície controlada | um NLB por cluster, mutações IAM escopadas por tag |
+| **[REL10](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/use-fault-isolation-to-protect-your-workload.html)** entrada HA | NLB multi-AZ; `EvaluateTargetHealth` no alias; Istio gateway replicável |
+| **[SEC08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** TLS na exposição | cert-manager (cluster) ou ACM (borda); apex no SAN quando preciso |
+| **[SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** superfície controlada | um NLB por cluster, mutações IAM escopadas por tag |
 | **OPS** um LB, N apps | Istio roteia por host — deploy de app novo não cria LB novo |
 
 ## Próximo

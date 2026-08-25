@@ -86,7 +86,7 @@ Ambos provam posse via DNS — daí este tópico morar no domínio DNS.
 | Best practice | Como atende |
 |---|---|
 | **OPS** eliminar toil | external-dns publica records; cert-manager/ACM renovam certs sozinhos |
-| **SEC08-BP01** TLS em toda exposição | wildcard cert por subzona; apex no SAN quando preciso |
+| **[SEC08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** TLS em toda exposição | wildcard cert por subzona; apex no SAN quando preciso |
 | **SEC** contenção em zona compartilhada | escopo `--txt-owner-id`/`--zone-id-filter`; issuer por subzona; upsert-only |
 | **OPS** observabilidade da automação | validar escopo nos **logs do pod**, não só no manifesto |
 

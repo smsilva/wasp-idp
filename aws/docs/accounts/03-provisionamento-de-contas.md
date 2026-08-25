@@ -122,7 +122,7 @@ aws sts assume-role \
 | Best practice | Como atende |
 |---|---|
 | **OPS** repetibilidade | Sequência é a mesma para toda conta nova — script, não ritual manual |
-| **SEC01** minimizar uso de root | `OrganizationAccountAccessRole` + SSO evitam qualquer necessidade de login root |
+| **[SEC01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/security.html)** minimizar uso de root | `OrganizationAccountAccessRole` + SSO evitam qualquer necessidade de login root |
 
 ## Próximo
 

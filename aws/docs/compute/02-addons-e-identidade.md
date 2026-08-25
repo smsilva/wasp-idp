@@ -74,9 +74,9 @@ faseado separa `65-pod-identity` de `68-ebs-csi-driver`, `80-eso-pod-identity` d
 
 | Best practice | Como atende |
 |---|---|
-| **SEC02-BP02** credencial temporária | Pod Identity emite STS rotacionada; sem access key no pod |
-| **SEC03-BP01** menor privilégio | role escopada por add-on (ESO só `poc-eks/*`, LB só por tag) |
-| **OPS05** ordem determinística | identidade (role+association) numa fase que **precede** o workload |
+| **[SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** credencial temporária | Pod Identity emite STS rotacionada; sem access key no pod |
+| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | role escopada por add-on (ESO só `poc-eks/*`, LB só por tag) |
+| **[OPS05](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/design-for-operations.html)** ordem determinística | identidade (role+association) numa fase que **precede** o workload |
 | **REL** resiliência de provisionamento | evitar a race elimina o CrashLoop que matava o provision |
 
 ## Próximo

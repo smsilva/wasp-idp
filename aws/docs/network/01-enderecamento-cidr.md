@@ -1,6 +1,6 @@
 # 01 — Endereçamento e CIDR
 
-**Pilar WAF principal:** Reliability (REL02-BP01/BP02 — planejamento de sub-rede e
+**Pilar WAF principal:** Reliability ([REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)/BP02 — planejamento de sub-rede e
 endereçamento não sobreposto).
 
 ## Por que isto vem antes de tudo
@@ -77,9 +77,9 @@ por `crossplane render` offline. Detalhe do "como" e o gotcha `%d`→`%v` em
 
 | Best practice | Como o plano atende |
 |---|---|
-| **REL02-BP01** subnets HA | `/24` por AZ, mínimo 2 AZs por spoke |
-| **REL02-BP02** sem sobreposição de IP | supernet única + `/16` fixo por spoke + tabela de alocação |
-| **REL02-BP04** hub-and-spoke | endereçamento não-sobreposto é pré-requisito para o TGW rotear |
+| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** subnets HA | `/24` por AZ, mínimo 2 AZs por spoke |
+| **[REL02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_private_networks.html)** sem sobreposição de IP | supernet única + `/16` fixo por spoke + tabela de alocação |
+| **[REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)** hub-and-spoke | endereçamento não-sobreposto é pré-requisito para o TGW rotear |
 
 ## Próximo
 

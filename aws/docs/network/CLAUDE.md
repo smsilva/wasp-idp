@@ -14,7 +14,7 @@ o Well-Architected Framework.
 
 | # | Arquivo | Assunto | Pilar WAF principal |
 |---|---|---|---|
-| 0 | [`00-topologia.md`](00-topologia.md) | Visão geral hub-and-spoke; por que TGW e não mesh (REL02-BP04); contas e spokes; distinção cell-based (raio de impacto) vs. hub-and-spoke (conectividade) | Reliability |
+| 0 | [`00-topologia.md`](00-topologia.md) | Visão geral hub-and-spoke; por que TGW e não mesh ([REL02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_prefer_hub_and_spoke.html)); contas e spokes; distinção cell-based (raio de impacto) vs. hub-and-spoke (conectividade) | Reliability |
 | 1 | [`01-enderecamento-cidr.md`](01-enderecamento-cidr.md) | Plano de endereçamento IP: supernet, /16 por spoke, zero sobreposição | Reliability |
 | 2 | [`02-vpc-subnets.md`](02-vpc-subnets.md) | Estrutura de VPC e subnets (pública/privada por AZ); IGW/NAT; tags EKS | Reliability |
 | 3 | [`03-transit-gateway-isolamento.md`](03-transit-gateway-isolamento.md) | TGW, RAM cross-account, route table por tenant, isolamento inter-spoke | Security |

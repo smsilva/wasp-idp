@@ -1,7 +1,7 @@
 # 04 — VPN de Acesso
 
-**Pilar WAF principal:** Security (SEC05/SEC08 — conectividade privada e criptografia em
-trânsito) + Reliability (REL02-BP01 — conectividade HA).
+**Pilar WAF principal:** Security ([SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)/[SEC08](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-data-at-rest.html) — conectividade privada e criptografia em
+trânsito) + Reliability ([REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html) — conectividade HA).
 
 ## Princípio: a VPN fecha sempre no Hub
 
@@ -86,9 +86,9 @@ vetor relevante (IPSec já usa AES256 + IKEv2). Sem rotação automática nesta 
 
 | Best practice | Como atende |
 |---|---|
-| **SEC08-BP01/BP02** criptografia em trânsito | IPSec IKEv2/AES256 em todos os túneis |
-| **SEC05-BP01** entrada única controlada | VPN fecha só no Hub, observável e protegível num ponto |
-| **REL02-BP01** conectividade HA | 2 túneis por conexão + BGP + ECMP; 2 conexões p/ peer active-active |
+| **[SEC08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)/BP02** criptografia em trânsito | IPSec IKEv2/AES256 em todos os túneis |
+| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** entrada única controlada | VPN fecha só no Hub, observável e protegível num ponto |
+| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** conectividade HA | 2 túneis por conexão + BGP + ECMP; 2 conexões p/ peer active-active |
 | **OPS** rotas dinâmicas | BGP elimina toil de atualizar rotas manualmente a cada tenant novo |
 
 ## Próximo

@@ -1,6 +1,6 @@
 # 05 — Segurança de DNS
 
-**Pilar WAF principal:** Security (SEC03 — permissões escopadas; SEC04 — detecção).
+**Pilar WAF principal:** Security ([SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — permissões escopadas; [SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html) — detecção).
 
 ## DNS é superfície de ataque e de erro
 
@@ -65,7 +65,7 @@ poisoning). Route53 suporta DNSSEC signing por Hosted Zone, com uma KSK em KMS.
   pública. Útil para ver o que está sendo resolvido (reconhecimento, nomes inesperados).
 - **Resolver query logging** (VPC) → o que as VPCs resolvem, alimentando GuardDuty
   (`../security/06`) para detectar exfiltração via DNS.
-- Coerente com SEC04: sem log de query, um abuso de DNS é invisível.
+- Coerente com [SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html): sem log de query, um abuso de DNS é invisível.
 
 ## Prevenção de sequestro em zona compartilhada
 
@@ -78,9 +78,9 @@ poisoning). Route53 suporta DNSSEC signing por Hosted Zone, com uma KSK em KMS.
 
 | Best practice | Como atende |
 |---|---|
-| **SEC03-BP01** menor privilégio | escrita escopada ao ARN da zona; leitura `*` só por imposição da AWS, compensada por filtro |
-| **SEC03-BP02** controle por atributo | `--txt-owner-id` dá posse por record em zona compartilhada |
-| **SEC04-BP01** capturar eventos | query logging + CloudTrail das mudanças de record |
+| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | escrita escopada ao ARN da zona; leitura `*` só por imposição da AWS, compensada por filtro |
+| **[SEC03-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_least_privileges.html)** controle por atributo | `--txt-owner-id` dá posse por record em zona compartilhada |
+| **[SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** capturar eventos | query logging + CloudTrail das mudanças de record |
 | **SEC** integridade (opcional) | DNSSEC onde a integridade de resolução é requisito |
 
 ## Próximo

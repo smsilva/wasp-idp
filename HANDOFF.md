@@ -80,8 +80,8 @@ Network      (094289743086)   (nenhuma — só OrganizationAccountAccessRole)
 wasp-nonprod (832721568602)   (nenhuma — idem)
 ```
 
-Revisão do passo ⑦ contra o WAF nesta sessão: IDs de best practice corrigidos (SEC02-BP04 e
-SEC03-BP02 estavam citados como BP01), e **break-glass (SEC03-BP03) documentado** em
+Revisão do passo ⑦ contra o WAF nesta sessão: IDs de best practice corrigidos ([SEC02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html) e
+[SEC03-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_least_privileges.html) estavam citados como BP01), e **break-glass ([SEC03-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)) documentado** em
 `aws/docs/accounts/04-acesso-cross-account.md` — não existia processo, então o caminho real de
 emergência era o root, exatamente o que ⑦ existe para evitar.
 
@@ -272,7 +272,7 @@ background, com as creds carregadas inline no mesmo shell.
       SCP **não** afeta a management account.
 - [x] Permission set de rotina da `log-archive` em `ReadOnlyAccess`.
 - [x] E-mail do root da `Network` alinhado (`+hub@` → `+network@`).
-- [x] Break-glass (SEC03-BP03) documentado; IDs do WAF conferidos contra as páginas oficiais.
+- [x] Break-glass ([SEC03-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)) documentado; IDs do WAF conferidos contra as páginas oficiais.
 - [ ] Atribuir permission set a `Network` e `wasp-nonprod`
       (`./assign-permission-set --account <conta> --group platform-admins`) — elimina o
       switch-role via `OrganizationAccountAccessRole`.

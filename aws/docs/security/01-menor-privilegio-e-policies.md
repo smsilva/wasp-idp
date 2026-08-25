@@ -1,6 +1,6 @@
 # 01 — Menor Privilégio e Policies
 
-**Pilar WAF principal:** Security (SEC03 — gerenciamento de permissões).
+**Pilar WAF principal:** Security ([SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — gerenciamento de permissões).
 
 ## Menor privilégio em uma frase
 
@@ -92,10 +92,10 @@ descobri-lo via CloudTrail/Access Analyzer).
 
 | Best practice | Como atende |
 |---|---|
-| **SEC03-BP01** menor privilégio | policies escopadas por ARN `<prefix>-*`, não `Resource: "*"` |
-| **SEC03-BP02** conceder acesso por atributo/condição | condição `iam:PermissionsBoundary` limita criação de role |
-| **SEC03-BP04** reduzir permissões continuamente | trilha via Access Analyzer/CloudTrail (tópico 6) para enxugar `PowerUserAccess` |
-| **SEC03-BP07** analisar acesso público e cross-account | boundary + escopo de ARN contêm o alcance |
+| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** menor privilégio | policies escopadas por ARN `<prefix>-*`, não `Resource: "*"` |
+| **[SEC03-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_least_privileges.html)** conceder acesso por atributo/condição | condição `iam:PermissionsBoundary` limita criação de role |
+| **[SEC03-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html)** reduzir permissões continuamente | trilha via Access Analyzer/CloudTrail (tópico 6) para enxugar `PowerUserAccess` |
+| **[SEC03-BP07](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_analyze_cross_account.html)** analisar acesso público e cross-account | boundary + escopo de ARN contêm o alcance |
 
 ## Próximo
 

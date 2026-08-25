@@ -1,6 +1,6 @@
 # 00 — Modelo de Identidade
 
-**Pilar WAF principal:** Security (SEC02 — gerenciamento de identidades).
+**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — gerenciamento de identidades).
 
 ## Duas classes de identidade, dois padrões
 
@@ -62,9 +62,9 @@ Aqui a divisão é:
 
 | Best practice | Como atende |
 |---|---|
-| **SEC02-BP01** identidade centralizada | SSO para humano, role/Pod Identity para máquina — sem IAM user solto por conta |
-| **SEC02-BP02** credenciais temporárias | STS/Pod Identity como padrão; access key só no bootstrap inevitável |
-| **SEC02-BP04** confiar em identidade forte | separação explícita humano/máquina evita reuso de credencial entre classes |
+| **[SEC02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_enforce_mechanisms.html)** identidade centralizada | SSO para humano, role/Pod Identity para máquina — sem IAM user solto por conta |
+| **[SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** credenciais temporárias | STS/Pod Identity como padrão; access key só no bootstrap inevitável |
+| **[SEC02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html)** confiar em identidade forte | separação explícita humano/máquina evita reuso de credencial entre classes |
 
 ## Próximo
 

@@ -1,6 +1,6 @@
 # 05 — Billing e Tags
 
-**Pilar WAF principal:** Cost Optimization (COST02 — governança de custo por unidade de
+**Pilar WAF principal:** Cost Optimization ([COST02](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/governance.html) — governança de custo por unidade de
 negócio/projeto).
 
 ## Billing consolidado — o que já vem de graça
@@ -51,9 +51,9 @@ relevante nesta referência, onde TGW + VPN Connections + NAT têm custo por hor
 
 | Best practice | Como atende |
 |---|---|
-| **COST02-BP01** governança implementada | Contas por projeto dão isolamento nativo; tags dão granularidade adicional |
-| **COST02-BP03** tagging consistente | Tag Policies padronizam valores aceitos |
-| **COST02-BP05** alertas de custo | Budgets por conta pegam desvio antes de virar surpresa na fatura |
+| **[COST02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_govern_usage_policies.html)** governança implementada | Contas por projeto dão isolamento nativo; tags dão granularidade adicional |
+| **[COST02-BP03](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_govern_usage_account_structure.html)** tagging consistente | Tag Policies padronizam valores aceitos |
+| **[COST02-BP05](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/cost_govern_usage_controls.html)** alertas de custo | Budgets por conta pegam desvio antes de virar surpresa na fatura |
 
 ## Próximo
 

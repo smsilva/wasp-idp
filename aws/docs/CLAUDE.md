@@ -92,7 +92,7 @@ Trabalho de rede hub-and-spoke maduro (KCL/Crossplane), usado como base:
 - Design consolidado AWS↔Azure: `<hub-repo>/docs/superpowers/specs/2026-05-26-hub-spoke-design.md`
 - Landing Zone (visão de arquitetura): `<hub-repo>/docs/02-arquitetura/aws-landing-zone.md`
 - Templates KCL: `<assets-repo>/crossplane/providers/aws/{hub_network,spoke_network,tgw,vpn_connection}/`
-- AWS Well-Architected Framework — pilares e best practices (REL02, SEC05, etc.).
+- AWS Well-Architected Framework — pilares e best practices ([REL02](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/plan-your-network-topology.html), [SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html), etc.).
 
 ## Explorações paralelas (em andamento, nenhuma final)
 

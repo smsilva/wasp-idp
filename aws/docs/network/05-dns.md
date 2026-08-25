@@ -63,7 +63,7 @@ para não pisar em registros de outros donos. Ver apêndice para os valores reai
 |---|---|
 | **OPS** nomes estáveis | subzona + wildcard = FQDN por app sem mexer na zona pai a cada deploy |
 | **REL** resolução HA | Route53 é global e HA por design; resolver endpoint multi-AZ |
-| **SEC05** isolamento | PHZ resolve só dentro da VPC; público e privado separados |
+| **[SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html)** isolamento | PHZ resolve só dentro da VPC; público e privado separados |
 | **Composable** | DNS como XR isolado (`DnsZone`), não embutido no provisionamento de rede |
 
 ## Próximo

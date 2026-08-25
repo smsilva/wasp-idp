@@ -109,7 +109,7 @@ account automaticamente — nenhuma configuração extra. Detalhe de tagging por
 | Best practice | Como atende |
 |---|---|
 | **OPS** delegação por unidade | OUs separam Security, Infrastructure e Workloads — guardrails e operação diferentes por natureza |
-| **SEC01-BP01** fundação de Organization | `feature-set ALL` é pré-requisito para todo o resto do domínio de segurança de contas |
+| **[SEC01-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_multi_accounts.html)** fundação de Organization | `feature-set ALL` é pré-requisito para todo o resto do domínio de segurança de contas |
 
 ## Próximo
 

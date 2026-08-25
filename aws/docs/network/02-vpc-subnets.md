@@ -1,6 +1,6 @@
 # 02 — VPC e Subnets (o spoke)
 
-**Pilar WAF principal:** Reliability (REL02-BP01 — subnets multi-AZ) + Security (SEC05 —
+**Pilar WAF principal:** Reliability ([REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html) — subnets multi-AZ) + Security ([SEC05](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/protecting-networks.html) —
 segmentação pública/privada).
 
 ## O que é um spoke, concretamente
@@ -36,7 +36,7 @@ VPC <spoke-cidr> (/16)   enableDnsSupport + enableDnsHostnames
 | **Route Table privada** | 1 (ou 1 por AZ) | `0.0.0.0/0 → NAT` + rotas de CIDR remoto `→ TGW`; associada às privadas |
 
 **NAT: 1 vs. 1-por-AZ.** Um NAT único é mais barato mas é ponto único de falha e cobra
-tráfego cross-AZ. Para produção, **1 NAT por AZ** (REL10 — isolar falhas por AZ). Para
+tráfego cross-AZ. Para produção, **1 NAT por AZ** ([REL10](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/use-fault-isolation-to-protect-your-workload.html) — isolar falhas por AZ). Para
 dev/PoC, 1 NAT é aceitável e economiza. Deixe isto **parametrizável**, não fixo.
 
 ## Tags obrigatórias para o EKS
@@ -67,10 +67,10 @@ Esse é exatamente o contrato que a `Network` XR do PoC já implementa (publica 
 
 | Best practice | Como atende |
 |---|---|
-| **REL02-BP01** subnets HA | mínimo 2 AZs, público+privado em cada |
-| **REL10-BP01** isolar por AZ | NAT por AZ (produção); route table privada por AZ |
-| **SEC05-BP01** segmentação | workloads em subnet privada sem IP público; público só para ingress |
-| **SEC05-BP02** controle de tráfego | saída privada forçada via NAT; entrada só via LB público |
+| **[REL02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ha_conn_users.html)** subnets HA | mínimo 2 AZs, público+privado em cada |
+| **[REL10-BP01](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_fault_isolation_multiaz_region_system.html)** isolar por AZ | NAT por AZ (produção); route table privada por AZ |
+| **[SEC05-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** segmentação | workloads em subnet privada sem IP público; público só para ingress |
+| **[SEC05-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_layered.html)** controle de tráfego | saída privada forçada via NAT; entrada só via LB público |
 
 ## Próximo
 

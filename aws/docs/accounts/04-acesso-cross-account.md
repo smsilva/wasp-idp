@@ -1,6 +1,6 @@
 # 04 — Acesso Cross-Account
 
-**Pilar WAF principal:** Security (SEC02 — gerenciamento de identidades; SEC03 — permissões).
+**Pilar WAF principal:** Security ([SEC02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html) — gerenciamento de identidades; [SEC03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html) — permissões).
 
 ## O problema: N contas, quantos usuários?
 
@@ -181,7 +181,7 @@ O `revoke` remove só a **atribuição** naquela conta — o permission set cont
 para as demais. Depois de qualquer mudança, `aws sso login` de novo para o cache local
 refletir o novo acesso.
 
-## Break-glass: acesso de emergência (SEC03-BP03)
+## Break-glass: acesso de emergência ([SEC03-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html))
 
 O caminho normal — Identity Center → permission set → STS — tem modos de falha que ele
 próprio não resolve: o Identity Center indisponível na região, a última atribuição de admin
@@ -203,7 +203,7 @@ O caminho 1 **não é** break-glass de verdade — depende da management account
 
 1. **Credencial não fica com uma pessoa.** Senha e MFA do root de cada conta-membro ficam em
    custódia (cofre corporativo), separadas — quem tem a senha não tem o dispositivo MFA.
-2. **MFA obrigatório**, preferencialmente hardware (SEC01-BP02).
+2. **MFA obrigatório**, preferencialmente hardware ([SEC01-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_aws_account.html)).
 3. **Zero access key de root.** A conta não deve ter nenhuma; se tiver, apagar.
 4. **Uso é evento auditável, não operação.** Todo uso gera registro: quem, quando, por quê,
    o que foi feito, e qual foi a correção que tornou o root desnecessário de novo.
@@ -235,16 +235,16 @@ O CloudTrail organizacional (`07-cloudtrail-e-log-archive.md`) já captura `user
 
 | Best practice | Como atende |
 |---|---|
-| **SEC01-BP02** *Secure account root user and properties* | Root de cada conta-membro nunca é usado na rotina; o caminho normal é o permission set |
-| **SEC02-BP01** *Use strong sign-in mechanisms* | MFA no Identity Center como porta de entrada única para humanos |
-| **SEC02-BP02** *Use temporary credentials* | Login SSO gera STS temporário, nunca access key de longa duração para humanos |
-| **SEC02-BP04** *Rely on a centralized identity provider* | Identity Center como fonte única, sem IAM user por conta |
-| **SEC02-BP06** *Employ user groups and attributes* | Atribuição a `--group`, não a `--user` |
-| **SEC03-BP01** *Define access requirements* | Permission set nomeado por função (`<project>NetworkEngineer`), não por pessoa |
-| **SEC03-BP02** *Grant least privilege access* | `ReadOnlyAccess` onde a rotina é leitura (ex.: `log-archive`), não `AdministratorAccess` por padrão |
-| **SEC03-BP03** *Establish emergency access process* | Break-glass documentado abaixo |
-| **SEC03-BP04** *Reduce permissions continuously* | Rebaixamento reprodutível (`assign` novo → `revoke` antigo), acima |
-| **SEC03-BP06** *Manage access based on lifecycle* | Atribuição por grupo sobrevive a quem entra/sai do time |
+| **[SEC01-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_aws_account.html)** *Secure account root user and properties* | Root de cada conta-membro nunca é usado na rotina; o caminho normal é o permission set |
+| **[SEC02-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_enforce_mechanisms.html)** *Use strong sign-in mechanisms* | MFA no Identity Center como porta de entrada única para humanos |
+| **[SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** *Use temporary credentials* | Login SSO gera STS temporário, nunca access key de longa duração para humanos |
+| **[SEC02-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_identity_provider.html)** *Rely on a centralized identity provider* | Identity Center como fonte única, sem IAM user por conta |
+| **[SEC02-BP06](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_groups_attributes.html)** *Employ user groups and attributes* | Atribuição a `--group`, não a `--user` |
+| **[SEC03-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** *Define access requirements* | Permission set nomeado por função (`<project>NetworkEngineer`), não por pessoa |
+| **[SEC03-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_least_privileges.html)** *Grant least privilege access* | `ReadOnlyAccess` onde a rotina é leitura (ex.: `log-archive`), não `AdministratorAccess` por padrão |
+| **[SEC03-BP03](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_emergency_process.html)** *Establish emergency access process* | Break-glass documentado abaixo |
+| **[SEC03-BP04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html)** *Reduce permissions continuously* | Rebaixamento reprodutível (`assign` novo → `revoke` antigo), acima |
+| **[SEC03-BP06](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_lifecycle.html)** *Manage access based on lifecycle* | Atribuição por grupo sobrevive a quem entra/sai do time |
 
 IDs conferidos contra [SEC02 — Identity management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/identity-management.html)
 e [SEC03 — Permissions management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/permissions-management.html).

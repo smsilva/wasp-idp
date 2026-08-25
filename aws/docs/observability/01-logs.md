@@ -1,6 +1,6 @@
 # 01 — Logs
 
-**Pilar WAF principal:** Operational Excellence (a trilha do que aconteceu) + Security (SEC04).
+**Pilar WAF principal:** Operational Excellence (a trilha do que aconteceu) + Security ([SEC04](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html)).
 
 ## As fontes de log da arquitetura
 
@@ -63,15 +63,15 @@ Um incidente raramente se explica por uma fonte só. O destino comum permite cru
 ```
 
 É por isso que o baseline liga **todas** as fontes por padrão, mesmo as que "parecem
-desnecessárias" até o dia do incidente (SEC04-BP01: sem o log, a violação é invisível).
+desnecessárias" até o dia do incidente ([SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html): sem o log, a violação é invisível).
 
 ## Well-Architected — porquê
 
 | Best practice | Como atende |
 |---|---|
-| **OPS08-BP01** coletar logs | control plane + container + Flow + CloudTrail + DNS, todos ligados |
-| **OPS08-BP04** correlacionar | destino comum permite cruzar fontes num incidente |
-| **SEC04-BP01** capturar eventos | audit/authenticator do control plane + CloudTrail |
+| **[OPS08-BP01](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_analyze_workload_metrics.html)** coletar logs | control plane + container + Flow + CloudTrail + DNS, todos ligados |
+| **[OPS08-BP04](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_workload_observability_create_alerts.html)** correlacionar | destino comum permite cruzar fontes num incidente |
+| **[SEC04-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** capturar eventos | audit/authenticator do control plane + CloudTrail |
 | **COST** retenção consciente | CloudWatch curto prazo + S3 longo prazo; retenção explícita por log group |
 
 ## Próximo

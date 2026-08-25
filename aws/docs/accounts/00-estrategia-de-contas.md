@@ -1,7 +1,7 @@
 # 00 — Estratégia de Contas
 
 **Pilar WAF principal:** Operational Excellence (OPS — organização de contas como unidade de
-isolamento) + Security (SEC01 — fundação de identidade e conta).
+isolamento) + Security ([SEC01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/security.html) — fundação de identidade e conta).
 
 ## Por que multi-account (e não uma conta só com muitas VPCs)
 
@@ -64,8 +64,8 @@ conta nova dedicada a ser a gerência.
 
 | Best practice | Como atende |
 |---|---|
-| **SEC01-BP01** *Separate workloads using accounts* | A conta como unidade de isolamento — multi-account desde o início, não como retrofit |
-| **SEC01-BP02** *Secure account root user and properties* | Cada conta nasce com um root indestrutível e imune a SCP; o plano para ele é o passo ⑦ (`04-acesso-cross-account.md`) |
+| **[SEC01-BP01](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_multi_accounts.html)** *Separate workloads using accounts* | A conta como unidade de isolamento — multi-account desde o início, não como retrofit |
+| **[SEC01-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_securely_operate_aws_account.html)** *Secure account root user and properties* | Cada conta nasce com um root indestrutível e imune a SCP; o plano para ele é o passo ⑦ (`04-acesso-cross-account.md`) |
 | **OPS** menor superfície privilegiada | Management account sem workload reduz o que uma falha ali pode afetar |
 | **REL/COST** isolamento de cota e billing | Cotas de serviço e custo são por conta, não globais |
 
