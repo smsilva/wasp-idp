@@ -145,7 +145,21 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, nada implementado)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **fase 1 completa**)
+
+**Último passo:** camada de DNS aplicada e delegação verificada (`1.3`), fechando a fase 1. Antes
+dela, `1.1` (teste das tags do LBC) e `1.2` (`/32` no endpoint da API). A sequência de provisionamento
+virou script por camada em `aws/terraform/scripts/`.
+
+**Próximo passo pretendido: `2.1`, que é PORTÃO** — verificar o client da AWS VPN nesta distro
+**antes** de criar TGW ou Client VPN endpoint, que cobram por hora. Se ele não rodar, há três saídas
+em `02-private-access.md`; a terceira (certificado mútuo) custa a demo de conceder/revogar acesso, que
+foi o motivo de escolher SAML.
+
+**Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
+uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
+garantiria conflito em cada merge sem ganho de revisão.
+
 
 **Plano em `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`** — **um arquivo por
 fase**, para não encher o contexto:
@@ -353,6 +367,12 @@ nenhum hoje.
   o lookup por hostname é frágil. Plano B (Resolver inbound endpoint) custa ~US$ 0,25/h. Risco do
   `2.4`.
 - **Parametrizar** valores de `CLAUDE.local.md` (chart values? env? EnvironmentConfig?).
+- **Domínio pessoal em arquivo versionado:** `01-preparation.md:88` cita o domínio real por extenso,
+  vindo do desenho original. Não está na lista de tokens proibidos (que é sobre a trilha corporativa),
+  mas é identidade num repo público. Decidir se vira `<domínio>` como no resto. **Não mexido de
+  propósito** — é decisão de quem escreveu.
+- **Quantas asserções do repo dependem de um único `override_resource`?** Uma só prova o valor, não a
+  ligação (ver `Next Steps`). `routing.tftest.hcl` é da mesma família e nunca foi olhada sob essa lente.
 - **Rework do orquestrador `environment/`** (BLOCKED): sob `metadata.name`, filhos compostos ganham
   nome hasheado → o cruzamento por label compartilhado não funciona. Conserto desenhado em
   `resources/examples/topology/05-07`. Adiado. `compute/06-crossplane-map.md` registra o alvo:
@@ -415,14 +435,33 @@ nenhum hoje.
 15. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts` `allow-all`
     policy; `idp/packages/backend/src/googleAuthModule.ts`
     `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
-16. **Sob `mock_provider`, data source de provider devolve valor sintético** — *intentional*
+16. **Asserção com um único `override_resource` prova o valor, não a ligação** — *unexpected*, e
+    genérico: se o consumidor tiver o valor **fixo no código** igual ao injetado, a asserção passa sem
+    haver fio. Comprovado no `1.3` — a mutação que colava name servers à mão passou **verde**. Corrigido
+    ali com dois runs de valores e tamanhos diferentes. **Auditar o resto do repo.**
+17. **`up-03-connectivity` não existe** — *intentional*: a raiz `connectivity/` é a fase 2. O `up-all`
+    a pula avisando, então a sequência não mente sobre o que entregou.
+18. **Sem `status`/`platform-status` em `aws/terraform/scripts/`** — *unexpected*: não há como
+    perguntar "o que está de pé e quanto custa por hora". Fica perigoso na fase 2, que introduz um
+    nível T1 que fica de pé **de propósito** e não pode ser confundido com resíduo.
+19. **Sob `mock_provider`, data source de provider devolve valor sintético** — *intentional*
     (limitação do framework): assertion sobre JSON computado pelo provider passa sem verificar nada.
     Regra: policy document via `jsonencode`. **Auditar se há outro lugar no repo com a mesma
     armadilha.**
 
 ## How to Resume
 
-**Custo hoje é zero.** Confirmar antes de confiar:
+**Primeiro comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd` assumem
+role a partir de `personal`):
+
+```bash
+for p in personal network cicd; do printf '%-10s ' "${p}"; aws sts get-caller-identity --profile "${p}" --query Arn --output text; done
+```
+
+ARN vazio ⟹ `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az`
+expira **independentemente** — conferir com `az account show`.
+
+**Custo hoje: ~US$ 0,50/mês** (a subzona de DNS, que fica de pé de propósito). Confirmar o resto:
 
 ```bash
 cd wasp-idp/aws/terraform/control-plane
@@ -430,13 +469,20 @@ terraform state list | wc --lines   # 0 = destruída; 39 = de pé (~US$ 0,23/h)
 k3d cluster list                    # esperado: vazio
 ```
 
-**Convenção de branch desta frente: uma por FASE do plano, não por passo** — `feat/private-access-phase-<n>`.
-Os passos de uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então
-uma branch por passo garantiria conflito em cada merge sem ganho de revisão; o código de cada passo já
-fica em arquivos disjuntos. Fase = uma branch = um PR = uma história fechada.
+**Subir camada é por script, na ordem** (`aws/terraform/README.md` tem a tabela com custos e
+dependências):
 
-Branch corrente: `feat/private-access-phase-1` (`1.1` e `1.2` feitos, `1.3` entra nela). A
-`feat/private-ingress-privatelink` era do desenho e já está em `main`.
+```bash
+cd wasp-idp/aws/terraform
+./scripts/up-all                      # 00 state-backend → 01 network → 02 dns; centavos/mês
+./scripts/up-04-control-plane --yes   # ~US$ 165/mês; fora do up-all de propósito
+```
+
+Sem tty, os `up-*` salvam o plano, dizem onde está e saem com erro em vez de assumir o sim. **Plano
+salvo não sobrevive à expiração de credencial** — replanejar, não reaproveitar.
+
+Branch corrente: `feat/private-access-phase-1`, com a fase 1 inteira. A próxima é
+`feat/private-access-phase-2`, a partir de `main`. Convenção registrada em **In Progress**.
 
 **O trabalho ativo é executar o plano, começando pelo `1.1`** — offline, grátis, com `terraform test`
 de aceite:
@@ -570,9 +616,14 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [x] **`1.3`** — raiz `aws/terraform/dns/` **aplicada e verificada**: subzona
       `nonprod.<domínio>` (`Z087731898SD8PA9OXYR`, conta `network`) + NS na pai no Azure, delegação
       confirmada por `dig +trace` atravessando as duas clouds. **Fase 1 completa.**
-- [ ] **`2.1` (PORTÃO)** — **é por aqui que se começa** — verificar o client da AWS VPN nesta distro **antes** de criar recurso que
-      cobra.
-- [ ] **`2.2`–`2.5`** — `connectivity/`, attachment, DNS privado, fechar a API.
+- [ ] **`2.1` (PORTÃO)** — **é por aqui que se começa.** Verificar o client da AWS VPN nesta distro
+      **antes** de criar recurso que cobra por hora. Abrir `feat/private-access-phase-2` a partir de
+      `main`.
+- [ ] **`2.2`–`2.5`** — `connectivity/`, attachment, DNS privado, fechar a API. Ao criar a raiz,
+      acrescentar `scripts/up-03-connectivity` junto — o `up-all` já a chama se existir.
+- [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
+      laptop segue funcionando, e a API recusa de outro IP.
+- [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
 - [ ] **`3.1`–`3.2`** — NLB interno + gateway Istio; depois lado hub com cert e listener rule.
 - [ ] **`4.1`–`4.2`** — as duas provas negativas.
 - [x] Criar `aws/terraform/scripts/` — feito, com `lib` + `up-00`/`up-01`/`up-02`/`up-04`/`up-all`.

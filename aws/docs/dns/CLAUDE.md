@@ -53,6 +53,22 @@ Não repete a topologia de subzona por spoke (isso é `../network/05`); parte da
   (`--zone-id-filter`/`--txt-owner-id`); o issuer DNS-01 precisa ser **por subzona** (o
   compartilhado escreve o TXT na zona errada) — tópicos 4 e 5.
 
+## Delegação verificada na prática (2026-08-26)
+
+Primeira subzona delegada de verdade — apex no Azure DNS, subzona no Route 53, delegação em
+Terraform (`aws/terraform/dns/`). Três coisas que só apareceram executando:
+
+- **O TTL da delegação é o do NS na PAI, não o da subzona.** O record `NS` que nasce **dentro** da
+  hosted zone do Route 53 vem com TTL 172800 (default da AWS) e não se mexe nele. Quem governa quão
+  rápido a delegação repropaga é o registro na zona pai — configurar 300 lá é o que permite recriar a
+  subzona sem o edge ficar horas intermitente.
+- **Conferir a delegação com `dig +trace`, não `dig NS`.** O `+trace` mostra o *handoff*: o name
+  server da pai entregando a delegação e o do Route 53 respondendo o SOA. O `dig NS` sozinho pode vir
+  de cache e não prova quem é autoritativo.
+- **Zona pai costuma já ter delegações NS de outros ambientes.** Antes de criar, checar se já existe
+  um `NS <label>` — um record set preexistente colide no apply, e a mensagem de erro do Azure não
+  aponta a causa. Só ADICIONAR ao lado; nunca alterar o do vizinho.
+
 ## Relação com o resto do repo
 
 - **Depende de** `../network/` (a subzona vive na topologia do spoke; o wildcard aponta ao

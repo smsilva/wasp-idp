@@ -65,6 +65,21 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   dois `toset()`. E comparar atributo `list(string)` com literal `["a","b"]` (que é *tuple*) falha com
   *"LHS and RHS values are of different types"* em vez de comparar — `toset()` nos dois lados resolve.
 
+## Scripts de subida
+
+- **A sequência das camadas é executável, não só documentada:** `scripts/up-NN-<camada>` na ordem de
+  dependência, mais `up-all`. Ordem, custos e dependências no `README.md`. Mexer numa camada nova
+  significa acrescentar um `up-NN`, não instruções soltas.
+- **`scripts/lib` é sourced, não executado.** Log com timestamp, `PIPESTATUS[0]`, confirmação e
+  descoberta do bucket vivem lá uma vez só.
+- **Contar mudanças de um plano SALVO não tem `-detailed-exitcode`** (a flag é do `plan`, não do
+  `show`). O caminho é `terraform show -no-color <plano> | grep --count '^  # '`, que é o que permite
+  dizer "nada a mudar" em vez de pedir confirmação para um apply vazio.
+- **`init -reconfigure` é obrigatório aqui:** a mesma árvore serve várias raízes, e um `.terraform`
+  herdado de outra state key faz o Terraform reclamar em vez de reinicializar.
+- **Raiz com dois providers de cloud é testável offline** mockando os dois (`mock_provider "aws"` +
+  `mock_provider "azurerm"`); o `subscription_id` obrigatório do azurerm não é exigido sob mock.
+
 ## Providers `kubernetes` e `helm`
 
 - **Configurar os providers a partir de outputs do módulo do cluster e aplicar tudo num
