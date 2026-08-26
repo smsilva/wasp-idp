@@ -1,0 +1,139 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+root_directory="$(realpath "${this_script_directory}/..")"
+
+show_usage() {
+  cat <<EOF
+
+  Destroi a camada control-plane e guarda o log da execucao.
+
+  Antes de destruir, confere que o Crossplane nao tem recurso gerenciado vivo.
+  Destruir o cluster com XR/managed de pe deixa recurso orfao na AWS: quem
+  sabia apagar era o Crossplane, e ele vai junto com o cluster.
+
+  Ordem da cadeia: control-plane ANTES de network-foundation.
+
+  O log vai para logs/destroy-<timestamp>.log (gitignored).
+
+    Options:
+
+      -h,  --help              Show this help
+      -y,  --yes               Nao perguntar (repassa -auto-approve)
+           --skip-crossplane   Pula a checagem de recursos gerenciados
+           --log-directory     Onde gravar o log (default: ${root_directory}/logs)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --yes
+
+EOF
+}
+
+assume_yes="false"
+skip_crossplane="false"
+log_directory="${root_directory}/logs"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    --skip-crossplane )
+      skip_crossplane="true"
+      ;;
+
+    --log-directory )
+      shift
+      log_directory="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+fail() {
+  echo "ERRO: ${1}" >&2
+  exit 1
+}
+
+set -e
+
+command -v terraform > /dev/null 2>&1 || fail "binario ausente: terraform"
+
+cd "${root_directory}"
+
+[ -d .terraform ] || fail "backend nao inicializado. Rode 'terraform init -backend-config=\"bucket=<bucket>\"'."
+
+if [ "${skip_crossplane}" != "true" ]; then
+  if ! command -v kubectl > /dev/null 2>&1; then
+    fail "kubectl ausente — nao da para conferir os recursos do Crossplane. Use --skip-crossplane se o cluster ja nao existe."
+  fi
+
+  if kubectl cluster-info > /dev/null 2>&1; then
+    # O contexto corrente pode ser o k3d control-plane, e nao o EKS desta camada.
+    # Sem essa checagem, um 'get managed' vazio no cluster errado passa por
+    # "nada vivo" e o destroy segue deixando recurso orfao.
+    cluster_name="$(terraform output -raw cluster_name 2> /dev/null)" || cluster_name=""
+    current_context="$(kubectl config current-context)"
+
+    if [ -n "${cluster_name}" ] && [[ "${current_context}" != *"${cluster_name}"* ]]; then
+      fail "contexto kubectl atual e '${current_context}', que nao casa com o cluster '${cluster_name}'. Rode '$(terraform output -raw kubeconfig_command)' antes, ou use --skip-crossplane."
+    fi
+
+    for kind in managed composite; do
+      # Sem a CRD o get falha; nesse caso o Crossplane nem chegou a subir.
+      alive="$(kubectl get "${kind}" --no-headers 2> /dev/null | wc --lines)"
+
+      if [ "${alive}" -gt 0 ]; then
+        kubectl get "${kind}" >&2
+        fail "${alive} recurso(s) '${kind}' vivos. Apague os XR primeiro e espere o Crossplane deletar na AWS — senao viram orfaos."
+      fi
+    done
+
+    echo "  Crossplane sem recursos gerenciados vivos" >&2
+  else
+    echo "  AVISO: kubectl nao alcanca nenhum cluster — checagem do Crossplane pulada" >&2
+  fi
+fi
+
+mkdir -p "${log_directory}"
+
+timestamp="$(date +%Y%m%d-%H%M%S)"
+log_file="${log_directory}/destroy-${timestamp}.log"
+
+auto_approve=()
+if [ "${assume_yes}" == "true" ]; then
+  auto_approve=("-auto-approve")
+fi
+
+echo "Destruindo. Log: ${log_file}" >&2
+
+terraform destroy -no-color "${auto_approve[@]}" 2>&1 | tee "${log_file}"
+destroy_status="${PIPESTATUS[0]}"
+
+echo "" >&2
+echo "Log: ${log_file}" >&2
+
+if [ "${destroy_status}" -ne 0 ]; then
+  fail "o destroy falhou (exit ${destroy_status}). Recursos remanescentes ficam cobrando — confira 'terraform state list'."
+fi
+
+echo "Camada control-plane destruida. network-foundation continua de pe." >&2

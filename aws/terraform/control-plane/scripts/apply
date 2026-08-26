@@ -1,0 +1,141 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+root_directory="$(realpath "${this_script_directory}/..")"
+
+show_usage() {
+  cat <<EOF
+
+  Aplica a camada control-plane e guarda o log da execucao.
+
+  Sem --plan-file, roda 'terraform plan -out' antes e pede confirmacao — o
+  plano e aplicado exatamente como foi revisado, sem o apply recalcular.
+
+  O log vai para logs/apply-<timestamp>.log (gitignored: a saida do apply
+  carrega account id, ARN e endpoint reais).
+
+    Options:
+
+      -h,  --help            Show this help
+      -p,  --plan-file       Plano ja salvo a aplicar (default: gera um novo)
+      -y,  --yes             Nao perguntar antes de aplicar o plano gerado
+           --log-directory   Onde gravar o log (default: ${root_directory}/logs)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --plan-file control-plane.tfplan
+
+      ${this_script_name} --yes
+
+EOF
+}
+
+plan_file=""
+assume_yes="false"
+log_directory="${root_directory}/logs"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -p | --plan-file )
+      shift
+      plan_file="${1}"
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    --log-directory )
+      shift
+      log_directory="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+fail() {
+  echo "ERRO: ${1}" >&2
+  exit 1
+}
+
+set -e
+
+command -v terraform > /dev/null 2>&1 || fail "binario ausente: terraform"
+
+cd "${root_directory}"
+
+[ -f terraform.tfvars ] || fail "terraform.tfvars ausente. Gere com scripts/generate-tfvars."
+[ -d .terraform ] || fail "backend nao inicializado. Rode 'terraform init -backend-config=\"bucket=<bucket>\"' (o bucket sai do generate-tfvars)."
+
+mkdir -p "${log_directory}"
+
+timestamp="$(date +%Y%m%d-%H%M%S)"
+log_file="${log_directory}/apply-${timestamp}.log"
+
+generated_plan="false"
+
+if [ -z "${plan_file}" ]; then
+  plan_file="${root_directory}/control-plane-${timestamp}.tfplan"
+  generated_plan="true"
+
+  echo "Gerando plano..." >&2
+  terraform plan -no-color -out="${plan_file}" 2>&1 | tee "${log_directory}/plan-${timestamp}.log"
+
+  # tee mascara o exit code do terraform; PIPESTATUS guarda o do primeiro elo.
+  [ "${PIPESTATUS[0]}" -eq 0 ] || fail "o plan falhou. Log: ${log_directory}/plan-${timestamp}.log"
+
+  if [ "${assume_yes}" != "true" ]; then
+    echo "" >&2
+    read -r -p "Aplicar este plano? Recursos cobrados por hora comecam a contar agora. [yes/N] " answer
+    if [ "${answer}" != "yes" ]; then
+      echo "Cancelado. O plano ficou em ${plan_file}." >&2
+      exit 1
+    fi
+  fi
+else
+  [ -f "${plan_file}" ] || fail "plano nao encontrado: ${plan_file}"
+fi
+
+echo "Aplicando. Log: ${log_file}" >&2
+
+# -no-color porque o arquivo salvo com escapes ANSI fica ilegivel; 2>&1 porque
+# o erro do provider sai em stderr e e justamente a parte que interessa depois.
+terraform apply -no-color "${plan_file}" 2>&1 | tee "${log_file}"
+apply_status="${PIPESTATUS[0]}"
+
+if [ "${generated_plan}" == "true" ] && [ "${apply_status}" -eq 0 ]; then
+  rm --force "${plan_file}"
+fi
+
+echo "" >&2
+echo "Log: ${log_file}" >&2
+
+if [ "${apply_status}" -ne 0 ]; then
+  fail "o apply falhou (exit ${apply_status}). Recursos parciais podem ter sido criados — confira o state antes de repetir."
+fi
+
+cat >&2 <<EOF
+
+Proximo passo:
+
+  $(terraform output -raw kubeconfig_command)
+  kubectl get nodes
+
+EOF
