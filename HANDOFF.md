@@ -427,7 +427,13 @@ terraform state list | wc --lines   # 0 = destruída; 39 = de pé (~US$ 0,23/h)
 k3d cluster list                    # esperado: vazio
 ```
 
-Branch de trabalho: `feat/private-ingress-privatelink`.
+**Convenção de branch desta frente: uma por FASE do plano, não por passo** — `feat/private-access-phase-<n>`.
+Os passos de uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então
+uma branch por passo garantiria conflito em cada merge sem ganho de revisão; o código de cada passo já
+fica em arquivos disjuntos. Fase = uma branch = um PR = uma história fechada.
+
+Branch corrente: `feat/private-access-phase-1` (`1.1` e `1.2` feitos, `1.3` entra nela). A
+`feat/private-ingress-privatelink` era do desenho e já está em `main`.
 
 **O trabalho ativo é executar o plano, começando pelo `1.1`** — offline, grátis, com `terraform test`
 de aceite:
