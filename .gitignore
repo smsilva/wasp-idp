@@ -24,6 +24,11 @@ terraform.tfvars
 !terraform.tfvars.example
 # Logs de apply/destroy: carregam account id, ARN e endpoint reais
 logs/
+# Metadata da aplicação SAML do Identity Center: identifica a instância de quem roda.
+# Baixado do console — a API CreateApplication não cria aplicação SAML. A fixture de teste
+# em tests/fixtures/ É versionada: é sintética e o provider exige >= 1000 caracteres.
+saml-metadata.xml
+!**/tests/fixtures/saml-metadata.xml
 
 # Andaime de contexto derivado de docs versionadas — nao versionar (segunda fonte de verdade)
 docs/superpowers/context/

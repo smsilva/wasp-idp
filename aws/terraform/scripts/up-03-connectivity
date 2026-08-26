@@ -1,0 +1,150 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+source "${this_script_directory}/lib"
+
+show_usage() {
+  cat <<EOF
+
+  Camada 3 — conectividade do hub. Cria o Transit Gateway (association e
+  propagation default DESLIGADOS, que e o que torna isolamento por tenant
+  possivel), o certificado do endpoint no ACM validado por DNS na subzona da
+  camada 2, o provider SAML, e o Client VPN endpoint com associacao, rota do
+  supernet e authorization rule por grupo.
+
+  NIVEL T1: ~US\$ 0,15/h (~US\$ 110/mes) mais US\$ 0,05/h por conexao ativa.
+  Fica de pe DURANTE O DIA de proposito e e destruida a noite — nao presuma
+  que e residuo. Derrube com connectivity/us-east-1/scripts/destroy.
+
+  DEPENDE de:
+
+    camada 1  a VPC hub, lida por tag (o endpoint nasce nela)
+    camada 2  a subzona delegada (o certificado valida por DNS nela)
+
+    E de um passo de CONSOLE: a aplicacao SAML no Identity Center. A API
+    CreateApplication so cria aplicacao OAuth 2.0 customizada, entao SAML nao
+    e Terraform. O generate-tfvars imprime o roteiro se o metadata faltar.
+
+    Options:
+
+      -h,  --help           Show this help
+      -y,  --yes            Nao perguntar antes de aplicar
+      -g,  --group          Grupo do Identity Center. Repetivel.
+                             Default: platform-admins
+      -l,  --label          Rotulo da subzona (default: nonprod)
+           --state-bucket   Nome do bucket (default: tfstate-<organization-id>)
+           --org-profile    Profile que le Organization e Identity Center
+                             (default: personal)
+      -f,  --force-tfvars   Regera o terraform.tfvars mesmo se existir
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --yes --group platform-admins --group cliente-a
+
+EOF
+}
+
+assume_yes="false"
+org_profile="personal"
+label="nonprod"
+force_tfvars="false"
+groups=()
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    -g | --group )
+      shift
+      groups+=("${1}")
+      ;;
+
+    -l | --label )
+      shift
+      label="${1}"
+      ;;
+
+    --state-bucket )
+      shift
+      STATE_BUCKET="${1}"
+      ;;
+
+    --org-profile )
+      shift
+      org_profile="${1}"
+      ;;
+
+    -f | --force-tfvars )
+      force_tfvars="true"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+require_tools aws jq terraform
+
+root="${terraform_directory}/connectivity/us-east-1"
+[ -d "${root}" ] || fail "raiz ausente: ${root}"
+
+step "Camada 3 — conectividade (TGW + Client VPN, ~US\$ 0,15/h)"
+
+if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
+  log "gerando terraform.tfvars"
+
+  generate_options=(--force --label "${label}" --org-profile "${org_profile}")
+  for group in "${groups[@]}"; do
+    generate_options+=(--group "${group}")
+  done
+
+  "${root}/scripts/generate-tfvars" "${generate_options[@]}"
+else
+  log "terraform.tfvars ja existe (use --force-tfvars para regerar — os grupos autorizados mudam com o 4.1)"
+fi
+
+state_bucket="$(discover_state_bucket "${org_profile}")"
+
+terraform_init "${root}" "${state_bucket}"
+terraform_plan_and_apply "${root}" "connectivity" "${assume_yes}"
+
+endpoint_dns="$(cd "${root}" && terraform output -raw client_vpn_dns_name 2> /dev/null)" || endpoint_dns=""
+
+if [ -n "${endpoint_dns}" ]; then
+  cat >&2 <<EOF
+
+Endpoint: ${endpoint_dns}
+
+O DNS acima MUDA a cada recriacao desta camada — nao salve .ovpn, reexporte:
+
+  aws ec2 export-client-vpn-client-configuration \\
+    --client-vpn-endpoint-id $(cd "${root}" && terraform output -raw client_vpn_endpoint_id 2> /dev/null) \\
+    --profile network --region us-east-1 --output text > /tmp/hub.ovpn
+
+  aws-vpn-client import-profile --profile-name hub --config-path /tmp/hub.ovpn
+  aws-vpn-client connect --profile-name hub
+
+Lembrete: ~US\$ 0,15/h enquanto de pe. Derrube com
+connectivity/us-east-1/scripts/destroy.
+
+EOF
+fi

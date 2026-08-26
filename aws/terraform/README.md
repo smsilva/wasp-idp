@@ -14,25 +14,32 @@ Um script por camada em `scripts/`, numerado pela ordem. Cada um é idempotente 
 cd aws/terraform
 
 ./scripts/up-all --base-domain <domínio>     # camadas 00 → 02, centavos por mês
+./scripts/up-all --with-connectivity         # inclui a 03 (~US$ 110/mês)
 ./scripts/up-all --with-control-plane        # inclui a 04 (~US$ 165/mês)
 ```
 
 | # | Script | Raiz | Depende de | Custo/mês | Nível |
 |---|---|---|---|---|---|
 | — | — | *aprovar região na SCP* | — | zero | **pré-requisito, não é Terraform** |
+| — | — | *aplicação SAML no Identity Center* | — | zero | **pré-requisito da 03, é console** |
 | 00 | `up-00-state-backend` | `state-backend/` | — | centavos | permanente |
 | 01 | `up-01-network-foundation` | `network-foundation/<região>/` | 00 | **zero** | permanente |
 | 02 | `up-02-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
-| 03 | `up-03-connectivity` | `connectivity/` | 00, 01 | ~US$ 110 | T1 — **raiz não existe ainda** |
-| 04 | `up-04-control-plane` | `control-plane/` | 00, 01 (e 03 quando existir) | ~US$ 165 | T2 |
+| 03 | `up-03-connectivity` | `connectivity/<região>/` | 00, 01, 02 | ~US$ 110 | T1 |
+| 04 | `up-04-control-plane` | `control-plane/` | 00, 01 (e 03 para apply com API fechada) | ~US$ 165 | T2 |
 
 **A ordem não é preferência.** 00 antes de tudo porque nenhuma outra raiz inicializa o backend sem
-o bucket; 01 antes de 04 porque a 04 lê a VPC hub por `tag:Name`; 02 é independente das outras, mas
-é pré-requisito de certificado e ingress adiante. Níveis de permanência em
+o bucket; 01 antes de 04 porque a 04 lê a VPC hub por `tag:Name`; 02 antes de 03 porque o
+certificado do endpoint da VPN valida por DNS na subzona que a 02 delega. Níveis de permanência em
 `docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md`.
 
-**A camada 04 não entra no `up-all` por default.** As três primeiras somam centavos; a quarta custa
-~US$ 165/mês. Incluir exige `--with-control-plane`, de propósito.
+**Nem a 03 nem a 04 entram no `up-all` por default.** As três primeiras somam centavos; as duas
+últimas somam ~US$ 275/mês. Incluir exige `--with-connectivity` / `--with-control-plane`, de
+propósito.
+
+**A 03 é o primeiro nível que fica de pé de propósito e é derrubado à noite** — T1. Não presumir
+resíduo e destruir; e não esquecer ligada. `connectivity/us-east-1/scripts/destroy` diz em voz alta
+o que se perde antes de confirmar.
 
 ### Aprovar a região vem antes, e não é Terraform
 
@@ -45,13 +52,19 @@ Sem isso, um `apply` fora das regiões aprovadas falha no primeiro `Create*` com
 para a Organization inteira — não há como liberar região só numa conta por essa via. O `up-01` faz
 um `describe-vpcs` barato para antecipar o deny para antes de qualquer escrita.
 
-### Três armadilhas que os scripts pegam antes de tocar em nada
+### Armadilhas que os scripts pegam antes de tocar em nada
 
 | Armadilha | Onde | O que o script faz |
 |---|---|---|
 | Bucket de state inexistente | `up-00` | **Para** e imprime o bootstrap manual (state local → apply → `init -migrate-state`). A raiz guarda o próprio state no bucket que gerencia; automatizar às cegas um passo de uma vez só esconde o problema |
-| Região negada pela SCP | `up-01` | `describe-vpcs` antes do primeiro `Create*` |
+| Região negada pela SCP | `up-01`, `up-03` | `describe-vpcs` antes do primeiro `Create*` |
 | Zona pai já tem NS para o label | `up-02` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
+| Subzona ausente ou ambígua | `up-03` | **Recusa.** Sem a camada 02 o certificado não tem onde validar; com duas subzonas `<label>.*` não se sabe para qual emitir |
+| Hub sem subnet privada | `up-03` | **Recusa.** Sem associação o endpoint fica em `pending-associate` para sempre — sobe, cobra e não conecta |
+| Metadata SAML ausente | `up-03` | **Para e imprime o roteiro de console.** É o passo mais fácil de esquecer justamente por não ser Terraform |
+| Metadata SAML curto demais | `up-03` | **Recusa** abaixo de 1000 caracteres: o provider exige isso, e arquivo curto quase sempre é página de erro salva por engano |
+| Nome de grupo no lugar do id | `up-03` | Traduz nome → UUID pelo Identity Center, e a variável do Terraform recusa o que não for UUID. Nome ali dá túnel que sobe e não alcança nada, com erro que não diz por quê |
+| Attachment de fora do state no TGW | `destroy` da 03 | **Recusa.** A AWS também recusa deletar TGW com attachment vivo, mas o erro dela chega depois de o destroy ter apagado o endpoint e o certificado |
 
 ### O encanamento comum fica em `scripts/lib`
 
@@ -80,6 +93,7 @@ inteira é rotina, derrubar nunca é. A `control-plane` tem `scripts/destroy` co
 | `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | **aplicada** |
 | `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, ESO, ArgoCD, Crossplane | **aplicada** |
 | `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | **aplicada** |
+| `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML | **escrita, não aplicada** |
 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
 `t3.medium`, três Pod Identities e os três charts. Prova o que estava em aberto no desenho — os

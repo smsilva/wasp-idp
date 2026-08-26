@@ -1,0 +1,169 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+root_directory="$(realpath "${this_script_directory}/..")"
+
+show_usage() {
+  cat <<EOF
+
+  Destroi a camada connectivity (TGW + Client VPN) e guarda o log.
+
+  Esta camada e destruida DE PROPOSITO ao fim do dia — nivel T1, ~US\$ 0,15/h.
+  Nao ha prevent_destroy em nada aqui; a protecao e este script dizer em voz
+  alta o que se perde antes de confirmar.
+
+  Antes de destruir, RECUSA se houver attachment no TGW que nao seja deste
+  state. A AWS ja recusa deletar TGW com attachment vivo, mas o erro dela
+  aparece depois de o destroy ter apagado meia camada — o certificado e o
+  endpoint iriam embora e o TGW ficaria, cobrando e sem uso.
+
+  Ordem da cadeia: control-plane ANTES desta (o attachment da spoke vive no
+  state da control-plane).
+
+    Options:
+
+      -h,  --help              Show this help
+      -y,  --yes               Nao perguntar (repassa -auto-approve)
+           --skip-attachments  Pula a checagem de attachment
+           --log-directory     Onde gravar o log (default: ${root_directory}/logs)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --yes
+
+EOF
+}
+
+assume_yes="false"
+skip_attachments="false"
+log_directory="${root_directory}/logs"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    --skip-attachments )
+      skip_attachments="true"
+      ;;
+
+    --log-directory )
+      shift
+      log_directory="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+fail() {
+  echo "ERRO: ${1}" >&2
+  exit 1
+}
+
+set -e
+
+for tool in aws terraform; do
+  command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
+done
+
+cd "${root_directory}"
+
+[ -d .terraform ] || fail "backend nao inicializado. Rode 'terraform init -backend-config=\"bucket=<bucket>\"'."
+
+transit_gateway_id="$(terraform output -raw transit_gateway_id 2> /dev/null)" || transit_gateway_id=""
+
+if [ "${skip_attachments}" != "true" ] && [ -n "${transit_gateway_id}" ]; then
+  profile="$(terraform output -raw aws_profile 2> /dev/null)" || profile="network"
+
+  attachments="$(aws ec2 describe-transit-gateway-attachments \
+    --profile "${profile}" \
+    --region us-east-1 \
+    --filters "Name=transit-gateway-id,Values=${transit_gateway_id}" "Name=state,Values=available,pending,modifying" \
+    --query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,ResourceType,ResourceId,State]' \
+    --output text 2> /dev/null)" || attachments=""
+
+  attachment_count="$(echo "${attachments}" | grep --count . || true)"
+
+  if [ "${attachment_count}" -gt 0 ]; then
+    echo "" >&2
+    echo "${attachments}" >&2
+    echo "" >&2
+    fail "${attachment_count} attachment(s) vivo(s) no TGW ${transit_gateway_id}, e nenhum deles e desta camada. Destrua a camada dona deles primeiro (a spoke: control-plane/scripts/destroy) ou use --skip-attachments sabendo que o destroy vai falhar no TGW."
+  fi
+
+  echo "  TGW sem attachment de fora deste state" >&2
+fi
+
+# O que se perde, dito antes de perguntar. O ponto nao e assustar: e que duas destas
+# coisas voltam diferentes na recriacao, e quem confirma tem de saber.
+cat >&2 <<EOF
+
+Isto vai embora:
+
+  TGW ${transit_gateway_id:-<sem output>}
+    e a route table do hub. Recriar da IDs NOVOS, e a camada 4 le o TGW por
+    tag — ela nao guarda o id, entao nao quebra.
+
+  Client VPN endpoint
+    o DNS dele MUDA na recriacao. Qualquer .ovpn salvo fica invalido; use
+    'vpn config' para reexportar em vez de reaproveitar arquivo.
+
+  Certificado do ACM e o registro de validacao
+    a subzona (camada 2) FICA — ela e T0 e tem prevent_destroy. O certificado
+    e reemitido no proximo apply, e a espera da validacao leva alguns minutos.
+
+  Authorization rules
+    a politica de quem alcanca o que. Reaparece do terraform.tfvars.
+
+Isto NAO vai embora: subzona de DNS, VPC hub, bucket de state.
+
+EOF
+
+if [ "${assume_yes}" != "true" ]; then
+  if [ ! -t 0 ]; then
+    fail "sem terminal para confirmar. Use --yes se e de proposito."
+  fi
+
+  read -r -p "Destruir a camada connectivity? [yes/N] " answer
+  [ "${answer}" == "yes" ] || fail "cancelado."
+fi
+
+mkdir --parents "${log_directory}"
+
+timestamp="$(date +%Y%m%d-%H%M%S)"
+log_file="${log_directory}/destroy-${timestamp}.log"
+
+auto_approve=("-auto-approve")
+
+echo "Destruindo. Log: ${log_file}" >&2
+
+terraform destroy -no-color "${auto_approve[@]}" 2>&1 | tee "${log_file}"
+# tee sempre devolve 0; PIPESTATUS guarda o exit code do terraform.
+destroy_status="${PIPESTATUS[0]}"
+
+echo "" >&2
+echo "Log: ${log_file}" >&2
+
+if [ "${destroy_status}" -ne 0 ]; then
+  fail "o destroy falhou (exit ${destroy_status}). O TGW e o endpoint continuam cobrando — confira 'terraform state list'."
+fi
+
+echo "Camada connectivity destruida. dns e network-foundation continuam de pe." >&2

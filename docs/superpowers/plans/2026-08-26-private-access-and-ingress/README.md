@@ -43,8 +43,8 @@ passar de 9 passos, padronizar a fase inteira com dois dígitos (`2.01`).
 
 | Nível | O que | Custo | Ciclo |
 |---|---|---|---|
-| **T0** | `state-backend`, `network-foundation` (2 regiões), raiz `dns/`, cert de servidor no ACM | ~zero (ACM importado é grátis) | permanente |
-| **T1** | TGW + Client VPN endpoint + associação | ~US$ 0,15/h ≈ US$ 110/mês | de pé durante o dia, destruído à noite |
+| **T0** | `state-backend`, `network-foundation` (2 regiões), raiz `dns/` | ~zero | permanente |
+| **T1** | TGW + Client VPN endpoint + associação + **certificado do ACM** | ~US$ 0,15/h ≈ US$ 110/mês (certificado público é grátis) | de pé durante o dia, destruído à noite |
 | **T2** | spoke + EKS + charts + attachment + `tgw-rt-<spoke>` + NLB interno | ~US$ 180/mês | sobe, valida, desce |
 | **T3** | ALB, segunda spoke mínima, VPN de cliente (AWS) + VPN Gateway (Azure) | ~US$ 0,27/h no pico | por fatia |
 
@@ -52,9 +52,13 @@ passar de 9 passos, padronizar a fase inteira com dois dígitos (`2.01`).
 `destroy` dizer em voz alta o que se perde. `prevent_destroy` fica no bucket de state e na hosted
 zone, onde destruição nunca é a intenção.
 
-**O material de client não muda entre recriações** (os certificados são T0), mas **o DNS do endpoint
-muda**. Daí um requisito duro do script: `vpn config` exporta a configuração do endpoint corrente a
-cada uso; nunca cachear `.ovpn`.
+**O material de client não muda entre recriações, mas o DNS do endpoint muda.** Daí um requisito duro
+do script: `vpn config` exporta a configuração do endpoint corrente a cada uso; nunca cachear `.ovpn`.
+
+O certificado saiu do T0 e entrou no T1 no `2.2`, e o argumento sobrevive melhor assim: com
+**certificado público do ACM**, o que o `.ovpn` embute é a cadeia da CA da Amazon, estável entre
+emissões. A estabilidade que importava vinha da CA, não da vida longa do recurso — então reemitir todo
+dia não custa nada ao operador, só alguns minutos de validação por DNS em cada apply.
 
 ## Fronteira de state
 
@@ -62,6 +66,7 @@ cada uso; nunca cachear `.ovpn`.
 |---|---|---|---|
 | Hosted zone `nonprod.` + delegação NS no Azure | `network` + Azure | permanente | `dns/` |
 | TGW, `tgw-rt-hub` | `network` | permanente | `connectivity/` |
+| Certificado do endpoint + registro de validação | `network` | do endpoint | `connectivity/` |
 | Client VPN endpoint, associação, rota do supernet, SAML provider | `network` | permanente | `connectivity/` |
 | Authorization rules por grupo | `network` | por spoke, mas é config | `connectivity/` (lista em variável) |
 | ALB + listener `:443` | `network` | permanente | `connectivity/` |

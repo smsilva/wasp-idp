@@ -18,12 +18,13 @@ show_usage() {
     01  network-foundation   VPC hub; a 04 le essa VPC por tag
     02  dns                  independente das outras, mas pre-requisito de
                              certificado e ingress mais adiante
-    03  connectivity         AINDA NAO EXISTE (TGW + Client VPN, fase 2 do plano)
+    03  connectivity         TGW + Client VPN; depende da 01 e da 02, e de um
+                             passo de console (aplicacao SAML)
     04  control-plane        depende da 01
 
-  CUSTO: as camadas 00, 01 e 02 somam centavos. A 04 custa ~US\$ 165/mes
-  enquanto de pe. Por isso ela NAO entra por default — passe --with-control-plane
-  de proposito.
+  CUSTO: as camadas 00, 01 e 02 somam centavos. A 03 custa ~US\$ 110/mes e a 04
+  ~US\$ 165/mes enquanto de pe. Por isso NENHUMA das duas entra por default —
+  passe --with-connectivity e --with-control-plane de proposito.
 
   Por default roda ate a 02, que e o estado de repouso barato desta PoC.
 
@@ -32,6 +33,7 @@ show_usage() {
       -h,  --help                Show this help
       -y,  --yes                 Nao perguntar antes de cada apply
       -d,  --base-domain         Repassado a 02 na primeira execucao
+           --with-connectivity   Inclui a camada 03 (~US\$ 110/mes)
            --with-control-plane  Inclui a camada 04 (~US\$ 165/mes)
            --state-bucket        Repassado a todas
            --org-profile         Repassado a todas (default: personal)
@@ -40,13 +42,14 @@ show_usage() {
 
       ${this_script_name} --base-domain exemplo.com
 
-      ${this_script_name} --yes --with-control-plane
+      ${this_script_name} --yes --with-connectivity --with-control-plane
 
 EOF
 }
 
 assume_yes="false"
 base_domain=""
+with_connectivity="false"
 with_control_plane="false"
 passthrough=()
 
@@ -64,6 +67,10 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     -d | --base-domain )
       shift
       base_domain="${1}"
+      ;;
+
+    --with-connectivity )
+      with_connectivity="true"
       ;;
 
     --with-control-plane )
@@ -105,11 +112,12 @@ if [ -n "${base_domain}" ]; then
 fi
 up-02-dns "${dns_options[@]}"
 
-if [ -d "${terraform_directory}/connectivity" ]; then
+if [ "${with_connectivity}" == "true" ]; then
   up-03-connectivity "${common[@]}"
 else
-  step "Camada 3 — connectivity: raiz ainda nao existe, pulada"
-  log "TGW + Client VPN sao a fase 2 do plano em docs/superpowers/plans/2026-08-26-private-access-and-ingress/"
+  step "Camada 3 — connectivity: pulada (~US\$ 110/mes)"
+  log "inclua com --with-connectivity quando for de proposito"
+  log "e derrube ao fim do dia: connectivity/us-east-1/scripts/destroy"
 fi
 
 if [ "${with_control_plane}" == "true" ]; then

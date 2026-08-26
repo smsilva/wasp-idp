@@ -92,15 +92,17 @@ portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por 
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
 | `control-plane` | `cicd` | `control-plane/` | ~US$ 165 quando de pé | **destruída** (state com 0 recursos) |
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.`, delegação verificada |
+| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 110 quando de pé | **escrita, não aplicada** — T1 |
 
 Bucket de state: `tfstate-o-e4r8ndteju`, na conta `network`. Nenhum cluster k3d de pé.
 
-**Subida por camada:** `aws/terraform/scripts/up-NN-<camada>`, numerados pela ordem de dependência, mais `up-all`. Sequência, custos e as três armadilhas que os scripts pegam antes de tocar em nada estão em `aws/terraform/README.md`. A camada 04 (`control-plane`, ~US$ 165/mês) **não** entra no `up-all` por default.
+**Subida por camada:** `aws/terraform/scripts/up-NN-<camada>`, numerados pela ordem de dependência, mais `up-all`. Sequência, custos e as nove armadilhas que os scripts pegam antes de tocar em nada estão em `aws/terraform/README.md`. As camadas 03 (`connectivity`, ~US$ 110/mês) e 04 (`control-plane`, ~US$ 165/mês) **não** entram no `up-all` por default — exigem `--with-connectivity` / `--with-control-plane`.
 
-**Atenção para as próximas sessões:** o plano ativo introduz um nível **T1 que fica de pé de
-propósito** (TGW + Client VPN, ~US$ 0,15/h ≈ US$ 110/mês). Quando existir, **não presumir resíduo e
+**Atenção para as próximas sessões:** a camada 03 é um nível **T1 que fica de pé de propósito**
+(TGW + Client VPN, ~US$ 0,15/h ≈ US$ 110/mês). Quando estiver aplicada, **não presumir resíduo e
 destruir** — a regra "nada fica de pé entre sessões" passa a ter exceção declarada. Ele é derrubado
-ao fim do dia, não ao fim da tarefa.
+ao fim do dia, não ao fim da tarefa. E não esquecer ligada:
+`connectivity/us-east-1/scripts/destroy`.
 
 ### Camada 1 — VPCs hub (custo recorrente zero)
 
@@ -145,19 +147,25 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **fase 1 completa, portão `2.1` passado**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.2` escrita, não aplicada**)
 
-**Último passo:** `2.1`, o portão do client da AWS VPN — **passou**, e mudou uma premissa do plano (ver
-`Achados a não reaprender` → Rede/VPN). Antes dele, a fase 1 inteira: `1.1` (teste das tags do LBC),
-`1.2` (`/32` no endpoint da API) e `1.3` (camada de DNS aplicada, delegação verificada). A sequência de
-provisionamento virou script por camada em `aws/terraform/scripts/`.
+**Último passo:** `2.2` — a raiz `aws/terraform/connectivity/us-east-1/` escrita e verde offline (22
+testes, 14 mutações, 13 capturadas), mais `up-03-connectivity` e os scripts da raiz. Antes dela, o
+portão `2.1` (client da AWS VPN) e a fase 1 inteira.
 
-**Próximo passo: `2.2`** — a raiz `connectivity/us-east-1/`, primeiro recurso que **cobra por hora**
-(~US$ 0,15/h, nível T1). Nada de client bloqueia mais; o que falta ali é AWS: TGW com association e
-propagation default desligados, cert de servidor autoassinado no ACM, `aws_iam_saml_provider`,
-endpoint do Client VPN, associação a subnet privada do hub, rota para `10.0.0.0/12`, authorization
-rules por grupo. **Dependência dura fora do Terraform:** a aplicação SAML customizada no Identity
-Center, com `memberOf` carregando **IDs** de grupo.
+**Próximo passo: aplicar o `2.2`, e ele tem um pré-requisito de console.** A aplicação SAML no
+Identity Center **não pode ser Terraform** — a API `CreateApplication` só cria aplicação OAuth 2.0
+customizada. O roteiro (ACS URL, audience, mapeamento de `Subject` e `memberOf`) está em
+`02-private-access.md`, e o `generate-tfvars` para e imprime se o metadata faltar.
+
+```bash
+cd aws/terraform
+./scripts/up-03-connectivity          # ~US$ 0,15/h a partir daqui
+```
+
+**Aceite do `2.2`:** túnel sobe com identidade do Identity Center, IP vindo de `100.64.0.0/22`, target
+network `associated`, e o **login SAML completa** — este último veio do `2.1`, que não podia prová-lo
+sem endpoint.
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
 uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
@@ -370,7 +378,16 @@ nenhum hoje.
 - **`aws-vpn-client connect` sob SAML abre o navegador sozinho?** Não verificado — o `--auth-user-pass`
   do CLI é usuário/senha, e a tentativa contra endpoint sintético morreu na validação do CA antes de
   tentar o túnel. Se **não** abrir, `connect` volta a depender da GUI para o handshake e o script `vpn`
-  fica com `config`/`status` só. **Responde-se no `2.2`**, e é o que decide o desenho do script.
+  fica com `config`/`status` só. **Responde-se no apply do `2.2`**, e é o que decide o desenho do script.
+- **O certificado do endpoint tem nome (`vpn.<subzona>`) diferente do hostname de conexão.** O
+  raciocínio é que o client usa `remote-cert-tls server`, que confere extended key usage e não nome, e
+  que `verify-x509-name` não entra na configuração exportada. **Não verificado contra um túnel real** —
+  se o handshake recusar por nome, a saída é voltar ao autoassinado importado (a decisão descartada) ou
+  acrescentar o hostname do endpoint ao SAN, que não se conhece antes de criar o endpoint. Risco do
+  apply do `2.2`.
+- **Quantas subnets privadas o hub tem por AZ, e o custo da associação.** A AWS cobra por associação de
+  target network, então associar as duas subnets privadas dobra essa parcela em troca de redundância de
+  AZ. O plano assume duas; se o custo apertar, uma resolve para PoC.
 - **Zona privada do endpoint do EKS** não é output do `aws_eks_cluster` e é recriada a cada provisão —
   o lookup por hostname é frágil. Plano B (Resolver inbound endpoint) custa ~US$ 0,25/h. Risco do
   `2.4`.
@@ -403,7 +420,8 @@ nenhum hoje.
    inicial dele. O achado veio da leitura do desenho de referência, não do código, e sobreviveu a
    duas sessões de handoff sem ninguém abrir o `main.tf`. Fechado no `1.1` com o teste que faltava
    (`src/network/tests/tags.tftest.hcl`). **Lição: achado sobre módulo do repo se confere no módulo.**
-2. **`src/network` não tem nada de TGW** — *intentional* até a decisão de VPN; agora é lacuna: falta
+2. **`src/network` não tem nada de TGW** — *intentional*. O TGW em si passou a existir na camada 03
+   (`connectivity/`), com association e propagation default desligados. O que falta é o lado do spoke:
    attachment, associação/propagação em `tgw-rt-<spoke>` e rotas para CIDRs remotos. **É o `2.3`.**
 3. **Endpoint da API do EKS público para `0.0.0.0/0`** — *era* `public_access_cidrs = []`, e vazio
    significa o mundo. **Fechado no `1.2` no que dá para fechar offline:** a variável do root não tem
@@ -447,15 +465,28 @@ nenhum hoje.
     genérico: se o consumidor tiver o valor **fixo no código** igual ao injetado, a asserção passa sem
     haver fio. Comprovado no `1.3` — a mutação que colava name servers à mão passou **verde**. Corrigido
     ali com dois runs de valores e tamanhos diferentes. **Auditar o resto do repo.**
-17. **`up-03-connectivity` não existe** — *intentional*: a raiz `connectivity/` é a fase 2. O `up-all`
-    a pula avisando, então a sequência não mente sobre o que entregou.
+17. ~~**`up-03-connectivity` não existe**~~ — **RETIRADO:** existe, e a raiz `connectivity/us-east-1/`
+    também. Fora do `up-all` por default (`--with-connectivity`), pelo mesmo critério de custo da 04.
 18. **Sem `status`/`platform-status` em `aws/terraform/scripts/`** — *unexpected*: não há como
     perguntar "o que está de pé e quanto custa por hora". Fica perigoso na fase 2, que introduz um
     nível T1 que fica de pé **de propósito** e não pode ser confundido com resíduo.
 19. **Sob `mock_provider`, data source de provider devolve valor sintético** — *intentional*
     (limitação do framework): assertion sobre JSON computado pelo provider passa sem verificar nada.
-    Regra: policy document via `jsonencode`. **Auditar se há outro lugar no repo com a mesma
+    Regra: policy document via `jsonencode`, ou `override_data` para tornar a ligação real (é o que a
+    camada 03 faz com VPC, subnets e hosted zone). **Auditar se há outro lugar no repo com a mesma
     armadilha.**
+20. **Ordenação por referência não é testável offline** — *intentional*, e é limitação de framework,
+    não do código: o endpoint do Client VPN referencia
+    `aws_acm_certificate_validation.vpn.certificate_arn` **para nascer depois** da validação, mas esse
+    ARN é idêntico ao de `aws_acm_certificate.vpn.arn` — a mutação que troca uma referência pela outra
+    **passa verde** (verificada). Está escrito no teste em vez de escondido. Só o apply pega: o sintoma
+    é endpoint criado com certificado `PENDING_VALIDATION`, e aparece na conexão do operador.
+21. **`connection_log_options.enabled = false` no endpoint do Client VPN** — *intentional*: logging por
+    conexão exige log group, que é custo e retenção a decidir. O que se perde é a trilha de quem
+    conectou quando. Hardening, não operabilidade.
+22. **Portal self-service do Client VPN não configurado** — *intentional*: exige uma **segunda**
+    aplicação SAML no Identity Center. Vale para a demo (a pessoa baixa a própria configuração em vez
+    de receber arquivo por e-mail); fora por ora.
 
 ## How to Resume
 
@@ -524,13 +555,14 @@ reais.
 `public_access_cidrs` **sem default**, então qualquer `plan` falha pedindo a variável até rodar
 `./scripts/generate-tfvars --force`. É a falha-fechado funcionando, não regressão.
 
-Regressão offline (**64 testes**, 12 diretórios, 0 falhas — a lista abaixo inclui `dns`):
+Regressão offline (**86 testes**, 13 diretórios, 0 falhas — a lista abaixo inclui `connectivity`):
 
 ```bash
 cd aws/terraform
 for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup \
          src/helm/modules/external-secrets src/helm/modules/argo-cd src/helm/modules/crossplane \
-         network-foundation/us-east-1 network-foundation/us-west-2 control-plane dns; do
+         network-foundation/us-east-1 network-foundation/us-west-2 control-plane dns \
+         connectivity/us-east-1; do
   (cd "${m}" && terraform init -backend=false >/dev/null && terraform test)
 done
 ```
@@ -628,6 +660,31 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
   usuário/senha, não SAML, e a tentativa contra endpoint sintético morreu na validação antes do túnel.
   Responde-se no `2.2`. As portas que o client reserva para SAML são **8096–8115** (não 35001).
 - **`client_cidr_block` precisa de /22 ou maior**, sem sobreposição — daí `100.64.0.0/22`.
+- **`transit_gateway_configuration` no endpoint do Client VPN é armadilha para quem destrói a camada
+  todo dia.** O bloco existe e pareceria mais direto que associar subnet, mas o attachment que ele cria
+  leva *"several hours"* para deletar, o provider **não espera**, e isso **impede deletar o TGW**.
+  Associação por subnet é o caminho — e é o que põe as ENIs na VPC hub, de onde o resolver da VPC é
+  alcançável (o `2.4` depende disso).
+- **Subnet privada serve como target network.** A exigência de rota para o IGW é dos *Prerequisites* do
+  tutorial de mutual auth, onde o túnel É o caminho de internet. Os requisitos de target network pedem
+  `/27` com 20 IPs livres e uma subnet por AZ. **E a AWS acrescenta a rota local da VPC sozinha** na
+  associação — a rota que se escreve é a do supernet, e as duas convivem por prefixo mais longo.
+- **Aplicação SAML do Identity Center não pode ser Terraform.** *"The `CreateApplication` API only
+  supports custom OAuth 2.0 applications. Creation of 3rd party SAML or OAuth 2.0 applications require
+  setup to be done through the associated app service or AWS console."* O metadata XML entra por
+  arquivo; o `generate-tfvars` da camada 03 imprime o roteiro quando falta.
+- **O certificado do endpoint pode ser público do ACM, validado por DNS** — não precisa ser
+  autoassinado importado, e isso ficou possível quando a camada de DNS entregou a subzona. Compra duas
+  coisas: **nenhuma chave privada em state nem em disco**, e rotação automática que o Client VPN
+  acompanha (*"whether through ACM auto-rotation..."*). O nome do certificado **não** casa com o
+  hostname do endpoint, e não precisa: o client usa `remote-cert-tls server`, que confere extended key
+  usage, não nome.
+- **O `NameID` da assertion tem de ser e-mail.** Exigência escrita da doc de federated authentication,
+  junto com: assertion e resposta assinadas, um IdP só por endpoint, sem single logout, e as portas do
+  handshake reservadas na máquina do cliente.
+- **As portas do handshake SAML divergem entre duas páginas da AWS:** o guia do usuário Linux diz
+  `8096–8115`, o guia do administrador diz `35001`. Não afirmar uma sem conferir qual guia; o ACS URL da
+  aplicação SAML usa `35001`.
 - **Azure VPN Gateway leva 30–45 min para provisionar**; a subnet tem de se chamar literalmente
   `GatewaySubnet`; ASN do lado Azure é **65515**; inside CIDRs em `169.254.21.0–169.254.22.255`, `/30`
   cada.
@@ -649,10 +706,13 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [x] **`2.1` (PORTÃO)** — **passou.** Client 6.0.1 instalado, GUI abre, CLI gerencia perfil SAML sem
       `sudo`. Derrubou a premissa de que `connect` não é scriptável. Branch
       `feat/private-access-phase-2`, a partir de `main` já com a fase 1 mergeada.
-- [ ] **`2.2`** — **é por aqui que se começa**, e é o primeiro recurso que cobra por hora (~US$ 0,15/h).
-      Raiz `connectivity/us-east-1/`. Ao criar, acrescentar `scripts/up-03-connectivity` junto — o
-      `up-all` já a chama se existir. Pré-requisito **fora do Terraform:** aplicação SAML customizada
-      no Identity Center.
+- [x] **`2.2`** — raiz `connectivity/us-east-1/` escrita: TGW isolado por default, cert público do ACM
+      validado por DNS, provider SAML, endpoint, associação por AZ, rota do supernet, authorization rule
+      por grupo. Mais `up-03-connectivity`, `generate-tfvars` e `destroy`. **22 testes, 13/14 mutações.**
+- [ ] **Aplicar o `2.2`** — **é por aqui que se começa**, e é o primeiro recurso que cobra por hora
+      (~US$ 0,15/h). Pré-requisito de **console**: criar a aplicação SAML no Identity Center e salvar o
+      metadata em `aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored). Roteiro em
+      `02-private-access.md`.
 - [ ] **`2.3`–`2.5`** — attachment, DNS privado, fechar a API.
 - [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
       laptop segue funcionando, e a API recusa de outro IP.
@@ -666,7 +726,7 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [ ] Acrescentar `vpn` a `aws/terraform/scripts/`: `config` exporta e importa o perfil, `status`
       confere na ordem em que quebra, `connect` chama `aws-vpn-client connect` — **scriptável**, ao
       contrário do que o plano assumia.
-- [ ] `up-03-connectivity` nasce com a raiz `connectivity/`. O `up-all` já a pula avisando.
+- [x] `up-03-connectivity` nasceu com a raiz `connectivity/`, fora do `up-all` por default.
 - [ ] Abrir branch dedicada em `wasp-gitops` para os manifestos do lado cluster; path interno decidido
       na implementação.
 
@@ -703,6 +763,51 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       ligação. Duas com valores diferentes provam. Descoberto no `1.3`.
 
 ## Completed Work
+
+### `2.2` — a raiz `connectivity/` escrita, e três desvios que a execução impôs (2026-08-26)
+
+TGW isolado por default, certificado do ACM, provider SAML e Client VPN completo, em
+`aws/terraform/connectivity/us-east-1/`. **22 testes offline, 14 mutações, 13 capturadas.** Custo até
+aqui: zero — nada tocou a AWS além de leitura de documentação.
+
+**Três desvios do esboço, cada um por achado, não por preferência:**
+
+- **O certificado virou público do ACM validado por DNS.** O esboço descartava a opção porque *"cert
+  público exigiria o domínio, que só chega no `1.3`"* — e o `1.3` chegou. Compra nenhuma chave privada
+  em state nem em disco, e rotação automática que o Client VPN acompanha. Isso **moveu o certificado de
+  T0 para T1**, e o argumento sobrevive melhor: a estabilidade que importava (material de client
+  inalterado entre recriações) vem da CA pública da Amazon, não da vida longa do recurso.
+- **`transit_gateway_configuration` ficou de fora**, apesar de existir e parecer mais direto que
+  associar subnet: o attachment que aquele bloco cria leva horas para deletar, o provider não espera, e
+  isso impede deletar o TGW — incompatível com destruir a camada toda noite.
+- **Subnet privada confirmada como target network.** A exigência de rota para o IGW que preocupava é dos
+  *Prerequisites* do tutorial de mutual auth, não dos requisitos de target network.
+
+**O passo que não é código, e a razão:** a aplicação SAML no Identity Center **não pode ser Terraform**
+— a API `CreateApplication` só cria aplicação OAuth 2.0 customizada. O `generate-tfvars` para e imprime
+o roteiro completo (ACS URL `http://127.0.0.1:35001`, audience `urn:amazon:webservices:clientvpn`,
+`Subject` → `${user:email}`, `memberOf` → `${user:groups}`) em vez de deixar o apply falhar num provider
+com mensagem que não explica o que falta.
+
+**Cinco coisas aprendidas escrevendo os testes**, todas registradas em `aws/terraform/CLAUDE.md`:
+
+- **Bloco repetível do provider costuma ser SET, não lista** — `authentication_options[0]` não compila
+  (*"set elements do not have addressable keys"*). Para bloco único, `one(...)`.
+- **`override_resource` substitui os atributos computados por inteiro.** Sobrescrever só o `arn` de
+  `aws_acm_certificate` deixa `domain_validation_options` como set vazio, e o erro parece bug do código.
+- **Validação de schema do provider roda sob `mock_provider`** — é client-side. O
+  `aws_iam_saml_provider` recusa metadata com menos de 1000 caracteres no plan, então a fixture tem de
+  ser realista em **tamanho**, não só em forma.
+- **Validações de uma variável são todas avaliadas, não param na primeira.** Duas chamando `cidrhost`
+  fazem um valor malformado produzir *"Call to function cidrhost failed"* em vez da mensagem que
+  explica. Cadeia precisa de guarda `!can(...) || <condição>`.
+- **Ordenação por referência não é testável offline.** O endpoint referencia
+  `aws_acm_certificate_validation.vpn.certificate_arn` para nascer depois da validação, mas o ARN é
+  idêntico ao do certificado — a mutação passa verde. Escrito no teste, não escondido.
+
+O `up-all` mudou: `connectivity` saiu do "roda se o diretório existir" e virou `--with-connectivity`,
+pelo mesmo critério de custo da 04. Antes, criar a raiz teria feito o `up-all` ligar ~US$ 110/mês por
+default — o oposto do que o script promete.
 
 ### `2.1` — o portão do client passou, e derrubou uma premissa do plano (2026-08-26)
 

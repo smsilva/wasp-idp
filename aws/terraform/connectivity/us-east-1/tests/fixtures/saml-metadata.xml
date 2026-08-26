@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fixture de teste. NAO e metadata real do Identity Center.
+
+  O arquivo real e baixado do console: a API CreateApplication do Identity Center so cria
+  aplicacao OAuth 2.0 customizada, entao aplicacao SAML e passo manual. O real fica
+  gitignored (identifica a instancia de quem roda).
+
+  Este existe por dois motivos, os dois descobertos rodando:
+
+    1. file() falha se o caminho nao existir, e o teste ficaria vermelho pelo motivo errado.
+    2. O provider valida saml_metadata_document entre 1000 e 10000000 caracteres, e essa
+       validacao roda mesmo sob mock_provider — schema e client-side. Um XML minimo de tres
+       linhas nao passa. Dai o blob abaixo: tamanho de metadata real, sem chave por tras.
+-->
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
+                  entityID="https://portal.sso.us-east-1.amazonaws.com/saml/assertion/EXAMPLE">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"
+                    WantAuthnRequestsSigned="false">
+    <KeyDescriptor use="signing">
+      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+        <X509Data>
+          <X509Certificate>MIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGUMIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGU</X509Certificate>
+        </X509Data>
+      </KeyInfo>
+    </KeyDescriptor>
+    <NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                         Location="https://portal.sso.us-east-1.amazonaws.com/saml/assertion/EXAMPLE"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                         Location="https://portal.sso.us-east-1.amazonaws.com/saml/assertion/EXAMPLE"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>

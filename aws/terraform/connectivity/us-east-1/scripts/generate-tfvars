@@ -1,0 +1,338 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+root="$(realpath "${this_script_directory}/..")"
+
+show_usage() {
+  cat <<EOF
+
+  Descobre na AWS o que a camada 3 precisa e escreve terraform.tfvars.
+  SOMENTE LEITURA — nao cria, nao altera, nao apaga nada.
+
+  DESCOBRE:
+
+    base_domain          da hosted zone <label>.<dominio> que a camada 2 delegou
+    operator_group_ids   dos grupos do Identity Center, por nome -> UUID
+
+  VALIDA antes de escrever arquivo:
+
+    - existe EXATAMENTE uma hosted zone publica <label>.*  (a camada 2 aplicada)
+    - a VPC hub casa com exatamente um id pela tag Name
+    - o hub tem subnets privadas (a associacao do endpoint precisa delas)
+    - a regiao nao esta negada por SCP
+    - o metadata SAML existe em disco  (passo de console, nao de Terraform)
+
+    Options:
+
+      -h,  --help            Show this help
+      -g,  --group           Nome de grupo do Identity Center. Repetivel.
+                             Default: platform-admins
+      -l,  --label           Rotulo da subzona (default: nonprod)
+           --network-profile Profile da conta network (default: network)
+           --org-profile     Profile que le o Identity Center (default: personal)
+      -f,  --force           Sobrescreve terraform.tfvars existente
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --group platform-admins --group cliente-a --force
+
+EOF
+}
+
+groups=()
+label="nonprod"
+network_profile="network"
+org_profile="personal"
+force="false"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -g | --group )
+      shift
+      groups+=("${1}")
+      ;;
+
+    -l | --label )
+      shift
+      label="${1}"
+      ;;
+
+    --network-profile )
+      shift
+      network_profile="${1}"
+      ;;
+
+    --org-profile )
+      shift
+      org_profile="${1}"
+      ;;
+
+    -f | --force )
+      force="true"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+if [ "${#groups[@]}" -eq 0 ]; then
+  groups=(platform-admins)
+fi
+
+region="us-east-1"
+hub_vpc_name="poc-hub-vpc"
+tfvars="${root}/terraform.tfvars"
+
+fail() {
+  echo "ERRO: ${1}" >&2
+  exit 1
+}
+
+log() {
+  echo "  ${1}" >&2
+}
+
+mask() {
+  local value="${1?}"
+  echo "***${value: -4}"
+}
+
+for tool in aws jq; do
+  command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
+done
+
+if [ -f "${tfvars}" ] && [ "${force}" != "true" ]; then
+  fail "${tfvars} ja existe. Use --force para sobrescrever."
+fi
+
+echo "" >&2
+echo "==> Descobrindo o que a camada 3 precisa" >&2
+
+# --------------------------------------------------------------------------------------
+# A regiao, antes de qualquer outra coisa
+# --------------------------------------------------------------------------------------
+
+# Uma SCP negando a regiao produz falha no primeiro Create*, depois de o script ter dito
+# que estava tudo bem — e o erro parece bug de codigo. Uma chamada de leitura barata
+# resolve isso aqui.
+aws ec2 describe-vpcs \
+  --profile "${network_profile}" \
+  --region "${region}" \
+  --max-items 1 \
+  --query 'Vpcs[0].VpcId' \
+  --output text > /dev/null 2>&1 \
+  || fail "nao consegui ler VPCs em ${region} com o profile '${network_profile}'. Credencial expirada ('aws sso login --profile ${org_profile}') ou regiao negada por SCP."
+
+log "regiao ${region} acessivel com o profile '${network_profile}'"
+
+# --------------------------------------------------------------------------------------
+# A subzona da camada 2 — e dela sai o dominio
+# --------------------------------------------------------------------------------------
+
+# Descoberta pela API, nao pelo terraform.tfvars da raiz dns/: depender do recurso existir
+# sobrevive a mudanca de backend ou de key do outro lado. E se a camada 2 nao subiu, o
+# certificado desta camada nao teria onde validar — melhor descobrir agora.
+zones_json="$(aws route53 list-hosted-zones \
+  --profile "${network_profile}" \
+  --output json)" \
+  || fail "nao consegui listar hosted zones na conta network."
+
+subzone_names="$(echo "${zones_json}" \
+  | jq --raw-output --arg prefix "${label}." \
+    '.HostedZones[] | select(.Config.PrivateZone == false) | select(.Name | startswith($prefix)) | .Name | rtrimstr(".")')"
+
+zone_count="$(echo "${subzone_names}" | grep --count . || true)"
+
+if [ "${zone_count}" -eq 0 ]; then
+  fail "nenhuma hosted zone publica '${label}.*' na conta network. A camada 2 (dns) precisa estar aplicada — rode scripts/up-02-dns."
+fi
+
+if [ "${zone_count}" -gt 1 ]; then
+  fail "${zone_count} hosted zones publicas '${label}.*': $(echo ${subzone_names} | tr '\n' ' '). Ambiguo — nao sei para qual emitir o certificado."
+fi
+
+subzone_fqdn="${subzone_names}"
+base_domain="${subzone_fqdn#"${label}".}"
+
+log "subzona '${subzone_fqdn}' -> base_domain '${base_domain}'"
+
+# --------------------------------------------------------------------------------------
+# A VPC hub e as subnets privadas
+# --------------------------------------------------------------------------------------
+
+hub_vpc_ids="$(aws ec2 describe-vpcs \
+  --profile "${network_profile}" \
+  --region "${region}" \
+  --filters "Name=tag:Name,Values=${hub_vpc_name}" \
+  --query 'Vpcs[].VpcId' \
+  --output text)"
+
+hub_vpc_count="$(echo "${hub_vpc_ids}" | wc --words)"
+
+if [ "${hub_vpc_count}" -eq 0 ]; then
+  fail "nenhuma VPC com tag Name='${hub_vpc_name}' em ${region}. A camada 1 precisa estar aplicada — rode scripts/up-01-network-foundation."
+fi
+
+if [ "${hub_vpc_count}" -gt 1 ]; then
+  fail "${hub_vpc_count} VPCs com tag Name='${hub_vpc_name}'. O data source do Terraform exige exatamente uma — desambigue antes."
+fi
+
+log "VPC hub: $(mask "${hub_vpc_ids}")"
+
+private_subnet_count="$(aws ec2 describe-subnets \
+  --profile "${network_profile}" \
+  --region "${region}" \
+  --filters "Name=vpc-id,Values=${hub_vpc_ids}" "Name=tag:Name,Values=${hub_vpc_name%-vpc}-private-*" \
+  --query 'length(Subnets)' \
+  --output text)"
+
+# Sem subnet privada nao ha associacao, e sem associacao o endpoint fica em
+# pending-associate para sempre — sobe, cobra e nao conecta.
+[ "${private_subnet_count}" -ge 1 ] \
+  || fail "a VPC hub nao tem subnet privada com tag Name='${hub_vpc_name%-vpc}-private-*'. O endpoint ficaria em pending-associate."
+
+log "${private_subnet_count} subnet(s) privada(s) no hub"
+
+# --------------------------------------------------------------------------------------
+# Os grupos do Identity Center — nome -> UUID
+# --------------------------------------------------------------------------------------
+
+# O Client VPN casa authorization rule contra o `memberOf` da assertion, e o Identity Center
+# manda UUID. Traduzir aqui e o que evita o sintoma mais chato do caminho: tunel que sobe e
+# nao alcanca nada, com erro que nao diz por que.
+identity_store_id="$(aws sso-admin list-instances \
+  --profile "${org_profile}" \
+  --query 'Instances[0].IdentityStoreId' \
+  --output text 2> /dev/null)" \
+  || fail "nao consegui ler o Identity Center com o profile '${org_profile}'. Rode 'aws sso login --profile ${org_profile}'."
+
+[ "${identity_store_id}" != "None" ] && [ -n "${identity_store_id}" ] \
+  || fail "nenhuma instancia de Identity Center nesta Organization."
+
+log "identity store: $(mask "${identity_store_id}")"
+
+group_ids=()
+for group_name in "${groups[@]}"; do
+  group_id="$(aws identitystore list-groups \
+    --profile "${org_profile}" \
+    --identity-store-id "${identity_store_id}" \
+    --query "Groups[?DisplayName=='${group_name}'].GroupId" \
+    --output text)"
+
+  [ -n "${group_id}" ] \
+    || fail "grupo '${group_name}' nao existe no Identity Center. Crie-o antes, ou passe outro --group."
+
+  # Dois grupos com o mesmo DisplayName nao deveriam existir, mas se existirem o --output text
+  # devolve os dois separados por tab e o tfvars sairia com lixo.
+  [ "$(echo "${group_id}" | wc --words)" -eq 1 ] \
+    || fail "mais de um grupo chamado '${group_name}'. Ambiguo."
+
+  log "grupo '${group_name}' -> $(mask "${group_id}")"
+  group_ids+=("${group_id}")
+done
+
+# --------------------------------------------------------------------------------------
+# O metadata SAML — passo de console, e por isso o mais facil de esquecer
+# --------------------------------------------------------------------------------------
+
+saml_metadata_path="saml-metadata.xml"
+
+if [ ! -f "${root}/${saml_metadata_path}" ]; then
+  cat >&2 <<EOF
+
+ERRO: ${root}/${saml_metadata_path} nao existe.
+
+Nao da para gerar por Terraform: a API CreateApplication do Identity Center so cria
+aplicacao OAuth 2.0 customizada. Aplicacao SAML e passo de console.
+
+  1. IAM Identity Center -> Applications -> Add application
+  2. "I have an application I want to set up" -> SAML 2.0
+  3. Nome: hub-client-vpn
+  4. Em "IAM Identity Center metadata", baixe o metadata XML e salve em:
+
+       ${root}/${saml_metadata_path}
+
+  5. Application properties -> Application ACS URL:
+
+       http://127.0.0.1:35001
+
+     Application SAML audience:
+
+       urn:amazon:webservices:clientvpn
+
+  6. Attribute mappings:
+
+       Subject   -> \${user:email}      formato emailAddress
+       memberOf  -> \${user:groups}     formato unspecified
+
+     memberOf tem de carregar IDs de grupo, nao nomes — e o que o Identity Center
+     manda em \${user:groups}.
+
+  7. Assigned users and groups: atribua os grupos que vao usar a VPN.
+
+Depois rode este script de novo.
+
+EOF
+  exit 1
+fi
+
+metadata_size="$(wc --chars < "${root}/${saml_metadata_path}")"
+
+# O provider recusa saml_metadata_document fora de 1000..10000000 caracteres, e a validacao
+# roda no plan. Metadata real do Identity Center tem alguns KB; arquivo curto aqui e quase
+# sempre pagina de erro salva por engano.
+[ "${metadata_size}" -ge 1000 ] \
+  || fail "${saml_metadata_path} tem ${metadata_size} caracteres. O provider exige >= 1000, e metadata real do Identity Center tem alguns KB — provavelmente o arquivo errado."
+
+log "metadata SAML: ${metadata_size} caracteres"
+
+# --------------------------------------------------------------------------------------
+# Escrever
+# --------------------------------------------------------------------------------------
+
+group_ids_hcl="$(printf '"%s", ' "${group_ids[@]}")"
+group_ids_hcl="[${group_ids_hcl%, }]"
+
+cat > "${tfvars}" <<EOF
+# Gerado por ${this_script_name} em $(date --iso-8601=seconds).
+#
+# Valores de identidade (dominio, grupos do Identity Center), por isso aqui e nao inline no
+# main.tf: o repo e publico. Regiao, nome do hub e supernet ficam inline la, porque sao
+# decisoes de desenho documentadas.
+
+base_domain   = "${base_domain}"
+subzone_label = "${label}"
+
+saml_metadata_path = "${saml_metadata_path}"
+
+operator_group_ids = ${group_ids_hcl}
+
+client_cidr_block = "100.64.0.0/22"
+EOF
+
+echo "" >&2
+echo "==> Escrito ${tfvars}" >&2
+
+git -C "${root}" check-ignore --quiet "${tfvars}" 2> /dev/null \
+  || fail "${tfvars} NAO esta no .gitignore. Corrija antes de seguir — ele carrega dominio e id de grupo."
+
+git -C "${root}" check-ignore --quiet "${root}/${saml_metadata_path}" 2> /dev/null \
+  || fail "${saml_metadata_path} NAO esta no .gitignore. Corrija antes de seguir — ele identifica a instancia de Identity Center."
+
+log "terraform.tfvars e ${saml_metadata_path} estao gitignored"

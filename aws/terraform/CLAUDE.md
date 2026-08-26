@@ -64,6 +64,25 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - **`setequal` não existe.** Há `setunion`/`setintersection`/`setsubtract`; igualdade é `==` entre
   dois `toset()`. E comparar atributo `list(string)` com literal `["a","b"]` (que é *tuple*) falha com
   *"LHS and RHS values are of different types"* em vez de comparar — `toset()` nos dois lados resolve.
+- **Bloco repetível do provider costuma ser SET, não lista — `[0]` não compila.** `Cannot index a set
+  value: set elements do not have addressable keys`. Para bloco que existe uma vez só (
+  `authentication_options` do Client VPN), o acesso é **`one(...)`**; para vários, `for` com `if`.
+- **`override_resource` substitui os atributos computados POR INTEIRO.** Omitir um atributo que a
+  configuração indexa transforma-o em coleção vazia, e o erro (`the collection has no elements`)
+  parece bug do código, não artefato do teste. Ao sobrescrever `aws_acm_certificate`, incluir
+  `domain_validation_options` junto do `arn`.
+- **Validação de schema do provider roda sob `mock_provider`.** Ela é client-side: o
+  `aws_iam_saml_provider` recusa `saml_metadata_document` fora de 1000..10.000.000 caracteres **no
+  plan**, sem tocar a AWS. Fixture de teste tem de ser realista em TAMANHO, não só em forma.
+- **Validações de uma variável são todas avaliadas, não param na primeira que falha.** Se uma chama
+  `cidrhost` e outra também, um valor malformado faz a segunda lançar *"Call to function cidrhost
+  failed"* e essa é a mensagem que o usuário lê — não a que explica o problema. Cadeia de validação
+  precisa de guarda: `!can(cidrhost(var.x, 0)) || <condição real>`.
+- **Ordenação é aresta do grafo, e `terraform test` não assere grafo.** Se `A` referencia
+  `B.attr` só para nascer depois de `B`, e `B.attr` tem o mesmo valor de `C.attr`, nenhuma asserção de
+  valor distingue as duas referências — a mutação passa verde. Comprovado com
+  `aws_acm_certificate_validation` vs `aws_acm_certificate`. Escrever isso no teste em vez de
+  esconder atrás de asserção que passaria de qualquer jeito.
 
 ## Scripts de subida
 
@@ -138,6 +157,26 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   determinístico, conhecido em tempo de plan, e estável entre recriações.
 - **`client_cidr_block` do Client VPN precisa de /22 ou maior e não pode sobrepor VPC nem rota.**
   Carvar fora do supernet.
+- **`transit_gateway_configuration` no endpoint do Client VPN é uma armadilha para quem destrói a
+  camada todo dia.** O bloco existe e pareceria mais direto que associar subnet, mas a doc do provider
+  avisa: o attachment que ele cria leva *"several hours"* para deletar, o provider **não espera**, e
+  isso **impede deletar o TGW**. Associação por subnet (`aws_ec2_client_vpn_network_association`) é o
+  caminho — e é também o que põe as ENIs na VPC hub, de onde o resolver da VPC é alcançável.
+- **Subnet privada serve como target network.** O requisito de rota para o IGW aparece nos
+  *Prerequisites* do tutorial de mutual auth, onde o túnel É o caminho de internet; a página de
+  requisitos de target network pede só `/27` com 20 IPs livres, sem sobreposição com o client CIDR, e
+  uma subnet por AZ.
+- **A AWS acrescenta sozinha a rota local da VPC** ao associar a target network. A rota que se escreve
+  é a do supernet; as duas convivem por prefixo mais longo.
+- **Aplicação SAML do Identity Center NÃO é Terraform.** *"The `CreateApplication` API only supports
+  custom OAuth 2.0 applications. Creation of 3rd party SAML or OAuth 2.0 applications require setup to
+  be done through the associated app service or AWS console."* O metadata XML entra por arquivo, e o
+  `generate-tfvars` da camada 03 imprime o roteiro de console quando ele falta.
+- **Certificado do endpoint: público do ACM validado por DNS, não autoassinado importado.** Ficou
+  possível quando a camada 02 entregou a subzona delegada, e compra duas coisas: nenhuma chave privada
+  em state nem em disco, e rotação automática que o Client VPN acompanha (*"whether through ACM
+  auto-rotation..."*). O nome do certificado **não** precisa casar com o hostname do endpoint — o
+  client usa `remote-cert-tls server`, que confere extended key usage, não nome.
 
 ## Raiz com dois providers de cloud
 
