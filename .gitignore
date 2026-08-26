@@ -22,6 +22,8 @@ crash.log
 crash.*.log
 terraform.tfvars
 !terraform.tfvars.example
+# Logs de apply/destroy: carregam account id, ARN e endpoint reais
+logs/
 
 # Andaime de contexto derivado de docs versionadas — nao versionar (segunda fonte de verdade)
 docs/superpowers/context/
