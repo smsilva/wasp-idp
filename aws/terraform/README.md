@@ -13,11 +13,26 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 | `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | **aplicada** |
 | `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | **aplicada** |
 | `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, ESO, ArgoCD, Crossplane | **aplicada** |
+| `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | escrita, **não aplicada** |
 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
 `t3.medium`, três Pod Identities e os três charts. Prova o que estava em aberto no desenho — os
 providers `kubernetes` e `helm` configurados a partir de outputs do módulo do cluster resolvem
 na hora do apply. **Não** inventar apply em duas fases.
+
+### `dns/` é a única raiz sem região na state key, e a única com valores em `tfvars`
+
+Hosted zone pública é recurso **global**: não cabe em `network-foundation/<região>/`. E não pode
+morar em `connectivity/`, que é destruído toda noite — a zona recriada nasce com **name servers
+novos**, e mesmo com a delegação automatizada a propagação do NS não é instantânea.
+
+Ela também é a única raiz que lê valores de `terraform.tfvars` em vez de tê-los inline. Nas outras,
+o que está inline (região, CIDR, AZs) é **decisão de desenho documentada**; aqui, domínio, resource
+group e subscription são **identidade de quem roda**, e o repo é público.
+
+`manage_delegation = false` desliga o lado Azure: numa raiz com dois providers de cloud, a ausência
+de credencial do segundo faz o `plan` falhar mesmo para mudança que só toca o primeiro. Desligado, a
+subzona existe no Route 53 e ninguém a resolve — é modo de trabalho, não estado de repouso.
 
 A VPC hub entra por `data "aws_vpc"` filtrando `tag:Name` num provider `aws` aliasado com o
 profile `network` — não por `terraform_remote_state`. O acoplamento é ao recurso, não ao arquivo
