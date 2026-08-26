@@ -102,6 +102,22 @@ if [ -z "${plan_file}" ]; then
   [ "${PIPESTATUS[0]}" -eq 0 ] || fail "o plan falhou. Log: ${log_directory}/plan-${timestamp}.log"
 
   if [ "${assume_yes}" != "true" ]; then
+    # Sem tty (pipe, CI, harness de agente) o read volta vazio na hora e o
+    # cancelamento pareceria decisao de quem rodou. Melhor dizer o que houve.
+    if [ ! -t 0 ]; then
+      cat >&2 <<EOF
+
+Plano salvo em ${plan_file}, mas nao ha terminal para confirmar.
+
+Aplique com um dos dois:
+
+  ${this_script_name} --plan-file ${plan_file}
+  ${this_script_name} --yes
+
+EOF
+      exit 1
+    fi
+
     echo "" >&2
     read -r -p "Aplicar este plano? Recursos cobrados por hora comecam a contar agora. [yes/N] " answer
     if [ "${answer}" != "yes" ]; then
