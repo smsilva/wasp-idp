@@ -398,6 +398,11 @@ Levantados ao aplicar a camada 2 (2026-08-25). Ordenados por dependência, não 
 
 ## Ingress centralizado: o que a AWS de fato recomenda
 
+> **Desenho completo da fatia em
+> `docs/superpowers/specs/2026-08-25-private-ingress-via-privatelink.md`** — topologia, ordem de
+> implementação em 6 passos, custo, fronteira Terraform/workload e cinco perguntas abertas. O resumo
+> abaixo é a fundamentação; o spec é o que se lê para retomar.
+
 Pesquisado em 2026-08-25 no whitepaper *[Building a Scalable and Secure Multi-VPC AWS Network
 Infrastructure](https://docs.aws.amazon.com/whitepapers/latest/building-scalable-secure-multi-vpc-network-infrastructure/welcome.html)*
 (pub. 2024-04-17), porque a escolha estava sendo feita por intuição.
@@ -698,10 +703,12 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
       funcionando nos três consumidores.
 - [x] Três scripts operacionais da camada 2 (`generate-tfvars`, `apply`, `destroy`).
 - [ ] **Destruir a camada 2** se ainda estiver de pé — a intenção declarada foi não deixar ligada.
-- [ ] **Fatia de ingress privado** (httpbin no cluster, entrada pelo hub, cluster sem LB público):
-      AWS LBC + quarta Pod Identity, NLB interno, endpoint service no spoke, interface endpoint e
-      ALB no hub. Padrão escolhido: **PrivateLink** — fundamentação e citação na seção
-      *Ingress centralizado*. Ganha plano próprio.
+- [ ] **Fatia de ingress privado** — desenho pronto em
+      `docs/superpowers/specs/2026-08-25-private-ingress-via-privatelink.md`. Padrão: **PrivateLink**,
+      com citação da AWS. Falta escrever o plano de implementação. **Primeira decisão da próxima
+      sessão:** quem é dono do NLB interno — Terraform (`aws_lb` + `TargetGroupBinding`, mantém o
+      apply único) ou o LBC (`Service type=LoadBalancer`, quebra em duas fases). O spec argumenta
+      pela primeira e **não a validou**.
 - [ ] **Fechar o endpoint público da API do EKS** (`public_access_cidrs`). Depende de alcançar a API
       de dentro da VPC, logo depende da fatia acima.
 - [ ] Instalar o **AWS Load Balancer Controller** como `src/helm/modules/aws-lbc` — pré-requisito da
