@@ -157,6 +157,10 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   determinístico, conhecido em tempo de plan, e estável entre recriações.
 - **`client_cidr_block` do Client VPN precisa de /22 ou maior e não pode sobrepor VPC nem rota.**
   Carvar fora do supernet.
+- **O Client VPN cobra por associação de target network, não por endpoint.** Duas subnets
+  privadas (uma por AZ) dobram essa parcela do custo — a estimativa de ~US$ 0,15/h do T1
+  assumia uma associação. Decidido manter duas (redundância de AZ) mesmo com o custo maior
+  (~US$ 0,20/h ≈ US$ 146/mês parado); reduzir para uma é mudança de `for_each` na raiz.
 - **`transit_gateway_configuration` no endpoint do Client VPN é uma armadilha para quem destrói a
   camada todo dia.** O bloco existe e pareceria mais direto que associar subnet, mas a doc do provider
   avisa: o attachment que ele cria leva *"several hours"* para deletar, o provider **não espera**, e

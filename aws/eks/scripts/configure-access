@@ -8,17 +8,17 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Concede acesso admin ao caller (AccessEntry + AccessPolicyAssociation), atualiza o
-  kubeconfig do EKS e valida 'kubectl get nodes'. Fecha o walk skeleton.
+  Grants admin access to the caller (AccessEntry + AccessPolicyAssociation), updates the
+  EKS kubeconfig and validates 'kubectl get nodes'. Closes the walk skeleton.
 
-  ATENÇÃO: 'aws eks update-kubeconfig' MUDA o contexto kubectl ativo para o EKS.
-  Ao final o script volta o contexto para k3d-control-plane.
+  WARNING: 'aws eks update-kubeconfig' CHANGES the active kubectl context to the EKS one.
+  At the end the script switches the context back to k3d-control-plane.
 
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
-      -i,  --cluster-id        clusterId (default: lê aws/eks/.cluster-id)
+      -c,  --cluster-name      k3d cluster name (default: control-plane)
+      -i,  --cluster-id        clusterId (default: reads aws/eks/.cluster-id)
 
     Examples:
 
@@ -76,12 +76,12 @@ fi
 
 full="poc-eks-${cluster_id}"
 
-# principalArn do AccessEntry precisa ser o ARN da ROLE, NÃO o ARN de sessão STS.
-# `aws sts get-caller-identity` de uma sessão SSO retorna
+# The AccessEntry principalArn must be the ROLE ARN, NOT the STS session ARN.
+# `aws sts get-caller-identity` on an SSO session returns
 #   arn:aws:sts::ACCT:assumed-role/ROLE_NAME/SESSION
-# mas o EKS AccessEntry exige o ARN da role IAM (com o path SSO):
+# but the EKS AccessEntry requires the IAM role ARN (with the SSO path):
 #   arn:aws:iam::ACCT:role/aws-reserved/sso.amazonaws.com/REGION/ROLE_NAME
-# Derivamos a role via `iam get-role` a partir do ROLE_NAME extraído da sessão.
+# We derive the role via `iam get-role` from the ROLE_NAME extracted from the session.
 session_arn="$(aws sts get-caller-identity --query Arn --output text)"
 case "${session_arn}" in
   *:assumed-role/*)
@@ -89,7 +89,7 @@ case "${session_arn}" in
     caller_arn="$(aws iam get-role --role-name "${role_name}" --query Role.Arn --output text)"
     ;;
   *)
-    # Já é um ARN de role/user IAM direto (não assumed-role) — usa como veio.
+    # Already a direct IAM role/user ARN (not assumed-role) — use it as is.
     caller_arn="${session_arn}"
     ;;
 esac
@@ -97,13 +97,13 @@ esac
 region="$(kubectl --context "${context}" get cluster.eks.aws.upbound.io/"${full}" \
   -o jsonpath='{.spec.forProvider.region}')"
 
-echo "Concedendo acesso admin a ${caller_arn}"
+echo "Granting admin access to ${caller_arn}"
 echo "  cluster ${full} (region ${region})"
 
-# crossplaneArn=unused satisfaz o guard `fail` de 72-cluster-auth (helm avalia TODOS os
-# templates antes de --show-only). A fase 70 não referencia crossplaneArn e 72 nunca é
-# emitido aqui — o placeholder jamais chega ao cluster (simétrico ao callerArn=unused do
-# provision-eks).
+# crossplaneArn=unused satisfies the `fail` guard in 72-cluster-auth (helm evaluates ALL
+# templates before --show-only). Phase 70 does not reference crossplaneArn and 72 is never
+# emitted here — the placeholder never reaches the cluster (symmetric to the
+# callerArn=unused in provision-eks).
 helm template "${chart_dir}" \
   --set "clusterId=${cluster_id}" \
   --set "callerArn=${caller_arn}" \
@@ -116,12 +116,12 @@ kubectl --context "${context}" wait "accessentry.eks.aws.upbound.io/${full}-acce
 kubectl --context "${context}" wait "accesspolicyassociation.eks.aws.upbound.io/${full}-access-admin" \
   --for=condition=Ready --timeout=120s
 
-# Atualiza o kubeconfig local — ISSO MUDA o contexto ativo para o EKS.
+# Updates the local kubeconfig — THIS CHANGES the active context to the EKS one.
 aws eks update-kubeconfig --region "${region}" --name "${full}"
 
-echo "Validação — nós do EKS:"
+echo "Validation — EKS nodes:"
 kubectl get nodes
 
-# Volta o contexto para o k3d (evita operar o Crossplane apontando para o EKS).
+# Switch the context back to k3d (avoids driving Crossplane while pointed at EKS).
 kubectl config use-context "${context}"
 echo "Contexto de volta em ${context}."

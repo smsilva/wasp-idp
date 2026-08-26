@@ -8,15 +8,15 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria o Secret aws-iam-credential (formato INI) e aplica o ProviderConfig "network"
-  (conta onde vive o IAM user crossplane-poc).
-  Fonte das keys: env AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
-  (ProviderConfig cross-account "wasp-nonprod": ver configure-account-access.)
+  Creates the aws-iam-credential Secret (INI format) and applies the "network"
+  ProviderConfig (the account where the crossplane-poc IAM user lives).
+  Key source: env AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
+  (Cross-account "wasp-nonprod" ProviderConfig: see configure-account-access.)
 
     Options:
 
       -h,  --help              Show this help
-      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
+      -c,  --cluster-name      k3d cluster name (default: control-plane)
 
     Examples:
 
@@ -52,14 +52,14 @@ if [[ "${1}" == '--' ]]; then shift; fi
 
 cluster_name="${cluster_name:-control-plane}"
 
-: "${AWS_ACCESS_KEY_ID?exporte AWS_ACCESS_KEY_ID}"
-: "${AWS_SECRET_ACCESS_KEY?exporte AWS_SECRET_ACCESS_KEY}"
+: "${AWS_ACCESS_KEY_ID?export AWS_ACCESS_KEY_ID}"
+: "${AWS_SECRET_ACCESS_KEY?export AWS_SECRET_ACCESS_KEY}"
 
 set -e
 
 context="k3d-${cluster_name}"
 
-echo "Usando access key ${AWS_ACCESS_KEY_ID:0:4}… para o Secret aws-iam-credential"
+echo "Using access key ${AWS_ACCESS_KEY_ID:0:4}… for the aws-iam-credential Secret"
 
 creds_file="$(mktemp)"
 trap 'rm -f "${creds_file}"' EXIT

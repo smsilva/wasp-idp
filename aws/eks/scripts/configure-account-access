@@ -8,18 +8,20 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Aplica um ProviderConfig cross-account (spoke) no k3d, resolvendo o account-id via envsubst.
-  NÃO cria credencial: reusa o Secret aws-iam-credential (assumeRoleChain parte dele). O
-  ProviderConfig "network" (credencial direta) é aplicado pelo configure-aws-creds, não aqui.
+  Applies a cross-account (spoke) ProviderConfig to k3d, resolving the account id via
+  envsubst. It does NOT create a credential: it reuses the aws-iam-credential Secret
+  (assumeRoleChain starts from it). The "network" ProviderConfig (direct credential) is
+  applied by configure-aws-creds, not here.
 
-  Lê o template providers/provider-config-<name>.yaml e substitui \${SPOKE_ACCOUNT_ID}.
+  Reads the providers/provider-config-<name>.yaml template and substitutes
+  \${SPOKE_ACCOUNT_ID}.
 
     Options:
 
       -h,  --help              Show this help
-      -n,  --name              Nome do ProviderConfig/spoke (ex.: wasp-nonprod) [obrigatório]
-      -a,  --account-id        Account id da conta spoke (12 dígitos)     [obrigatório]
-      -c,  --cluster-name      Nome do cluster k3d (default: control-plane)
+      -n,  --name              ProviderConfig/spoke name (e.g. wasp-nonprod) [required]
+      -a,  --account-id        Spoke account id (12 digits)                 [required]
+      -c,  --cluster-name      k3d cluster name (default: control-plane)
 
     Examples:
 
@@ -63,11 +65,11 @@ if [[ "${1}" == '--' ]]; then shift; fi
 
 cluster_name="${cluster_name:-control-plane}"
 
-: "${name?informe --name (ex.: wasp-nonprod)}"
-: "${account_id?informe --account-id (12 dígitos da conta spoke)}"
+: "${name?pass --name (e.g. wasp-nonprod)}"
+: "${account_id?pass --account-id (12 digits of the spoke account)}"
 
 if [[ ! "${account_id}" =~ ^[0-9]{12}$ ]]; then
-  echo "account-id inválido: '${account_id}' (esperado 12 dígitos)" >&2
+  echo "invalid account-id: '${account_id}' (expected 12 digits)" >&2
   exit 1
 fi
 
@@ -77,11 +79,11 @@ context="k3d-${cluster_name}"
 template="${this_script_directory}/../providers/provider-config-${name}.yaml"
 
 if [[ ! -f "${template}" ]]; then
-  echo "template não encontrado: ${template}" >&2
+  echo "template not found: ${template}" >&2
   exit 1
 fi
 
-echo "Aplicando ProviderConfig '${name}' (assumeRoleChain → conta ${account_id})"
+echo "Applying ProviderConfig '${name}' (assumeRoleChain → account ${account_id})"
 
 SPOKE_ACCOUNT_ID="${account_id}" \
   envsubst '${SPOKE_ACCOUNT_ID}' < "${template}" \

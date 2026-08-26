@@ -147,25 +147,40 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.2` escrita, não aplicada**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.2` planejada, apply pendente**)
 
-**Último passo:** `2.2` — a raiz `aws/terraform/connectivity/us-east-1/` escrita e verde offline (22
-testes, 14 mutações, 13 capturadas), mais `up-03-connectivity` e os scripts da raiz. Antes dela, o
-portão `2.1` (client da AWS VPN) e a fase 1 inteira.
+**Último passo:** `2.2` escrita e verde offline (22 testes, 14 mutações, 13 capturadas). O passo de
+console foi concluído nesta sessão: aplicação SAML `hub-client-vpn` criada no Identity Center
+(management account), attribute mappings (`Subject`→`${user:email}`/emailAddress,
+`memberOf`→`${user:groups}`/unspecified) salvos, grupo `platform-admins` atribuído, metadata XML
+baixado para `aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored, 2504 caracteres).
+`generate-tfvars` rodou limpo e um `terraform plan` confirmou **12 recursos a criar**, plano limpo —
+mas **o apply NÃO rodou ainda** (bloqueado pelo classifier do agente; pedido ao usuário via `!`, sem
+confirmação de conclusão registrada nesta sessão). `terraform state list` na raiz `connectivity/`
+está vazio — **verificar isso primeiro** ao retomar.
 
-**Próximo passo: aplicar o `2.2`, e ele tem um pré-requisito de console.** A aplicação SAML no
-Identity Center **não pode ser Terraform** — a API `CreateApplication` só cria aplicação OAuth 2.0
-customizada. O roteiro (ACS URL, audience, mapeamento de `Subject` e `memberOf`) está em
-`02-private-access.md`, e o `generate-tfvars` para e imprime se o metadata faltar.
+**Achado do plan, ainda não registrado no plano em si:** o Client VPN cobra por **associação de
+subnet**, não por endpoint. Com 2 subnets privadas do hub (uma por AZ), o custo real do T1 é
+~US$ 0,20/h (~US$ 146/mês parado), não os ~US$ 0,15/h (~US$ 110) que o `README.md` do plano ainda
+documenta. Decidido manter as duas associações (redundância de AZ); atualizar a tabela de custo do
+plano quando alguém voltar a editá-la.
+
+```bash
+cd aws/terraform/connectivity/us-east-1
+terraform state list          # vazio? o apply não rodou — retomar por aqui
+```
+
+Se vazio, retomar com:
 
 ```bash
 cd aws/terraform
-./scripts/up-03-connectivity          # ~US$ 0,15/h a partir daqui
+./scripts/up-03-connectivity --yes    # tfvars e metadata já prontos; plano já validado
 ```
 
 **Aceite do `2.2`:** túnel sobe com identidade do Identity Center, IP vindo de `100.64.0.0/22`, target
-network `associated`, e o **login SAML completa** — este último veio do `2.1`, que não podia prová-lo
-sem endpoint.
+network `associated`, e o **login SAML completa** — este último não pôde ser testado nem no `2.1` nem
+nesta sessão (exige o endpoint de pé). Verificar também se `aws-vpn-client connect` sob SAML abre o
+navegador sozinho (ver Known Broken / Open Questions).
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
 uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
@@ -217,6 +232,36 @@ Decisões fechadas nesta frente:
    (raiz `dns/` com providers `aws` + `azurerm`). O apex segue no Azure DNS.
 9. **Cliente simulado do `4.2` no Azure**, VPN Gateway gerenciado active-active com BGP, numa raiz só
    (`azure/terraform/simulated-client/`) que contém **os dois lados do túnel**.
+
+### Frente E — scripts shell em inglês (ATIVA, parcial)
+
+Regra corrigida pelo usuário nesta sessão: scripts shell (comentários, `show_usage`, mensagens de
+log/erro) são em **inglês**, mesmo em projeto cujos `.md` são em português. Regra global gravada em
+`~/git/linux/claude/rules/language.md`.
+
+**Convertidos e commitados nesta sessão:** `aws/terraform/scripts/` (lib, up-00 a up-04, up-all),
+`aws/terraform/connectivity/us-east-1/scripts/` (generate-tfvars, destroy),
+`aws/terraform/control-plane/scripts/` (generate-tfvars, apply, destroy), e os 13 scripts de
+`aws/docs/accounts/scripts/`.
+
+**Convertidos mas NÃO commitados** (working tree, verificar `git status` ao retomar):
+`aws/eks/scripts/check`, `configure-access`, `configure-account-access`, `configure-aws-creds`,
+`install-crossplane`, `load-crossplane-creds`, `random-id`. `bash -n` passou em todos.
+
+**Ainda em português, não tocados** (são os maiores e mais arriscados de quebrar — scripts que
+provisionam/destroem EKS de verdade, fase a fase):
+
+- `aws/eks/scripts/provision-eks` — ~215 linhas, todos os comentários de fase em português
+- `aws/eks/scripts/teardown` — destrutivo, comentários de ordem inversa das fases
+- `aws/eks/apps/deploy`
+- `aws/eks/apps/clean`
+
+Converter estes quatro por último e com cuidado extra: cada comentário documenta uma decisão de
+ordenação (race de Pod Identity, dependência entre fases) que não pode se perder na tradução — reler
+o comentário inteiro antes de traduzir frase a frase, não fazer find/replace ingênuo.
+
+`scripts/cluster-zero/`, `scripts/install.sh`, `scripts/configure.sh` já estavam em inglês — nada a
+fazer ali.
 
 ### Frente A — bootstrap de contas / Organization
 
@@ -709,10 +754,14 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [x] **`2.2`** — raiz `connectivity/us-east-1/` escrita: TGW isolado por default, cert público do ACM
       validado por DNS, provider SAML, endpoint, associação por AZ, rota do supernet, authorization rule
       por grupo. Mais `up-03-connectivity`, `generate-tfvars` e `destroy`. **22 testes, 13/14 mutações.**
-- [ ] **Aplicar o `2.2`** — **é por aqui que se começa**, e é o primeiro recurso que cobra por hora
-      (~US$ 0,15/h). Pré-requisito de **console**: criar a aplicação SAML no Identity Center e salvar o
-      metadata em `aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored). Roteiro em
-      `02-private-access.md`.
+- [x] Pré-requisito de console do `2.2` — aplicação SAML `hub-client-vpn` criada no Identity Center,
+      attribute mappings salvos, grupo `platform-admins` atribuído, metadata baixado.
+- [ ] **Confirmar/rodar o apply do `2.2`.** `terraform plan` já validou 12 recursos limpo; verificar
+      `terraform state list` em `connectivity/us-east-1/` primeiro — pode já ter sido aplicado fora
+      desta sessão. Se vazio: `./scripts/up-03-connectivity --yes` (tfvars e metadata já prontos).
+      É o primeiro recurso que cobra por hora (~US$ 0,20/h com 2 associações — não ~0,15/h).
+- [ ] Testar se o login SAML completa (aceite do `2.2`) e se `aws-vpn-client connect` sob SAML abre o
+      navegador sozinho — nenhum dos dois foi possível verificar sem o endpoint de pé.
 - [ ] **`2.3`–`2.5`** — attachment, DNS privado, fechar a API.
 - [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
       laptop segue funcionando, e a API recusa de outro IP.
@@ -729,6 +778,15 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [x] `up-03-connectivity` nasceu com a raiz `connectivity/`, fora do `up-all` por default.
 - [ ] Abrir branch dedicada em `wasp-gitops` para os manifestos do lado cluster; path interno decidido
       na implementação.
+- [ ] Atualizar a tabela de custo do T1 em `docs/superpowers/plans/.../README.md`: Client VPN cobra
+      por associação de subnet, não por endpoint — o real é ~US$ 0,20/h com 2 AZs, não ~0,15/h.
+
+### Frente E — scripts shell em inglês
+
+- [ ] Commitar os 7 scripts já convertidos em `aws/eks/scripts/` (estão na working tree).
+- [ ] Converter `aws/eks/scripts/provision-eks`, `teardown`, `aws/eks/apps/deploy`, `aws/eks/apps/clean`
+      — os quatro maiores e mais arriscados; reler cada comentário de fase antes de traduzir, várias
+      decisões de ordenação (races de Pod Identity) estão documentadas só ali.
 
 ### Frente B — Terraform + Crossplane / EKS
 

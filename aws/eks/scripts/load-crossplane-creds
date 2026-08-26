@@ -1,31 +1,31 @@
 #!/bin/bash
-# ATENÇÃO: rode via SOURCE, não execute — as credenciais precisam ficar exportadas no
-# shell chamador (configure-aws-creds/provision-eks/teardown rodam depois, como comandos
-# separados na mesma sessão; um subprocesso não consegue exportar env pro pai).
+# WARNING: SOURCE this, do not execute it — the credentials have to end up exported in
+# the calling shell (configure-aws-creds/provision-eks/teardown run afterwards, as
+# separate commands in the same session; a subprocess cannot export env to its parent).
 #
 #   source aws/eks/scripts/load-crossplane-creds
 #
-# Fonte das keys: Secrets Manager (poc-idp/crossplane-poc-credentials, us-east-1) —
-# nunca um arquivo local. Mesmo padrão documentado em aws/CLAUDE.md ("Operação:
-# credenciais AWS via CLI"): recupera inline, na memória do processo, nunca persiste em
-# disco nem imprime as chaves. Pré-requisito: acesso admin ativo à conta que hospeda o
-# secret para o get-secret-value do bootstrap.
+# Key source: Secrets Manager (poc-idp/crossplane-poc-credentials, us-east-1) — never a
+# local file. Same pattern documented in aws/CLAUDE.md ("Operacao: credenciais AWS via
+# CLI"): retrieve inline, in process memory, never persist to disk and never print the
+# keys. Prerequisite: active admin access to the account hosting the secret, for the
+# bootstrap get-secret-value.
 #
-# Override (raro — outra conta/secret): exporte CROSSPLANE_SECRET_ID/
-# CROSSPLANE_SECRET_REGION antes do source.
+# Override (rare — another account/secret): export CROSSPLANE_SECRET_ID/
+# CROSSPLANE_SECRET_REGION before sourcing.
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  echo "Erro: rode via 'source ${BASH_SOURCE[0]}', não execute direto — as credenciais" >&2
-  echo "precisam ficar exportadas no shell chamador." >&2
+  echo "Error: run via 'source ${BASH_SOURCE[0]}', do not execute it directly — the" >&2
+  echo "credentials have to end up exported in the calling shell." >&2
   exit 1
 fi
 
 secret_id="${CROSSPLANE_SECRET_ID:-poc-idp/crossplane-poc-credentials}"
 secret_region="${CROSSPLANE_SECRET_REGION:-us-east-1}"
 
-# Atribuição explícita (não `source <(... | jq ...)`): a secret key nunca passa por
-# interpretação do shell como comando, só como valor de string — mesmo que contenha
-# metacaracteres. JSON fica só na memória do processo, nunca em arquivo.
+# Explicit assignment (not `source <(... | jq ...)`): the secret key never goes through
+# shell interpretation as a command, only as a string value — even if it contains
+# metacharacters. The JSON stays in process memory only, never in a file.
 _secret_json="$(aws secretsmanager get-secret-value \
   --secret-id "${secret_id}" --region "${secret_region}" \
   --query SecretString --output text)"
@@ -39,4 +39,4 @@ unset _secret_json
 export AWS_DEFAULT_REGION="${secret_region}"
 unset AWS_PROFILE AWS_SESSION_TOKEN
 
-echo "Creds do Crossplane carregadas (AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:0:4}…, região ${AWS_DEFAULT_REGION})"
+echo "Crossplane creds loaded (AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:0:4}…, region ${AWS_DEFAULT_REGION})"
