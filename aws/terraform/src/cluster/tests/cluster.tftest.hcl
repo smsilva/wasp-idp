@@ -3,6 +3,9 @@ mock_provider "aws" {}
 variables {
   name       = "test-control-plane"
   subnet_ids = ["subnet-aaa", "subnet-bbb", "subnet-ccc", "subnet-ddd"]
+  # Sem isto o modulo recusa o plan de proposito: endpoint publico ligado com lista vazia
+  # e como a AWS entende 0.0.0.0/0. O 203.0.113.0/24 e o bloco de documentacao da RFC 5737.
+  public_access_cidrs = ["203.0.113.10/32"]
 }
 
 run "modo_de_autenticacao_e_api_puro" {
@@ -54,6 +57,61 @@ run "addons_de_base_sao_dois_com_overwrite" {
     condition     = aws_eks_addon.this["eks-pod-identity-agent"].resolve_conflicts_on_create == "OVERWRITE"
     error_message = "addon deveria resolver conflitos com OVERWRITE, recebido ${aws_eks_addon.this["eks-pod-identity-agent"].resolve_conflicts_on_create}"
   }
+}
+
+# O endpoint da API e a maior superficie exposta da celula. A lista chega ao vpc_config ou
+# nao chega — e se nao chegar, a AWS abre para 0.0.0.0/0 sem reclamar de nada.
+run "os_cidrs_autorizados_chegam_ao_endpoint_publico" {
+  command = plan
+
+  assert {
+    condition     = aws_eks_cluster.this.vpc_config[0].public_access_cidrs == toset(["203.0.113.10/32"])
+    error_message = "public_access_cidrs deveria chegar ao vpc_config, recebido ${jsonencode(aws_eks_cluster.this.vpc_config[0].public_access_cidrs)}"
+  }
+
+  assert {
+    condition     = aws_eks_cluster.this.vpc_config[0].endpoint_private_access
+    error_message = "o endpoint privado fica ligado: e o caminho que sobrevive ao fechamento do publico no 2.5"
+  }
+}
+
+# Este e o Known Broken 3 virado teste: omitir a lista era o caminho silencioso para expor
+# a API ao mundo. Agora e erro de validacao, antes de qualquer chamada a AWS.
+run "endpoint_publico_sem_cidr_e_erro" {
+  command = plan
+
+  variables {
+    public_access_cidrs = []
+  }
+
+  expect_failures = [var.public_access_cidrs]
+}
+
+# Com o endpoint publico desligado nao ha o que restringir, e exigir a lista ali seria
+# atrapalhar o caminho de destino (2.5, endpoint so privado).
+run "sem_endpoint_publico_a_lista_vazia_e_valida" {
+  command = plan
+
+  variables {
+    endpoint_public_access = false
+    public_access_cidrs    = []
+  }
+
+  assert {
+    condition     = aws_eks_cluster.this.vpc_config[0].endpoint_public_access == false
+    error_message = "o endpoint publico deveria estar desligado neste cenario"
+  }
+}
+
+run "cidr_malformado_e_erro" {
+  command = plan
+
+  variables {
+    # Sem prefixo: passaria por uma checagem de regex ingenua e falharia so na AWS.
+    public_access_cidrs = ["203.0.113.10"]
+  }
+
+  expect_failures = [var.public_access_cidrs]
 }
 
 run "role_dos_nos_tem_as_tres_policies_gerenciadas" {

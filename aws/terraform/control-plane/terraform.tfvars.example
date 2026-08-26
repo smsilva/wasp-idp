@@ -6,3 +6,8 @@ vpc_cidr           = "10.2.0.0/16"
 availability_zones = ["us-east-1a", "us-east-1b"]
 network_account_id = "<id-da-conta-network>"
 target_account_ids = ["<id-da-conta-alvo>"]
+
+# CIDRs autorizados no endpoint publico da API do EKS. O valor certo e o IP de saida da
+# maquina que roda o apply — scripts/generate-tfvars descobre e escreve o /32. Nao ha
+# default: lista vazia seria 0.0.0.0/0 para a AWS.
+public_access_cidrs = ["<ip-publico-desta-maquina>/32"]

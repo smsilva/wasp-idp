@@ -32,9 +32,26 @@ variable "endpoint_private_access" {
 }
 
 variable "public_access_cidrs" {
-  description = "CIDRs autorizados no endpoint publico. Vazio significa 0.0.0.0/0."
+  description = <<-EOT
+    CIDRs autorizados no endpoint publico. A AWS le lista VAZIA como 0.0.0.0/0 — por isso
+    vazio e recusado quando o endpoint publico esta ligado: omitir um valor nao pode ser o
+    caminho para expor a API do cluster ao mundo.
+  EOT
   type        = list(string)
   default     = []
+
+  validation {
+    # Com o endpoint publico desligado a lista e irrelevante e vazia esta correta; a
+    # invariante so morde quando ha endpoint publico para restringir.
+    condition     = !var.endpoint_public_access || length(var.public_access_cidrs) > 0
+    error_message = "com endpoint_public_access ligado, public_access_cidrs nao pode ser vazio: a AWS interpreta lista vazia como 0.0.0.0/0."
+  }
+
+  validation {
+    # alltrue([]) e true, e aqui esta certo: lista vazia ja e tratada pela validacao acima.
+    condition     = alltrue([for cidr in var.public_access_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "todo item de public_access_cidrs deve ser um CIDR com prefixo (ex.: 203.0.113.10/32)."
+  }
 }
 
 variable "access_entries" {

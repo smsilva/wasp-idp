@@ -17,7 +17,15 @@ show_usage() {
     availability_zones   describe-availability-zones da regiao, as N primeiras
     target_account_ids   organizations list-accounts, resolvendo nome -> id
     kubernetes_version   describe-cluster-versions, a versao default do EKS
+    public_access_cidrs  o IP publico DESTA maquina, como /32, via checkip.amazonaws.com
     <bucket de state>    tfstate-<organization-id>, impresso para o -backend-config
+
+  Sobre o public_access_cidrs: quem fala com o API server do EKS e a maquina que roda
+  o terraform apply — os providers helm e kubernetes saem daqui. Por isso o valor certo
+  e o IP de saida DESTA maquina, e por isso ele e descoberto a cada geracao em vez de
+  ficar fixo no arquivo. IP dinamico, trocar de rede ou conectar/desconectar VPN muda o
+  valor: regenerar. O endpoint publico deixa de existir no passo 2.5, quando o caminho
+  privado estiver de pe.
 
   O que e DECIDIDO (vem por opcao, nao se descobre):
 
@@ -31,6 +39,7 @@ show_usage() {
     - o vpc_cidr pedido nao colide com nenhuma VPC ja existente na conta alvo
     - a regiao passa pela SCP DenyOutsideApprovedRegions
     - o bucket de state existe
+    - o IP descoberto e um IPv4 valido, nao pagina de portal cativo
 
     Options:
 
@@ -47,6 +56,10 @@ show_usage() {
                                   (default: wasp-nonprod)
            --availability-zones  Quantas AZs usar (default: 2)
            --kubernetes-version  Fixa a versao em vez de descobrir
+           --public-access-cidr  CIDR autorizado no endpoint publico da API. Repetivel.
+                                  Passar pelo menos um DESLIGA a descoberta do IP — use
+                                  quando o apply for rodar de outro lugar (CodeBuild,
+                                  runner de CI) ou para acrescentar o CIDR do Client VPN
            --format              tfvars | json  (default: tfvars)
       -o,  --output              Arquivo de saida (default: ../terraform.tfvars;
                                   use - para stdout)
@@ -61,6 +74,8 @@ show_usage() {
       ${this_script_name} --format json --output -
 
       ${this_script_name} --region us-west-2 --vpc-cidr 10.4.0.0/16 --hub-vpc-name poc-hub-vpc
+
+      ${this_script_name} --public-access-cidr 203.0.113.10/32 --force
 
 EOF
 }
@@ -77,6 +92,7 @@ format="tfvars"
 output=""
 force="false"
 target_accounts=()
+public_access_cidrs=()
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
   case $1 in
@@ -128,6 +144,11 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     --kubernetes-version )
       shift
       kubernetes_version="${1}"
+      ;;
+
+    --public-access-cidr )
+      shift
+      public_access_cidrs+=("${1}")
       ;;
 
     --format )
@@ -187,7 +208,7 @@ fail() {
 
 set -e
 
-for tool in aws jq; do
+for tool in aws jq curl; do
   command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
 done
 
@@ -315,6 +336,33 @@ if [ -z "${kubernetes_version}" ]; then
 fi
 log "versao do Kubernetes: ${kubernetes_version}"
 
+# --- CIDRs autorizados no endpoint publico da API ---------------------------
+# Quem fala com o API server do EKS e a maquina que roda o apply — os providers
+# helm e kubernetes saem daqui. Logo o valor certo e o IP de saida DESTA maquina,
+# e nao um valor fixo no arquivo. Lista vazia nao serve: a AWS le vazio como
+# 0.0.0.0/0, e o root recusa isso na validacao.
+if [ "${#public_access_cidrs[@]}" -eq 0 ]; then
+  # Sem pipe de proposito: com "curl | tr" o exit code seria o do tr e a falha do
+  # curl passaria calada — a mesma armadilha que os scripts apply/destroy resolvem
+  # com PIPESTATUS. --fail faz HTTP >= 400 virar exit code.
+  discovered_ip="$(curl --silent --fail --max-time 5 https://checkip.amazonaws.com)" \
+    || fail "nao alcancei checkip.amazonaws.com. Sem rede, ou proxy no caminho — passe --public-access-cidr <cidr> explicitamente."
+
+  discovered_ip="${discovered_ip//[[:space:]]/}"
+
+  # Portal cativo e proxy que intercepta devolvem HTML com HTTP 200, entao o exit
+  # code do curl nao basta. A faixa de cada octeto nao e checada aqui: o CIDR passa
+  # pela validacao do root, que recusa 999.0.0.1/32 com mensagem propria.
+  if [[ ! "${discovered_ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    fail "checkip.amazonaws.com devolveu algo que nao e IPv4 ('${discovered_ip:0:24}'). Portal cativo ou proxy interceptando? Passe --public-access-cidr <cidr>."
+  fi
+
+  public_access_cidrs=("${discovered_ip}/32")
+  log "IP publico desta maquina: $(mask "${discovered_ip}")/32 (regenere ao trocar de rede ou VPN)"
+else
+  log "CIDRs do endpoint publico: ${#public_access_cidrs[@]} passado(s) por opcao, descoberta desligada"
+fi
+
 # --- bucket de state --------------------------------------------------------
 # Nao entra no tfvars: o backend recebe o bucket por -backend-config, justamente
 # para o nome real nao virar arquivo versionado.
@@ -339,6 +387,7 @@ fi
 
 # --- saida ------------------------------------------------------------------
 target_account_ids_json="$(printf '%s\n' "${target_account_ids[@]}" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+public_access_cidrs_json="$(printf '%s\n' "${public_access_cidrs[@]}" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
 
 if [ "${format}" == "json" ]; then
   rendered="$(jq --null-input \
@@ -354,6 +403,7 @@ if [ "${format}" == "json" ]; then
     --arg state_bucket "${state_bucket}" \
     --argjson availability_zones "${availability_zones}" \
     --argjson target_account_ids "${target_account_ids_json}" \
+    --argjson public_access_cidrs "${public_access_cidrs_json}" \
     '{
       region: $region,
       aws_profile: $aws_profile,
@@ -364,6 +414,7 @@ if [ "${format}" == "json" ]; then
       availability_zones: $availability_zones,
       network_account_id: $network_account_id,
       target_account_ids: $target_account_ids,
+      public_access_cidrs: $public_access_cidrs,
       discovered: {
         hub_vpc_id: $hub_vpc_id,
         cluster_account_id: $cluster_account_id,
@@ -387,6 +438,11 @@ kubernetes_version = "${kubernetes_version}"
 availability_zones = $(echo "${availability_zones}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
 network_account_id = "${network_account_id}"
 target_account_ids = $(echo "${target_account_ids_json}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
+
+# O endpoint publico da API do EKS aceita SO estes CIDRs. Descoberto nesta geracao;
+# trocar de rede ou de VPN invalida o valor — regenere em vez de editar a mao. Some
+# quando o passo 2.5 fechar o endpoint publico.
+public_access_cidrs = $(echo "${public_access_cidrs_json}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
 EOF
 )"
 fi

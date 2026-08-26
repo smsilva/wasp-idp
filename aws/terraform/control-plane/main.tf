@@ -34,11 +34,12 @@ module "network" {
 module "cluster" {
   source = "../src/cluster"
 
-  name               = var.name
-  kubernetes_version = var.kubernetes_version
-  subnet_ids         = module.network.control_plane_subnet_ids
-  access_entries     = var.access_entries
-  tags               = local.tags
+  name                = var.name
+  kubernetes_version  = var.kubernetes_version
+  subnet_ids          = module.network.control_plane_subnet_ids
+  public_access_cidrs = var.public_access_cidrs
+  access_entries      = var.access_entries
+  tags                = local.tags
 }
 
 module "nodegroup" {

@@ -18,6 +18,13 @@ output "cluster_security_group_id" {
   value       = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
 }
 
+# Le do RECURSO, nao da variavel: e o unico jeito de um teste do root provar que o valor
+# atravessou o modulo e chegou ao vpc_config, em vez de so provar que foi passado.
+output "public_access_cidrs" {
+  description = "CIDRs efetivamente autorizados no endpoint publico da API."
+  value       = aws_eks_cluster.this.vpc_config[0].public_access_cidrs
+}
+
 output "node_role_arn" {
   description = "Role compartilhado pelos node groups."
   value       = aws_iam_role.node.arn

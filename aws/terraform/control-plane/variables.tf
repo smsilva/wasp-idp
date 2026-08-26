@@ -63,6 +63,33 @@ variable "target_account_ids" {
   type        = list(string)
 }
 
+variable "public_access_cidrs" {
+  description = <<-EOT
+    CIDRs autorizados no endpoint publico da API do EKS. SEM DEFAULT de proposito: quem fala
+    com o API server e a maquina que roda o terraform apply, entao o valor certo depende de
+    onde o apply roda e nao ha default seguro. scripts/generate-tfvars descobre o IP publico
+    corrente e escreve o /32.
+
+    Some quando o 2.5 fechar o endpoint publico; ate lah e o unico controle de quem alcanca
+    a API.
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.public_access_cidrs) > 0
+    error_message = "public_access_cidrs nao pode ser vazio: a AWS le lista vazia como 0.0.0.0/0. Rode scripts/generate-tfvars para descobrir o IP corrente."
+  }
+
+  validation {
+    # A checagem de CIDR valido mora no modulo. Aqui mora a POLITICA da celula: nem por
+    # engano nem de proposito esta camada expoe a API do cluster ao mundo. Abrir de verdade
+    # exige editar esta validacao, que e ato visivel em diff — nao um valor num tfvars
+    # gitignored.
+    condition     = !contains(var.public_access_cidrs, "0.0.0.0/0")
+    error_message = "0.0.0.0/0 em public_access_cidrs: a celula control-plane nao expoe a API do EKS ao mundo (ver Known Broken 3 no HANDOFF)."
+  }
+}
+
 variable "access_entries" {
   description = "Principals IAM com acesso ao cluster, alem do criador."
   type = map(object({

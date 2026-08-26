@@ -17,6 +17,9 @@ variables {
   availability_zones = ["us-east-1a", "us-east-1b"]
   target_account_ids = ["000000000000"]
   network_account_id = "111111111111"
+  # RFC 5737, bloco de documentacao. Na vida real vem do generate-tfvars, que descobre o IP
+  # publico da maquina que vai rodar o apply.
+  public_access_cidrs = ["203.0.113.10/32"]
 }
 
 run "spoke_usa_o_segundo_octeto_reservado" {
@@ -81,4 +84,27 @@ run "cidr_fora_do_supernet_e_erro" {
   }
 
   expect_failures = [var.vpc_cidr]
+}
+
+# A restricao do endpoint atravessa duas camadas: o root escolhe o valor, o modulo o entrega
+# ao vpc_config. Um desses fios cortado deixa a API aberta sem nada reclamar.
+run "o_cidr_do_root_chega_ao_endpoint_do_cluster" {
+  command = plan
+
+  assert {
+    condition     = module.cluster.public_access_cidrs == toset(["203.0.113.10/32"])
+    error_message = "o public_access_cidrs do root deveria chegar ao endpoint do cluster, recebido ${jsonencode(module.cluster.public_access_cidrs)}"
+  }
+}
+
+# Politica da celula, nao semantica da AWS: 0.0.0.0/0 e um valor legitimo para o recurso e
+# recusado aqui de proposito. Abrir exige editar a validacao, que aparece em diff.
+run "o_mundo_e_recusado_mesmo_explicito" {
+  command = plan
+
+  variables {
+    public_access_cidrs = ["0.0.0.0/0"]
+  }
+
+  expect_failures = [var.public_access_cidrs]
 }
