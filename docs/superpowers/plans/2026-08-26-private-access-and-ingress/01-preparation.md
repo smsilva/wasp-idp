@@ -7,7 +7,7 @@ decidir qualquer coisa das fases seguintes.
 |---|---|---|---|---|
 | `1.1` | ~~Tags~~ **Teste** das tags `kubernetes.io/role/{elb,internal-elb}` em `src/network` | — | zero | `terraform test` offline — **feito** |
 | `1.2` | `generate-tfvars` descobre o IP público → `public_access_cidrs = ["<ip>/32"]` | — | zero | teste offline **feito**; os dois critérios que exigem apply real **pendentes** |
-| `1.3` | Raiz `dns/`: hosted zone `nonprod.<domínio>` + delegação NS no Azure, dois providers | T0 | ~US$ 0,50/mês | escrita e testada offline; **`dig` pendente** — falta o `apply` |
+| `1.3` | Raiz `dns/`: hosted zone `nonprod.<domínio>` + delegação NS no Azure, dois providers | T0 | ~US$ 0,50/mês | **aplicada**; `dig +trace` confirma a delegação |
 
 ## `1.1` — tags de descoberta do LBC — **FEITO**
 
@@ -164,8 +164,16 @@ o segundo run cai; colando o do segundo, cai o primeiro.
 Vale para qualquer asserção sobre valor que atravessa recursos: **um override testa o valor, dois
 testam a ligação.**
 
-### O que falta
+### Aplicada — o aceite
 
-O `apply`. Ele cria a hosted zone (T0, ~US$ 0,50/mês, `prevent_destroy`) e escreve o NS no Azure,
-então precisa de credencial das duas clouds e roda por `! <comando>`. Só depois dele o critério de
-aceite — `dig NS nonprod.<domínio>` respondendo pelos name servers do Route 53 — é verificável.
+Subzona criada na conta `network`, 2 record sets, e a delegação provada por `dig +trace`: o name
+server do Azure entrega a delegação e o do Route 53 responde o SOA. A cadeia atravessa as duas clouds,
+que é o que o passo existia para demonstrar. Propagação quase imediata.
+
+**O TTL 300 está no NS da PAI, não na subzona.** O `NS` dentro da zona do Route 53 nasce com 172800
+(default da AWS); quem governa a repropagação da delegação é o registro da pai — que é justamente o
+que se configurou aqui.
+
+**A pai já tinha uma delegação no mesmo formato** (`NS sandbox`, apontando para outra zona Azure). A
+nova ficou ao lado, apontando para o Route 53 — nada de novo na zona pai, e foi o que justificou o
+guard de colisão no script da camada.
