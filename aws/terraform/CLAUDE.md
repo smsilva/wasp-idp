@@ -43,6 +43,19 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - Validação que vive numa `variable` some quando os valores viram inline. Ao mover valores para
   dentro do `main.tf`, transformar a validação em assertion de teste — senão vira buraco
   silencioso. Foi o que aconteceu com a checagem de supernet do CIDR.
+- **Mutar `validation` exige ENFRAQUECER a condição, não removê-la.** Trocar por `condition = true`
+  não deixa o teste vermelho: o Terraform recusa condição que não referencia a própria variável, a
+  configuração fica inválida e **nenhum run executa** — o que se lê como "mutação não detectada".
+  Enfraquecer (`length(...) >= 0`, `for x in ... : x != ""`) mantém a referência e produz o vermelho
+  de verdade.
+- **`can(cidrhost(c, 0))` valida CIDR sem regex:** aceita `203.0.113.10/32`, recusa sem prefixo,
+  `/33` e octeto acima de 255. Verificado no `terraform console`.
+- **Validação em duas camadas tem fronteira:** a **semântica do provider** (ex.: `public_access_cidrs`
+  vazio é `0.0.0.0/0` para a AWS) mora no módulo, onde vale para qualquer chamador; a **política da
+  célula** (ex.: esta camada não expõe a API ao mundo nem explicitamente) mora na raiz, onde mudá-la
+  aparece em diff. Misturar as duas põe decisão de projeto em módulo genérico.
+- **Variável sem default é a forma de falhar fechado.** Ela invalida o `terraform.tfvars` já gerado, e
+  isso é o mecanismo: quem for aplicar tem de regenerar em vez de herdar um valor perigoso.
 
 ## Providers `kubernetes` e `helm`
 

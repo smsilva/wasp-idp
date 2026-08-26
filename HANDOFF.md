@@ -374,9 +374,12 @@ nenhum hoje.
    (`src/network/tests/tags.tftest.hcl`). **Lição: achado sobre módulo do repo se confere no módulo.**
 2. **`src/network` não tem nada de TGW** — *intentional* até a decisão de VPN; agora é lacuna: falta
    attachment, associação/propagação em `tgw-rt-<spoke>` e rotas para CIDRs remotos. **É o `2.3`.**
-3. **Endpoint da API do EKS público para `0.0.0.0/0`** quando a camada 2 está de pé — *intentional*:
-   `public_access_cidrs = []` (vazio significa o mundo). **Mitigação barata é o `1.2`** (`/32`);
-   fechar de vez é o `2.5`, e depende de VPN + DNS.
+3. **Endpoint da API do EKS público para `0.0.0.0/0`** — *era* `public_access_cidrs = []`, e vazio
+   significa o mundo. **Fechado no `1.2` no que dá para fechar offline:** a variável do root não tem
+   default, lista vazia é erro de validação no módulo e `0.0.0.0/0` é recusado no root mesmo
+   explícito. **Falta a confirmação com a camada 2 de pé** (o apply do laptop segue funcionando; a API
+   recusa de outro IP) — os dois critérios exigem ~US$ 165/mês ligados. Fechar de vez é o `2.5`, que
+   depende de VPN + DNS.
 4. **Break-glass documentado, controles ausentes** — *unexpected*: MFA no root da management account e
    das contas-membro **não verificado**; alarme de uso de root **não existe** (CloudTrail já captura,
    falta a regra EventBridge); ensaio nunca executado.
@@ -448,7 +451,11 @@ agente. O `apply` sem tty falha de propósito, informando o caminho do plano sal
 não houver terminal. O mesmo vale para os scripts de `aws/docs/accounts/scripts/` que criam recursos
 reais.
 
-Regressão offline (**49 testes**, 11 diretórios, 0 falhas):
+**O `terraform.tfvars` local ficou desatualizado de propósito:** o `1.2` acrescentou
+`public_access_cidrs` **sem default**, então qualquer `plan` falha pedindo a variável até rodar
+`./scripts/generate-tfvars --force`. É a falha-fechado funcionando, não regressão.
+
+Regressão offline (**55 testes**, 11 diretórios, 0 falhas):
 
 ```bash
 cd aws/terraform
@@ -500,6 +507,10 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
   association.
 - **Nunca fixar versão de Kubernetes (nem de chart, nem de addon) em documento de plano.** O
   `generate-tfvars` descobre.
+- **`curl | tr` engole a falha do `curl`** — o exit code do pipeline é o do `tr`. Mesma família do
+  `PIPESTATUS[0]` do `apply`/`destroy`, em roupa nova. Sem pipe, e `--fail` para transformar HTTP ≥
+  400 em exit code. E o exit code **não basta**: portal cativo devolve HTML com 200, então o formato
+  do que voltou também é validado.
 
 **Load balancer e TLS**
 
@@ -544,9 +555,11 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 
 - [x] Plano completo, sem decisão de desenho em aberto, um arquivo por fase.
 - [x] **`1.1`** — tags do LBC em `src/network`: já estavam no código; entregue o teste que faltava.
-- [ ] **`1.2`** — `generate-tfvars` descobre o IP público → `public_access_cidrs = ["<ip>/32"]`.
-      **É por aqui que se começa.**
+- [x] **`1.2`** — `public_access_cidrs` sem default no root, invariante no módulo, IP descoberto pelo
+      `generate-tfvars`. **Offline provado (6 mutações); os dois critérios que exigem a camada 2 de pé
+      seguem pendentes** — verificar na próxima vez que ela subir.
 - [ ] **`1.3`** — raiz `aws/terraform/dns/`: hosted zone `nonprod.` + delegação NS no Azure.
+      **É por aqui que se começa.**
 - [ ] **`2.1` (PORTÃO)** — verificar o client da AWS VPN nesta distro **antes** de criar recurso que
       cobra.
 - [ ] **`2.2`–`2.5`** — `connectivity/`, attachment, DNS privado, fechar a API.
@@ -587,6 +600,40 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       (Known Broken 16).
 
 ## Completed Work
+
+### `1.2` — endpoint da API restrito ao IP de quem aplica (2026-08-26)
+
+Branch `feat/lbc-subnet-discovery-tags` (o `1.2` seguiu na mesma).
+
+**A fronteira foi a decisão do passo**, e ela se dividiu em duas por natureza do que se protege:
+
+| Onde | O que | Natureza |
+|---|---|---|
+| `src/cluster` | recusa lista vazia **se** o endpoint público está ligado; recusa CIDR sem prefixo | **semântica da AWS** — vazio é `0.0.0.0/0`, e a armadilha vale para qualquer chamador |
+| `control-plane` | variável **sem default**; recusa `0.0.0.0/0` mesmo explícito | **política da célula** — abrir exige editar a validação, ato visível em diff |
+| `generate-tfvars` | descobre o IP em `checkip.amazonaws.com`, escreve o `/32`; `--public-access-cidr` (repetível) desliga a descoberta | o script já existia para descobrir antes de gerar arquivo |
+
+Sem default é o que fecha o `Known Broken 3`: omitir a variável era o caminho silencioso para o
+mundo, e agora é erro de validação antes de qualquer chamada à AWS. Custo do fechamento: o
+`terraform.tfvars` local precisa ser regenerado.
+
+**Seis mutações rodadas, seis capturadas.** Duas ensinaram algo:
+
+- **Condição de `validation` tem de referenciar a própria variável.** Trocar por `true` para testar
+  não deixa o teste vermelho — deixa a configuração inválida, e **nenhum run executa**. Mutação de
+  validação precisa **enfraquecer** (`length(...) >= 0`), não remover. Duas tentativas foram
+  perdidas nisso.
+- **A invariante do módulo torna o fio do root impossível de cortar calado:** apagar o
+  `public_access_cidrs = var.public_access_cidrs` deixa a lista vazia e o módulo derruba o plan no
+  primeiro run. Só a mutação que passa um CIDR **válido mas errado** isola a asserção do root — e é
+  ela que a justifica.
+
+**O que NÃO foi verificado:** os outros dois critérios de aceite do passo (*o apply do laptop segue
+funcionando*, *a API recusa de outro IP*) exigem a camada 2 de pé, ~US$ 165/mês. Ficam para a próxima
+vez que ela subir.
+
+Regressão: **55 testes em 11 diretórios, 0 falhas** (eram 49). Nada tocou a AWS além de um GET em
+`checkip.amazonaws.com`.
 
 ### `1.1` — tags de descoberta do LBC, e a lição sobre achado não conferido (2026-08-26)
 
