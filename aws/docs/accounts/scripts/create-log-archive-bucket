@@ -8,27 +8,27 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria, DENTRO da conta log-archive, o bucket S3 que recebe o CloudTrail
-  organizacional — com Block Public Access, versionamento, criptografia e a bucket
-  policy que autoriza o serviço CloudTrail a escrever (ver
+  Creates, INSIDE the log-archive account, the S3 bucket that receives the organization
+  CloudTrail — with Block Public Access, versioning, encryption and the bucket
+  policy that authorizes the CloudTrail service to write (see
   aws/docs/accounts/07-cloudtrail-and-log-archive.md).
 
   Roda a partir da MANAGEMENT account e assume a role indicada por --role na conta
-  de destino (OrganizationAccountAccessRole existe por default em conta criada via
+  target account (OrganizationAccountAccessRole exists by default in an account created via
   'create-account'). Idempotente.
 
     Options:
 
       -h,  --help              Show this help
-      -a,  --account           Nome ou id da conta de log (default: log-archive)
+      -a,  --account           Log account name or id (default: log-archive)
       -b,  --bucket            Nome do bucket (default: cloudtrail-<organization-id>)
       -t,  --trail             Nome do trail que vai escrever (default: organization-trail)
-      -r,  --region            Região do bucket e do trail (default: us-east-1)
-           --role              Role assumida na conta de destino
+      -r,  --region            Bucket and trail region (default: us-east-1)
+           --role              Role assumed in the target account
                                 (default: OrganizationAccountAccessRole)
 
-  A bucket policy é escopada por 'aws:SourceArn' ao ARN do trail — trocar --trail
-  depois exige rodar este script de novo para a policy acompanhar.
+  The bucket policy is scoped by 'aws:SourceArn' to the trail ARN — changing --trail
+  later requires running this script again so the policy keeps up.
 
     Examples:
 
@@ -101,7 +101,7 @@ else
     --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
 
   if [ -z "${account_id}" ]; then
-    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    echo "No ACTIVE account named '${account}' in the Organization." >&2
     exit 1
   fi
 fi
@@ -122,7 +122,7 @@ Trail alvo:    ${trail_arn}
 
 EOF
 
-# --- assume role na conta de log (credenciais só na memória deste processo) ----
+# --- assume role in the log account (credentials only in this process memory) --
 credentials_json="$(aws sts assume-role \
   --role-arn "arn:aws:iam::${account_id}:role/${role}" \
   --role-session-name "${this_script_name}" \
@@ -138,7 +138,7 @@ echo "ok  assumida ${role} em ${account_id} ($(aws sts get-caller-identity --que
 
 # --- bucket -------------------------------------------------------------------
 if aws s3api head-bucket --bucket "${bucket}" 2> /dev/null; then
-  echo "ok  bucket '${bucket}' já existe"
+  echo "ok  bucket '${bucket}' already exists"
 else
   if [ "${region}" == "us-east-1" ]; then
     aws s3api create-bucket --bucket "${bucket}" --region "${region}" > /dev/null
@@ -221,7 +221,7 @@ cat <<EOF
 
 Bucket pronto: s3://${bucket}
 
-Próximo passo (na management account):
+Next step (in the management account):
   aws cloudtrail create-trail --name ${trail} \\
     --s3-bucket-name ${bucket} --is-organization-trail --is-multi-region-trail
   aws cloudtrail start-logging --name ${trail}

@@ -8,16 +8,16 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Mostra o estado do IAM Identity Center: permission sets existentes e, para cada conta
+  Shows the state of IAM Identity Center: existing permission sets and, for each account
   da Organization, quem tem qual acesso (ver aws/docs/accounts/04-cross-account-access.md).
 
-  Somente leitura — não altera nada. É a forma de conferir o resultado de
+  Read only — changes nothing. This is how to check the result of
   ${this_script_directory}/assign-permission-set e de revoke-permission-set.
 
     Options:
 
       -h,  --help              Show this help
-      -a,  --account           Restringe a uma conta (nome ou id); default: todas
+      -a,  --account           Restrict to one account (name or id); default: all
 
     Examples:
 
@@ -59,7 +59,7 @@ instance_arn="$(echo "${instance_json}" | jq -r '.InstanceArn // empty')"
 identity_store_id="$(echo "${instance_json}" | jq -r '.IdentityStoreId // empty')"
 
 if [ -z "${instance_arn}" ]; then
-  echo "Nenhuma instância do IAM Identity Center nesta Organization." >&2
+  echo "No IAM Identity Center instance in this Organization." >&2
   exit 1
 fi
 
@@ -67,7 +67,7 @@ echo "Identity Center ${instance_arn}"
 echo "Identity store  ${identity_store_id}"
 echo
 
-# Cache nome<-permission set arn: list-permission-sets devolve só ARNs (sem filtro por nome).
+# Cache name<-permission set arn: list-permission-sets returns only ARNs (no name filter).
 declare -A permission_set_name
 
 echo "Permission sets:"
@@ -81,7 +81,7 @@ for arn in $(aws sso-admin list-permission-sets --instance-arn "${instance_arn}"
     --instance-arn "${instance_arn}" --permission-set-arn "${arn}" \
     --query 'AttachedManagedPolicies[].Name' --output text)"
 
-  printf '  %-28s %s\n' "${name}" "${policies:-(sem managed policy)}"
+  printf '  %-28s %s\n' "${name}" "${policies:-(no managed policy)}"
 done
 echo
 
@@ -96,7 +96,7 @@ principal_label() {
     return
   fi
 
-  echo "usuário $(aws identitystore describe-user \
+  echo "user $(aws identitystore describe-user \
     --identity-store-id "${identity_store_id}" --user-id "${id}" \
     --query UserName --output text 2> /dev/null || echo "${id}")"
 }
@@ -110,7 +110,7 @@ if [ -n "${account}" ]; then
   fi
 
   if [ -z "${accounts}" ]; then
-    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    echo "No ACTIVE account named '${account}' in the Organization." >&2
     exit 1
   fi
 else
@@ -118,7 +118,7 @@ else
     --query "Accounts[?Status=='ACTIVE'].Id" --output text)"
 fi
 
-echo "Atribuições por conta:"
+echo "Assignments per account:"
 for account_id in ${accounts}; do
   account_name="$(aws organizations describe-account --account-id "${account_id}" \
     --query Account.Name --output text)"
@@ -142,6 +142,6 @@ for account_id in ${accounts}; do
   done
 
   if [ -z "${found}" ]; then
-    echo "    (nenhuma — acesso só via OrganizationAccountAccessRole)"
+    echo "    (none — access only via OrganizationAccountAccessRole)"
   fi
 done

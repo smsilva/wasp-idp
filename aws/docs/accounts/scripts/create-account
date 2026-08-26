@@ -8,31 +8,31 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria (ou reaproveita) uma conta-membro da Organization e a move para a OU pedida
-  (ver aws/docs/accounts/03-provisioning.md). Idempotente: se já existir
-  uma conta ACTIVE com o --name pedido, só garante que está na OU certa.
+  Creates (or reuses) an Organization member account and moves it into the requested
+  OU (see aws/docs/accounts/03-provisioning.md). Idempotent: if an ACTIVE account
+  with the requested --name already exists, it only ensures it sits in the right OU.
 
     Options:
 
       -h,  --help              Show this help
-      -n,  --name              Nome da conta (obrigatório, ex.: network, log-archive, wasp-prod)
-      -e,  --email-domain      Domínio para o e-mail (obrigatório, ex.: example.com)
-      -u,  --email-user        Base da caixa (mailbox) para plus-addressing (opcional).
-                                Com ela:  <email-user>+<name>@<email-domain>
-                                Sem ela:  <name>+aws@<email-domain>  (catch-all corporativo)
+      -n,  --name              Account name (required, e.g. network, log-archive, wasp-prod)
+      -e,  --email-domain      Domain for the email address (required, e.g. example.com)
+      -u,  --email-user        Mailbox base for plus-addressing (optional).
+                                With it:     <email-user>+<name>@<email-domain>
+                                Without it:  <name>+aws@<email-domain>  (corporate catch-all)
            --ou                security | infrastructure | deployments | nonprod | production
-                                (obrigatório). deployments = conta do Control Plane (cicd);
-                                não existe variante nonprod dela — é sempre produção.
+                                (required). deployments = the Control Plane account (cicd);
+                                it has no nonprod variant — it is always production.
 
-  Dois modos de e-mail (o endereço vira o root user da conta e precisa ser único em
-  TODA a AWS, além de válido/controlado por você):
+  Two email modes (the address becomes the account root user and must be unique across
+  ALL of AWS, besides being valid and controlled by you):
 
-    - Domínio corporativo com catch-all: omita --email-user. Ex.: --name network
-      --email-domain <email-domain>  ->  network+aws@<email-domain> (roteia pelo catch-all).
+    - Corporate domain with a catch-all: omit --email-user. E.g. --name network
+      --email-domain <email-domain>  ->  network+aws@<email-domain> (routed by the catch-all).
 
-    - Caixa pessoal (Gmail/Workspace): passe --email-user com a SUA caixa. O Gmail
-      entrega qualquer <caixa>+tag@gmail.com em <caixa>@gmail.com, então o nome da
-      conta vira o tag e cada conta fica única. Ex.: --email-user smsilva
+    - Personal mailbox (Gmail/Workspace): pass --email-user with YOUR mailbox. Gmail
+      delivers any <mailbox>+tag@gmail.com to <mailbox>@gmail.com, so the account name
+      becomes the tag and each account stays unique. E.g. --email-user smsilva
       --name network --email-domain gmail.com  ->  smsilva+network@gmail.com.
 
     Examples:
@@ -91,7 +91,7 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 done
 
 if [ -z "${name}" ] || [ -z "${email_domain}" ] || [ -z "${ou}" ]; then
-  echo "Faltam argumentos obrigatórios: --name, --email-domain e --ou." >&2
+  echo "Missing required arguments: --name, --email-domain and --ou." >&2
   show_usage
   exit 1
 fi
@@ -99,14 +99,14 @@ fi
 case "${ou}" in
   security | infrastructure | deployments | nonprod | production ) ;;
   * )
-    echo "--ou inválido: '${ou}' (use security, infrastructure, deployments, nonprod ou production)" >&2
+    echo "invalid --ou: '${ou}' (use security, infrastructure, deployments, nonprod or production)" >&2
     exit 1
     ;;
 esac
 
 if [ "${ou}" == "production" ]; then
-  echo "ATENÇÃO: criando conta na OU Production." >&2
-  echo "Confirme que já validou o mesmo setup em NonProd antes de prosseguir aqui." >&2
+  echo "WARNING: creating an account in the Production OU." >&2
+  echo "Confirm you have validated the same setup in NonProd before going ahead here." >&2
 fi
 
 set -e
@@ -153,7 +153,7 @@ case "${ou}" in
 esac
 
 if [ -z "${parent_id}" ]; then
-  echo "OU '${ou_name}' não encontrada — rode ${this_script_directory}/create-organizational-unit-structure primeiro." >&2
+  echo "OU '${ou_name}' not found — run ${this_script_directory}/create-organizational-unit-structure first." >&2
   exit 1
 fi
 
@@ -161,25 +161,25 @@ existing_account_id="$(aws organizations list-accounts \
   --query "Accounts[?Name=='${name}' && Status=='ACTIVE'].Id" --output text)"
 
 if [ -n "${existing_account_id}" ]; then
-  echo "ok  conta '${name}' já existe (${existing_account_id}) — garantindo que está em ${ou_name}"
+  echo "ok  account '${name}' already exists (${existing_account_id}) — ensuring it sits in ${ou_name}"
   current_parent_id="$(aws organizations list-parents --child-id "${existing_account_id}" \
     --query 'Parents[0].Id' --output text)"
   if [ "${current_parent_id}" != "${parent_id}" ]; then
     aws organizations move-account --account-id "${existing_account_id}" \
       --source-parent-id "${current_parent_id}" --destination-parent-id "${parent_id}"
-    echo "movida  conta '${name}' -> ${ou_name}"
+    echo "moved  account '${name}' -> ${ou_name}"
   else
-    echo "ok  já está em ${ou_name}"
+    echo "ok  already in ${ou_name}"
   fi
   echo "${existing_account_id}"
   exit 0
 fi
 
-echo "Criando conta '${name}' (${email}) em ${ou_name}..."
+echo "Creating account '${name}' (${email}) in ${ou_name}..."
 request_id="$(aws organizations create-account --email "${email}" --account-name "${name}" \
   --query CreateAccountStatus.Id --output text)"
 
-echo "Aguardando provisionamento (request ${request_id})..."
+echo "Waiting for provisioning (request ${request_id})..."
 account_id=""
 for _ in $(seq 1 30); do
   status_json="$(aws organizations describe-create-account-status --create-account-request-id "${request_id}")"
@@ -192,7 +192,7 @@ for _ in $(seq 1 30); do
 
   if [ "${state}" == "FAILED" ]; then
     reason="$(echo "${status_json}" | jq -r .CreateAccountStatus.FailureReason)"
-    echo "create-account FALHOU: ${reason}" >&2
+    echo "create-account FAILED: ${reason}" >&2
     exit 1
   fi
 
@@ -200,14 +200,14 @@ for _ in $(seq 1 30); do
 done
 
 if [ -z "${account_id}" ]; then
-  echo "create-account não concluiu em tempo — verifique manualmente: aws organizations describe-create-account-status --create-account-request-id ${request_id}" >&2
+  echo "create-account did not finish in time — check manually: aws organizations describe-create-account-status --create-account-request-id ${request_id}" >&2
   exit 1
 fi
 
-echo "conta criada  ${name} = ${account_id}"
+echo "account created  ${name} = ${account_id}"
 
 aws organizations move-account --account-id "${account_id}" \
   --source-parent-id "${root_id}" --destination-parent-id "${parent_id}"
-echo "movida  '${name}' -> ${ou_name}"
+echo "moved  '${name}' -> ${ou_name}"
 
 echo "${account_id}"

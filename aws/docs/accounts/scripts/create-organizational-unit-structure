@@ -8,7 +8,7 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria a estrutura mínima de OUs (ver aws/docs/accounts/01-organizations-and-ous.md):
+  Creates the minimum OU structure (see aws/docs/accounts/01-organizations-and-ous.md):
 
     Root
     ├── Security          (log-archive, security-tooling)
@@ -19,10 +19,10 @@ show_usage() {
         └── Production
 
   Nomes seguem o whitepaper "Organizing Your AWS Environment Using Multiple Accounts".
-  Deployments é classificada lá como Advanced OU (opcional em geral), mas é obrigatória
-  nesta referência: é onde vive a conta do Control Plane, que provisiona nas demais.
+  Deployments is classified there as an Advanced OU (generally optional), but it is required
+  in this reference: it is where the Control Plane account lives, the one that provisions the others.
 
-  Idempotente: reaproveita qualquer OU já existente com o mesmo nome no mesmo pai.
+  Idempotent: reuses any existing OU with the same name under the same parent.
 
     Options:
 
@@ -64,7 +64,7 @@ find_or_create_ou() {
     --query "OrganizationalUnits[?Name=='${name}'].Id" --output text)"
 
   if [ -n "${existing_id}" ]; then
-    echo "ok  OU '${name}' já existe (${existing_id})" >&2
+    echo "ok  OU '${name}' already exists (${existing_id})" >&2
     echo "${existing_id}"
     return 0
   fi
@@ -97,5 +97,5 @@ Estrutura de OUs pronta:
   Workloads/NonProd:    ${nonprod_id}
   Workloads/Production: ${production_id}
 
-Próximo passo: ${this_script_directory}/apply-baseline-service-control-policy
+Next step: ${this_script_directory}/apply-baseline-service-control-policy
 EOF

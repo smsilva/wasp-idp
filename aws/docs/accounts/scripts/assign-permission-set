@@ -8,30 +8,30 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria (ou reaproveita) um permission set do IAM Identity Center e o atribui a um
-  usuário/grupo numa conta-membro — o passo que faz a conta aparecer no portal SSO e
-  no 'aws sso login' direto (ver aws/docs/accounts/04-cross-account-access.md).
+  Creates (or reuses) an IAM Identity Center permission set and assigns it to a
+  user/group on a member account — the step that makes the account show up in the SSO
+  portal and in 'aws sso login' (see aws/docs/accounts/04-cross-account-access.md).
 
-  Idempotente: reaproveita permission set e atribuição já existentes.
+  Idempotent: reuses an existing permission set and an existing assignment.
 
     Options:
 
       -h,  --help              Show this help
-      -a,  --account           Nome ou id da conta-membro (obrigatório)
-      -p,  --permission-set    Nome do permission set (default: AdministratorAccess)
-           --managed-policy    ARN da managed policy anexada ao criar o permission set
+      -a,  --account           Member account name or id (required)
+      -p,  --permission-set    Permission set name (default: AdministratorAccess)
+           --managed-policy    Managed policy ARN attached when creating the permission set
                                 (default: arn:aws:iam::aws:policy/AdministratorAccess)
-      -u,  --user              Username no Identity Store (obrigatório se --group ausente)
-      -g,  --group             Nome do grupo no Identity Store (alternativa a --user)
-           --create-group      Cria o --group se ele ainda não existir
-      -m,  --member            Username adicionado ao --group (repetível; implica
+      -u,  --user              Identity Store username (required if --group is absent)
+      -g,  --group             Identity Store group name (alternative to --user)
+           --create-group      Create --group if it does not exist yet
+      -m,  --member            Username added to --group (repeatable; implies
                                 --create-group)
-           --session-duration  Duração da sessão, ISO-8601 (default: PT4H)
+           --session-duration  Session duration, ISO-8601 (default: PT4H)
 
-  Pré-requisito: IAM Identity Center habilitado na management account (console —
-  não há API para habilitar a instância).
+  Prerequisite: IAM Identity Center enabled on the management account (console only —
+  there is no API to enable the instance).
 
-  Preferir --group a --user: a atribuição sobrevive a quem entra/sai do time.
+  Prefer --group over --user: the assignment survives people joining and leaving a team.
 
     Examples:
 
@@ -126,13 +126,13 @@ instance_arn="$(echo "${instance_json}" | jq -r '.InstanceArn // empty')"
 identity_store_id="$(echo "${instance_json}" | jq -r '.IdentityStoreId // empty')"
 
 if [ -z "${instance_arn}" ]; then
-  echo "Nenhuma instância do IAM Identity Center nesta Organization." >&2
-  echo "Habilite pelo console (management account -> IAM Identity Center -> Enable)." >&2
+  echo "No IAM Identity Center instance in this Organization." >&2
+  echo "Enable it in the console (management account -> IAM Identity Center -> Enable)." >&2
   exit 1
 fi
 echo "ok  Identity Center ${instance_arn} (identity store ${identity_store_id})"
 
-# --- conta alvo ---------------------------------------------------------------
+# --- target account -----------------------------------------------------------
 if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
   account_id="${account}"
 else
@@ -140,11 +140,11 @@ else
     --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
 
   if [ -z "${account_id}" ]; then
-    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    echo "No ACTIVE account named '${account}' in the Organization." >&2
     exit 1
   fi
 fi
-echo "ok  conta alvo ${account} = ${account_id}"
+echo "ok  target account ${account} = ${account_id}"
 
 # --- permission set -----------------------------------------------------------
 permission_set_arn=""
@@ -160,34 +160,34 @@ for arn in $(aws sso-admin list-permission-sets --instance-arn "${instance_arn}"
 done
 
 if [ -n "${permission_set_arn}" ]; then
-  echo "ok  permission set '${permission_set}' já existe (${permission_set_arn})"
+  echo "ok  permission set '${permission_set}' already exists (${permission_set_arn})"
 else
   permission_set_arn="$(aws sso-admin create-permission-set \
     --instance-arn "${instance_arn}" \
     --name "${permission_set}" \
-    --description "${permission_set} (criado por ${this_script_name})" \
+    --description "${permission_set} (created by ${this_script_name})" \
     --session-duration "${session_duration}" \
     --query PermissionSet.PermissionSetArn --output text)"
-  echo "criado  permission set '${permission_set}' (${permission_set_arn})"
+  echo "created  permission set '${permission_set}' (${permission_set_arn})"
 fi
 
-# Fora do else de propósito: se o attach falhar (ARN inválido, por exemplo), o permission
-# set já existe e a reexecução precisa conseguir consertá-lo — dentro do else o script
-# pularia o attach para sempre, deixando um permission set órfão sem policy nenhuma.
+# Outside the else on purpose: if the attach fails (an invalid ARN, say), the permission
+# set already exists and a rerun has to be able to fix it — inside the else the script
+# would skip the attach forever, leaving an orphan permission set with no policy at all.
 attached="$(aws sso-admin list-managed-policies-in-permission-set \
   --instance-arn "${instance_arn}" --permission-set-arn "${permission_set_arn}" \
   --query "AttachedManagedPolicies[?Arn=='${managed_policy}'].Arn" --output text)"
 
 if [ -n "${attached}" ]; then
-  echo "ok  managed policy ${managed_policy} já anexada"
+  echo "ok  managed policy ${managed_policy} already attached"
 else
   aws sso-admin attach-managed-policy-to-permission-set \
     --instance-arn "${instance_arn}" \
     --permission-set-arn "${permission_set_arn}" \
     --managed-policy-arn "${managed_policy}"
-  echo "anexada  managed policy ${managed_policy}"
+  echo "attached  managed policy ${managed_policy}"
 
-  # Permission set alterado precisa ser reprovisionado nas contas onde já está atribuído.
+  # A changed permission set must be reprovisioned on the accounts where it is assigned.
   for provisioned_account in $(aws sso-admin list-accounts-for-provisioned-permission-set \
     --instance-arn "${instance_arn}" --permission-set-arn "${permission_set_arn}" \
     --query 'AccountIds[]' --output text); do
@@ -195,7 +195,7 @@ else
       --instance-arn "${instance_arn}" \
       --permission-set-arn "${permission_set_arn}" \
       --target-id "${provisioned_account}" --target-type AWS_ACCOUNT > /dev/null
-    echo "reprovisionado  em ${provisioned_account}"
+    echo "reprovisioned  on ${provisioned_account}"
   done
 fi
 
@@ -221,14 +221,14 @@ if [ -n "${group}" ]; then
       --display-name "${group}" \
       --description "${group} (criado por ${this_script_name})" \
       --query GroupId --output text)"
-    echo "criado  ${principal_label} (${principal_id})"
+    echo "created  ${principal_label} (${principal_id})"
   fi
 
   for member in "${members[@]}"; do
     member_id="$(find_user_id "${member}")"
 
     if [ -z "${member_id}" ] || [ "${member_id}" == "None" ]; then
-      echo "usuário '${member}' não encontrado no Identity Store — não adicionado ao grupo." >&2
+      echo "user '${member}' not found in the Identity Store — not added to the group." >&2
       exit 1
     fi
 
@@ -239,7 +239,7 @@ if [ -n "${group}" ]; then
       --query MembershipId --output text 2> /dev/null || true)"
 
     if [ -n "${existing_membership}" ] && [ "${existing_membership}" != "None" ]; then
-      echo "ok  '${member}' já é membro de ${principal_label}"
+      echo "ok  '${member}' is already a member of ${principal_label}"
       continue
     fi
 
@@ -247,21 +247,21 @@ if [ -n "${group}" ]; then
       --identity-store-id "${identity_store_id}" \
       --group-id "${principal_id}" \
       --member-id "UserId=${member_id}" > /dev/null
-    echo "adicionado  '${member}' -> ${principal_label}"
+    echo "added  '${member}' -> ${principal_label}"
   done
 else
   principal_type="USER"
   principal_id="$(find_user_id "${user}")"
-  principal_label="usuário '${user}'"
+  principal_label="user '${user}'"
 fi
 
 if [ -z "${principal_id}" ] || [ "${principal_id}" == "None" ]; then
-  echo "${principal_label} não encontrado no Identity Store ${identity_store_id}." >&2
+  echo "${principal_label} not found in Identity Store ${identity_store_id}." >&2
   exit 1
 fi
 echo "ok  ${principal_label} = ${principal_id}"
 
-# --- atribuição ---------------------------------------------------------------
+# --- assignment ---------------------------------------------------------------
 existing="$(aws sso-admin list-account-assignments \
   --instance-arn "${instance_arn}" \
   --account-id "${account_id}" \
@@ -269,7 +269,7 @@ existing="$(aws sso-admin list-account-assignments \
   --query "AccountAssignments[?PrincipalId=='${principal_id}'].PrincipalId" --output text)"
 
 if [ -n "${existing}" ]; then
-  echo "ok  atribuição já existe — nada a fazer."
+  echo "ok  the assignment already exists — nothing to do."
   exit 0
 fi
 
@@ -280,16 +280,16 @@ request_id="$(aws sso-admin create-account-assignment \
   --principal-type "${principal_type}" --principal-id "${principal_id}" \
   --query AccountAssignmentCreationStatus.RequestId --output text)"
 
-echo "Aguardando propagação da atribuição (request ${request_id})..."
+echo "Waiting for the assignment to propagate (request ${request_id})..."
 for _ in $(seq 1 30); do
   status="$(aws sso-admin describe-account-assignment-creation-status \
     --instance-arn "${instance_arn}" --account-assignment-creation-request-id "${request_id}" \
     --query AccountAssignmentCreationStatus.Status --output text)"
 
   if [ "${status}" == "SUCCEEDED" ]; then
-    echo "atribuído  ${permission_set} -> ${account} (${account_id}) para ${principal_label}"
+    echo "assigned  ${permission_set} -> ${account} (${account_id}) to ${principal_label}"
     echo
-    echo "Rode 'aws sso login' de novo para a conta aparecer no portal/CLI."
+    echo "Run 'aws sso login' again for the account to show up in the portal/CLI."
     exit 0
   fi
 
@@ -303,5 +303,5 @@ for _ in $(seq 1 30); do
   sleep 5
 done
 
-echo "Atribuição não concluiu em tempo — verifique no console do Identity Center." >&2
+echo "The assignment did not finish in time — check the Identity Center console." >&2
 exit 1

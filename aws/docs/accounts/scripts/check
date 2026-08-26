@@ -1,5 +1,5 @@
 #!/bin/bash
-# Valida binários e credenciais AWS antes de qualquer bootstrap de Organization.
+# Validates binaries and AWS credentials before any Organization bootstrap.
 set -e
 
 missing=0
@@ -13,22 +13,22 @@ for tool in aws jq; do
 done
 
 if [ "${missing}" -ne 0 ]; then
-  echo "Instale os binários ausentes antes de prosseguir." >&2
+  echo "Install the missing binaries before going on." >&2
   exit 1
 fi
 
 caller_arn="$(aws sts get-caller-identity --query Arn --output text 2> /dev/null || true)"
 if [ -z "${caller_arn}" ]; then
-  echo "Credenciais AWS inválidas — rode 'aws sso login' ou exporte AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY." >&2
+  echo "Invalid AWS credentials — run 'aws sso login' or export AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY." >&2
   exit 1
 fi
-echo "ok  credenciais AWS válidas (${caller_arn})"
+echo "ok  AWS credentials valid (${caller_arn})"
 
 feature_set="$(aws organizations describe-organization --query Organization.FeatureSet --output text 2> /dev/null || true)"
 if [ -z "${feature_set}" ]; then
-  echo "info  nenhuma Organization associada a esta conta ainda — rode ./enable-organization"
+  echo "info  no Organization associated with this account yet — run ./enable-organization"
 elif [ "${feature_set}" != "ALL" ]; then
-  echo "AVISO  Organization existe mas feature-set='${feature_set}' (esperado ALL) — SCPs não funcionarão." >&2
+  echo "WARNING  Organization exists but feature-set='${feature_set}' (expected ALL) — SCPs will not work." >&2
 else
-  echo "ok  Organization já habilitada com feature-set=ALL"
+  echo "ok  Organization already enabled with feature-set=ALL"
 fi

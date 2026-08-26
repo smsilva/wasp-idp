@@ -8,16 +8,16 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Remove a atribuição de um permission set a um usuário/grupo numa conta-membro — o
+  Removes a permission set assignment from a user/group on a member account — the
   inverso de ${this_script_directory}/assign-permission-set.
 
-  DESTRUTIVO: quem depender dessa atribuição perde o acesso pelo portal SSO. Pede
-  confirmação salvo com --yes. O permission set em si NÃO é apagado (outras contas podem
-  usá-lo); só a atribuição nesta conta some.
+  DESTRUCTIVE: whoever depends on that assignment loses SSO portal access. It asks for
+  confirmation unless --yes is given. The permission set itself is NOT deleted (other accounts may
+  use it); only the assignment on this account goes away.
 
-  Idempotente: se a atribuição já não existir, sai sem erro.
+  Idempotent: if the assignment no longer exists, it exits without error.
 
-  Uso típico — rebaixar uma conta de admin para leitura, sem janela sem acesso:
+  Typical use — downgrade an account from admin to read-only, with no access gap:
 
     assign-permission-set --account log-archive --group platform-admins \\
       --permission-set ReadOnlyAccess \\
@@ -28,11 +28,11 @@ show_usage() {
     Options:
 
       -h,  --help              Show this help
-      -a,  --account           Nome ou id da conta-membro (obrigatório)
-      -p,  --permission-set    Nome do permission set (obrigatório)
-      -u,  --user              Username no Identity Store (obrigatório se --group ausente)
+      -a,  --account           Member account name or id (required)
+      -p,  --permission-set    Permission set name (required)
+      -u,  --user              Identity Store username (required if --group is absent)
       -g,  --group             Nome do grupo no Identity Store (alternativa a --user)
-      -y,  --yes               Não pedir confirmação
+      -y,  --yes               Do not ask for confirmation
 
     Examples:
 
@@ -102,12 +102,12 @@ instance_arn="$(echo "${instance_json}" | jq -r '.InstanceArn // empty')"
 identity_store_id="$(echo "${instance_json}" | jq -r '.IdentityStoreId // empty')"
 
 if [ -z "${instance_arn}" ]; then
-  echo "Nenhuma instância do IAM Identity Center nesta Organization." >&2
+  echo "No IAM Identity Center instance in this Organization." >&2
   exit 1
 fi
 echo "ok  Identity Center ${instance_arn} (identity store ${identity_store_id})"
 
-# --- conta alvo ---------------------------------------------------------------
+# --- target account -----------------------------------------------------------
 if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
   account_id="${account}"
 else
@@ -115,11 +115,11 @@ else
     --query "Accounts[?Name=='${account}' && Status=='ACTIVE'].Id" --output text)"
 
   if [ -z "${account_id}" ]; then
-    echo "Nenhuma conta ACTIVE chamada '${account}' na Organization." >&2
+    echo "No ACTIVE account named '${account}' in the Organization." >&2
     exit 1
   fi
 fi
-echo "ok  conta alvo ${account} = ${account_id}"
+echo "ok  target account ${account} = ${account_id}"
 
 # --- permission set -----------------------------------------------------------
 permission_set_arn=""
@@ -135,7 +135,7 @@ for arn in $(aws sso-admin list-permission-sets --instance-arn "${instance_arn}"
 done
 
 if [ -z "${permission_set_arn}" ]; then
-  echo "ok  permission set '${permission_set}' não existe — nada a revogar."
+  echo "ok  permission set '${permission_set}' does not exist — nothing to revoke."
   exit 0
 fi
 echo "ok  permission set '${permission_set}' (${permission_set_arn})"
@@ -154,16 +154,16 @@ else
     --identity-store-id "${identity_store_id}" \
     --filters "AttributePath=UserName,AttributeValue=${user}" \
     --query 'Users[0].UserId' --output text 2> /dev/null || true)"
-  principal_label="usuário '${user}'"
+  principal_label="user '${user}'"
 fi
 
 if [ -z "${principal_id}" ] || [ "${principal_id}" == "None" ]; then
-  echo "${principal_label} não encontrado no Identity Store ${identity_store_id}." >&2
+  echo "${principal_label} not found in Identity Store ${identity_store_id}." >&2
   exit 1
 fi
 echo "ok  ${principal_label} = ${principal_id}"
 
-# --- atribuição ---------------------------------------------------------------
+# --- assignment ---------------------------------------------------------------
 existing="$(aws sso-admin list-account-assignments \
   --instance-arn "${instance_arn}" \
   --account-id "${account_id}" \
@@ -171,15 +171,15 @@ existing="$(aws sso-admin list-account-assignments \
   --query "AccountAssignments[?PrincipalId=='${principal_id}'].PrincipalId" --output text)"
 
 if [ -z "${existing}" ]; then
-  echo "ok  atribuição não existe — nada a fazer."
+  echo "ok  the assignment does not exist — nothing to do."
   exit 0
 fi
 
 if [ -z "${assume_yes}" ]; then
   echo
-  echo "Revogar '${permission_set}' de ${principal_label} na conta ${account} (${account_id})?"
-  echo "Depois disso o acesso a essa conta pelo portal SSO some para esse principal."
-  read -r -p "Digite 'yes' para confirmar: " answer
+  echo "Revoke '${permission_set}' from ${principal_label} on account ${account} (${account_id})?"
+  echo "After this, SSO portal access to that account goes away for that principal."
+  read -r -p "Type 'yes' to confirm: " answer
 
   if [ "${answer}" != "yes" ]; then
     echo "Abortado."
@@ -194,7 +194,7 @@ request_id="$(aws sso-admin delete-account-assignment \
   --principal-type "${principal_type}" --principal-id "${principal_id}" \
   --query AccountAssignmentDeletionStatus.RequestId --output text)"
 
-echo "Aguardando propagação da revogação (request ${request_id})..."
+echo "Waiting for the revocation to propagate (request ${request_id})..."
 for _ in $(seq 1 30); do
   status="$(aws sso-admin describe-account-assignment-deletion-status \
     --instance-arn "${instance_arn}" --account-assignment-deletion-request-id "${request_id}" \
@@ -215,5 +215,5 @@ for _ in $(seq 1 30); do
   sleep 5
 done
 
-echo "Revogação não concluiu em tempo — verifique no console do Identity Center." >&2
+echo "The revocation did not finish in time — check the Identity Center console." >&2
 exit 1

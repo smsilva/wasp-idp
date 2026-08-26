@@ -8,21 +8,21 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Aplica os guardrails baseline via Service Control Policy (ver
+  Applies the baseline guardrails as Service Control Policies (see
   aws/docs/accounts/02-scp-guardrails.md):
 
     Root         -> DenyLeaveOrganization, ProtectCloudTrail
     Workloads    -> DenyOutsideApprovedRegions, RequireImdsv2, DenyRootUser
     (Infrastructure e Security recebem os mesmos guardrails de Workloads
-     nesta baseline mínima)
+     in this minimal baseline)
 
-  Idempotente: reaproveita qualquer policy já existente com o mesmo nome; reanexa só
-  se ainda não estiver anexada ao target.
+  Idempotent: reuses any existing policy with the same name; reattaches only
+  if it is not already attached to the target.
 
     Options:
 
       -h,  --help              Show this help
-      -r,  --regions           Regiões aprovadas, separadas por vírgula (default: us-east-1)
+      -r,  --regions           Approved regions, comma separated (default: us-east-1)
 
     Examples:
 
@@ -59,9 +59,9 @@ set -e
 
 check
 
-# SCPs só podem ser anexadas se o policy type estiver habilitado na Root — habilitar é
-# idempotente na prática: se já estiver ENABLED, pulamos; a habilitação é assíncrona
-# (PENDING_ENABLE por alguns segundos), então esperamos virar ENABLED antes de seguir.
+# SCPs can only be attached if the policy type is enabled on Root — enabling is
+# idempotent in practice: if already ENABLED we skip; enabling is asynchronous
+# (PENDING_ENABLE for a few seconds), so we wait for ENABLED before going on.
 enable_scp_policy_type() {
   local root_id="${1}"
 
@@ -71,12 +71,12 @@ enable_scp_policy_type() {
     --output text)"
 
   if [ "${status}" == "ENABLED" ]; then
-    echo "ok  SERVICE_CONTROL_POLICY já habilitado na Root" >&2
+    echo "ok  SERVICE_CONTROL_POLICY already enabled on Root" >&2
     return 0
   fi
 
   if [ "${status}" != "PENDING_ENABLE" ]; then
-    echo "Habilitando SERVICE_CONTROL_POLICY na Root..." >&2
+    echo "Enabling SERVICE_CONTROL_POLICY on Root..." >&2
     aws organizations enable-policy-type \
       --root-id "${root_id}" --policy-type SERVICE_CONTROL_POLICY > /dev/null
   fi
@@ -92,11 +92,11 @@ enable_scp_policy_type() {
     sleep 5
   done
 
-  echo "SERVICE_CONTROL_POLICY não ficou ENABLED em tempo — verifique 'aws organizations list-roots'." >&2
+  echo "SERVICE_CONTROL_POLICY did not become ENABLED in time — check 'aws organizations list-roots'." >&2
   exit 1
 }
 
-# aws:RequestedRegion precisa de uma lista JSON de strings.
+# aws:RequestedRegion needs a JSON list of strings.
 regions_json="$(echo "${regions}" | tr ',' '\n' | jq -R . | jq -s -c .)"
 
 find_or_create_policy() {
@@ -109,7 +109,7 @@ find_or_create_policy() {
     --query "Policies[?Name=='${name}'].Id" --output text)"
 
   if [ -n "${existing_id}" ]; then
-    echo "ok  policy '${name}' já existe (${existing_id}) — atualizando conteúdo" >&2
+    echo "ok  policy '${name}' already exists (${existing_id}) — updating its content" >&2
     aws organizations update-policy --policy-id "${existing_id}" --content "${content}" > /dev/null
     echo "${existing_id}"
     return 0
@@ -134,7 +134,7 @@ attach_if_missing() {
     --query "Policies[?Id=='${policy_id}'].Id" --output text)"
 
   if [ -n "${already_attached}" ]; then
-    echo "ok  já anexada em ${target_id}" >&2
+    echo "ok  already attached to ${target_id}" >&2
     return 0
   fi
 
@@ -156,7 +156,7 @@ deployments_id="$(aws organizations list-organizational-units-for-parent \
   --parent-id "${root_id}" --query "OrganizationalUnits[?Name=='Deployments'].Id" --output text)"
 
 if [ -z "${workloads_id}" ] || [ -z "${infra_id}" ] || [ -z "${security_id}" ] || [ -z "${deployments_id}" ]; then
-  echo "OUs Security/Infrastructure/Deployments/Workloads não encontradas — rode ${this_script_directory}/create-organizational-unit-structure primeiro." >&2
+  echo "Security/Infrastructure/Deployments/Workloads OUs not found — run ${this_script_directory}/create-organizational-unit-structure first." >&2
   exit 1
 fi
 
@@ -267,10 +267,10 @@ EOF
 )
 
 deny_leave_org_id="$(find_or_create_policy DenyLeaveOrganization "Impede sair da Organization" "${deny_leave_org_content}")"
-protect_cloudtrail_id="$(find_or_create_policy ProtectCloudTrail "Protege CloudTrail contra desativação" "${protect_cloudtrail_content}")"
-deny_outside_regions_id="$(find_or_create_policy DenyOutsideApprovedRegions "Restringe a regiões aprovadas: ${regions}" "${deny_outside_regions_content}")"
-require_imdsv2_id="$(find_or_create_policy RequireImdsv2 "Exige IMDSv2 em toda instância EC2" "${require_imdsv2_content}")"
-deny_root_user_id="$(find_or_create_policy DenyRootUser "Nega ações do usuário root da conta-membro" "${deny_root_user_content}")"
+protect_cloudtrail_id="$(find_or_create_policy ProtectCloudTrail "Protects CloudTrail from being disabled" "${protect_cloudtrail_content}")"
+deny_outside_regions_id="$(find_or_create_policy DenyOutsideApprovedRegions "Restricts to approved regions: ${regions}" "${deny_outside_regions_content}")"
+require_imdsv2_id="$(find_or_create_policy RequireImdsv2 "Requires IMDSv2 on every EC2 instance" "${require_imdsv2_content}")"
+deny_root_user_id="$(find_or_create_policy DenyRootUser "Denies member account root user actions" "${deny_root_user_content}")"
 
 echo "Anexando guardrails de Organization inteira (Root)..."
 attach_if_missing "${deny_leave_org_id}" "${root_id}"
@@ -291,9 +291,9 @@ attach_if_missing "${deny_outside_regions_id}" "${security_id}"
 attach_if_missing "${require_imdsv2_id}" "${security_id}"
 attach_if_missing "${deny_root_user_id}" "${security_id}"
 
-# Deployments hospeda a conta do Control Plane, cuja identidade provisiona nas OUTRAS contas.
-# A SCP daqui restringe só o que ele cria LOCALMENTE; o que ele cria na conta-alvo é regido
-# pela SCP da OU de lá (ver aws/docs/security/08-control-plane-identity.md).
+# Deployments hosts the Control Plane account, whose identity provisions into OTHER accounts.
+# The SCP here only restricts what it creates LOCALLY; what it creates in the target account is governed
+# by the SCP of the OU over there (see aws/docs/security/08-control-plane-identity.md).
 echo "Anexando os mesmos guardrails de baseline em Deployments..."
 attach_if_missing "${deny_outside_regions_id}" "${deployments_id}"
 attach_if_missing "${require_imdsv2_id}" "${deployments_id}"

@@ -8,19 +8,19 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Renomeia uma OU da Organization (in-place — o Id da OU não muda, então SCPs,
-  contas-membro e referências existentes continuam válidas).
+  Renames an Organization OU (in place — the OU Id does not change, so SCPs,
+  member accounts and existing references stay valid).
 
-  Idempotente: se a OU já tiver o nome pedido, não faz nada.
+  Idempotent: if the OU already has the requested name, it does nothing.
 
     Options:
 
       -h,  --help              Show this help
-      -n,  --name              Nome ATUAL da OU (obrigatório se --id ausente)
+      -n,  --name              CURRENT OU name (required if --id is absent)
       -i,  --id                Id da OU (alternativa a --name)
-      -p,  --parent            Nome da OU pai, para desambiguar --name (opcional;
+      -p,  --parent            Parent OU name, to disambiguate --name (optional;
                                 default: Root)
-           --new-name          Novo nome da OU (obrigatório)
+           --new-name          New OU name (required)
 
     Examples:
 
@@ -94,7 +94,7 @@ if [ -z "${ou_id}" ]; then
       --query "OrganizationalUnits[?Name=='${parent}'].Id" --output text)"
 
     if [ -z "${parent_id}" ]; then
-      echo "OU pai '${parent}' não encontrada na Root." >&2
+      echo "parent OU '${parent}' not found under Root." >&2
       exit 1
     fi
   fi
@@ -104,7 +104,7 @@ if [ -z "${ou_id}" ]; then
     --query "OrganizationalUnits[?Name=='${name}'].Id" --output text)"
 
   if [ -z "${ou_id}" ]; then
-    echo "OU '${name}' não encontrada em '${parent:-Root}'." >&2
+    echo "OU '${name}' not found under '${parent:-Root}'." >&2
     exit 1
   fi
 fi
@@ -114,7 +114,7 @@ current_name="$(aws organizations describe-organizational-unit \
   --query OrganizationalUnit.Name --output text)"
 
 if [ "${current_name}" == "${new_name}" ]; then
-  echo "ok  OU ${ou_id} já se chama '${new_name}' — nada a fazer."
+  echo "ok  OU ${ou_id} is already named '${new_name}' — nothing to do."
   exit 0
 fi
 

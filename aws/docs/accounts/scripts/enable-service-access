@@ -8,23 +8,23 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Habilita trusted access de um serviço AWS na Organization — pré-requisito para a
-  management account operar aquele serviço nas contas-membro (ver
+  Enables trusted access for an AWS service in the Organization — a prerequisite for
+  management account to operate that service across member accounts (see
   aws/docs/accounts/03-provisioning.md).
 
-  Idempotente: se o service principal já estiver habilitado, não faz nada.
+  Idempotent: if the service principal is already enabled, it does nothing.
 
     Options:
 
       -h,  --help              Show this help
       -s,  --service           Service principal (default: account.amazonaws.com)
 
-  Service principals usados por esta referência:
+  Service principals used by this reference:
 
-    account.amazonaws.com      Account Management — permite renomear contas-membro
+    account.amazonaws.com      Account Management — allows renaming member accounts
                                e gerir contatos a partir da management account
                                (usado por ${this_script_directory}/rename-account)
-    cloudtrail.amazonaws.com   CloudTrail organizacional
+    cloudtrail.amazonaws.com   organization CloudTrail
     sso.amazonaws.com          IAM Identity Center
 
     Examples:
@@ -67,10 +67,10 @@ already_enabled="$(aws organizations list-aws-service-access-for-organization \
   --output text)"
 
 if [ -n "${already_enabled}" ]; then
-  echo "ok  trusted access já habilitado para '${service}'"
+  echo "ok  trusted access already enabled for '${service}'"
   exit 0
 fi
 
-echo "Habilitando trusted access para '${service}'..."
+echo "Enabling trusted access for '${service}'..."
 aws organizations enable-aws-service-access --service-principal "${service}"
 echo "habilitado  ${service}"

@@ -8,28 +8,28 @@ PATH="${this_script_directory}:${PATH}"
 show_usage() {
   cat <<EOF
 
-  Cria o CloudTrail organizacional na management account, escrevendo no bucket da
-  conta log-archive (ver aws/docs/accounts/07-cloudtrail-and-log-archive.md).
+  Creates the organization CloudTrail in the management account, writing to the bucket in the
+  log-archive account (see aws/docs/accounts/07-cloudtrail-and-log-archive.md).
 
   Captura eventos de TODAS as contas-membro, inclusive as criadas depois — conta
-  nova entra sozinha, sem passo de onboarding.
+  new account is covered automatically, with no onboarding step.
 
-  Idempotente: se o trail já existir, só garante configuração e logging ligado.
+  Idempotent: if the trail already exists, it only ensures configuration and that logging is on.
 
     Options:
 
       -h,  --help              Show this help
       -t,  --trail             Nome do trail (default: organization-trail)
       -b,  --bucket            Bucket de destino (default: cloudtrail-<organization-id>)
-      -r,  --region            Região home do trail (default: us-east-1)
+      -r,  --region            Trail home region (default: us-east-1)
 
-  Pré-requisitos, nesta ordem:
+  Prerequisites, in this order:
 
     1. ${this_script_directory}/enable-service-access --service cloudtrail.amazonaws.com
     2. ${this_script_directory}/create-log-archive-bucket
 
-  Só management events (grátis no 1º trail por conta). Data events NÃO são
-  habilitados aqui — são cobrados por evento e podem dominar a fatura.
+  Management events only (free on the 1st trail per account). Data events are NOT
+  enabled here — they are billed per event and can dominate the bill.
 
     Examples:
 
@@ -90,7 +90,7 @@ service_enabled="$(aws organizations list-aws-service-access-for-organization \
   --output text)"
 
 if [ -z "${service_enabled}" ]; then
-  echo "Trusted access do CloudTrail não habilitado — rode primeiro:" >&2
+  echo "CloudTrail trusted access is not enabled — run this first:" >&2
   echo "  ${this_script_directory}/enable-service-access --service cloudtrail.amazonaws.com" >&2
   exit 1
 fi
@@ -100,12 +100,12 @@ existing_trail_arn="$(aws cloudtrail describe-trails --region "${region}" \
   --query 'trailList[0].TrailARN' --output text 2> /dev/null || true)"
 
 if [ -n "${existing_trail_arn}" ] && [ "${existing_trail_arn}" != "None" ]; then
-  echo "ok  trail '${trail}' já existe (${existing_trail_arn})"
+  echo "ok  trail '${trail}' already exists (${existing_trail_arn})"
   aws cloudtrail update-trail --region "${region}" --name "${trail}" \
     --s3-bucket-name "${bucket}" \
     --is-organization-trail --is-multi-region-trail \
     --enable-log-file-validation > /dev/null
-  echo "ok  configuração reaplicada (org + multi-region + validação de integridade)"
+  echo "ok  configuration reapplied (org + multi-region + log file validation)"
 else
   aws cloudtrail create-trail --region "${region}" --name "${trail}" \
     --s3-bucket-name "${bucket}" \
@@ -114,13 +114,13 @@ else
   echo "criado  trail '${trail}' -> s3://${bucket}"
 fi
 
-# create-trail NÃO começa a gravar — trail parado é indistinguível de trail saudável
-# na listagem, então o start-logging é sempre reafirmado.
+# create-trail does NOT start recording — a stopped trail is indistinguishable from a healthy one
+# in the listing, so start-logging is always reasserted.
 is_logging="$(aws cloudtrail get-trail-status --region "${region}" --name "${trail}" \
   --query IsLogging --output text)"
 
 if [ "${is_logging}" == "True" ]; then
-  echo "ok  logging já ativo"
+  echo "ok  logging already active"
 else
   aws cloudtrail start-logging --region "${region}" --name "${trail}"
   echo "iniciado  logging"
@@ -130,7 +130,7 @@ cat <<EOF
 
 Trail organizacional ativo.
 
-Verificar (os primeiros objetos levam ~5-15 min para aparecer):
+Verify (the first objects take ~5-15 min to show up):
   aws cloudtrail get-trail-status --region ${region} --name ${trail}
   aws s3 ls s3://${bucket}/AWSLogs/${organization_id}/ --recursive | head
 EOF
