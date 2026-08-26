@@ -31,7 +31,7 @@ conectada**, não uma verificação pontual.
 | **T0** | `state-backend`, `network-foundation` (2 regiões), cert de servidor no ACM | ~zero (ACM importado é grátis) | permanente |
 | **T1** | TGW + Client VPN endpoint + associação | ~US$ 0,15/h ≈ US$ 110/mês | de pé durante o dia, destruído à noite |
 | **T2** | spoke + EKS + charts + attachment + `tgw-rt-<spoke>` | ~US$ 165/mês | sobe, valida, desce |
-| **T3** | ALB, cliente simulado, segunda spoke | ~US$ 125/mês no pico | por fatia |
+| **T3** | ALB, segunda spoke mínima, VPN de cliente (AWS) + VPN Gateway (Azure) | ~US$ 0,27/h no pico | por fatia |
 
 **Sem `prevent_destroy` no T1** — ele é destruído de propósito todo dia. A proteção é o script
 `destroy` dizer em voz alta o que se perde. `prevent_destroy` continua só no bucket de state.
@@ -93,8 +93,8 @@ com `10.0.0.0/12` nem com CIDR de cliente), associação a uma subnet privada do
 | **4** | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
 | **5** | LBC + 4ª Pod Identity + workload de teste | T2 | camada 2 | NLB **interno** `active`, targets `healthy`, `curl` pelo túnel |
 | **6** | ALB público no hub → workload na spoke | T3 | +~US$ 16/mês | `curl` no DNS do ALB devolve o workload |
-| **7** | `Site-to-Site VPN` de cliente simulado (strongSwan noutra VPC) | T3 | +~US$ 36/mês | cliente simulado alcança **só** a spoke dele |
-| **8** | Segunda spoke + **provas negativas** | T3 | +~US$ 73/mês | cliente A não alcança spoke B; **operador do grupo A não alcança spoke B**; tirar do grupo derruba o acesso |
+| **7** | Segunda spoke mínima (VPC + `t4g.nano`) + grupo `cliente-a` + authorization rule por grupo | T3 | ~US$ 3/mês | **prova negativa 1:** operador do grupo A alcança a spoke A e **não** a spoke B; tirar do grupo derruba o acesso |
+| **8** | `Site-to-Site VPN` AWS↔Azure: VPN Gateway active-active, BGP | T3 | +~US$ 36/mês na AWS, ~US$ 0,19/h no Azure | **prova negativa 2:** a rede Azure alcança **só** a spoke dela; `search-transit-gateway-routes` mostra que o CIDR da spoke B não está na route table de A |
 
 ### Por que nesta ordem
 
@@ -105,8 +105,37 @@ com `10.0.0.0/12` nem com CIDR de cliente), associação a uma subnet privada do
 - **O acesso subiu para antes do LBC.** Testar workload sem caminho privado obriga a expor coisa
   publicamente só para conseguir olhar. Com o túnel pronto antes, o teste do passo 5 é `curl` num NLB
   **interno** — o alvo real, não um proxy dele.
-- **O passo 8 é o único com aceite negativo.** Até ali só se provou que o tráfego *chega*; nada
-  provou que o que não deve chegar **não chega**.
+- **7 e 8 são os únicos com aceite negativo.** Até ali só se provou que o tráfego *chega*; nada
+  provou que o que não deve chegar **não chega**. E eles provam coisas **diferentes**, em pontos de
+  aplicação diferentes — um não substitui o outro:
+
+  | Mecanismo | Onde é aplicado | O que prova |
+  |---|---|---|
+  | authorization rule por grupo | endpoint do Client VPN | que **uma pessoa** só alcança a spoke do grupo dela |
+  | route table por attachment | tabela de rotas do TGW | que a **rede inteira** de um cliente só alcança a spoke dele |
+
+  O 7 vem antes por ser quase de graça: a segunda spoke **não precisa de cluster** — basta VPC com
+  algo que responda. E é o 7 que demonstra conceder/revogar, que foi o motivo de escolher SAML.
+
+## O ambiente de cliente do passo 8 fica no Azure
+
+Decidido: VPN Gateway gerenciado, não strongSwan em VM. Mais lento e mais caro, mas é "cliente com
+concentrador de verdade" — suporta BGP e active-active, que é o caso real.
+
+Parâmetros que vêm do desenho de referência e não precisam ser redescobertos:
+
+- **ASN BGP do lado Azure é 65515** (fixo do VPN Gateway); lado AWS usa `amazonSideAsn` 64512.
+- **Inside CIDRs dos túneis em `169.254.21.0–169.254.22.255`**, `/30` cada, sem sobreposição entre
+  túneis do mesmo hub — restrição específica de peering com Azure.
+- **Active-active = 2 IPs públicos = 2 Customer Gateways = 2 VPN Connections = 4 túneis.**
+- **VNet em `10.50.0.0/16`** — fora de `10.0.0.0/12`, então não consome o teto de 15 spokes e não
+  colide com nada nosso.
+- **BGP, não rotas estáticas** — é o que um cliente real faz, dá ECMP e failover sem intervenção, e
+  evita rejeição de CIDR duplicado na route table.
+
+**Armadilha operacional:** o VPN Gateway do Azure leva **30–45 min para provisionar** — de longe o
+recurso mais lento de todo o plano. Planejar a sessão do passo 8 em torno disso, e subir o lado AWS
+em paralelo.
 
 ### Detalhes de 1b (SAML) que já custaram tempo em outros lugares
 
@@ -160,9 +189,11 @@ timestamp em `logs/` gitignored, opções longas, 2 espaços, variáveis sempre 
 | T0 + T1 parado | ~0,15 | ~110 |
 | \+ conexão VPN ativa | +0,05 por conexão | só enquanto conectado |
 | \+ T2 | +0,23 | +165 |
-| \+ T3 no pico do passo 8 | +0,17 | +125 |
+| \+ T3 no pico do passo 8 | +0,27 | — |
 
-Uma sessão de 7 h com tudo ligado no pico custa ~US$ 4 além da base.
+No pico: ALB ~0,0225 + segunda spoke ~0,004 + VPN connection ~0,05 na AWS + VPN Gateway ~0,19 no
+Azure. Uma sessão de 7 h com tudo ligado custa ~US$ 5 além da base — e o VPN Gateway do Azure é
+mais da metade disso.
 
 ## Fora do plano, de propósito
 
@@ -184,6 +215,5 @@ Uma sessão de 7 h com tudo ligado no pico custa ~US$ 4 além da base.
    **PrivateLink**. Não decidido.
 2. **Quem é dono do ALB do passo 6** — `connectivity/` (permanente, coerente com ser edge do hub) ou
    raiz própria da fatia. Depende de 1.
-3. **Desenho do cliente simulado** dos passos 7–8: VPC separada com strongSwan em EC2 fazendo papel
-   de concentrador, CIDR, e como provar a prova negativa sem ambiguidade.
+3. **Onde mora o lado Azure do passo 8** — repo/diretório e se reaproveita a trilha Azure pausada.
 4. **Em qual conta fica a hosted zone pública**, quando o domínio for decidido.
