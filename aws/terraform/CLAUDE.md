@@ -70,9 +70,20 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 
 ## Load balancer: quem é dono do quê
 
-- **`src/network` NÃO aplica as tags de descoberta do AWS Load Balancer Controller** —
-  `kubernetes.io/role/elb` nas públicas e `kubernetes.io/role/internal-elb` nas privadas. Sem elas o
-  LBC não encontra onde criar load balancer e o sintoma é obscuro. Bug latente, não hipótese.
+- **`src/network` aplica as tags de descoberta do AWS Load Balancer Controller** desde o commit
+  inicial do módulo: `kubernetes.io/role/elb` nas públicas, `kubernetes.io/role/internal-elb` nas
+  privadas, cobertas por `tests/tags.tftest.hcl`. Um handoff chegou a registrar a ausência delas como
+  bug latente — era leitura do desenho de referência, não do código. **Conferir o módulo antes de
+  confiar em achado sobre ele.**
+- **O LBC não examina route table** para deduzir se a subnet é pública ou privada — o controller
+  in-tree examina, o LBC não ([doc do
+  EKS](https://docs.aws.amazon.com/eks/latest/userguide/network-load-balancing.html)). Logo as tags
+  de papel não têm fallback: sem elas não há descoberta, e o sintoma aparece longe da causa.
+- **A tag `kubernetes.io/cluster/<nome>` fica de fora de propósito.** É opcional a partir do LBC
+  `2.1.2` (obrigatória só até `2.1.1`) e serve para escolher entre clusters que **compartilham a
+  VPC**. Aqui é um cluster por VPC spoke, e `src/network` não conhece nome de cluster — acrescentá-la
+  criaria dependência network → cluster por um ganho inexistente. **Inverte** se um dia mais de um
+  cluster dividir a mesma VPC.
 - **`TargetGroupBinding` aceita target group criado fora do controller** — verificado na doc do LBC,
   que descreve provisionar o load balancer *"completely outside of Kubernetes"* e ainda gerenciar os
   targets pelo Service. Campos: `targetGroupARN`, `targetType: ip`, `serviceRef`, `vpcID` e

@@ -367,9 +367,11 @@ nenhum hoje.
 
 ## Known Broken
 
-1. **`src/network` não aplica as tags de descoberta do AWS Load Balancer Controller** — *unexpected*:
-   falta `kubernetes.io/role/elb` nas públicas e `kubernetes.io/role/internal-elb` nas privadas. Sem
-   elas o LBC não encontra onde criar load balancer, e o sintoma é obscuro. **É o passo `1.1`.**
+1. ~~**`src/network` não aplica as tags de descoberta do AWS Load Balancer Controller.**~~
+   **RETIRADO — o item estava errado.** As duas tags estão no módulo desde `b32eb68`, o commit
+   inicial dele. O achado veio da leitura do desenho de referência, não do código, e sobreviveu a
+   duas sessões de handoff sem ninguém abrir o `main.tf`. Fechado no `1.1` com o teste que faltava
+   (`src/network/tests/tags.tftest.hcl`). **Lição: achado sobre módulo do repo se confere no módulo.**
 2. **`src/network` não tem nada de TGW** — *intentional* até a decisão de VPN; agora é lacuna: falta
    attachment, associação/propagação em `tgw-rt-<spoke>` e rotas para CIDRs remotos. **É o `2.3`.**
 3. **Endpoint da API do EKS público para `0.0.0.0/0`** quando a camada 2 está de pé — *intentional*:
@@ -446,7 +448,7 @@ agente. O `apply` sem tty falha de propósito, informando o caminho do plano sal
 não houver terminal. O mesmo vale para os scripts de `aws/docs/accounts/scripts/` que criam recursos
 reais.
 
-Regressão offline (45 testes, 11 diretórios, 0 falhas):
+Regressão offline (**49 testes**, 11 diretórios, 0 falhas):
 
 ```bash
 cd aws/terraform
@@ -501,6 +503,11 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 
 **Load balancer e TLS**
 
+- **As tags de papel do LBC não têm fallback:** o controller **não examina route table** para deduzir
+  público/privado (o controller in-tree examina; o LBC não). Já estão em `src/network`, com teste.
+- **A tag `kubernetes.io/cluster/<nome>` é opcional a partir do LBC `2.1.2`** e só desempata entre
+  clusters que compartilham a VPC — fora daqui de propósito, porque `src/network` não conhece nome de
+  cluster. Inverte se um dia dois clusters dividirem uma VPC.
 - **`TargetGroupBinding` aceita target group criado fora do controller** — a doc do LBC descreve
   provisionar o LB *"completely outside of Kubernetes"*. `networking.ingress` é o campo que faz o
   controller cuidar das regras de SG para targets IP. Logo **Terraform pode ser dono do NLB sem
@@ -536,9 +543,9 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 ### Frente D — executar o plano (prioridade)
 
 - [x] Plano completo, sem decisão de desenho em aberto, um arquivo por fase.
-- [ ] **`1.1`** — tags `kubernetes.io/role/{elb,internal-elb}` em `src/network`. Offline, grátis,
-      `terraform test` de aceite. **É por aqui que se começa.**
+- [x] **`1.1`** — tags do LBC em `src/network`: já estavam no código; entregue o teste que faltava.
 - [ ] **`1.2`** — `generate-tfvars` descobre o IP público → `public_access_cidrs = ["<ip>/32"]`.
+      **É por aqui que se começa.**
 - [ ] **`1.3`** — raiz `aws/terraform/dns/`: hosted zone `nonprod.` + delegação NS no Azure.
 - [ ] **`2.1` (PORTÃO)** — verificar o client da AWS VPN nesta distro **antes** de criar recurso que
       cobra.
@@ -580,6 +587,33 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       (Known Broken 16).
 
 ## Completed Work
+
+### `1.1` — tags de descoberta do LBC, e a lição sobre achado não conferido (2026-08-26)
+
+Branch `feat/lbc-subnet-discovery-tags`, a partir de `main`.
+
+**O passo não era o que o plano dizia.** `Known Broken 1` e o `1.1` afirmavam que `src/network` não
+aplicava `kubernetes.io/role/{elb,internal-elb}`. As duas tags estão no módulo desde `b32eb68`, o
+commit inicial dele, com comentário explicando o propósito. O achado nasceu da comparação com o
+desenho de referência — que trata as tags como flag explícita de spoke — e foi registrado como bug do
+código sem ninguém abrir o `main.tf`. Atravessou duas sessões de handoff assim.
+
+O que de fato faltava era o critério de aceite escrito no próprio passo: **nenhum dos dois arquivos de
+teste olhava tag alguma**. Entregue `src/network/tests/tags.tftest.hcl`, 4 runs — perda da tag
+pública, perda da privada, cruzamento das duas famílias, e inversão da ordem do `merge`.
+
+**Quatro mutações rodadas, quatro capturas**, cada uma pela asserção pretendida. A quarta só passou a
+valer depois de a `var.tags` do teste **colidir de propósito** com a tag de papel, e com o valor
+errado: sem colisão, inverter `merge(var.tags, {papel})` para `merge({papel}, var.tags)` passava sem
+ser notado. Todo `alltrue` tem contagem ao lado — `alltrue([])` é `true`.
+
+Duas decisões fechadas, com a doc do EKS no lugar de memória: **a tag `kubernetes.io/cluster/<nome>`
+fica fora** (opcional desde o LBC `2.1.2`, só desempata clusters que dividem VPC, e o módulo não
+conhece nome de cluster); e **as tags de papel não têm fallback**, porque o LBC não examina route
+table como o controller in-tree.
+
+Regressão da árvore: **49 testes em 11 diretórios, 0 falhas** (eram 45). Custo: zero, nada tocou a
+AWS.
 
 ### Desenho de acesso privado e ingress — plano fechado (2026-08-26)
 
