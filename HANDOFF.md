@@ -133,9 +133,10 @@ Tempos do apply: EKS 11m09s, node group 2m, addon `aws-ebs-csi-driver` 6m28s,
 
 ### Frente D — acesso privado + ingress centralizado (ATIVA)
 
-**Plano escrito: `docs/superpowers/plans/2026-08-26-private-access-and-ingress.md`** — sequência de
-9 passos, cada um testável isolado, com níveis de permanência, fronteira de state, scripts e custo.
-Ler ele; o resumo aqui é só para saber se vale abrir.
+**Plano escrito: `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`** — **um arquivo
+por fase**, para não encher o contexto: `README.md` tem o que atravessa todas (decisões, níveis de
+permanência, fronteira de state, custo, scripts) e `01`–`04` têm uma fase cada. Ler só a do trabalho
+corrente; o resumo abaixo é para saber se vale abrir.
 
 Decisões fechadas:
 
@@ -507,7 +508,7 @@ e depois `connection reset`) e SSO admin ativo (`aws sso login --profile persona
 
 ### Frente D — acesso privado + ingress (prioridade)
 
-Plano em `docs/superpowers/plans/2026-08-26-private-access-and-ingress.md`. Executar na ordem.
+Plano em `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`. Executar na ordem.
 
 Numeração `fase.passo`; passo descoberto executando entra com sufixo de letra (`2.3a`) para não
 empurrar os seguintes.
@@ -524,7 +525,10 @@ empurrar os seguintes.
 - [ ] **Fase 3 (`3.1`–`3.2`)** — NLB interno e gateway Istio; depois o lado hub com cert e listener
       rule.
 - [ ] **Fase 4 (`4.1`–`4.2`)** — as duas provas negativas.
-- [ ] Conferir a cota de certificados por listener de ALB (único item aberto do plano).
+
+Cota conferida: **25 certificados por ALB** (excluindo o default) e 100 rules, ambos ajustáveis — o
+certificado aperta primeiro, então são 25 clientes por ALB antes de pedir aumento. **Nenhum item de
+desenho em aberto no plano; o que resta é executar.**
 
 ### Frente B — Terraform + Crossplane / EKS
 
