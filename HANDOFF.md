@@ -92,7 +92,7 @@ portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por 
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
 | `control-plane` | `cicd` | `control-plane/` | ~US$ 165 quando de pé | **destruída** (state com 0 recursos) |
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.`, delegação verificada |
-| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 110 quando de pé | **escrita, não aplicada** — T1 |
+| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **aplicada** — T1, de pé agora |
 
 Bucket de state: `tfstate-o-e4r8ndteju`, na conta `network`. Nenhum cluster k3d de pé.
 
@@ -147,17 +147,23 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.2` planejada, apply pendente**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.2` aplicada, aceite confirmado**)
 
-**Último passo:** `2.2` escrita e verde offline (22 testes, 14 mutações, 13 capturadas). O passo de
-console foi concluído nesta sessão: aplicação SAML `hub-client-vpn` criada no Identity Center
-(management account), attribute mappings (`Subject`→`${user:email}`/emailAddress,
-`memberOf`→`${user:groups}`/unspecified) salvos, grupo `platform-admins` atribuído, metadata XML
-baixado para `aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored, 2504 caracteres).
-`generate-tfvars` rodou limpo e um `terraform plan` confirmou **12 recursos a criar**, plano limpo.
-**Confirmado: o apply NÃO rodou** — `terraform state list` na raiz `connectivity/` devolve "No state
-file was found", ou seja o backend S3 não tem key nenhuma ainda para esta camada (bloqueado pelo
-classifier do agente; pedido ao usuário via `!`, nunca confirmado como concluído nesta sessão).
+**Último passo:** `2.2` aplicada na AWS por `up-03-connectivity --yes` — 12 recursos criados, 0
+falhas, ~10 min (a maior parte em `aws_ec2_client_vpn_network_association`, ~6m40s cada). TGW
+`tgw-09a8a60996c37ad64`, endpoint `cvpn-endpoint-0ed2eee5abea362d4`, certificado ACM validado por
+DNS para `vpn.nonprod.wasp.silvios.me`. O passo de console foi concluído antes: aplicação SAML
+`hub-client-vpn` no Identity Center (management account), attribute mappings
+(`Subject`→`${user:email}`/emailAddress, `memberOf`→`${user:groups}`/unspecified), grupo
+`platform-admins` atribuído, metadata XML em `aws/terraform/connectivity/us-east-1/saml-metadata.xml`
+(gitignored).
+
+**Aceite do `2.2` confirmado ponta a ponta:** `aws-vpn-client import-profile` + `connect` abriu o
+navegador **sozinho**, sem intervenção manual — a hipótese de que o handshake SAML dependeria da GUI
+não se confirmou. Login completou em `127.0.0.1:35001` (o ACS URL da aplicação SAML — confirma o
+**guia do administrador**, não o `8096–8115` do guia do usuário Linux, para essa etapa do fluxo).
+Túnel `Connected`, IP `100.64.0.2/27` (dentro de `100.64.0.0/22`), rotas `10.0.0.0/12` e `10.1.0.0/16`
+via `tun0` — target network `associated` nas duas AZs, supernet inteiro roteando pelo túnel.
 
 **Achado do plan, ainda não registrado no plano em si:** o Client VPN cobra por **associação de
 subnet**, não por endpoint. Com 2 subnets privadas do hub (uma por AZ), o custo real do T1 é
@@ -165,17 +171,17 @@ subnet**, não por endpoint. Com 2 subnets privadas do hub (uma por AZ), o custo
 documenta. Decidido manter as duas associações (redundância de AZ); atualizar a tabela de custo do
 plano quando alguém voltar a editá-la.
 
-Retomar direto (tfvars e metadata já prontos, plano já validado):
+Conectar (perfil exportado para `~/trash/hub.ovpn` — sobrevive a reboot, ao contrário de `/tmp`; a
+DNS name do endpoint muda a cada recriação da camada, nunca reaproveitar `.ovpn` velho):
 
 ```bash
-cd aws/terraform
-./scripts/up-03-connectivity --yes
+aws ec2 export-client-vpn-client-configuration \
+  --client-vpn-endpoint-id cvpn-endpoint-0ed2eee5abea362d4 \
+  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
+aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
+aws-vpn-client connect --profile-name hub
+aws-vpn-client get-connection-status --profile-name hub
 ```
-
-**Aceite do `2.2`:** túnel sobe com identidade do Identity Center, IP vindo de `100.64.0.0/22`, target
-network `associated`, e o **login SAML completa** — este último não pôde ser testado nem no `2.1` nem
-nesta sessão (exige o endpoint de pé). Verificar também se `aws-vpn-client connect` sob SAML abre o
-navegador sozinho (ver Known Broken / Open Questions).
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
 uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
@@ -415,16 +421,12 @@ nenhum hoje.
 - ~~**Client da AWS VPN no Linux**~~ — **RESOLVIDO no `2.1`:** roda, 24.04 é suportado oficialmente, e
   desde a 6.0.1 tem CLI. As três saídas de contingência não foram usadas; ficam escritas em
   `02-private-access.md` para o caso de a distro mudar.
-- **`aws-vpn-client connect` sob SAML abre o navegador sozinho?** Não verificado — o `--auth-user-pass`
-  do CLI é usuário/senha, e a tentativa contra endpoint sintético morreu na validação do CA antes de
-  tentar o túnel. Se **não** abrir, `connect` volta a depender da GUI para o handshake e o script `vpn`
-  fica com `config`/`status` só. **Responde-se no apply do `2.2`**, e é o que decide o desenho do script.
-- **O certificado do endpoint tem nome (`vpn.<subzona>`) diferente do hostname de conexão.** O
-  raciocínio é que o client usa `remote-cert-tls server`, que confere extended key usage e não nome, e
-  que `verify-x509-name` não entra na configuração exportada. **Não verificado contra um túnel real** —
-  se o handshake recusar por nome, a saída é voltar ao autoassinado importado (a decisão descartada) ou
-  acrescentar o hostname do endpoint ao SAN, que não se conhece antes de criar o endpoint. Risco do
-  apply do `2.2`.
+- ~~**`aws-vpn-client connect` sob SAML abre o navegador sozinho?**~~ — **RESOLVIDO no `2.2`:** sim,
+  sozinho, sem intervenção manual. Login completou em `127.0.0.1:35001` (guia do administrador, não o
+  `8096–8115` do guia do usuário Linux). O script `vpn` pode ter `connect` de ponta a ponta.
+- ~~**O certificado do endpoint tem nome (`vpn.<subzona>`) diferente do hostname de conexão.**~~ —
+  **RESOLVIDO no `2.2`:** o túnel conectou normalmente com o certificado `vpn.nonprod.wasp.silvios.me`
+  contra um endpoint de hostname diferente. `remote-cert-tls server` de fato não confere nome.
 - **Quantas subnets privadas o hub tem por AZ, e o custo da associação.** A AWS cobra por associação de
   target network, então associar as duas subnets privadas dobra essa parcela em troca de redundância de
   AZ. O plano assume duas; se o custo apertar, uma resolve para PoC.
@@ -751,12 +753,10 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       por grupo. Mais `up-03-connectivity`, `generate-tfvars` e `destroy`. **22 testes, 13/14 mutações.**
 - [x] Pré-requisito de console do `2.2` — aplicação SAML `hub-client-vpn` criada no Identity Center,
       attribute mappings salvos, grupo `platform-admins` atribuído, metadata baixado.
-- [ ] **Rodar o apply do `2.2`.** Confirmado que não rodou ainda (`terraform state list` vazio,
-      backend S3 sem key para esta camada). `terraform plan` já validou 12 recursos limpo, tfvars e
-      metadata já prontos: `cd aws/terraform && ./scripts/up-03-connectivity --yes`. É o primeiro
-      recurso que cobra por hora (~US$ 0,20/h com 2 associações — não ~0,15/h).
-- [ ] Testar se o login SAML completa (aceite do `2.2`) e se `aws-vpn-client connect` sob SAML abre o
-      navegador sozinho — nenhum dos dois foi possível verificar sem o endpoint de pé.
+- [x] **Rodar o apply do `2.2`.** Aplicado, 12 recursos, 0 falhas. TGW `tgw-09a8a60996c37ad64`,
+      endpoint `cvpn-endpoint-0ed2eee5abea362d4`. De pé agora, ~US$ 0,20/h.
+- [x] Testar se o login SAML completa (aceite do `2.2`) e se `aws-vpn-client connect` sob SAML abre o
+      navegador sozinho — **os dois sim**, confirmado por túnel real conectado.
 - [ ] **`2.3`–`2.5`** — attachment, DNS privado, fechar a API.
 - [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
       laptop segue funcionando, e a API recusa de outro IP.
@@ -816,6 +816,34 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       ligação. Duas com valores diferentes provam. Descoberto no `1.3`.
 
 ## Completed Work
+
+### `2.2` — apply na AWS, e as duas perguntas do aceite resolvidas (2026-08-26)
+
+`up-03-connectivity --yes` aplicou os 12 recursos planejados, 0 falhas, ~10 min — a maior parte do
+tempo em `aws_ec2_client_vpn_network_association` (~6m40s cada associação) e
+`aws_ec2_client_vpn_route` (~1m40s/~4m55s). Nada surpreendeu no apply em si; a região no console tem
+de ser `us-east-1`, não a região default do último workspace usado (achado colateral: **um `acm:List
+Certificates` em `us-east-2` bate na SCP `DenyOutsideApprovedRegions` mesmo sendo leitura** — mesmo
+mecanismo já comprovado para `ec2:DescribeVpcs`, agora confirmado também para ACM).
+
+**As duas perguntas que só um apply real respondia, resolvidas:**
+
+- **`aws-vpn-client connect` sob SAML abre o navegador sozinho.** Sim — sem intervenção manual além do
+  login na página. A hipótese de que dependeria da GUI não se confirmou.
+- **Em que porta o handshake SAML acontece.** `127.0.0.1:35001` — bate com o **guia do administrador**
+  do Client VPN, não com o `8096–8115` do guia do usuário Linux (as duas páginas da AWS divergiam
+  nisso, e não havia como saber qual valia sem testar).
+
+Túnel `Connected`, verificado por `ip addr`/`ip route`: `100.64.0.2/27` (dentro do `client_cidr_block`
+`100.64.0.0/22`) e rotas `10.0.0.0/12` + `10.1.0.0/16` via `tun0` — supernet inteiro e VPC hub
+alcançáveis pelo túnel, confirmando a authorization rule e as duas rotas de subnet.
+
+**Perfil exportado para `~/trash/hub.ovpn`**, não `/tmp` — sobrevive a reboot. A DNS name do endpoint
+(`*.cvpn-endpoint-0ed2eee5abea362d4.prod.clientvpn.us-east-1.amazonaws.com`) muda a cada recriação da
+camada; o `.ovpn` nunca deve ser reaproveitado entre applies, só reexportado.
+
+Camada de pé: ~US$ 0,20/h. Derrubar à noite com `connectivity/us-east-1/scripts/destroy` — regra já
+registrada, sem exceção nova.
 
 ### `2.2` — a raiz `connectivity/` escrita, e três desvios que a execução impôs (2026-08-26)
 
