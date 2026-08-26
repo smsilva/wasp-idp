@@ -19,7 +19,7 @@ válido na fundamentação (citações da AWS) mas cuja escolha PrivateLink-vs-T
 |---|---|---|
 | 1 | **Ingress único, pelo hub.** Nenhuma spoke expõe acesso a si direto na internet | vale para qualquer entrada — logo VGW em spoke também está fora |
 | 2 | **`Site-to-Site VPN` por cliente**, terminando no TGW do hub | um attachment por cliente ⟹ route table de tenant isola nas **duas** direções, sem depender de security group |
-| 3 | **Acesso de manutenção: AWS Client VPN no hub, autenticação SAML** pelo Identity Center | conceder e revogar acesso a uma pessoa **é a demonstração**; e authorization rule por grupo dá CIDR-por-grupo, impossível com certificado |
+| 3 | **Acesso de manutenção: AWS Client VPN no hub, autenticação SAML** pelo Identity Center | conceder e revogar acesso a uma pessoa **é a demonstração**; e authorization rule por grupo dá CIDR-por-grupo, impossível com certificado. O preço que esta decisão pagava — client desktop, `connect` não scriptável — **caiu no `2.1`**: a 6.0.1 traz CLI |
 | 4 | **TGW + Client VPN ficam de pé entre sessões**, destruídos ao fim do dia | o que prende o endpoint público não é `kubectl`, é o Terraform |
 | 5 | **Fronteira de state segue o ciclo de vida, não a conta** | recurso da conta hub cujo ciclo é o do spoke vai no state do spoke |
 
@@ -117,7 +117,7 @@ ali (não é Terraform), mas isso custa menos que criar uma quarta pasta de scri
 
 | Script | O que faz |
 |---|---|
-| `vpn` | `config` exporta a configuração do endpoint corrente (o DNS muda a cada recriação); `status` confere interface, rota para `10.0.0.0/12`, DNS e resolução do endpoint do cluster — **na ordem em que quebram**. `connect` é manual, pelo client da AWS |
+| `vpn` | `config` exporta a configuração do endpoint corrente (o DNS muda a cada recriação) e a importa por `aws-vpn-client import-profile`; `status` confere interface, rota para `10.0.0.0/12`, DNS e resolução do endpoint do cluster — **na ordem em que quebram**. `connect` chama `aws-vpn-client connect` (**scriptável a partir da 6.0.1**; ver `2.1`), e **não** trata import bem-sucedido como configuração válida — a validação do CA é no `connect` |
 | `platform-status` | percorre as raízes, diz o que está aplicado por nível e soma o custo/h — antídoto para "esqueci ligado" e, mais importante, para "achei que era resíduo e destruí o T1" |
 
 Scripts de raiz (`generate-tfvars`, `apply`, `destroy`) seguem o molde da camada 2 —

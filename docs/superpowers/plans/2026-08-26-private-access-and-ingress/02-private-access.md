@@ -6,23 +6,58 @@ provisionamento (ver `README.md`).
 
 | # | Passo | Nível | Custo | Aceite |
 |---|---|---|---|---|
-| `2.1` | **PORTÃO:** verificar o client da AWS VPN nesta distro | — | zero | client instala, abre e completa login SAML |
-| `2.2` | `connectivity/`: TGW + cert de servidor no ACM + SAML provider + Client VPN + associação + rota do supernet | T1 | ~US$ 0,15/h | túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated` |
+| `2.1` | **PORTÃO:** verificar o client da AWS VPN nesta distro | — | zero | **FEITO** — instala, daemon sobe, GUI abre, CLI gerencia perfil SAML |
+| `2.2` | `connectivity/`: TGW + cert de servidor no ACM + SAML provider + Client VPN + associação + rota do supernet | T1 | ~US$ 0,15/h | túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated`; **e o login SAML completa** |
 | `2.3` | Attachment da spoke + `tgw-rt-<spoke>` + rotas + authorization rule do grupo para `10.2.0.0/16` | T2 | +US$ 0,05/h | pelo túnel, alcança IP privado dentro da spoke |
 | `2.4` | DNS: zona privada do cluster associada à VPC hub + `dns_servers` | T2 | zero | `dig` devolve IP privado; `kubectl get nodes` pelo túnel |
 | `2.5` | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
 
-## `2.1` — o portão
+## `2.1` — o portão — **PASSOU** (2026-08-26)
 
-O maior risco do caminho de acesso não está na AWS, está no client na máquina: endpoint com
+O maior risco do caminho de acesso não estava na AWS, estava no client na máquina: endpoint com
 autenticação **SAML exige o client da AWS**, que no Linux é aplicação desktop empacotada para versões
-específicas de Ubuntu. Verificar **antes** de criar recurso que cobra por hora.
+específicas de Ubuntu. Verificado **antes** de criar recurso que cobra por hora — e o risco que
+motivou o portão não existe mais.
 
-### Saídas se falhar
+**Ubuntu 24.04 LTS (AMD64) é oficialmente suportado** — a doc lista 22.04, 24.04 e 26.04. O client
+hoje é build GTK/Electron (o caminho de download é `/GTK/`), não o Mono/WPF que exigia distro antiga.
+
+| Verificação | Resultado |
+|---|---|
+| Instalação | `dpkg --install` exit 0, `apt-get check` limpo |
+| Dependências | as 9 satisfeitas — `libgtk-3-0` e `libasound2` **não existem** com esse nome no noble e vêm por `Provides` de `libgtk-3-0t64`/`libasound2t64` |
+| Daemon | `aws-client-vpn-daemon.service` `enabled` + `active`, como root |
+| GUI | abre e renderiza ("No profiles available") sob GNOME/X11 |
+| CLI | `aws-vpn-client 6.0.1`, 12 comandos |
+| Perfil SAML | `import-profile`/`list-profiles`/`get-config`/`delete-profile` funcionam **sem `sudo`**, e o client classifica `auth-type: saml` a partir de `auth-federate` |
+| Portas 8096–8115 | livres; não reservadas em repouso |
+
+### `connect` É scriptável a partir da 6.0.1 — a premissa mudou
+
+A versão **6.0.1 (2026-08-12)** instala `/usr/local/bin/aws-vpn-client`, com `connect`, `disconnect`,
+`import-profile`, `get-config`, `get-connection-status`, `list-connections`, `put-preference`. Some o
+"preço" registrado na decisão 3 (*"o client é desktop, então `connect` não é scriptável"*), e o script
+`vpn` do `README.md` deixa de ser só `config`/`status`.
+
+**Duas ressalvas, as duas honestas:**
+
+1. **`latest` não entrega a 6.0.1.** `https://.../GTK/latest/awsvpnclient_amd64.deb` e o repo apt da
+   doc entregam **5.4.1** (25/08/2026), que **não tem CLI** — a AWS mantém o 5.x como linha default
+   enquanto o 6.0.x é major mais novo e não promovido. **Instalar pela URL da versão**, conferindo o
+   sha256 das release notes. Instalar por `latest` é regressão silenciosa de capacidade.
+2. **Se `connect` sob SAML abre o navegador sozinho, o `2.2` diz.** O `--auth-user-pass` do CLI é para
+   usuário/senha, não SAML. Tentar contra endpoint sintético não respondeu a pergunta: o `connect`
+   recusou com `Invalid configuration file` **antes** de tentar o túnel.
+
+**E daí uma armadilha para o script `vpn`:** `import-profile` aceita configuração que `connect` depois
+recusa — a validação do CA é no `connect`, não no import. Import bem-sucedido **não** é prova de
+configuração boa.
+
+### Saídas se falhar — não usadas, mantidas para o caso de a distro mudar
 
 1. Rodar o client numa VM/contêiner com distro suportada só para conectar.
 2. Abordagem comunitária que dirige `openvpn` puro capturando a resposta SAML num listener local —
-   **de terceiros, não verificada**; se for tentar, é aqui.
+   **de terceiros, não verificada**; se for tentar, é aqui. (`openvpn 2.6.19` está nesta máquina.)
 3. Cair para certificado mútuo temporariamente, **sabendo que se perde a demo de conceder/revogar** —
    é desbloqueio, não alternativa. Com certificado, todo portador alcança todo CIDR autorizado; não
    existe "o Fulano só chega na spoke dele".

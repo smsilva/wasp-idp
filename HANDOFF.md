@@ -82,8 +82,8 @@ OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workloads`, `
 
 ## Estado aplicado na AWS
 
-Snapshot de 2026-08-26. **Custo recorrente: só centavos.** Nada foi aplicado nesta sessão — foi
-sessão de desenho.
+Snapshot de 2026-08-26. **Custo recorrente: só centavos.** A última sessão não aplicou nada na AWS — o
+portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por hora.
 
 | Camada | Conta | State key | Custo/mês | Estado |
 |---|---|---|---|---|
@@ -145,16 +145,19 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **fase 1 completa**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **fase 1 completa, portão `2.1` passado**)
 
-**Último passo:** camada de DNS aplicada e delegação verificada (`1.3`), fechando a fase 1. Antes
-dela, `1.1` (teste das tags do LBC) e `1.2` (`/32` no endpoint da API). A sequência de provisionamento
-virou script por camada em `aws/terraform/scripts/`.
+**Último passo:** `2.1`, o portão do client da AWS VPN — **passou**, e mudou uma premissa do plano (ver
+`Achados a não reaprender` → Rede/VPN). Antes dele, a fase 1 inteira: `1.1` (teste das tags do LBC),
+`1.2` (`/32` no endpoint da API) e `1.3` (camada de DNS aplicada, delegação verificada). A sequência de
+provisionamento virou script por camada em `aws/terraform/scripts/`.
 
-**Próximo passo pretendido: `2.1`, que é PORTÃO** — verificar o client da AWS VPN nesta distro
-**antes** de criar TGW ou Client VPN endpoint, que cobram por hora. Se ele não rodar, há três saídas
-em `02-private-access.md`; a terceira (certificado mútuo) custa a demo de conceder/revogar acesso, que
-foi o motivo de escolher SAML.
+**Próximo passo: `2.2`** — a raiz `connectivity/us-east-1/`, primeiro recurso que **cobra por hora**
+(~US$ 0,15/h, nível T1). Nada de client bloqueia mais; o que falta ali é AWS: TGW com association e
+propagation default desligados, cert de servidor autoassinado no ACM, `aws_iam_saml_provider`,
+endpoint do Client VPN, associação a subnet privada do hub, rota para `10.0.0.0/12`, authorization
+rules por grupo. **Dependência dura fora do Terraform:** a aplicação SAML customizada no Identity
+Center, com `memberOf` carregando **IDs** de grupo.
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
 uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
@@ -192,8 +195,8 @@ Decisões fechadas nesta frente:
 3. **Acesso de manutenção: AWS Client VPN no hub, autenticação SAML** pelo Identity Center. Escolhido
    sobre certificado mútuo porque **conceder e revogar acesso a uma pessoa é a demonstração**, e
    porque `access_group_id` dá **CIDR por grupo** — com certificado todo portador alcança tudo que
-   estiver autorizado. Preço: o client da AWS no Linux é aplicação desktop, então `connect` não é
-   scriptável.
+   estiver autorizado. O preço que esta decisão pagava (client desktop, `connect` não scriptável)
+   **caiu no `2.1`**: a versão 6.0.1 do client traz CLI.
 4. **TGW + Client VPN de pé durante o dia, destruídos à noite.** Sem `prevent_destroy` neles.
 5. **Fronteira de state segue o ciclo de vida, não a conta.**
 6. **Ingress variante B:** ALB no hub → NLB interno na spoke (do Terraform, IPs fixados) → pods do
@@ -361,8 +364,13 @@ nenhum hoje.
 - **Session tags em `assumeRoleChain`:** a contenção regional por
   `aws:RequestedRegion` = `aws:PrincipalTag/region` depende de o provider-aws propagar tags de sessão.
   **Não verificado.** Se não propagar, a condição nunca casa e tudo é negado.
-- **Client da AWS VPN no Linux** — é o portão `2.1` do plano. Se não rodar nesta distro, três saídas
-  escritas lá; a terceira (certificado mútuo) custa a demo de conceder/revogar.
+- ~~**Client da AWS VPN no Linux**~~ — **RESOLVIDO no `2.1`:** roda, 24.04 é suportado oficialmente, e
+  desde a 6.0.1 tem CLI. As três saídas de contingência não foram usadas; ficam escritas em
+  `02-private-access.md` para o caso de a distro mudar.
+- **`aws-vpn-client connect` sob SAML abre o navegador sozinho?** Não verificado — o `--auth-user-pass`
+  do CLI é usuário/senha, e a tentativa contra endpoint sintético morreu na validação do CA antes de
+  tentar o túnel. Se **não** abrir, `connect` volta a depender da GUI para o handshake e o script `vpn`
+  fica com `config`/`status` só. **Responde-se no `2.2`**, e é o que decide o desenho do script.
 - **Zona privada do endpoint do EKS** não é output do `aws_eks_cluster` e é recriada a cada provisão —
   o lookup por hostname é frágil. Plano B (Resolver inbound endpoint) custa ~US$ 0,25/h. Risco do
   `2.4`.
@@ -481,15 +489,21 @@ cd wasp-idp/aws/terraform
 Sem tty, os `up-*` salvam o plano, dizem onde está e saem com erro em vez de assumir o sim. **Plano
 salvo não sobrevive à expiração de credencial** — replanejar, não reaproveitar.
 
-Branch corrente: `feat/private-access-phase-1`, com a fase 1 inteira. A próxima é
-`feat/private-access-phase-2`, a partir de `main`. Convenção registrada em **In Progress**.
+Branch corrente: `feat/private-access-phase-2`. A fase 1 foi mergeada em `main` por fast-forward e
+empurrada. Convenção — uma branch por fase — registrada em **In Progress**.
 
-**O trabalho ativo é executar o plano, começando pelo `1.1`** — offline, grátis, com `terraform test`
-de aceite:
+**O trabalho ativo é o `2.2`**, primeiro passo da cadeia que cobra por hora:
 
 ```bash
 code docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md
-code docs/superpowers/plans/2026-08-26-private-access-and-ingress/01-preparation.md
+code docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md
+```
+
+O client da VPN já está instalado nesta máquina (6.0.1, portão `2.1`). Conferir em vez de reinstalar:
+
+```bash
+aws-vpn-client --version          # 6.0.1 — se o comando não existir, alguém instalou por `latest`
+systemctl is-active aws-client-vpn-daemon.service
 ```
 
 Se for preciso subir a camada 2 para experimentar:
@@ -597,6 +611,22 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - **Client VPN com SAML exige o client da AWS**; **cert de servidor é obrigatório em qualquer tipo de
   autenticação**; `memberOf` tem de carregar **IDs** de grupo, não nomes; **nunca**
   `authorize_all_groups = true`.
+- **O client da AWS VPN roda nesta máquina, e desde a 6.0.1 é scriptável** (portão `2.1`,
+  2026-08-26). Ubuntu 24.04 AMD64 é oficialmente suportado — 22.04, 24.04 e 26.04 estão na doc — e o
+  build hoje é GTK/Electron, não o Mono/WPF que exigia distro antiga. O pacote instala `awsvpnclient`
+  (GUI), o serviço `aws-client-vpn-daemon` e o CLI `/usr/local/bin/aws-vpn-client`, que gerencia
+  perfil **sem `sudo`** e reconhece `auth-type: saml` a partir de `auth-federate`.
+- **`latest` do client entrega a 5.4.1, que NÃO tem CLI.** O repo apt da doc e
+  `.../GTK/latest/awsvpnclient_amd64.deb` servem a linha 5.x; o CLI só existe na **6.0.1**, que exige
+  URL de versão explícita (`.../GTK/6.0.1/...`) e conferência do sha256 das release notes. Instalar
+  por `latest` é **regressão silenciosa de capacidade** — o pacote instala, a GUI abre, e o
+  `aws-vpn-client` simplesmente não existe.
+- **`import-profile` aceita configuração que `connect` recusa.** A validação do CA acontece no
+  `connect` (`Invalid configuration file`), não no import. Import bem-sucedido não prova configuração
+  boa — o script `vpn` não pode tratar como prova.
+- **Se `connect` sob SAML abre o navegador sozinho, ainda não se sabe.** O `--auth-user-pass` do CLI é
+  usuário/senha, não SAML, e a tentativa contra endpoint sintético morreu na validação antes do túnel.
+  Responde-se no `2.2`. As portas que o client reserva para SAML são **8096–8115** (não 35001).
 - **`client_cidr_block` precisa de /22 ou maior**, sem sobreposição — daí `100.64.0.0/22`.
 - **Azure VPN Gateway leva 30–45 min para provisionar**; a subnet tem de se chamar literalmente
   `GatewaySubnet`; ASN do lado Azure é **65515**; inside CIDRs em `169.254.21.0–169.254.22.255`, `/30`
@@ -616,11 +646,14 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [x] **`1.3`** — raiz `aws/terraform/dns/` **aplicada e verificada**: subzona
       `nonprod.<domínio>` (`Z087731898SD8PA9OXYR`, conta `network`) + NS na pai no Azure, delegação
       confirmada por `dig +trace` atravessando as duas clouds. **Fase 1 completa.**
-- [ ] **`2.1` (PORTÃO)** — **é por aqui que se começa.** Verificar o client da AWS VPN nesta distro
-      **antes** de criar recurso que cobra por hora. Abrir `feat/private-access-phase-2` a partir de
-      `main`.
-- [ ] **`2.2`–`2.5`** — `connectivity/`, attachment, DNS privado, fechar a API. Ao criar a raiz,
-      acrescentar `scripts/up-03-connectivity` junto — o `up-all` já a chama se existir.
+- [x] **`2.1` (PORTÃO)** — **passou.** Client 6.0.1 instalado, GUI abre, CLI gerencia perfil SAML sem
+      `sudo`. Derrubou a premissa de que `connect` não é scriptável. Branch
+      `feat/private-access-phase-2`, a partir de `main` já com a fase 1 mergeada.
+- [ ] **`2.2`** — **é por aqui que se começa**, e é o primeiro recurso que cobra por hora (~US$ 0,15/h).
+      Raiz `connectivity/us-east-1/`. Ao criar, acrescentar `scripts/up-03-connectivity` junto — o
+      `up-all` já a chama se existir. Pré-requisito **fora do Terraform:** aplicação SAML customizada
+      no Identity Center.
+- [ ] **`2.3`–`2.5`** — attachment, DNS privado, fechar a API.
 - [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
       laptop segue funcionando, e a API recusa de outro IP.
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
@@ -630,7 +663,9 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [ ] Acrescentar `status` a `aws/terraform/scripts/` (o `platform-status` do plano): o que está de pé
       por nível e quanto custa/h. Antídoto para "esqueci ligado" e para "achei que era resíduo e
       destruí o T1".
-- [ ] Acrescentar `vpn` a `aws/terraform/scripts/` (`config`/`status`; `connect` é manual).
+- [ ] Acrescentar `vpn` a `aws/terraform/scripts/`: `config` exporta e importa o perfil, `status`
+      confere na ordem em que quebra, `connect` chama `aws-vpn-client connect` — **scriptável**, ao
+      contrário do que o plano assumia.
 - [ ] `up-03-connectivity` nasce com a raiz `connectivity/`. O `up-all` já a pula avisando.
 - [ ] Abrir branch dedicada em `wasp-gitops` para os manifestos do lado cluster; path interno decidido
       na implementação.
@@ -668,6 +703,45 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       ligação. Duas com valores diferentes provam. Descoberto no `1.3`.
 
 ## Completed Work
+
+### `2.1` — o portão do client passou, e derrubou uma premissa do plano (2026-08-26)
+
+Branch `feat/private-access-phase-2`, a partir de `main` já com a fase 1 mergeada por fast-forward.
+Custo: zero — nada tocou a AWS, só a máquina local.
+
+**O risco que motivou o portão não existe mais.** A doc lista **Ubuntu 22.04, 24.04 e 26.04 (AMD64)**
+como suportados; esta máquina é 24.04.4 x86_64 sob GNOME/X11. O client de hoje é build GTK/Electron
+(o caminho de download é `/GTK/`), não o Mono/WPF que exigia distro antiga e era a origem do medo.
+
+Instalado o **6.0.1** por URL de versão, sha256 conferido contra as release notes. `dpkg --install`
+exit 0, `apt-get check` limpo, daemon `enabled`+`active`, GUI abrindo e renderizando, CLI respondendo.
+Perfil SAML sintético importado, listado, lido por `get-config` e apagado — **tudo sem `sudo`**, e o
+client classificou `auth-type: saml` a partir do `auth-federate`. Portas 8096–8115 livres. Nenhum
+resíduo: perfil apagado, `/tmp` limpo.
+
+**A premissa que caiu:** a decisão 3 do plano pagava como preço *"o client da AWS no Linux é aplicação
+desktop, então `connect` não é scriptável"*. A **6.0.1 (12/08/2026)** instala
+`/usr/local/bin/aws-vpn-client`, com `connect`, `disconnect`, `import-profile`, `get-config`,
+`get-connection-status`, `list-connections`, `put-preference`. O script `vpn` deixa de ser
+`config`/`status` só.
+
+Três coisas aprendidas que valem mais que o resultado do portão:
+
+- **`latest` é uma armadilha.** `.../GTK/latest/` e o repo apt da própria doc entregam **5.4.1**
+  (25/08/2026), que **não tem CLI** — a AWS mantém o 5.x como linha default enquanto o 6.0.x é major
+  mais novo e não promovido. Data maior, capacidade menor. E a falha é silenciosa: instala, a GUI abre,
+  e o `aws-vpn-client` só não existe.
+- **Dependência satisfeita por `Provides` conta.** O 6.0.1 declara `libgtk-3-0` e `libasound2`, que
+  **não existem com esse nome no noble** — a transição t64 renomeou os dois. Instala porque
+  `libgtk-3-0t64` e `libasound2t64` declaram `Provides` com versão. Conferir `apt-cache policy` do nome
+  declarado e concluir "não existe, vai quebrar" é errado.
+- **`import-profile` aceita o que `connect` recusa.** A validação do CA é no `connect`
+  (`Invalid configuration file`), não no import. O script `vpn` não pode tratar import bem-sucedido
+  como configuração válida.
+
+**O que o portão não podia provar:** o aceite escrito no passo pedia "completa login SAML", e completar
+login SAML exige o endpoint e a aplicação SAML — que são o `2.2`. O critério foi movido para lá, junto
+com a pergunta que sobrou: se `aws-vpn-client connect` num perfil SAML abre o navegador sozinho.
 
 ### Sequência de provisionamento em scripts, e a camada 2 de DNS aplicada (2026-08-26)
 
