@@ -50,6 +50,10 @@ cada uso; nunca cachear `.ovpn`.
 | `tgw-rt-<spoke>` + associação + propagação | `network` | **do spoke** | `control-plane/` (provider aliasado) |
 | Rotas remotas nas RTs da VPC spoke | `cicd` | do spoke | `control-plane/` |
 | Authorization rules por grupo | `network` | por spoke, mas é config | `connectivity/` (lista em variável) |
+| ALB + listener `:443` | `network` | permanente | `connectivity/` |
+| Cert wildcard do cluster no ACM + validação | `network` | **do cluster** | `control-plane/` (provider aliasado) |
+| Target group do hub + listener rule + anexo do cert | `network` | **do cluster** | `control-plane/` (provider aliasado) |
+| NLB interno + target group | `cicd` | do cluster | `control-plane/` |
 
 **Rota é topologia** — uma só, para `10.0.0.0/12`, permanente. **Authorization rule é política** —
 uma por CIDR por grupo, cresce com os spokes.
@@ -92,7 +96,7 @@ com `10.0.0.0/12` nem com CIDR de cliente), associação a uma subnet privada do
 | **3** | DNS: zona privada do cluster associada à VPC hub + `dns_servers` | T2 | zero | `dig` devolve IP privado; `kubectl get nodes` pelo túnel |
 | **4** | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
 | **5** | LBC + 4ª Pod Identity + workload de teste | T2 | camada 2 | NLB **interno** `active`, targets `healthy`, `curl` pelo túnel |
-| **6** | ALB público no hub → workload na spoke | T3 | +~US$ 16/mês | `curl` no DNS do ALB devolve o workload |
+| **6** | ALB público no hub → NLB interno → gateway Istio (variante **B**) | T3 | +~US$ 32/mês (ALB + NLB) | `curl` em `app.<id>.sandbox.<domínio>` devolve o workload, com TLS válido |
 | **7** | Segunda spoke mínima (VPC + `t4g.nano`) + grupo `cliente-a` + authorization rule por grupo | T3 | ~US$ 3/mês | **prova negativa 1:** operador do grupo A alcança a spoke A e **não** a spoke B; tirar do grupo derruba o acesso |
 | **8** | `Site-to-Site VPN` AWS↔Azure: VPN Gateway active-active, BGP | T3 | +~US$ 36/mês na AWS, ~US$ 0,19/h no Azure | **prova negativa 2:** a rede Azure alcança **só** a spoke dela; `search-transit-gateway-routes` mostra que o CIDR da spoke B não está na route table de A |
 
@@ -164,6 +168,108 @@ exige `data "aws_route53_zone"` casando pelo hostname do endpoint, o que é frá
 `dns_servers` do Client VPN apontando para os IPs dele — robusto e generaliza para N spokes, mas
 custa ~US$ 0,25/h em 2 AZs. Começar pela associação (grátis) e cair para o Resolver se travar.
 
+## Montagem do passo 6 — variante (B), decidida
+
+```
+internet
+   │
+   ▼  conta network (hub) — permanente
+┌──────────────────────────────────────────────────────────┐
+│ ALB público, 1 listener :443, N certificados por SNI     │
+│   cert *.<id-a>.sandbox.<dom>  → rule Host → TG-A        │
+│   TG-A type=ip → IPs FIXOS do NLB da spoke A             │
+└──────────────────────┬───────────────────────────────────┘
+                       │ TGW (rota 10.0.0.0/12)
+                       ▼  conta cicd (spoke) — do cluster
+┌──────────────────────────────────────────────────────────┐
+│ NLB interno, IPs fixados por subnet_mapping              │
+│   TG type=ip → pods do istio-ingressgateway              │
+│                       │                                  │
+│ istio-ingressgateway  │  Service ClusterIP               │
+│   + TargetGroupBinding ─┘  (não type=LoadBalancer)       │
+│   Gateway + VirtualService → svc-a, svc-b, svc-c         │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Por que (B) e não as outras duas
+
+- **(A) ALB → IPs de pod direto via TGW** é mais barata (um LB só) e mais elegante, mas o target
+  group vive na conta do hub e quem registraria os pods é o LBC, que roda na conta do cluster —
+  **mutação cross-account em tempo de execução**, com IP de pod mudando a cada deploy. Concentra dois
+  mecanismos não exercitados num passo onde o sinal precisa ser limpo. Migrar para ela depois é
+  trocar o alvo da target group do hub e apagar o NLB, com linha de base funcionando para comparar.
+- **(C) PrivateLink** custa ~US$ 47/mês e a vantagem que a sustentava era não precisar de TGW — que
+  agora existe de qualquer forma. Volta à mesa na fatia de **spoke de recursos compartilhados**, onde
+  CIDR sobreposto e autorização por principal valem dinheiro.
+
+### Um NLB por cluster, não por Service
+
+É o que o Istio resolve: um único ingress gateway recebe tudo, `Gateway` declara host/porta e
+`VirtualService` roteia por host/path para os Services internos. Publicar aplicação nova é criar um
+`VirtualService` — **zero recurso AWS, zero custo, zero `terraform apply`**. Sem mesh, cada
+`Service type=LoadBalancer` viraria um NLB próprio (~US$ 16/mês cada) e o hub precisaria de uma
+target group por aplicação.
+
+E o hub escala do mesmo jeito: **por listener rule, não por load balancer.** N clientes = 1 ALB +
+N certificados + N regras + N target groups. Só o ALB cobra.
+
+### Quem cria o quê
+
+| Peça | Quem cria | Ciclo |
+|---|---|---|
+| ALB, listener `:443` | Terraform, `connectivity/` | permanente |
+| Certificado wildcard `*.<id>.sandbox.<dom>` no ACM | Terraform, `control-plane/` via provider aliasado | do cluster |
+| Target group no hub + listener rule + `aws_lb_listener_certificate` | idem | do cluster |
+| NLB interno + target group na spoke | Terraform, `control-plane/` | do cluster |
+| Service do `istio-ingressgateway` como **`ClusterIP`** | Helm | do cluster |
+| ligação pods → target group | **`TargetGroupBinding`** do LBC | do cluster |
+
+O `istio-ingressgateway` **deixa de ser `type=LoadBalancer`**. O NLB tem cardinalidade 1 por cluster
+e nunca muda — pelo critério cardinalidade × churn é infraestrutura, não workload. E se o LBC o
+criasse, o ARN só existiria depois de aplicar o workload, quebrando o apply único.
+
+### Contrato: mais uma chave no `platform-bootstrap`
+
+O que o cluster precisa não é o NLB, é o **ARN da target group** — é o que o `TargetGroupBinding`
+consome. Entra como `ingressTargetGroupArn` no ConfigMap que já é o contrato Terraform→GitOps.
+
+Na direção oposta, o hub precisa dos **IPs privados do NLB**. Em vez de caçar ENI por descrição
+(frágil, mesma classe do lookup de zona do passo 3), **fixar os IPs** com
+`subnet_mapping { private_ipv4_address = cidrhost(<cidr da subnet privada>, 10) }`. Determinístico,
+conhecido em tempo de plan, e o NLB ganha endereço estável entre recriações.
+
+### TLS: ACM no edge, cert-manager só no interno
+
+**O ALB não lê Secret do Kubernetes — só certificado do ACM.** Importar o certificado do cert-manager
+no ACM funciona, mas transfere a renovação (~60 dias no Let's Encrypt) para nós.
+
+Caminho adotado: **um wildcard de ACM por cluster**, `*.<id>.sandbox.<domínio>`, com validação por
+DNS. Wildcard cobre **um nível só** — `*.sandbox.<dom>` não cobre `app.<id>.sandbox.<dom>`, e
+`*.*.` não existe. Renovação é automática enquanto o CNAME de validação permanecer na zona. Custo
+zero.
+
+Consequência: **acaba a emissão de certificado público por cluster pelo cert-manager** — sem desafio
+DNS-01 por cluster, sem risco de rate limit, e o ingress deixa de depender de o cert-manager estar
+saudável.
+
+| Trecho | Certificado |
+|---|---|
+| internet → ALB | wildcard público no **ACM**, renovação automática |
+| ALB → NLB → gateway | interno ou HTTP puro — **o ALB não valida certificado de backend**, então autoassinado basta |
+| dentro do mesh (mTLS) | cert-manager / Istio |
+
+**Teto a conferir antes de prometer escala:** há limite de certificados por listener de ALB (dezenas,
+aumentável por cota) — mesma família do teto de 15 CIDRs.
+
+### Duas armadilhas
+
+- **IP do cliente real:** com ALB na frente, o Istio vê o IP do ALB. O IP do usuário chega em
+  `X-Forwarded-For`, e o gateway precisa de `numTrustedProxies` configurado — senão qualquer política
+  por IP de origem olha para o lugar errado.
+- **ALB é L7, não faz passthrough TCP.** Se um dia o requisito for TLS ponta a ponta até o gateway
+  sem re-encriptação, a entrada teria de ser NLB no hub — e aí se perde o roteamento por Host, que é
+  o que torna o fan-out por cliente uma regra grátis.
+
 ## Scripts
 
 `aws/terraform/connectivity/us-east-1/scripts/` — mesmo molde da camada 2 (`PIPESTATUS[0]`, log com
@@ -209,11 +315,14 @@ mais da metade disso.
 
 ## Itens ainda em aberto neste plano
 
-1. **Variante do passo 6:** ALB no hub com target group `type=ip` apontando **direto para IPs de
-   pod** via TGW (elimina o NLB interno; `TargetGroupBinding` cross-account é padrão documentado do
-   LBC), contra ALB → **IPs do NLB interno** (mais peças, alvo estável por AZ), contra
-   **PrivateLink**. Não decidido.
-2. **Quem é dono do ALB do passo 6** — `connectivity/` (permanente, coerente com ser edge do hub) ou
-   raiz própria da fatia. Depende de 1.
-3. **Onde mora o lado Azure do passo 8** — repo/diretório e se reaproveita a trilha Azure pausada.
-4. **Em qual conta fica a hosted zone pública**, quando o domínio for decidido.
+1. **Onde mora o lado Azure do passo 8** — repo/diretório, e se reaproveita a trilha Azure pausada.
+2. **Base do domínio** — delegar `wasp.silvios.me` inteiro ou a subzona `sandbox.` para o Route 53.
+   **A conta já está decidida: `network`** — a validação do ACM exige registro na zona, e o
+   certificado tem de estar na conta e região do ALB; zona noutra conta tornaria todo ciclo de
+   renovação um trabalho cross-account em troca de nada. É também onde o whitepaper põe o Route 53
+   Resolver.
+3. **Teto de certificados por listener de ALB** — conferir a cota antes de prometer escala.
+
+Resolvidos nesta rodada: variante do passo 6 (**B**), dono do ALB (`connectivity/` para o ALB,
+`control-plane/` para o que é por-spoke), emissão do certificado (**um wildcard de ACM por
+cluster**), e conta da hosted zone pública.
