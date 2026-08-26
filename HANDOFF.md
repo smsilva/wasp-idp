@@ -154,10 +154,10 @@ console foi concluído nesta sessão: aplicação SAML `hub-client-vpn` criada n
 (management account), attribute mappings (`Subject`→`${user:email}`/emailAddress,
 `memberOf`→`${user:groups}`/unspecified) salvos, grupo `platform-admins` atribuído, metadata XML
 baixado para `aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored, 2504 caracteres).
-`generate-tfvars` rodou limpo e um `terraform plan` confirmou **12 recursos a criar**, plano limpo —
-mas **o apply NÃO rodou ainda** (bloqueado pelo classifier do agente; pedido ao usuário via `!`, sem
-confirmação de conclusão registrada nesta sessão). `terraform state list` na raiz `connectivity/`
-está vazio — **verificar isso primeiro** ao retomar.
+`generate-tfvars` rodou limpo e um `terraform plan` confirmou **12 recursos a criar**, plano limpo.
+**Confirmado: o apply NÃO rodou** — `terraform state list` na raiz `connectivity/` devolve "No state
+file was found", ou seja o backend S3 não tem key nenhuma ainda para esta camada (bloqueado pelo
+classifier do agente; pedido ao usuário via `!`, nunca confirmado como concluído nesta sessão).
 
 **Achado do plan, ainda não registrado no plano em si:** o Client VPN cobra por **associação de
 subnet**, não por endpoint. Com 2 subnets privadas do hub (uma por AZ), o custo real do T1 é
@@ -165,16 +165,11 @@ subnet**, não por endpoint. Com 2 subnets privadas do hub (uma por AZ), o custo
 documenta. Decidido manter as duas associações (redundância de AZ); atualizar a tabela de custo do
 plano quando alguém voltar a editá-la.
 
-```bash
-cd aws/terraform/connectivity/us-east-1
-terraform state list          # vazio? o apply não rodou — retomar por aqui
-```
-
-Se vazio, retomar com:
+Retomar direto (tfvars e metadata já prontos, plano já validado):
 
 ```bash
 cd aws/terraform
-./scripts/up-03-connectivity --yes    # tfvars e metadata já prontos; plano já validado
+./scripts/up-03-connectivity --yes
 ```
 
 **Aceite do `2.2`:** túnel sobe com identidade do Identity Center, IP vindo de `100.64.0.0/22`, target
@@ -756,10 +751,10 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       por grupo. Mais `up-03-connectivity`, `generate-tfvars` e `destroy`. **22 testes, 13/14 mutações.**
 - [x] Pré-requisito de console do `2.2` — aplicação SAML `hub-client-vpn` criada no Identity Center,
       attribute mappings salvos, grupo `platform-admins` atribuído, metadata baixado.
-- [ ] **Confirmar/rodar o apply do `2.2`.** `terraform plan` já validou 12 recursos limpo; verificar
-      `terraform state list` em `connectivity/us-east-1/` primeiro — pode já ter sido aplicado fora
-      desta sessão. Se vazio: `./scripts/up-03-connectivity --yes` (tfvars e metadata já prontos).
-      É o primeiro recurso que cobra por hora (~US$ 0,20/h com 2 associações — não ~0,15/h).
+- [ ] **Rodar o apply do `2.2`.** Confirmado que não rodou ainda (`terraform state list` vazio,
+      backend S3 sem key para esta camada). `terraform plan` já validou 12 recursos limpo, tfvars e
+      metadata já prontos: `cd aws/terraform && ./scripts/up-03-connectivity --yes`. É o primeiro
+      recurso que cobra por hora (~US$ 0,20/h com 2 associações — não ~0,15/h).
 - [ ] Testar se o login SAML completa (aceite do `2.2`) e se `aws-vpn-client connect` sob SAML abre o
       navegador sozinho — nenhum dos dois foi possível verificar sem o endpoint de pé.
 - [ ] **`2.3`–`2.5`** — attachment, DNS privado, fechar a API.
