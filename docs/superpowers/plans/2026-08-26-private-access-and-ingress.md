@@ -138,8 +138,48 @@ Parâmetros que vêm do desenho de referência e não precisam ser redescobertos
   evita rejeição de CIDR duplicado na route table.
 
 **Armadilha operacional:** o VPN Gateway do Azure leva **30–45 min para provisionar** — de longe o
-recurso mais lento de todo o plano. Planejar a sessão do passo 8 em torno disso, e subir o lado AWS
-em paralelo.
+recurso mais lento de todo o plano. Planejar a sessão do passo 8 em torno disso.
+
+### Raiz: `azure/terraform/simulated-client/`, com os dois lados do túnel
+
+A dependência entre as clouds é uma **cadeia**, não um ciclo — e é por isso que cabe numa raiz só:
+
+```
+PIPs do VPN Gateway (Azure)  →  Customer Gateway (AWS)  →  VPN Connection (AWS)
+   →  IPs externos dos túneis + PSK  →  Local Network Gateway + Connection (Azure)
+```
+
+Em duas raízes isso exigiria três applies alternados (Azure → AWS → Azure) num recurso que leva 40
+min para nascer. Numa raiz com os dois providers, o Terraform ordena sozinho.
+
+O lado AWS do túnel mora aqui também, via provider `aws` aliasado — **pela mesma regra de ciclo de
+vida** já aplicada a `tgw-rt-<spoke>` e à listener rule do ALB: Customer Gateways, VPN Connections e
+a route table do cliente morrem quando o cliente simulado morre.
+
+| Lado | Conteúdo |
+|---|---|
+| Azure | resource group, VNet `10.50.0.0/16`, **`GatewaySubnet`** (o nome é obrigatório e literal), 2 public IPs, `azurerm_virtual_network_gateway` active-active com BGP ASN 65515, Local Network Gateways, Connections, e uma VM pequena para responder |
+| AWS (aliasado) | 2 Customer Gateways (um por PIP), 2 VPN Connections no TGW, `tgw-rt-cliente-a` + associação + rotas |
+
+A raiz cria também o slot `azure/terraform/`, onde a trilha Azure pausada pode aterrar depois.
+
+### Onde o isolamento é aplicado — o mecanismo que o passo 8 prova
+
+**Route table por cliente, não só por spoke.** Se o attachment de VPN do cliente A associasse à
+`tgw-rt-hub` — que tem todas as spokes propagadas — ele alcançaria todas, e a prova falharia. O
+desenho correto é simétrico:
+
+| Route table | Associada a | Contém |
+|---|---|---|
+| `tgw-rt-spoke-a` | attachment da VPC spoke A | CIDR da spoke A + `10.50.0.0/16` (volta para o cliente A) |
+| `tgw-rt-cliente-a` | attachment de VPN do cliente A | **só** o CIDR da spoke A |
+
+Cliente A não tem rota para a spoke B, e spoke A não tem rota para a rede do cliente B. Acrescentar
+um cliente é acrescentar rota nos **dois** lados — explícito e aditivo, nunca por default.
+
+O aceite tem duas formas, e vale fazer as duas: assertion por API
+(`aws ec2 search-transit-gateway-routes` não devolve o CIDR da spoke B na route table do cliente A) e
+conexão real que estoura o timeout contra um listener vivo na spoke B.
 
 ### Detalhes de 1b (SAML) que já custaram tempo em outros lugares
 
@@ -363,13 +403,13 @@ mais da metade disso.
 
 ## Itens ainda em aberto neste plano
 
-1. **Onde mora o lado Azure do passo 8** — repo/diretório, e se reaproveita a trilha Azure pausada.
-2. **Teto de certificados por listener de ALB** — conferir a cota antes de prometer escala.
-3. **Onde entra o passo de DNS na sequência.** A raiz `dns/` é pré-requisito do certificado do
+1. **Teto de certificados por listener de ALB** — conferir a cota antes de prometer escala.
+2. **Onde entra o passo de DNS na sequência.** A raiz `dns/` é pré-requisito do certificado do
    passo 6, mas independe de tudo antes dele — pode ser aplicada a qualquer momento, e é de custo
    quase zero. Provável 0c.
 
 Resolvidos: variante do passo 6 (**B**), dono do ALB (`connectivity/` para o ALB, `control-plane/`
 para o que é por-spoke), emissão do certificado (**um wildcard de ACM por cluster**), conta da
-hosted zone pública (`network`), e base do domínio (**subzona `nonprod.` delegada, com a delegação
-automatizada por provider `azurerm`**).
+hosted zone pública (`network`), base do domínio (**subzona `nonprod.` delegada, com a delegação
+automatizada por provider `azurerm`**), e onde mora o cliente simulado
+(**`azure/terraform/simulated-client/`, com os dois lados do túnel numa raiz só**).
