@@ -112,7 +112,8 @@ centralizado). Aí a camada tem de ser reunificada.
 
 ## Scripts
 
-`aws/scripts/` — transversais, servem qualquer fase:
+`aws/terraform/scripts/` — transversais, servem qualquer fase. O `vpn` fica um pouco fora do lugar
+ali (não é Terraform), mas isso custa menos que criar uma quarta pasta de scripts no repo:
 
 | Script | O que faz |
 |---|---|

@@ -73,6 +73,11 @@ O certificado aperta primeiro: **25 clientes por ALB** antes de pedir aumento.
 | Service do `istio-ingressgateway` como **`ClusterIP`** | Helm | do cluster |
 | ligação pods → target group | **`TargetGroupBinding`** do LBC | do cluster |
 
+**Os manifestos do lado cluster ficam no repo `wasp-gitops`, numa branch dedicada a este
+experimento** — o path dentro dele se decide na implementação. Ele já tem `charts/httpbin`, que serve
+de workload de teste sem precisar escrever nada novo. Este repo não ganha diretório de GitOps: a
+decisão registrada é que config de GitOps vive em repositório próprio.
+
 O `istio-ingressgateway` **deixa de ser `type=LoadBalancer`**. O NLB tem cardinalidade 1 por cluster e
 nunca muda — pelo critério cardinalidade × churn é infraestrutura, não workload. E se o LBC o criasse,
 o ARN só existiria depois de aplicar o workload, quebrando o apply único.
