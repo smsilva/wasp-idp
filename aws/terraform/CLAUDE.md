@@ -68,6 +68,19 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - ESO 2.9.0 **não serve mais** `external-secrets.io/v1beta1` nem `v1alpha1`. Manifestos
   `ExternalSecret` têm que ser `v1`.
 
+## Load balancer: quem é dono do quê
+
+- **`src/network` NÃO aplica as tags de descoberta do AWS Load Balancer Controller** —
+  `kubernetes.io/role/elb` nas públicas e `kubernetes.io/role/internal-elb` nas privadas. Sem elas o
+  LBC não encontra onde criar load balancer e o sintoma é obscuro. Bug latente, não hipótese.
+- **`TargetGroupBinding` aceita target group criado fora do controller** — verificado na doc do LBC,
+  que descreve provisionar o load balancer *"completely outside of Kubernetes"* e ainda gerenciar os
+  targets pelo Service. Campos: `targetGroupARN`, `targetType: ip`, `serviceRef`, `vpcID` e
+  `networking.ingress` (é este que faz o controller cuidar das regras de SG para targets IP).
+  Consequência: **Terraform pode ser dono do NLB/target group sem quebrar o apply único** — o
+  workload entra depois só registrando pods. Ressalva: o CR pode referenciar qualquer target group,
+  então em cenário multi-tenant exige RBAC.
+
 ## Custo
 
 - **`enable_nat_gateway = false` nos hubs é deliberado**, não esquecimento: sem TGW nada roteia

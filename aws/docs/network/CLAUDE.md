@@ -46,3 +46,23 @@ no PoC vs. o alvo multi-account) está no tópico 7.
   tenant — a `Network` do PoC vira uma **spoke** desse desenho maior.
 - **Gap crítico já mapeado:** o CIDR `172.16.0.0/16` hardcoded é incompatível com
   hub-and-spoke (colide entre VPCs). Parametrização e alinhamento com supernet: tópicos 1 e 7.
+
+## Armadilha: route table de tenant só isola se o attachment for por tenant
+
+O isolamento em dois níveis do tópico 3 (`tgw-rt-<spoke>` + rotas na VPC) pressupõe **um attachment
+de VPN por cliente**. Com um attachment **agregado** — um concentrador único a montante, servindo
+vários clientes pelos mesmos túneis — todos os CIDRs de cliente chegam pelo mesmo attachment e são
+aprendidos por BGP na mesma route table. Consequência:
+
+- **saída** (spoke → cliente) continua isolada: a RT privada da spoke só ganha rota para os CIDRs
+  remotos declarados;
+- **entrada** (cliente → spoke) **não** fica isolada no TGW, porque o CIDR de toda spoke é
+  propagado na `tgw-rt-hub` para o tráfego de retorno funcionar. Sobra só security group/NACL
+  dentro da spoke — uma camada, e a mais interna.
+
+Isso rebaixa `SEC05-BP01`/`BP02` (camadas de rede, controle de fluxo em todas elas) a uma camada
+nessa direção. Aceitável como decisão registrada; inaceitável como efeito colateral. Saídas: VPN por
+cliente, VPC de inspeção com Network Firewall no caminho, ou PrivateLink em vez de rota.
+
+**Neste repo a decisão é VPN por cliente**, justamente para manter as duas direções isoladas por
+topologia.

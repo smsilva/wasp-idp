@@ -152,6 +152,11 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - **Platform Library vs. per-project GitOps repo:** central Crossplane Compositions/XRDs live in a read-only Platform Library repo; each project's GitOps config lives in its own write-restricted repo (only that project's Backstage instance can write to it). This is the blast-radius/write-access isolation boundary.
 - **Per-project isolation model:** security boundary is a separate Backstage instance per project (separate namespace, separate GitOps repo, separate GitHub org) — not RBAC inside a shared instance. One project's team must not be able to discover another project's existence.
 - **Crossplane provider wait timeout:** on a resource-contrained host (8 cores, 3-node k3d), the 10 Azure providers can take >600 s to reach `Healthy` due to apiserver patch pressure under etcd load. Use `--timeout=900s` for `kubectl wait provider --all --for condition=Healthy`.
+- **Ingress é único, pelo hub (decidido 2026-08-26):** nenhuma spoke expõe acesso a si direto na
+  internet. Vale para qualquer entrada, HTTPS ou VPN — logo um VGW numa spoke também está fora.
+- **VPN de cliente termina no hub, uma `Site-to-Site VPN` por cliente (decidido 2026-08-26):** um
+  attachment por cliente no TGW ⟹ a route table de tenant no TGW isola nas **duas** direções, sem
+  depender de security group para separar cliente de cliente.
 - **Cluster naming idea (not decided):** OpenStack's TripleO project uses `Undercloud` (the bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project Backstage clusters (overcloud-like).
 
 ## Security TODOs (PoC hardening, deferred)
