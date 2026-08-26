@@ -7,7 +7,7 @@ decidir qualquer coisa das fases seguintes.
 |---|---|---|---|---|
 | `1.1` | ~~Tags~~ **Teste** das tags `kubernetes.io/role/{elb,internal-elb}` em `src/network` | — | zero | `terraform test` offline — **feito** |
 | `1.2` | `generate-tfvars` descobre o IP público → `public_access_cidrs = ["<ip>/32"]` | — | zero | teste offline **feito**; os dois critérios que exigem apply real **pendentes** |
-| `1.3` | Raiz `dns/`: hosted zone `nonprod.<domínio>` + delegação NS no Azure, dois providers | T0 | ~US$ 0,50/mês | `dig NS nonprod.<domínio>` responde pelos name servers do Route 53 |
+| `1.3` | Raiz `dns/`: hosted zone `nonprod.<domínio>` + delegação NS no Azure, dois providers | T0 | ~US$ 0,50/mês | escrita e testada offline; **`dig` pendente** — falta o `apply` |
 
 ## `1.1` — tags de descoberta do LBC — **FEITO**
 
@@ -134,3 +134,38 @@ delegado, essa separação não existiria.
 **Risco dos dois providers no mesmo state:** sem credencial Azure válida, o `plan` falha mesmo para
 mudança que só toca AWS. Manter o recurso de delegação atrás de um `local.manage_delegation` para
 poder desligar sem editar o resto.
+
+### O que foi entregue — **escrita e testada offline, `apply` pendente**
+
+Raiz `aws/terraform/dns/`, 9 runs, 0 falhas. Quatro desvios do esboço acima, todos deliberados:
+
+| Desvio | Por quê |
+|---|---|
+| `manage_delegation` é **variável**, não `local` | um `local` não é alcançável por teste; a variável permite exercitar os dois caminhos, e serve ao mesmo propósito (desligar sem editar o resto) |
+| valores em `terraform.tfvars`, não inline | única raiz assim. Nas outras, o que está inline é decisão de desenho; aqui domínio, resource group e subscription são **identidade de quem roda**, e o repo é público |
+| `subzone_label` é variável com default `nonprod` | `prod.` entra como outra instância desta raiz, não como exceção dentro dela |
+| `azurerm ~> 5.0` | major 5 conferido no registry, não herdado do repo Azure pessoal (`~> 4.x`). O schema de `azurerm_dns_ns_record` é o mesmo nos dois |
+
+`azure_subscription_id` e `azure_dns_resource_group` são obrigatórios **só** com
+`manage_delegation` ligado — validação cruzada entre variáveis, senão o interruptor não serviria
+para nada (exigiria os valores do Azure justamente para não usar o Azure).
+
+### O achado do passo: um `override_resource` não prova fio
+
+`name_servers` só existe depois do apply, então a asserção que prova a delegação-como-código precisa
+de `override_resource`. **Mas um override só não basta:** com uma lista fixa no `main.tf` igual aos
+valores injetados, a asserção passa sem haver fio nenhum. Aconteceu — a mutação que colava os name
+servers à mão passou **verde** na primeira versão do teste.
+
+O conserto são **dois** runs com overrides de valores diferentes (e tamanhos diferentes): nenhuma
+lista fixa satisfaz os dois. Verificado nas duas direções — colando o conjunto do primeiro override,
+o segundo run cai; colando o do segundo, cai o primeiro.
+
+Vale para qualquer asserção sobre valor que atravessa recursos: **um override testa o valor, dois
+testam a ligação.**
+
+### O que falta
+
+O `apply`. Ele cria a hosted zone (T0, ~US$ 0,50/mês, `prevent_destroy`) e escreve o NS no Azure,
+então precisa de credencial das duas clouds e roda por `! <comando>`. Só depois dele o critério de
+aceite — `dig NS nonprod.<domínio>` respondendo pelos name servers do Route 53 — é verificável.

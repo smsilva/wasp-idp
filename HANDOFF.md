@@ -91,6 +91,7 @@ sessão de desenho.
 | `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
 | `control-plane` | `cicd` | `control-plane/` | ~US$ 165 quando de pé | **destruída** (state com 0 recursos) |
+| `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **escrita, não aplicada** |
 
 Bucket de state: `tfstate-o-e4r8ndteju`, na conta `network`. Nenhum cluster k3d de pé.
 
@@ -461,13 +462,13 @@ reais.
 `public_access_cidrs` **sem default**, então qualquer `plan` falha pedindo a variável até rodar
 `./scripts/generate-tfvars --force`. É a falha-fechado funcionando, não regressão.
 
-Regressão offline (**55 testes**, 11 diretórios, 0 falhas):
+Regressão offline (**64 testes**, 12 diretórios, 0 falhas — a lista abaixo inclui `dns`):
 
 ```bash
 cd aws/terraform
 for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup \
          src/helm/modules/external-secrets src/helm/modules/argo-cd src/helm/modules/crossplane \
-         network-foundation/us-east-1 network-foundation/us-west-2 control-plane; do
+         network-foundation/us-east-1 network-foundation/us-west-2 control-plane dns; do
   (cd "${m}" && terraform init -backend=false >/dev/null && terraform test)
 done
 ```
@@ -564,8 +565,10 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [x] **`1.2`** — `public_access_cidrs` sem default no root, invariante no módulo, IP descoberto pelo
       `generate-tfvars`. **Offline provado (6 mutações); os dois critérios que exigem a camada 2 de pé
       seguem pendentes** — verificar na próxima vez que ela subir.
-- [ ] **`1.3`** — raiz `aws/terraform/dns/`: hosted zone `nonprod.` + delegação NS no Azure.
-      **É por aqui que se começa.**
+- [~] **`1.3`** — raiz `aws/terraform/dns/` **escrita e testada offline** (9 runs). Falta o `apply`:
+      cria a hosted zone (T0, ~US$ 0,50/mês) e escreve o NS no Azure, então precisa de credencial das
+      duas clouds e roda por `! <comando>`. Só depois dele o `dig NS` é verificável.
+      **É por aqui que se começa: preencher `dns/terraform.tfvars` e aplicar.**
 - [ ] **`2.1` (PORTÃO)** — verificar o client da AWS VPN nesta distro **antes** de criar recurso que
       cobra.
 - [ ] **`2.2`–`2.5`** — `connectivity/`, attachment, DNS privado, fechar a API.
@@ -604,8 +607,35 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - [ ] `tenancy/04-crossplane-map.md`, quando o schema do registry de tenants existir.
 - [ ] Auditar o repo por outros usos de `data "aws_iam_policy_document"` sob `mock_provider`
       (Known Broken 16).
+- [ ] Auditar asserções que dependem de um único `override_resource`: elas provam o valor, não a
+      ligação. Duas com valores diferentes provam. Descoberto no `1.3`.
 
 ## Completed Work
+
+### `1.3` — raiz `dns/` escrita, e o que um `override_resource` não prova (2026-08-26)
+
+Subzona `nonprod.<domínio>` no Route 53 da conta `network` + registro NS de delegação na zona pai no
+Azure DNS, numa raiz com dois providers de cloud. **9 runs, 0 falhas. `apply` pendente.**
+
+Quatro desvios do esboço do plano, todos deliberados: `manage_delegation` é **variável** e não
+`local` (um `local` não é alcançável por teste, e o propósito — desligar sem editar o resto — se
+mantém); valores em `terraform.tfvars` e não inline (única raiz assim: nas outras o inline é decisão
+de desenho, aqui é **identidade de quem roda**, e o repo é público); `subzone_label` como variável,
+para `prod.` ser outra instância e não exceção; e `azurerm ~> 5.0`, conferido no registry em vez de
+herdado do repo Azure pessoal (`~> 4.x`).
+
+**O achado, e vale muito além deste passo: um `override_resource` testa o VALOR, dois testam a
+LIGAÇÃO.** `name_servers` só existe depois do apply, então a asserção que prova
+delegação-como-código precisa de override. Mas com uma lista fixa no `main.tf` igual aos valores
+injetados, a asserção passa sem haver fio — e foi o que aconteceu: a mutação que colava os name
+servers à mão passou **verde**. O conserto são dois runs com overrides de valores e tamanhos
+diferentes; nenhuma lista fixa satisfaz os dois. Verificado nas duas direções.
+
+**Auditar o repo por asserções com um único `override_resource`** — a de `routing.tftest.hcl` (NAT na
+subnet pública) é da mesma família e já usa IDs distintos entre si de propósito, mas não foi checada
+sob esta lente.
+
+Regressão: **64 testes em 12 diretórios, 0 falhas** (eram 55).
 
 ### `1.2` — endpoint da API restrito ao IP de quem aplica (2026-08-26)
 

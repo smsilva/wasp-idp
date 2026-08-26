@@ -56,6 +56,14 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   aparece em diff. Misturar as duas põe decisão de projeto em módulo genérico.
 - **Variável sem default é a forma de falhar fechado.** Ela invalida o `terraform.tfvars` já gerado, e
   isso é o mecanismo: quem for aplicar tem de regenerar em vez de herdar um valor perigoso.
+- **Um `override_resource` prova o VALOR; dois provam a LIGAÇÃO.** Para asserção sobre atributo que só
+  existe depois do apply (`name_servers`, id de subnet), um override sozinho passa mesmo se o
+  consumidor tiver o valor **fixo no código** igual ao injetado — comprovado: a mutação que colava
+  name servers à mão passou verde. Usar dois runs com valores **e tamanhos** diferentes; nenhuma lista
+  fixa satisfaz os dois.
+- **`setequal` não existe.** Há `setunion`/`setintersection`/`setsubtract`; igualdade é `==` entre
+  dois `toset()`. E comparar atributo `list(string)` com literal `["a","b"]` (que é *tuple*) falha com
+  *"LHS and RHS values are of different types"* em vez de comparar — `toset()` nos dois lados resolve.
 
 ## Providers `kubernetes` e `helm`
 
