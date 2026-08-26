@@ -509,15 +509,22 @@ e depois `connection reset`) e SSO admin ativo (`aws sso login --profile persona
 
 Plano em `docs/superpowers/plans/2026-08-26-private-access-and-ingress.md`. Executar na ordem.
 
+Numeração `fase.passo`; passo descoberto executando entra com sufixo de letra (`2.3a`) para não
+empurrar os seguintes.
+
 - [x] Acesso de manutenção decidido: **Client VPN + SAML** no hub.
 - [x] Níveis de permanência, fronteira de state e o corte `hub | spoke+cluster` sob TGW.
-- [ ] **Passo 0a** — tags de descoberta do LBC em `src/network` (offline, grátis).
-- [ ] **Passo 0b** — `generate-tfvars` descobre o IP público → `public_access_cidrs` `/32`.
-- [ ] **Passo 1a (PORTÃO)** — verificar o client da AWS VPN nesta distro **antes** de criar recurso
-      que cobra. Três saídas escritas no plano se falhar.
-- [ ] **Passos 1b–8** — ver plano.
-- [ ] Decidir a variante do passo 6 (ALB → IP de pod via TGW, ALB → NLB interno, ou PrivateLink).
-- [ ] Desenhar o cliente simulado dos passos 7–8 (strongSwan em VPC separada).
+- [x] Ingress decidido (variante **B**), certificado (**wildcard de ACM por cluster**), DNS (subzona
+      `nonprod.` delegada com a delegação em código) e onde mora o cliente simulado.
+- [ ] **Fase 1 — preparação, grátis:** `1.1` tags de descoberta do LBC; `1.2` `/32` no
+      `public_access_cidrs`; `1.3` raiz `dns/` + delegação.
+- [ ] **`2.1` é PORTÃO** — verificar o client da AWS VPN nesta distro **antes** de criar recurso que
+      cobra. Três saídas escritas no plano se falhar.
+- [ ] **Fase 2 (`2.2`–`2.5`)** — TGW + Client VPN + attachment + DNS privado + fechar a API.
+- [ ] **Fase 3 (`3.1`–`3.2`)** — NLB interno e gateway Istio; depois o lado hub com cert e listener
+      rule.
+- [ ] **Fase 4 (`4.1`–`4.2`)** — as duas provas negativas.
+- [ ] Conferir a cota de certificados por listener de ALB (único item aberto do plano).
 
 ### Frente B — Terraform + Crossplane / EKS
 

@@ -86,30 +86,52 @@ com `10.0.0.0/12` nem com CIDR de cliente), associação a uma subnet privada do
 
 ## Sequência
 
+Numeração **`fase.passo`**. Passo descoberto durante a execução entra com **sufixo de letra**
+(`2.3a`) para não empurrar os seguintes — referência escrita em commit ou handoff continua válida.
+Se alguma fase passar de 9 passos, padronizar a fase inteira com dois dígitos (`2.01`).
+
+### Fase 1 — Preparação · grátis ou quase, independe de tudo o resto
+
 | # | Passo | Nível | Custo | Aceite |
 |---|---|---|---|---|
-| **0a** | Tags `kubernetes.io/role/{elb,internal-elb}` em `src/network` | — | zero | `terraform test` offline |
-| **0b** | `generate-tfvars` descobre o IP público → `public_access_cidrs = ["<ip>/32"]` | — | zero | teste offline; apply do laptop segue funcionando |
-| **1a** | **PORTÃO:** verificar o client da AWS VPN nesta distro Linux | — | zero | client instala, abre e completa login SAML |
-| **1b** | `connectivity/`: TGW + cert ACM + SAML provider + Client VPN + associação + rota | T1 | ~US$ 0,15/h | túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated` |
-| **2** | Attachment + `tgw-rt-<spoke>` + rotas; authorization rule do grupo para `10.2.0.0/16` | T2 | +US$ 0,05/h | pelo túnel, alcança IP privado dentro da spoke |
-| **3** | DNS: zona privada do cluster associada à VPC hub + `dns_servers` | T2 | zero | `dig` devolve IP privado; `kubectl get nodes` pelo túnel |
-| **4** | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
-| **5** | LBC + 4ª Pod Identity + workload de teste | T2 | camada 2 | NLB **interno** `active`, targets `healthy`, `curl` pelo túnel |
-| **6** | ALB público no hub → NLB interno → gateway Istio (variante **B**) | T3 | +~US$ 32/mês (ALB + NLB) | `curl` em `app.<id>.sandbox.<domínio>` devolve o workload, com TLS válido |
-| **7** | Segunda spoke mínima (VPC + `t4g.nano`) + grupo `cliente-a` + authorization rule por grupo | T3 | ~US$ 3/mês | **prova negativa 1:** operador do grupo A alcança a spoke A e **não** a spoke B; tirar do grupo derruba o acesso |
-| **8** | `Site-to-Site VPN` AWS↔Azure: VPN Gateway active-active, BGP | T3 | +~US$ 36/mês na AWS, ~US$ 0,19/h no Azure | **prova negativa 2:** a rede Azure alcança **só** a spoke dela; `search-transit-gateway-routes` mostra que o CIDR da spoke B não está na route table de A |
+| `1.1` | Tags `kubernetes.io/role/{elb,internal-elb}` em `src/network` | — | zero | `terraform test` offline |
+| `1.2` | `generate-tfvars` descobre o IP público → `public_access_cidrs = ["<ip>/32"]` | — | zero | teste offline; apply do laptop segue funcionando; API recusa de outro IP |
+| `1.3` | Raiz `dns/`: hosted zone `nonprod.<domínio>` + delegação NS no Azure, dois providers | T0 | ~US$ 0,50/mês | `dig NS nonprod.<domínio>` responde pelos name servers do Route 53 |
+
+### Fase 2 — Acesso privado · o que destrava fechar a API
+
+| # | Passo | Nível | Custo | Aceite |
+|---|---|---|---|---|
+| `2.1` | **PORTÃO:** verificar o client da AWS VPN nesta distro | — | zero | client instala, abre e completa login SAML |
+| `2.2` | `connectivity/`: TGW + cert de servidor no ACM + SAML provider + Client VPN + associação + rota do supernet | T1 | ~US$ 0,15/h | túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated` |
+| `2.3` | Attachment da spoke + `tgw-rt-<spoke>` + rotas + authorization rule do grupo para `10.2.0.0/16` | T2 | +US$ 0,05/h | pelo túnel, alcança IP privado dentro da spoke |
+| `2.4` | DNS: zona privada do cluster associada à VPC hub + `dns_servers` | T2 | zero | `dig` devolve IP privado; `kubectl get nodes` pelo túnel |
+| `2.5` | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
+
+### Fase 3 — Ingress · privado primeiro, público depois
+
+| # | Passo | Nível | Custo | Aceite |
+|---|---|---|---|---|
+| `3.1` | LBC + 4ª Pod Identity + NLB interno com IPs fixos + target group + gateway Istio (por GitOps) com `TargetGroupBinding` | T2 | +~US$ 16/mês | `curl` no IP do NLB **pelo túnel** devolve o workload |
+| `3.2` | Lado hub: cert wildcard `*.<id>.nonprod.<domínio>` + target group com os IPs do NLB + listener rule no ALB | T3 | +~US$ 16/mês | `curl` em `app.<id>.nonprod.<domínio>` devolve o workload com TLS válido |
+
+### Fase 4 — Provas de isolamento · os únicos aceites negativos
+
+| # | Passo | Nível | Custo | Aceite |
+|---|---|---|---|---|
+| `4.1` | Segunda spoke mínima (VPC + `t4g.nano`) + grupo `cliente-a` + authorization rule por grupo | T3 | ~US$ 3/mês | **prova 1:** operador do grupo A alcança a spoke A e **não** a B; tirar do grupo derruba o acesso |
+| `4.2` | `azure/terraform/simulated-client/`: VPN Gateway active-active com BGP + `tgw-rt-cliente-a` | T3 | +~US$ 36/mês AWS, ~US$ 0,19/h Azure | **prova 2:** a rede Azure alcança **só** a spoke dela; `search-transit-gateway-routes` não devolve o CIDR da spoke B na route table do cliente A |
 
 ### Por que nesta ordem
 
-- **0a/0b são grátis e offline.** O `/32` sozinho é a maior redução de superfície da lista — hoje o
-  endpoint aceita `0.0.0.0/0` — e não quebra o apply do laptop.
-- **1a antes de 1b:** o maior risco do caminho de acesso não está na AWS, está no client na máquina.
+- **A fase 1 é grátis e independente.** O `/32` do `1.2` sozinho é a maior redução de superfície da
+  lista — hoje o endpoint aceita `0.0.0.0/0` — e não quebra o apply do laptop.
+- **`2.1` antes de `2.2`:** o maior risco do caminho de acesso não está na AWS, está no client na máquina.
   Descobrir depois de criar recurso que cobra por hora seria caro.
 - **O acesso subiu para antes do LBC.** Testar workload sem caminho privado obriga a expor coisa
-  publicamente só para conseguir olhar. Com o túnel pronto antes, o teste do passo 5 é `curl` num NLB
+  publicamente só para conseguir olhar. Com o túnel pronto antes, o teste do `3.1` é `curl` num NLB
   **interno** — o alvo real, não um proxy dele.
-- **7 e 8 são os únicos com aceite negativo.** Até ali só se provou que o tráfego *chega*; nada
+- **`4.1` e `4.2` são os únicos com aceite negativo.** Até ali só se provou que o tráfego *chega*; nada
   provou que o que não deve chegar **não chega**. E eles provam coisas **diferentes**, em pontos de
   aplicação diferentes — um não substitui o outro:
 
@@ -118,10 +140,10 @@ com `10.0.0.0/12` nem com CIDR de cliente), associação a uma subnet privada do
   | authorization rule por grupo | endpoint do Client VPN | que **uma pessoa** só alcança a spoke do grupo dela |
   | route table por attachment | tabela de rotas do TGW | que a **rede inteira** de um cliente só alcança a spoke dele |
 
-  O 7 vem antes por ser quase de graça: a segunda spoke **não precisa de cluster** — basta VPC com
+  O `4.1` vem antes por ser quase de graça: a segunda spoke **não precisa de cluster** — basta VPC com
   algo que responda. E é o 7 que demonstra conceder/revogar, que foi o motivo de escolher SAML.
 
-## O ambiente de cliente do passo 8 fica no Azure
+## O ambiente de cliente do `4.2` fica no Azure
 
 Decidido: VPN Gateway gerenciado, não strongSwan em VM. Mais lento e mais caro, mas é "cliente com
 concentrador de verdade" — suporta BGP e active-active, que é o caso real.
@@ -138,7 +160,7 @@ Parâmetros que vêm do desenho de referência e não precisam ser redescobertos
   evita rejeição de CIDR duplicado na route table.
 
 **Armadilha operacional:** o VPN Gateway do Azure leva **30–45 min para provisionar** — de longe o
-recurso mais lento de todo o plano. Planejar a sessão do passo 8 em torno disso.
+recurso mais lento de todo o plano. Planejar a sessão do `4.2` em torno disso.
 
 ### Raiz: `azure/terraform/simulated-client/`, com os dois lados do túnel
 
@@ -163,7 +185,7 @@ a route table do cliente morrem quando o cliente simulado morre.
 
 A raiz cria também o slot `azure/terraform/`, onde a trilha Azure pausada pode aterrar depois.
 
-### Onde o isolamento é aplicado — o mecanismo que o passo 8 prova
+### Onde o isolamento é aplicado — o mecanismo que o `4.2` prova
 
 **Route table por cliente, não só por spoke.** Se o attachment de VPN do cliente A associasse à
 `tgw-rt-hub` — que tem todas as spokes propagadas — ele alcançaria todas, e a prova falharia. O
@@ -181,7 +203,7 @@ O aceite tem duas formas, e vale fazer as duas: assertion por API
 (`aws ec2 search-transit-gateway-routes` não devolve o CIDR da spoke B na route table do cliente A) e
 conexão real que estoura o timeout contra um listener vivo na spoke B.
 
-### Detalhes de 1b (SAML) que já custaram tempo em outros lugares
+### Detalhes do `2.2` (SAML) que já custaram tempo em outros lugares
 
 - **Mapeamento de atributos:** o Client VPN espera `NameID` com o usuário e `memberOf` com os
   grupos, e `memberOf` tem de carregar os **IDs** dos grupos do Identity Center, não os nomes. Errar
@@ -192,15 +214,15 @@ conexão real que estoura o timeout contra um listener vivo na spoke B.
   próprio SSO e baixa a configuração, sem arquivo por e-mail.
 - **Nunca `authorize_all_groups = true`** — perde-se CIDR-por-grupo, que é metade do valor de (a).
 
-### Saídas se 1a falhar
+### Saídas se o `2.1` falhar
 
 1. Rodar o client numa VM/contêiner com distro suportada só para conectar.
 2. Abordagem comunitária que dirige `openvpn` puro capturando a resposta SAML num listener local —
-   **de terceiros, não verificada**; se for tentar, é no 1a.
+   **de terceiros, não verificada**; se for tentar, é no `2.1`.
 3. Cair para certificado mútuo temporariamente, **sabendo que se perde a demo de conceder/revogar** —
    é desbloqueio, não alternativa.
 
-### Risco conhecido do passo 3
+### Risco conhecido do `2.4`
 
 A zona privada do endpoint do EKS é criada pela AWS e **não é output do `aws_eks_cluster`** — achá-la
 exige `data "aws_route53_zone"` casando pelo hostname do endpoint, o que é frágil, e ela é
@@ -208,7 +230,7 @@ exige `data "aws_route53_zone"` casando pelo hostname do endpoint, o que é frá
 `dns_servers` do Client VPN apontando para os IPs dele — robusto e generaliza para N spokes, mas
 custa ~US$ 0,25/h em 2 AZs. Começar pela associação (grátis) e cair para o Resolver se travar.
 
-## Montagem do passo 6 — variante (B), decidida
+## Montagem da fase 3 — variante (B), decidida
 
 ```
 internet
@@ -274,7 +296,7 @@ O que o cluster precisa não é o NLB, é o **ARN da target group** — é o que
 consome. Entra como `ingressTargetGroupArn` no ConfigMap que já é o contrato Terraform→GitOps.
 
 Na direção oposta, o hub precisa dos **IPs privados do NLB**. Em vez de caçar ENI por descrição
-(frágil, mesma classe do lookup de zona do passo 3), **fixar os IPs** com
+(frágil, mesma classe do lookup de zona do `2.4`), **fixar os IPs** com
 `subnet_mapping { private_ipv4_address = cidrhost(<cidr da subnet privada>, 10) }`. Determinístico,
 conhecido em tempo de plan, e o NLB ganha endereço estável entre recriações.
 
@@ -383,7 +405,7 @@ timestamp em `logs/` gitignored, opções longas, 2 espaços, variáveis sempre 
 | T0 + T1 parado | ~0,15 | ~110 |
 | \+ conexão VPN ativa | +0,05 por conexão | só enquanto conectado |
 | \+ T2 | +0,23 | +165 |
-| \+ T3 no pico do passo 8 | +0,27 | — |
+| \+ T3 no pico da fase 4 | +0,27 | — |
 
 No pico: ALB ~0,0225 + segunda spoke ~0,004 + VPN connection ~0,05 na AWS + VPN Gateway ~0,19 no
 Azure. Uma sessão de 7 h com tudo ligado custa ~US$ 5 além da base — e o VPN Gateway do Azure é
@@ -393,8 +415,8 @@ mais da metade disso.
 
 - **DNS público e TLS** — dependem da base de domínio, ainda aberta. A sequência termina em HTTP no
   DNS do ALB.
-- **Spoke de recursos compartilhados** (banco, mensageria) — vira sequência própria depois do passo
-  6, quando se saberá se o TGW já está pago. Dois padrões candidatos: TGW com propagação seletiva
+- **Spoke de recursos compartilhados** (banco, mensageria) — vira sequência própria depois da
+  fase 3, quando se saberá se o TGW já está pago. Dois padrões candidatos: TGW com propagação seletiva
   (qualquer protocolo, exige CIDR não sobreposto, autorização bidirecional contida por SG) e
   PrivateLink por serviço (unidirecional, por principal, admite CIDR sobreposto, mas é um endpoint
   por serviço por consumidora).
@@ -404,12 +426,10 @@ mais da metade disso.
 ## Itens ainda em aberto neste plano
 
 1. **Teto de certificados por listener de ALB** — conferir a cota antes de prometer escala.
-2. **Onde entra o passo de DNS na sequência.** A raiz `dns/` é pré-requisito do certificado do
-   passo 6, mas independe de tudo antes dele — pode ser aplicada a qualquer momento, e é de custo
-   quase zero. Provável 0c.
 
-Resolvidos: variante do passo 6 (**B**), dono do ALB (`connectivity/` para o ALB, `control-plane/`
-para o que é por-spoke), emissão do certificado (**um wildcard de ACM por cluster**), conta da
-hosted zone pública (`network`), base do domínio (**subzona `nonprod.` delegada, com a delegação
-automatizada por provider `azurerm`**), e onde mora o cliente simulado
-(**`azure/terraform/simulated-client/`, com os dois lados do túnel numa raiz só**).
+Resolvidos nas rodadas anteriores: variante do ingress (**B**); dono do ALB (`connectivity/` para o
+ALB, `control-plane/` para o que é por-spoke); emissão do certificado (**um wildcard de ACM por
+cluster**); conta da hosted zone pública (`network`); lugar do DNS na sequência (`1.3`); base do
+domínio (**subzona `nonprod.` delegada, com a delegação automatizada por provider `azurerm`**); e
+onde mora o cliente simulado (**`azure/terraform/simulated-client/`, com os dois lados do túnel numa
+raiz só**).
