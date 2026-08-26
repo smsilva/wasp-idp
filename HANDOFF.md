@@ -1,8 +1,13 @@
 # HANDOFF
 
-> **A frente ativa vive em `HANDOFF.local.md`** (não versionado). Este arquivo carrega o que vale
-> para qualquer pessoa: decisões, backlog, gotchas e trabalho entregue. O que está aplicado na
-> máquina de alguém, e qual era o próximo passo dessa pessoa, fica lá.
+> **Arquivo único.** Este repo NÃO usa `HANDOFF.local.md` — a divisão versionado/local foi
+> desfeita em 2026-08-25, porque duplicava contexto e cada sessão tinha de reconciliar os dois.
+> Frente ativa, estado aplicado e backlog vivem aqui. `HANDOFF.local.md` segue no `.gitignore`
+> como rede de segurança; se aparecer um, é resíduo — consolidar aqui e apagar.
+>
+> **Account IDs desta Organization estão neste arquivo, deliberadamente.** São de uma conta
+> pessoal descartável para exercitar a PoC; nada aqui vai para ambiente real. E-mails de root
+> **não** entram (PII, e um handoff não precisa deles) — ficam em `CLAUDE.local.md`.
 
 ## Why
 
@@ -78,6 +83,67 @@ de outra trilha.
 (`Security`, `Infrastructure`, `Workloads`, `Sandbox`, `Deployments`, …); o **SRA** nomeia
 contas (`Shared Services`, `Network`, …). Tabela em `aws/docs/accounts/01-organizations-and-ous.md`.
 
+## Estado aplicado na AWS
+
+Snapshot de 2026-08-25. **Conferir antes de confiar** — a camada 2 cobra por hora e pode já ter
+sido destruída:
+
+```bash
+cd aws/terraform/control-plane && terraform state list | wc --lines   # 39 = de pé; 0 = destruída
+```
+
+| Camada | Conta | State key | Custo/mês | Estado |
+|---|---|---|---|---|
+| `state-backend` | `network` | `state-backend/` | centavos | aplicada |
+| `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
+| `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
+| `control-plane` | `cicd` | `control-plane/` | **~US$ 165** | aplicada 2026-08-25 |
+
+Bucket de state: `tfstate-o-e4r8ndteju`, na conta `network`.
+
+### Camada 1 — VPCs hub (custo recorrente zero)
+
+| Região | VPC | CIDR | Subnets |
+|---|---|---|---|
+| `us-east-1` | `vpc-087a169b8e8dfc7d5`, tag `Name = poc-hub-vpc` | `10.1.0.0/16` | públicas `10.1.0.0/20`, `10.1.16.0/20`; privadas `10.1.32.0/20`, `10.1.48.0/20` |
+| `us-west-2` | — | `10.3.0.0/16` | idem, derivadas por `cidrsubnet()` |
+
+**Sem NAT Gateway em nenhuma das duas.** Sem TGW nada roteia pelo hub, e um NAT custaria ~US$ 32/mês
+servindo zero tráfego. As subnets privadas não têm saída para a internet — intencional.
+
+### Camada 2 — Control Plane (conta `cicd`, `us-east-1`)
+
+| Recurso | Valor |
+|---|---|
+| VPC spoke | `10.2.0.0/16`; públicas `10.2.0.0/20`, `10.2.16.0/20`; privadas `10.2.32.0/20` = `subnet-093dc591660611891`, `10.2.48.0/20` = `subnet-0d3dd1f8a55a7f31b` |
+| Cluster EKS | `control-plane`, Kubernetes **1.36** (nós `v1.36.2-eks-b3f9404`) |
+| Nós | 2× `t3.medium` `ON_DEMAND` |
+| NAT | **ligado** — ao contrário do hub, os nós dependem dele |
+| Charts | ArgoCD `10.4.0`, ESO `2.9.0`, Crossplane `2.4.0` (canal `stable`) |
+| Contexto kubectl | `arn:aws:eks:us-east-1:270222614208:cluster/control-plane` |
+
+Roles de Pod Identity, todas na conta `cicd`:
+
+| Role | Namespace | ServiceAccount |
+|---|---|---|
+| `control-plane-crossplane` | `crossplane-system` | `crossplane` |
+| `control-plane-external-secrets` | `external-secrets` | `external-secrets` |
+| `control-plane-ebs-csi` | `kube-system` | `ebs-csi-controller-sa` |
+
+Mais `control-plane-cluster` e `control-plane-node` (roles do EKS, não Pod Identity).
+
+### Alocação de CIDR do supernet `10.0.0.0/12`
+
+| N | CIDR | Conta | Papel |
+|---|---|---|---|
+| 0 | `10.0.0.0/16` | — | reservado à Organization |
+| 1 | `10.1.0.0/16` | `network` | VPC **hub** `us-east-1` |
+| 2 | `10.2.0.0/16` | `cicd` | VPC **spoke** do Control Plane |
+| 3 | `10.3.0.0/16` | `network` | VPC **hub** `us-west-2` |
+| 4–15 | `10.4`–`10.15` | — | livres |
+
+**É a única decisão irreversível da cadeia.** Teto de 15, e região multiplica.
+
 ## In Progress
 
 ### Frente A — bootstrap de contas / Organization
@@ -87,23 +153,33 @@ contra o whitepaper AWS conforme cada passo é executado de verdade. **Regra ado
 manter o vocabulário de "Organizing Your AWS Environment Using Multiple Accounts"; divergir só
 com motivo registrado.**
 
-Forma da Organization, inspecionada na API. **Account IDs, OU IDs e e-mails ficam em
-`CLAUDE.local.md`** — este arquivo é versionado e a convenção do repo é não carregar valor real.
+Forma da Organization, inspecionada na API. Organization `o-e4r8ndteju`, root `r-f11d`,
+região de trabalho `us-east-1`.
 
 ```
-Root
-├── ACC  <management>                        (management — não hospeda nada; SCP não a afeta)
-├── OU   Security
-│   └── ACC  log-archive
-├── OU   Infrastructure
-│   └── ACC  Network                         (Connectivity Account)
-├── OU   Deployments
-│   └── ACC  cicd                            (Control Plane — Crossplane + ArgoCD)
-└── OU   Workloads
-    ├── OU   NonProd
-    │   └── ACC  wasp-nonprod
-    └── OU   Production                      (vazia)
+Root  r-f11d
+├── ACC  221047292361  Silvio Silva          (management — não hospeda nada; SCP não a afeta)
+├── OU   ou-f11d-ig5lcrlr  Security
+│   └── ACC  995122007318  log-archive
+├── OU   ou-f11d-8l7pbxgp  Infrastructure
+│   └── ACC  094289743086  Network           (Connectivity Account — VPC hub)
+├── OU   ou-f11d-rd0jp025  Deployments
+│   └── ACC  270222614208  cicd              (Control Plane — Crossplane + ArgoCD + ESO)
+└── OU   ou-f11d-j7fnwqmx  Workloads
+    ├── OU   ou-f11d-7nadx2es  NonProd
+    │   └── ACC  832721568602  wasp-nonprod
+    └── OU   ou-f11d-vyxw3s7r  Production     (vazia)
 ```
+
+| Conta | Profile local | ProviderConfig | Credencial |
+|---|---|---|---|
+| `Network` `094289743086` | `network` | `network` | IAM user `crossplane-poc` (direta) |
+| `wasp-nonprod` `832721568602` | `wasp-nonprod` | `wasp-nonprod` | role `crossplane-wasp-nonprod` (assumeRoleChain) |
+| `cicd` `270222614208` | `cicd` | — | `OrganizationAccountAccessRole` via `personal` |
+| management `221047292361` | `personal` | — | SSO `AdministratorAccess` |
+
+Casing: o nome na Organizations é `Network` (maiúsculo, igual ao LZA); identificadores técnicos
+(profile, ProviderConfig, enum) usam `network` minúsculo.
 
 Conferir o estado real a qualquer momento:
 
@@ -174,7 +250,37 @@ como produção — o whitepaper recomenda rodar CI/CD em *"production deploymen
 **não existe `cicd-nonprod`**. Contas da OU `Infrastructure` também não têm variante de
 ambiente, por recomendação explícita do whitepaper.
 
-### Frente B — Crossplane / EKS
+### Frente B — Terraform (camadas 1 e 2) e Crossplane / EKS
+
+**A camada 2 está aplicada e verificada (2026-08-25).** As 8 tasks do plano
+`docs/superpowers/plans/2026-08-25-terraform-control-plane.md` foram executadas: 1–7 em TDD
+offline, um commit por task, e a 8 aplicou na AWS.
+
+Um `terraform apply`, **39 recursos**, ~13 min, **sem `-target`**. Isso fecha a pergunta que
+estava aberta no desenho: providers `kubernetes`/`helm` configurados a partir de outputs do módulo
+do cluster resolvem na hora do apply. O que quebraria é **data source** desses providers no plan —
+por isso o `platform-bootstrap` tem de continuar sendo `resource`.
+
+Verificado no cluster: 2 nós `Ready`, 12 pods `Running` nos três namespaces de plataforma, as 7
+chaves do ConfigMap `platform-bootstrap`, e `AWS_CONTAINER_CREDENTIALS_FULL_URI` no pod do
+Crossplane.
+
+**Consequência para o item 3 de Known Broken:** a access key de longa duração do `crossplane-poc`
+**é eliminável** — no EKS o Crossplane roda com credencial por Pod Identity, sem access key
+nenhuma. Ela só sobrevive na trilha k3d, que não suporta Pod Identity.
+
+Três scripts em `aws/terraform/control-plane/scripts/`:
+
+| Script | O que faz |
+|---|---|
+| `generate-tfvars` | Descobre na AWS o que a camada precisa e gera o `terraform.tfvars`. **Só leitura.** Valida antes de gerar arquivo: tag da VPC hub univoca, CIDR livre, região aprovada na SCP, bucket existente |
+| `apply` | `plan` → confirma → aplica → guarda log com timestamp em `logs/` |
+| `destroy` | Confere Crossplane sem recurso vivo e contexto kubectl correto → destrói → guarda log |
+
+Os dois últimos leem o exit code por `PIPESTATUS[0]`: o `tee` sempre retorna 0, e sem isso um
+apply que falhou passaria por sucesso.
+
+#### Cross-account + Fase 4 (Crossplane no k3d)
 
 Cross-account + Fase 4 (split de charts + identidade) prontos e validados offline:
 
@@ -243,6 +349,102 @@ Adicionado nesta sessão:
 mesmo com recursos dedicados, um silo *"still relies on a shared identity, onboarding, and
 operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed service*.
 
+## Achados a providenciar — sessões próximas
+
+Levantados ao aplicar a camada 2 (2026-08-25). Ordenados por dependência, não por gravidade.
+
+**Bloqueiam a fatia de ingress privado:**
+
+1. **Não existe conectividade hub → spoke.** Verificado na API das duas contas: zero TGW, zero
+   attachment, zero peering, zero endpoint service. As route tables do hub só têm `10.1.0.0/16`
+   (local) e `0.0.0.0/0` (IGW). **Nada alcança `10.2`.** A experiência multi-região provou reuso do
+   módulo, não conectividade — e o mesmo vale para hub↔spoke.
+2. **O AWS Load Balancer Controller não está instalado.** A camada 2 entrega ESO, ArgoCD e
+   Crossplane. Sem LBC, `Service type=LoadBalancer` cai no provider in-tree legado (Classic LB),
+   que não dá NLB interno com `target-type: ip`. Precisa de `src/helm/modules/aws-lbc` + uma quarta
+   Pod Identity.
+3. **Escolher o padrão: PrivateLink ou TGW.** Fundamentação e citação da AWS na seção
+   *Ingress centralizado* abaixo.
+
+**Postura de segurança do que já está aplicado:**
+
+4. **O endpoint da API do EKS é público para `0.0.0.0/0`.** `endpointPublicAccess = true` e
+   `public_access_cidrs = []` (a variável documenta que vazio significa `0.0.0.0/0`);
+   `endpointPrivateAccess` também `true`. **Plano distinto do ingress de workload** — este é o
+   *management plane*. Fechar exige alcançar a API de dentro da VPC, logo depende do item 1.
+5. **`bootstrapClusterCreatorAdminPermissions` está `true` na camada 2 e `false` no cluster do
+   chart Crossplane.** Divergência não decidida, herdada de caminhos diferentes. `true` é
+   conveniente (o profile que aplica já tem admin); `false` é a postura estrita. Escolher e
+   justificar.
+6. **A VPC default da `cicd` segue de pé em toda região**, com security group aberto. Já estava em
+   Known Broken, mas agora há workload real na conta.
+
+**Dívida de processo, barata:**
+
+7. **Nunca fixar versão de Kubernetes em documento de plano.** O plano trazia `1.34`; o default do
+   EKS já era `1.36`, e o suporte padrão do `1.34` termina em **2026-12-01** — o cluster nasceria
+   com upgrade vencendo. O `generate-tfvars` descobre a versão; o plano não deveria ter opinião.
+   Mesma regra para versão de chart e de addon.
+8. **A race de Pod Identity do EBS CSI não existe no Terraform.** No chart Crossplane obrigou a
+   separar as fases 65 e 68 (`aws/CLAUDE.md`); aqui o grafo de dependências já ordena addon depois
+   da association, e o controller subiu com **0 restarts**. Não é lei da natureza — é limitação do
+   Crossplane sem `depends_on` real. Quando o chart for aposentado, a nota sai junto.
+9. **Sobrou um `control-plane.tfplan` duplicado** no diretório da camada 2. Gitignored, mas
+   confunde: apagar.
+10. **Sob `mock_provider`, data source de provider devolve valor sintético.** Qualquer assertion
+    sobre JSON computado pelo provider passa sem verificar nada — foi como duas assertions ficaram
+    vazias. Regra: policy document via `jsonencode`, não `data "aws_iam_policy_document"`. Aplicado
+    nos módulos novos; **auditar se há outro lugar no repo com a mesma armadilha.**
+
+## Ingress centralizado: o que a AWS de fato recomenda
+
+Pesquisado em 2026-08-25 no whitepaper *[Building a Scalable and Secure Multi-VPC AWS Network
+Infrastructure](https://docs.aws.amazon.com/whitepapers/latest/building-scalable-secure-multi-vpc-network-infrastructure/welcome.html)*
+(pub. 2024-04-17), porque a escolha estava sendo feita por intuição.
+
+A AWS **não** elege um vencedor — ela separa por **tipo de conectividade**, e diz explicitamente
+que arquiteturas reais misturam as duas:
+
+> **AWS PrivateLink** — Use AWS PrivateLink when you have a client/server set up where you want to
+> allow one or more consumer VPCs unidirectional access to a specific service or set of instances
+> in the service provider VPC (…) This is also a good option when client and servers in the two
+> VPCs have overlapping IP addresses.
+>
+> **VPC peering and Transit Gateway** — Use VPC peering and Transit Gateway when you want to enable
+> layer-3 IP connectivity between VPCs.
+>
+> — [AWS PrivateLink](https://docs.aws.amazon.com/whitepapers/latest/building-scalable-secure-multi-vpc-network-infrastructure/aws-privatelink.html)
+
+Aplicando ao caso *ALB público no hub → httpbin no spoke*: o hub é **consumer**, o httpbin é o
+**service**, o acesso é **unidirecional**. É a descrição literal do caso de uso do PrivateLink.
+
+**Onde o TGW é a recomendação:** a seção
+[Centralized inbound inspection](https://docs.aws.amazon.com/whitepapers/latest/building-scalable-secure-multi-vpc-network-infrastructure/centralized-inbound-inspection.html)
+usa *"AWS Transit Gateway acting as a central hub for routing traffic"* — mas o que ela centraliza
+é **inspeção** (Gateway Load Balancer, Network Firewall, IDS/IPS). Sem requisito de inspeção, o TGW
+está resolvendo um problema que não existe aqui. Note que a arquitetura WAF+ALB que o mesmo
+capítulo mostra é **por-ALB, distribuída** — a própria AWS a classifica como *"best suited for HTTP
+header inspection and distributed inspections"*.
+
+Três razões próprias do repo que reforçam PrivateLink para esta fatia:
+
+- **Não invalida o corte de state documentado.** `aws/terraform/README.md` registra que
+  `hub | spoke+cluster` é seguro *hoje porque não há TGW* — os nós não roteiam pelo hub. Ligar TGW
+  obriga a revisitar esse raciocínio agora. PrivateLink não toca route table nenhuma.
+- **Não consome o teto de CIDR.** O `/12` dá 15 `/16` e região multiplica (questão aberta abaixo).
+  PrivateLink permite CIDR sobreposto entre spokes; TGW não.
+- **Menor privilégio de rede:** expõe um serviço autorizado por principal de conta, não um CIDR.
+
+O whitepaper também registra que **ALB pode ser target de NLB**, o que permite combinar roteamento
+L7 do ALB com PrivateLink — relevante se o ingress no hub precisar de path-based routing.
+
+**Alternativa que não passa pelo hub:** CloudFront com *VPC origins* alcança um ALB privado sem
+exposição pública. Satisfaz "cluster não expõe LB público", mas **abandona o ingress centralizado
+na conta de rede** — é outra topologia, não uma variante desta.
+
+TGW continua sendo a resposta eventual para egress centralizado e tráfego spoke↔spoke. Não é
+ou-um-ou-outro.
+
 ## Open Questions / Hypotheses
 
 - **Conflação em `decisions.md` §2:** a spoke de plataforma roda *"auth, discovery, ArgoCD,
@@ -297,7 +499,9 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
    para `platform-admins` (atribuir o grupo antes de revogar o usuário).
 3. **Credencial-raiz do Crossplane é access key de longa duração** — *intentional*: contraria
    [SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html).
-   Bloqueado por k3d não suportar Pod Identity; só desaparece quando o Control Plane virar EKS.
+   Bloqueado por k3d não suportar Pod Identity. **Deixou de ser hipótese em 2026-08-25:** no EKS da
+   camada 2 o pod do Crossplane subiu com `AWS_CONTAINER_CREDENTIALS_FULL_URI`, ou seja, Pod
+   Identity sem access key nenhuma. A access key sobrevive só na trilha k3d.
    **Mitigação barata ainda não aplicada:** a própria BP recomenda reduzir o IAM user a só
    `sts:AssumeRole` para uma role específica — hoje ele tem `PowerUserAccess` direto.
 4. **Link quebrado em `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`** →
@@ -309,9 +513,9 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
    **Parcialmente corrigido em 2026-08-25:** a árvore da Organization neste arquivo tinha os 5
    account IDs e e-mails; foi genericizada e os valores passaram a `CLAUDE.local.md`. Os três
    arquivos acima continuam pendentes.
-6. VPC+EKS ainda NÃO provisionados numa spoke — *intentional*: custo alto, só sob autorização
-   explícita. A conta `cicd` já existe e está vazia — criar a conta não custa nada; o EKS custa.
-   A VPC **hub** existe (camada 1 do Terraform), mas hub não é spoke e não hospeda workload.
+6. **VPC+EKS provisionados na spoke da conta `cicd`** desde 2026-08-25 — *intentional*, sob
+   autorização explícita, com intenção declarada de **não deixar de pé**. Se ainda estiver vivo,
+   cobra ~US$ 165/mês. Nenhum EKS em `wasp-nonprod` (aquela é a spoke de projeto, ainda vazia).
 7. `crossplane render` não injeta defaults do XRD — *intentional* (limitação da ferramenta):
    passar `providerConfigName`/`metadata.name` explícitos no XR de teste. `providerConfigName`
    é OBRIGATÓRIO (sem default): XR sem ele é rejeitado, não há fallback.
@@ -329,16 +533,45 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
 
 ## How to Resume
 
-O design do módulo foi aprovado e o plano de implementação da camada 2 está escrito:
+**Primeira pergunta, antes de qualquer código: o cluster está de pé?** Ele cobra por hora.
 
 ```bash
 cd wasp-idp
+git branch --show-current                       # esperado: feat/control-plane-layer
+cd aws/terraform/control-plane
+terraform state list | wc --lines               # 39 = de pé (~US$ 0,23/h); 0 = destruída
+```
+
+Se estiver de pé e não houver trabalho ativo nele: `./scripts/destroy`. Se estiver destruída e for
+preciso subir de novo, o state fica no bucket e a sequência é curta:
+
+```bash
+./scripts/generate-tfvars --force
+terraform init -backend-config="bucket=tfstate-o-e4r8ndteju"
+./scripts/apply
+```
+
+O `terraform apply`/`destroy` roda por `! <comando>` — o classifier de auto-mode bloqueia para o
+agente. O `apply` sem tty falha de propósito, informando o caminho do plano salvo; use `--yes`
+quando não houver terminal.
+
+**O plano da camada 2 está concluído** (8 de 8 tasks). Regressão offline, 45 testes, 0 falhas:
+
+```bash
+cd aws/terraform
+for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup \
+         src/helm/modules/external-secrets src/helm/modules/argo-cd src/helm/modules/crossplane \
+         network-foundation/us-east-1 network-foundation/us-west-2 control-plane; do
+  (cd "${m}" && terraform init -backend=false >/dev/null && terraform test)
+done
+```
+
+Contexto de desenho, se for preciso reconstruir o raciocínio:
+
+```bash
 code docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md
 code docs/superpowers/plans/2026-08-25-terraform-control-plane.md
 ```
-
-O plano tem 8 tasks. As 1–7 são TDD offline e não tocam a AWS. **A Task 8 aplica na AWS e
-exige autorização explícita do Silvio** — parar nela.
 
 **A referência funcional é a Composition, não as fases do chart.**
 As Compositions Crossplane do repositório de referência interno (caminho em `CLAUDE.local.md`)
@@ -459,7 +692,22 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
       não alcança a outra nem o bucket.
 - [x] **`us-west-2` aprovada na SCP baseline.** `--regions` reescreve a policy em todos os
       targets; não dá para liberar região só numa conta por essa via.
-- [ ] Escrever o plano da camada 2 (`control-plane`) — desbloqueado. Custo real: ~US$ 105/mês.
+- [x] **Plano da camada 2 escrito e executado por inteiro** (8 tasks). Custo real: **~US$ 165/mês**
+      — EKS ~73 + NAT ~32 + 2×`t3.medium` ~60. Os ~US$ 105 registrados antes omitiam os nós.
+- [x] **Camada 2 APLICADA e verificada.** 39 recursos, um único apply sem `-target`. Pod Identity
+      funcionando nos três consumidores.
+- [x] Três scripts operacionais da camada 2 (`generate-tfvars`, `apply`, `destroy`).
+- [ ] **Destruir a camada 2** se ainda estiver de pé — a intenção declarada foi não deixar ligada.
+- [ ] **Fatia de ingress privado** (httpbin no cluster, entrada pelo hub, cluster sem LB público):
+      AWS LBC + quarta Pod Identity, NLB interno, endpoint service no spoke, interface endpoint e
+      ALB no hub. Padrão escolhido: **PrivateLink** — fundamentação e citação na seção
+      *Ingress centralizado*. Ganha plano próprio.
+- [ ] **Fechar o endpoint público da API do EKS** (`public_access_cidrs`). Depende de alcançar a API
+      de dentro da VPC, logo depende da fatia acima.
+- [ ] Instalar o **AWS Load Balancer Controller** como `src/helm/modules/aws-lbc` — pré-requisito da
+      fatia de ingress e de qualquer `Service type=LoadBalancer` sério.
+- [ ] Decidir `bootstrapClusterCreatorAdminPermissions`: `true` (camada 2) ou `false` (chart).
+- [ ] Enviar `feat/control-plane-layer` para PR — tem código, apply e verificação. Não pushada.
 - [ ] Escrever o design do script `follow` determinístico (equivalente ao
       `azure-kubernetes/scripts/follow-creation/follow`) — decidido que ganha spec própria.
 - [ ] Reduzir o IAM user `crossplane-poc` a só `sts:AssumeRole` (mitigação de SEC02-BP02 que
@@ -478,5 +726,61 @@ manualmente via `! <script>` — o classifier de auto-mode bloqueia.
       a decisão 6 do §11.
 - [ ] Remover os valores reais que sobraram em docs genéricas (item 5 de Known Broken).
 - [ ] `tenancy/04-crossplane-map.md`, quando o schema do registry de tenants existir.
+
+## Completed Work
+
+### Camada 2 do Terraform — escrita, aplicada e verificada (2026-08-25)
+
+Dez commits em `feat/control-plane-layer`. Tasks 1–7 em TDD offline, um commit por task; Task 8 é o
+apply.
+
+| Task | Módulo | Testes |
+|---|---|---|
+| 1 | `src/pod-identity` | 4 |
+| 2 | `src/cluster` | 6 |
+| 3 | `src/nodegroup` | 4 |
+| 4 | `src/helm/modules/external-secrets` | 3 |
+| 5 | `src/helm/modules/argo-cd` | 4 |
+| 6 | `src/helm/modules/crossplane` | 2 |
+| 7 | root `control-plane/` | 5 |
+| 8 | apply na AWS | 39 recursos |
+
+Regressão da árvore inteira: **45 testes em 11 diretórios, 0 falhas** — a camada 1 segue intacta.
+
+O que o root compõe: VPC spoke `10.2.0.0/16` + EKS + node group + três Pod Identities (EBS CSI,
+ESO, Crossplane) + os três charts + o ConfigMap `platform-bootstrap`, que é o contrato com o
+GitOps — nenhum manifesto do lado GitOps carrega account id ou VPC id hardcoded.
+
+**Quatro correções ao plano, exigidas pelos próprios testes do plano** (não são escolha de estilo —
+sem elas os testes não passavam honestamente):
+
+- **`jsonencode` no lugar de `data.aws_iam_policy_document`** nos módulos `pod-identity` e
+  `cluster`. Sob `mock_provider "aws"` o data source devolve valor sintético, o provider rejeita com
+  `"assume_role_policy" contains an invalid JSON policy: not a JSON object`, e as asserções sobre
+  `sts:TagSession` no trust nunca poderiam passar.
+- **A asserção das três Pod Identities comparava `role_arn` com `null`.** O ARN só existe depois do
+  apply, então a condição era ineliminavelmente *unknown* no plan. Passou a verificar `role_name`,
+  que deriva de `var.name`.
+- `kubernetes_config_map` → `kubernetes_config_map_v1` (o primeiro está deprecado no provider 3.x).
+- A cláusula morta `cidrsubnet("10.0.0.0/12", 4, 0) != null` saiu da validação de `vpc_cidr`, com um
+  `can()` em volta do `tonumber` para CIDR malformado falhar limpo.
+
+**Decisões de desenho confirmadas pelo apply real:**
+
+- **Apply único, sem `-target`.** Comprovado. `platform-bootstrap` como `resource`, não data source.
+- **VPC hub por `data "aws_vpc"`** num provider aliasado para a conta `network`, não por
+  `terraform_remote_state` — acoplamento ao recurso, não ao arquivo de state.
+- **Providers `helm`/`kubernetes` na faixa 3.x.** No helm 3.x `kubernetes` é atributo, não bloco.
+- **Versões de chart conferidas nos repositórios**, não herdadas: ESO `2.9.0`, argo-cd `7.7.7` →
+  **`10.4.0`** (ArgoCD 3.5.1, atravessa um major), crossplane `2.3.1` → **`2.4.0`** do canal
+  `stable` (o ArtifactHub indexa `master`, que publica RCs).
+- `aws/eks/scripts/install-crossplane` segue em `2.3.1` — trilha k3d, atualização separada.
+
+### Camada 1 do Terraform (2026-08-25, anterior)
+
+Bucket de state em raiz própria com `prevent_destroy`, desacoplado de qualquer região; uma raiz por
+região com state key própria. Reuso do módulo entre regiões provado com um segundo hub em
+`us-west-2` sem alterar uma linha de `src/network`. Isolamento verificado: `plan -destroy` de uma
+região não alcança a outra nem o bucket.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
