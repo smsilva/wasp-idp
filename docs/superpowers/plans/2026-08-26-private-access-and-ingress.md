@@ -270,6 +270,54 @@ aumentável por cota) — mesma família do teto de 15 CIDRs.
   sem re-encriptação, a entrada teria de ser NLB no hub — e aí se perde o roteamento por Host, que é
   o que torna o fan-out por cliente uma regra grátis.
 
+## DNS: nova raiz `aws/terraform/dns/`, com dois providers
+
+Subzona delegada, não o domínio inteiro: **`nonprod.wasp.silvios.me`** para o Route 53, na conta
+`network`. O apex continua no Azure DNS, então a trilha Azure não migra nada.
+
+Nomes resultantes: cluster em `<id>.nonprod.<domínio>`, aplicações em `app.<id>.nonprod.<domínio>`,
+certificado wildcard `*.<id>.nonprod.<domínio>`. Um ambiente novo é uma subzona nova delegada do
+mesmo jeito — e cada uma é sua própria fronteira de permissão.
+
+**A delegação é código, não passo manual.** A raiz usa dois providers:
+
+```hcl
+provider "aws"     { profile = var.network_profile, region = "us-east-1" }
+provider "azurerm" { features {} }
+
+resource "aws_route53_zone" "nonprod" {
+  name = "nonprod.${var.base_domain}"
+  lifecycle { prevent_destroy = true }
+}
+
+# a delegação, do lado Azure, cabeada direto nos name servers que a AWS acabou de dar
+resource "azurerm_dns_ns_record" "delegation" {
+  name                = "nonprod"
+  zone_name           = var.base_domain
+  resource_group_name = var.azure_dns_resource_group
+  ttl                 = 300
+  records             = aws_route53_zone.nonprod.name_servers
+}
+```
+
+Destruir a raiz remove o registro NS no Azure junto — sem resíduo apontando para name servers que
+não existem mais.
+
+**Raiz própria, sem região na state key**, por dois motivos: hosted zone pública é **global**, então
+não cabe em `network-foundation/<região>/`; e se a zona morasse em `connectivity/` (destruído toda
+noite) ela renasceria com **name servers novos** todo dia — com a delegação automatizada isso até se
+corrigiria sozinho, mas a propagação de NS não é instantânea e o edge ficaria intermitente sem
+motivo. Zona é T0: ~US$ 0,50/mês, `prevent_destroy`, e a automação existe para quando a recriação
+*for* necessária, não como licença para recriar.
+
+**Ganho de permissão:** a subzona delegada é a fronteira de blast radius do DNS — o external-dns
+dentro do cluster recebe acesso só a ela, e não tem como tocar o apex. Com o domínio inteiro
+delegado, essa separação não existiria.
+
+**Risco dos dois providers no mesmo state:** sem credencial Azure válida, o `plan` falha mesmo para
+mudança que só toca AWS. Manter o recurso de delegação atrás de um `local.manage_delegation` para
+poder desligar sem editar o resto.
+
 ## Scripts
 
 `aws/terraform/connectivity/us-east-1/scripts/` — mesmo molde da camada 2 (`PIPESTATUS[0]`, log com
@@ -316,13 +364,12 @@ mais da metade disso.
 ## Itens ainda em aberto neste plano
 
 1. **Onde mora o lado Azure do passo 8** — repo/diretório, e se reaproveita a trilha Azure pausada.
-2. **Base do domínio** — delegar `wasp.silvios.me` inteiro ou a subzona `sandbox.` para o Route 53.
-   **A conta já está decidida: `network`** — a validação do ACM exige registro na zona, e o
-   certificado tem de estar na conta e região do ALB; zona noutra conta tornaria todo ciclo de
-   renovação um trabalho cross-account em troca de nada. É também onde o whitepaper põe o Route 53
-   Resolver.
-3. **Teto de certificados por listener de ALB** — conferir a cota antes de prometer escala.
+2. **Teto de certificados por listener de ALB** — conferir a cota antes de prometer escala.
+3. **Onde entra o passo de DNS na sequência.** A raiz `dns/` é pré-requisito do certificado do
+   passo 6, mas independe de tudo antes dele — pode ser aplicada a qualquer momento, e é de custo
+   quase zero. Provável 0c.
 
-Resolvidos nesta rodada: variante do passo 6 (**B**), dono do ALB (`connectivity/` para o ALB,
-`control-plane/` para o que é por-spoke), emissão do certificado (**um wildcard de ACM por
-cluster**), e conta da hosted zone pública.
+Resolvidos: variante do passo 6 (**B**), dono do ALB (`connectivity/` para o ALB, `control-plane/`
+para o que é por-spoke), emissão do certificado (**um wildcard de ACM por cluster**), conta da
+hosted zone pública (`network`), e base do domínio (**subzona `nonprod.` delegada, com a delegação
+automatizada por provider `azurerm`**).
