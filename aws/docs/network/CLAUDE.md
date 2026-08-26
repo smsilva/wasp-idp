@@ -66,3 +66,13 @@ cliente, VPC de inspeção com Network Firewall no caminho, ou PrivateLink em ve
 
 **Neste repo a decisão é VPN por cliente**, justamente para manter as duas direções isoladas por
 topologia.
+
+## Duas coisas que o TGW não faz
+
+- **TGW entrega roteamento IP, não resolução de nome.** O endpoint privado da API do EKS resolve por
+  uma private hosted zone associada à VPC do cluster; de outra VPC o hostname não resolve mesmo com
+  rota. Saídas: associar a zona à VPC de origem, ou Route 53 Resolver inbound endpoint.
+- **Route table por spoke não isola cliente de cliente.** Se o attachment de VPN de um cliente
+  associar à `tgw-rt-hub` — que tem todas as spokes propagadas — ele alcança todas. É preciso
+  **route table por cliente** também, contendo só o CIDR da spoke dele. Isolamento é simétrico e
+  aditivo: acrescentar cliente é acrescentar rota nos dois lados.

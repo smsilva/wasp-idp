@@ -61,3 +61,19 @@ Não repete a topologia de subzona por spoke (isso é `../network/05`); parte da
   pública fim-a-fim.
 - Regra herdada do PoC (`../../CLAUDE.md`): numa zona pai **compartilhada**, só ADICIONAR
   records isolados (o NS da própria subzona); **nunca** alterar records de terceiros.
+
+## TLS no edge: o ALB só lê ACM
+
+- **O ALB não consegue consumir Secret do Kubernetes** — só certificado do ACM. Importar o
+  certificado do cert-manager no ACM funciona, mas transfere a renovação (~60 dias) para nós.
+  Preferir **certificado do ACM com validação por DNS**, que renova sozinho enquanto o CNAME
+  permanecer na zona.
+- **Wildcard cobre um nível só, e `*.*.` não existe.** `*.zona` não cobre `app.<id>.zona` — se o
+  padrão de nome tem dois níveis, é **um wildcard por cluster** (`*.<id>.zona`), não um global.
+- **O ALB não valida o certificado do backend.** No trecho ALB → NLB → gateway, autoassinado basta;
+  não precisa ser confiável nem casar com hostname.
+- **A subzona delegada é a fronteira de blast radius do DNS** — dar ao external-dns acesso só a ela
+  impede que ele toque o apex. Delegar o domínio inteiro elimina essa separação.
+- **Certificado do ACM tem de estar na mesma conta e região do load balancer** que o serve. Isso
+  arrasta a hosted zone pública para a conta do edge (`network`): zona noutra conta torna cada
+  renovação um trabalho cross-account.

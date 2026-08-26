@@ -157,6 +157,14 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - **VPN de cliente termina no hub, uma `Site-to-Site VPN` por cliente (decidido 2026-08-26):** um
   attachment por cliente no TGW ⟹ a route table de tenant no TGW isola nas **duas** direções, sem
   depender de security group para separar cliente de cliente.
+- **Fronteira de state segue o ciclo de vida, não a conta (decidido 2026-08-26):** recurso da conta
+  do hub cujo ciclo de vida é o de um spoke (route table de tenant, target group, listener rule,
+  certificado do cluster) mora no state do spoke, via provider aliasado. Destruir a célula leva tudo
+  junto, sem órfão do lado do hub.
+- **Ingress: ALB no hub → NLB interno na spoke → gateway Istio (decidido 2026-08-26):** o NLB é do
+  Terraform e o `istio-ingressgateway` vira `ClusterIP` com `TargetGroupBinding` — cardinalidade 1
+  por cluster, e se o LBC criasse o NLB o ARN só existiria depois do workload, quebrando o apply
+  único. Nada cruza conta em tempo de execução.
 - **Cluster naming idea (not decided):** OpenStack's TripleO project uses `Undercloud` (the bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project Backstage clusters (overcloud-like).
 
 ## Security TODOs (PoC hardening, deferred)

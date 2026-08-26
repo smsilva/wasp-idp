@@ -81,6 +81,22 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   workload entra depois só registrando pods. Ressalva: o CR pode referenciar qualquer target group,
   então em cenário multi-tenant exige RBAC.
 
+## Rede
+
+- **TGW nasce com `default_route_table_association` e `default_route_table_propagation` LIGADOS.**
+  Desligar os dois é o que torna isolamento por tenant possível — com eles ligados todo attachment
+  aprende todo mundo.
+- **Ler IPs privados de um NLB é frágil** (`aws_lb` não os expõe; o caminho usual é caçar ENI por
+  descrição). **Fixar** com `subnet_mapping { private_ipv4_address = cidrhost(<cidr>, N) }`:
+  determinístico, conhecido em tempo de plan, e estável entre recriações.
+- **`client_cidr_block` do Client VPN precisa de /22 ou maior e não pode sobrepor VPC nem rota.**
+  Carvar fora do supernet.
+
+## Raiz com dois providers de cloud
+
+Sem credencial do segundo provider, o `plan` falha mesmo para mudança que só toca o primeiro. Manter
+o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem editar o resto.
+
 ## Custo
 
 - **`enable_nat_gateway = false` nos hubs é deliberado**, não esquecimento: sem TGW nada roteia
