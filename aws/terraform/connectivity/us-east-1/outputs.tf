@@ -12,6 +12,15 @@ output "transit_gateway_route_table_id" {
   value       = aws_ec2_transit_gateway_route_table.hub.id
 }
 
+output "transit_gateway_attachment_id" {
+  description = <<-EOT
+    O attachment da própria VPC hub — pertence a este state. O script `destroy` o exclui da
+    checagem de "attachment de fora", senão o attachment do hub sozinho já faria a checagem
+    recusar um destroy legítimo desta camada.
+  EOT
+  value       = aws_ec2_transit_gateway_vpc_attachment.hub.id
+}
+
 output "client_vpn_endpoint_id" {
   value = aws_ec2_client_vpn_endpoint.hub.id
 }

@@ -91,6 +91,23 @@ variable "manage_authorization" {
   default     = true
 }
 
+variable "spoke_account_ids" {
+  description = <<-EOT
+    Contas às quais o TGW é compartilhado via RAM, para que cada uma crie o próprio
+    attachment (`CreateTransitGatewayVpcAttachment` de outra conta exige o TGW compartilhado
+    primeiro). Uma por spoke — hoje só `cicd` (control-plane).
+
+    Sem default: identifica contas desta Organization, e o repo é público. O
+    `generate-tfvars` descobre.
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = alltrue([for id in var.spoke_account_ids : can(regex("^[0-9]{12}$", id))])
+    error_message = "spoke_account_ids tem de conter account ids de 12 dígitos."
+  }
+}
+
 variable "client_cidr_block" {
   description = <<-EOT
     Faixa de onde saem os IPs dos clientes conectados. FORA do supernet 10.0.0.0/12 de

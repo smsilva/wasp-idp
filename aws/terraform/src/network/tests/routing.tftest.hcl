@@ -102,3 +102,22 @@ run "toda_subnet_esta_associada_a_uma_route_table" {
     error_message = "as 2 subnets privadas deveriam estar associadas"
   }
 }
+
+# O 2.3 (attachment do spoke no TGW) precisa acrescentar rota nas duas pontas — hub e spoke —
+# em direção ao TGW, e a route table privada é única (compartilhada por todas as subnets
+# privadas). Sem o output, quem consome o módulo não tem como referenciá-la.
+run "o_id_da_route_table_privada_e_exposto" {
+  command = plan
+
+  # id só existe depois do apply; o override dá um valor conhecido no plan.
+  override_resource {
+    target          = aws_route_table.private
+    override_during = plan
+    values          = { id = "rtb-private-test" }
+  }
+
+  assert {
+    condition     = output.private_route_table_id == "rtb-private-test"
+    error_message = "private_route_table_id deveria expor aws_route_table.private.id, recebido ${output.private_route_table_id}"
+  }
+}

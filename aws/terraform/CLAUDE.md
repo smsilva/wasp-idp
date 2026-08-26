@@ -98,6 +98,14 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   herdado de outra state key faz o Terraform reclamar em vez de reinicializar.
 - **Raiz com dois providers de cloud é testável offline** mockando os dois (`mock_provider "aws"` +
   `mock_provider "azurerm"`); o `subscription_id` obrigatório do azurerm não é exigido sob mock.
+- **Todo script/comando de apply longo precisa emitir progresso, não só o log salvo em arquivo.**
+  Um `terraform apply` de vários minutos rodado via `! <comando>` (fora do agente) sem `tee`/eco
+  no terminal deixa quem está acompanhando sem nenhum sinal de que algo está de fato em execução
+  — indistinguível de travado. `scripts/lib` já grava log com timestamp; o que falta em applies
+  soltos (fora dos scripts `up-NN`) é garantir que a saída também aparece ao vivo no terminal.
+- **Todo `terraform apply`/`destroy` rodado fora dos scripts `up-NN` precisa de `-no-color`.**
+  `scripts/lib` já usa; um `apply`/`destroy` improvisado com `| tee arquivo.log` sem essa flag
+  salva o log cheio de códigos ANSI, ilegível fora de um terminal que os interpreta.
 
 ## Providers `kubernetes` e `helm`
 
@@ -176,6 +184,31 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   custom OAuth 2.0 applications. Creation of 3rd party SAML or OAuth 2.0 applications require setup to
   be done through the associated app service or AWS console."* O metadata XML entra por arquivo, e o
   `generate-tfvars` da camada 03 imprime o roteiro de console quando ele falta.
+- **O TGW nunca ficava anexado à própria VPC hub.** `connectivity/` criava o TGW e `tgw-rt-hub`,
+  mas nenhum attachment ligava a VPC hub a eles — órfãos até o `2.3`. Sem esse attachment, o
+  tráfego que chega pelo túnel numa subnet privada do hub não tem como sair para o TGW rumo a
+  uma spoke. O texto original do plano descrevia `2.3` só como "o lado da spoke"; o lado do hub
+  também faltava, e sem ele nada roteia nas duas pontas.
+- **Attachment cross-conta exige RAM antes de existir, e RAM exige "sharing with AWS
+  Organizations" ligado antes de qualquer share.** Comprovado no primeiro apply do `2.3`: a AWS
+  recusou `AssociateResourceShare` com `OperationNotPermittedException` até esse toggle
+  organization-wide ser ligado. É `aws_ram_sharing_with_organization` — só roda sob a management
+  account (provider aliasado, profile `personal`) e **não tem argumento nenhum** além de `id`
+  computado; a própria existência do recurso é o "ligado". Fica em `dns/` (T0, permanente), não
+  em `connectivity/` (T1, destruída toda noite) — é configuração da Organization inteira, e um
+  destroy noturno da connectivity não pode desligá-la e religá-la todo dia por um recurso que não
+  é seu. Com ele ligado, o attachment cross-conta nasce já associado, sem convite — não há
+  `aws_ram_resource_share_accepter` do lado da spoke.
+- **A authorization rule por spoke já não era necessária.** O texto do `2.3` previa uma rule para
+  `10.2.0.0/16`; a `2.2` já cobre o supernet inteiro (`10.0.0.0/12`) por grupo, que inclui
+  qualquer spoke futura. Rota é topologia (uma só, para sempre); authorization rule é política —
+  a política já estava lá.
+- **As duas propagações do TGW não podem ser trocadas entre si.** `spoke_to_hub` propaga o
+  attachment da SPOKE para a route table do HUB (para o hub aprender a rota de volta);
+  `hub_to_spoke` propaga o attachment do HUB para a route table da SPOKE (para a spoke aprender
+  a rota para o hub e, atrás dela, para o cliente VPN). Mesmo tipo de armadilha já documentada
+  para `aws_acm_certificate_validation`: duas referências do mesmo formato, fácil inverter sem
+  que uma asserção de valor perceba — coberto por teste de mutação específico.
 - **Certificado do endpoint: público do ACM validado por DNS, não autoassinado importado.** Ficou
   possível quando a camada 02 entregou a subzona delegada, e compra duas coisas: nenhuma chave privada
   em state nem em disco, e rotação automática que o Client VPN acompanha (*"whether through ACM

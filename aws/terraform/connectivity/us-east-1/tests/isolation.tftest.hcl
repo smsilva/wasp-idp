@@ -8,6 +8,7 @@ variables {
   base_domain        = "exemplo.com"
   operator_group_ids = ["11111111-2222-3333-4444-555555555555"]
   saml_metadata_path = "tests/fixtures/saml-metadata.xml"
+  spoke_account_ids  = ["222222222222"]
 }
 
 # Data sources de provider devolvem valor sintético sob mock — asserção sobre eles passaria
@@ -30,6 +31,25 @@ override_data {
   target = data.aws_route53_zone.subzone
   values = {
     zone_id = "ZSUBZONE00000000001"
+  }
+}
+
+override_data {
+  target = data.aws_route_table.hub_private
+  values = {
+    id = "rtb-hubprivate00001"
+  }
+}
+
+# aws_ram_resource_association valida resource_arn como ARN de verdade — validação de schema
+# do provider, roda sob mock_provider (mesma família da checagem de tamanho do metadata SAML).
+# Sem este override global, o id sintético que o mock atribui a aws_ec2_transit_gateway.hub
+# não é um ARN válido, e todo run que não sobrescreve `arn` explicitamente falha por isso —
+# não pelo que o run pretende testar.
+override_resource {
+  target = aws_ec2_transit_gateway.hub
+  values = {
+    arn = "arn:aws:ec2:us-east-1:000000000000:transit-gateway/tgw-0000000000000000f"
   }
 }
 
@@ -68,7 +88,8 @@ run "a_route_table_pertence_ao_tgw_desta_raiz" {
     target          = aws_ec2_transit_gateway.hub
     override_during = plan
     values = {
-      id = "tgw-aaaaaaaaaaaaaaaa1"
+      id  = "tgw-aaaaaaaaaaaaaaaa1"
+      arn = "arn:aws:ec2:us-east-1:000000000000:transit-gateway/tgw-aaaaaaaaaaaaaaaa1"
     }
   }
 
@@ -85,7 +106,8 @@ run "e_acompanha_outro_tgw" {
     target          = aws_ec2_transit_gateway.hub
     override_during = plan
     values = {
-      id = "tgw-bbbbbbbbbbbbbbbb2"
+      id  = "tgw-bbbbbbbbbbbbbbbb2"
+      arn = "arn:aws:ec2:us-east-1:000000000000:transit-gateway/tgw-bbbbbbbbbbbbbbbb2"
     }
   }
 

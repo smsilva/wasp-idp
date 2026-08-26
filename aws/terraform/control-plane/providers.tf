@@ -10,7 +10,10 @@ provider "aws" {
   }
 }
 
-# Somente leitura, para descobrir a VPC hub. A camada 2 nao escreve nada na conta network.
+# Descobre a VPC hub e, desde o 2.3, tambem escreve na conta network: a route table de
+# tenant (tgw-rt-<spoke>) e suas associacao/propagacoes pertencem a conta dona do TGW mas tem
+# o ciclo de vida desta spoke, entao moram aqui via este provider aliasado — fronteira de
+# state por ciclo de vida, nao por conta.
 provider "aws" {
   alias   = "network"
   region  = var.region

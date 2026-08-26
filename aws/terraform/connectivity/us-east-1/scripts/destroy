@@ -17,10 +17,11 @@ show_usage() {
   script saying out loud what is lost before you confirm.
 
   Before destroying, it REFUSES if there is any TGW attachment that does not
-  belong to this state. AWS also refuses to delete a TGW with a live
-  attachment, but its error arrives after the destroy has already removed half
-  the layer — the certificate and the endpoint would be gone and the TGW would
-  stay, billing and unused.
+  belong to this state — the hub's OWN attachment (2.3) does belong here and
+  is excluded from the check; only foreign ones (a spoke's) trip it. AWS also
+  refuses to delete a TGW with a live attachment, but its error arrives after
+  the destroy has already removed half the layer — the certificate and the
+  endpoint would be gone and the TGW would stay, billing and unused.
 
   Chain order: control-plane BEFORE this one (the spoke attachment lives in
   the control-plane state).
@@ -94,6 +95,10 @@ transit_gateway_id="$(terraform output -raw transit_gateway_id 2> /dev/null)" ||
 if [ "${skip_attachments}" != "true" ] && [ -n "${transit_gateway_id}" ]; then
   profile="$(terraform output -raw aws_profile 2> /dev/null)" || profile="network"
 
+  # The hub's own attachment (2.3) belongs to THIS state — terraform destroy removes it as
+  # part of the same run. Only an attachment that is NOT this one is foreign.
+  own_attachment_id="$(terraform output -raw transit_gateway_attachment_id 2> /dev/null)" || own_attachment_id=""
+
   attachments="$(aws ec2 describe-transit-gateway-attachments \
     --profile "${profile}" \
     --region us-east-1 \
@@ -101,13 +106,14 @@ if [ "${skip_attachments}" != "true" ] && [ -n "${transit_gateway_id}" ]; then
     --query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,ResourceType,ResourceId,State]' \
     --output text 2> /dev/null)" || attachments=""
 
-  attachment_count="$(echo "${attachments}" | grep --count . || true)"
+  foreign_attachments="$(echo "${attachments}" | awk -v own="${own_attachment_id}" -F'\t' '$1 != own')"
+  attachment_count="$(echo "${foreign_attachments}" | grep --count . || true)"
 
   if [ "${attachment_count}" -gt 0 ]; then
     echo "" >&2
-    echo "${attachments}" >&2
+    echo "${foreign_attachments}" >&2
     echo "" >&2
-    fail "${attachment_count} live attachment(s) on TGW ${transit_gateway_id}, and none of them belong to this layer. Destroy the layer that owns them first (the spoke: control-plane/scripts/destroy) or use --skip-attachments knowing the destroy will fail on the TGW."
+    fail "${attachment_count} live attachment(s) on TGW ${transit_gateway_id} outside this layer. Destroy the layer that owns them first (the spoke: control-plane/scripts/destroy) or use --skip-attachments knowing the destroy will fail on the TGW."
   fi
 
   echo "  TGW has no attachment from outside this state" >&2

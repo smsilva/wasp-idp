@@ -96,6 +96,78 @@ resource "aws_ec2_transit_gateway_route_table" "hub" {
 }
 
 # --------------------------------------------------------------------------------------
+# RAM — pré-requisito de attachment cross-conta
+# --------------------------------------------------------------------------------------
+
+# O TGW pertence à conta network; a VPC de cada spoke pertence a outra conta. A AWS só permite
+# `CreateTransitGatewayVpcAttachment` de outra conta depois de compartilhar o TGW via RAM.
+resource "aws_ram_resource_share" "tgw" {
+  name = "${local.name}-tgw"
+
+  # allow_external_principals = false: o compartilhamento fica dentro desta Organization, não
+  # com contas de fora. As spokes já estão todas na mesma Organization (Frente A).
+  allow_external_principals = false
+
+  tags = merge(local.tags, { Name = "${local.name}-tgw-share" })
+}
+
+resource "aws_ram_resource_association" "tgw" {
+  resource_arn       = aws_ec2_transit_gateway.hub.arn
+  resource_share_arn = aws_ram_resource_share.tgw.arn
+}
+
+# Uma por conta spoke — cresce quando uma spoke nova entra, ao contrário da rota abaixo.
+resource "aws_ram_principal_association" "spoke" {
+  for_each = toset(var.spoke_account_ids)
+
+  principal          = each.value
+  resource_share_arn = aws_ram_resource_share.tgw.arn
+}
+
+# --------------------------------------------------------------------------------------
+# Attachment da própria VPC hub — sem ele, o que chega pelo túnel na subnet privada não tem
+# como sair para o TGW.
+# --------------------------------------------------------------------------------------
+
+resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
+  vpc_id     = data.aws_vpc.hub.id
+  subnet_ids = data.aws_subnets.hub_private.ids
+
+  transit_gateway_id = aws_ec2_transit_gateway.hub.id
+
+  # Mesma disciplina do TGW em si: nada entra por default, associação e propagação são
+  # explícitas abaixo.
+  transit_gateway_default_route_table_association = false
+  transit_gateway_default_route_table_propagation  = false
+
+  tags = merge(local.tags, { Name = "${local.name}-tgw-attachment" })
+}
+
+resource "aws_ec2_transit_gateway_route_table_association" "hub" {
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
+}
+
+# A route table privada do hub já existe (network-foundation/, T0) — lida por tag, mesmo
+# padrão da VPC e das subnets, não por terraform_remote_state.
+data "aws_route_table" "hub_private" {
+  filter {
+    name   = "tag:Name"
+    values = ["${local.name}-rt-private"]
+  }
+}
+
+# Uma rota só, para a supernet inteira, para sempre: rota é TOPOLOGIA e não cresce por spoke —
+# quem cresce por spoke é a authorization rule (política), não esta rota.
+resource "aws_route" "hub_to_tgw" {
+  route_table_id         = data.aws_route_table.hub_private.id
+  destination_cidr_block = local.supernet
+  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
+}
+
+# --------------------------------------------------------------------------------------
 # Certificado do endpoint
 # --------------------------------------------------------------------------------------
 

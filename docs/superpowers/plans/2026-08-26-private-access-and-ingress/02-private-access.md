@@ -244,9 +244,44 @@ mascarado numa asserção que passaria de qualquer jeito.
 
 ## `2.3` — o spoke entra na malha
 
-Attachment da VPC spoke (conta `cicd`), `tgw-rt-<spoke>` na conta do hub mas no state do spoke,
-associação, propagação, e as rotas remotas nas route tables da VPC. Mais a authorization rule do
-grupo de operadores para `10.2.0.0/16`, do lado do Client VPN.
+Duas pontas, não uma: a exploração desta sessão achou que o hub nunca tinha sido anexado ao
+próprio TGW — `connectivity/` criava o TGW e `tgw-rt-hub`, mas ambos ficavam órfãos, sem
+attachment nenhum. Sem o lado do hub, o tráfego que chega pelo túnel na subnet privada não tem
+como sair para o TGW, e o lado da spoke sozinho não fecharia o circuito.
+
+**Lado do hub** (`connectivity/us-east-1/`, conta `network`):
+
+- RAM: `aws_ram_resource_share` do TGW (`allow_external_principals = false`) +
+  `aws_ram_resource_association` + uma `aws_ram_principal_association` por conta em
+  `var.spoke_account_ids` — pré-requisito de qualquer attachment cross-conta.
+- Attachment da própria VPC hub, associado a `tgw-rt-hub` (que existia órfã desde o `2.2`).
+- Uma rota só, para o supernet inteiro, na route table privada do hub (lida por tag) — mesma
+  lógica de "rota é topologia, não cresce por spoke" já usada para a rota do Client VPN.
+
+**Pré-requisito de conta, fora de qualquer camada TGW:** "sharing with AWS Organizations" tem
+de estar ligado — sem isso a AWS recusa `AssociateResourceShare` com
+`OperationNotPermittedException`. É `aws_ram_sharing_with_organization` (só roda pela management
+account), e mora em `dns/` — T0, permanente — não em `connectivity/` (T1, destruída toda noite):
+é configuração da Organization inteira, não do ciclo de vida do TGW. Aplicado uma vez, descoberto
+na prática ao tentar o primeiro apply do `2.3` (a AWS recusou com a mensagem exata).
+
+Com ele ligado, o attachment cross-conta nasce **já associado**, sem convite — não há
+`aws_ram_resource_share_accepter` do lado da spoke.
+
+**Lado da spoke** (`control-plane/`, conta `cicd`):
+
+- Attachment da VPC spoke — criado com o provider **default** (`cicd`, dono da VPC).
+- `tgw-rt-<spoke>` — pertence à conta do TGW (`network`) mas o ciclo de vida é da spoke, então
+  mora no state dela via o provider `aws.network` já existente (fronteira de state por ciclo de
+  vida, decisão 5 do `README.md`).
+- Duas propagações, e elas não podem ser trocadas entre si: `spoke_to_hub` (attachment da spoke
+  → `tgw-rt-hub`, para o hub aprender a rota de volta) e `hub_to_spoke` (attachment do hub →
+  `tgw-rt-spoke`, para a spoke aprender a rota para o hub e, atrás dela, para o cliente VPN).
+- Uma rota, no lado da spoke, para o supernet inteiro — espelho da rota do hub.
+
+**Não entrou:** a authorization rule por `10.2.0.0/16` que o esboço original previa. A `2.2` já
+cobre o supernet inteiro por grupo, o que já inclui qualquer spoke — rota é topologia (cresce
+aqui, uma vez), authorization rule é política (já estava coberta).
 
 Aceite deliberadamente fraco: alcançar um **IP** privado dentro da spoke. Nome ainda não resolve —
 isso é o `2.4`.

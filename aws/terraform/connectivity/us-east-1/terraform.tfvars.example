@@ -20,3 +20,7 @@ operator_group_ids = ["00000000-0000-0000-0000-000000000000"]
 
 # Fora do supernet 10.0.0.0/12 de propósito. Não muda depois de o endpoint existir.
 client_cidr_block = "100.64.0.0/22"
+
+# Contas às quais o TGW é compartilhado via RAM, para que cada uma crie o próprio attachment.
+# Uma por spoke — hoje só a conta cicd (control-plane).
+spoke_account_ids = ["000000000000"]

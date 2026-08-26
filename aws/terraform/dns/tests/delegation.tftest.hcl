@@ -1,4 +1,9 @@
 mock_provider "aws" {}
+
+mock_provider "aws" {
+  alias = "management"
+}
+
 mock_provider "azurerm" {}
 
 variables {

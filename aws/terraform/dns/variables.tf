@@ -40,6 +40,15 @@ variable "network_profile" {
   default     = "network"
 }
 
+variable "management_profile" {
+  description = <<-EOT
+    Profile local com acesso à management account. `aws_ram_sharing_with_organization` só
+    pode ser aplicado por um principal dela — é onde a Organization em si vive.
+  EOT
+  type        = string
+  default     = "personal"
+}
+
 variable "manage_delegation" {
   description = <<-EOT
     Liga o registro NS no Azure. Desligado, esta raiz não toca o Azure e o `plan` roda sem

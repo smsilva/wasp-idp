@@ -23,3 +23,8 @@ output "control_plane_subnet_ids" {
   EOT
   value       = concat(aws_subnet.public[*].id, aws_subnet.private[*].id)
 }
+
+output "private_route_table_id" {
+  description = "Única, compartilhada por todas as subnets privadas — quem anexa TGW referencia esta."
+  value       = aws_route_table.private.id
+}

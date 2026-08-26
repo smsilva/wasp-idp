@@ -114,6 +114,12 @@ group e subscription são **identidade de quem roda**, e o repo é público.
 de credencial do segundo faz o `plan` falhar mesmo para mudança que só toca o primeiro. Desligado, a
 subzona existe no Route 53 e ninguém a resolve — é modo de trabalho, não estado de repouso.
 
+**`dns/` também liga o RAM sharing com a Organization** (`aws_ram_sharing_with_organization`, via
+provider aliasado `aws.management`, profile `personal`). Não tem relação com DNS — é configuração
+permanente da Organization inteira, e mora aqui porque `dns/` é a raiz T0 (permanente, custo quase
+zero), não porque o TGW da `connectivity/` (T1) devesse possuí-la. Sem ela, qualquer attachment
+cross-conta de TGW falha com `OperationNotPermittedException`.
+
 A VPC hub entra por `data "aws_vpc"` filtrando `tag:Name` num provider `aws` aliasado com o
 profile `network` — não por `terraform_remote_state`. O acoplamento é ao recurso, não ao arquivo
 de state da camada 1. O filtro tem de devolver exatamente um id, senão quebra no plan;

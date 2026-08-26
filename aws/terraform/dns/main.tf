@@ -32,6 +32,27 @@ provider "azurerm" {
   subscription_id = var.azure_subscription_id
 }
 
+# A management account e onde este toggle de Organization mora — nao a network, que e onde
+# vive o resto desta raiz.
+provider "aws" {
+  alias   = "management"
+  region  = "us-east-1"
+  profile = var.management_profile
+}
+
+# Pre-requisito de qualquer attachment cross-conta de TGW (2.3): sem isto, RAM recusa
+# associar um resource share a um principal de outra conta com
+# "OperationNotPermittedException: ... enabled sharing with your AWS organization".
+#
+# Fica aqui, nao em connectivity/: e configuracao PERMANENTE da Organization inteira, nao do
+# ciclo de vida do TGW. Um destroy noturno da connectivity nao pode desligar isto — desligaria
+# e religaria um toggle organization-wide todo dia, por um recurso que nao e dele.
+# O recurso não tem argumento nenhum além de `id` (computado) — a própria existência dele é
+# o "ligado". Não há "enabled = true" para declarar.
+resource "aws_ram_sharing_with_organization" "this" {
+  provider = aws.management
+}
+
 resource "aws_route53_zone" "subzone" {
   name = local.subzone_fqdn
 

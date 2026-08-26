@@ -5,6 +5,9 @@ locals {
   install_argocd_oidc      = false # exige o client secret ja no Secrets Manager
   install_app_of_apps      = false # entregue por GitOps, fora do Terraform
 
+  # Mesmo valor de connectivity/us-east-1 — decisao irreversivel documentada, nao segredo.
+  supernet = "10.0.0.0/12"
+
   tags = { role = "control-plane" }
 }
 
@@ -29,6 +32,104 @@ module "network" {
   availability_zones = var.availability_zones
   enable_nat_gateway = var.enable_nat_gateway
   tags               = local.tags
+}
+
+# --------------------------------------------------------------------------------------
+# 2.3 — attachment desta spoke no TGW da conta network. Sem isto o tunel do Client VPN
+# alcanca a VPC hub e para ai.
+# --------------------------------------------------------------------------------------
+
+# O TGW pertence a conta network; lido por tag, mesmo padrao de data.aws_vpc.hub acima.
+data "aws_ec2_transit_gateway" "hub" {
+  provider = aws.network
+
+  filter {
+    name   = "tag:Name"
+    values = ["poc-hub-tgw"]
+  }
+}
+
+# O compartilhamento (RAM) e criado do lado do hub, em connectivity/, e so funciona com
+# "sharing with AWS Organizations" ligado na Organization (raiz dns/, aplicado uma vez —
+# nao e o TGW quem liga isto). Com ele ligado, o attachment cross-conta nasce ja associado
+# sem convite — nao ha aws_ram_resource_share_accepter para rodar aqui.
+#
+# Quem cria o attachment e a conta dona da VPC (cicd) — provider default, nao aliasado.
+resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
+  vpc_id             = module.network.vpc_id
+  subnet_ids         = module.network.private_subnet_ids
+  transit_gateway_id = data.aws_ec2_transit_gateway.hub.id
+
+  # Mesma disciplina de connectivity/: nada por default, associacao e propagacao explicitas.
+  transit_gateway_default_route_table_association = false
+  transit_gateway_default_route_table_propagation  = false
+
+  tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
+}
+
+# tgw-rt-<spoke>: pertence a conta dona do TGW (network), mas o ciclo de vida e o desta
+# spoke — por isso mora no state dela, via provider aliasado, e nao em connectivity/.
+resource "aws_ec2_transit_gateway_route_table" "spoke" {
+  provider = aws.network
+
+  transit_gateway_id = data.aws_ec2_transit_gateway.hub.id
+
+  tags = merge(local.tags, { Name = "${var.name}-tgw-rt-spoke" })
+}
+
+resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
+  provider = aws.network
+
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
+}
+
+# tgw-rt-hub — a route table do proprio hub, ja existe em connectivity/. Lida por tag, nao
+# por terraform_remote_state, mesmo padrao do resto desta camada.
+data "aws_ec2_transit_gateway_route_table" "hub" {
+  provider = aws.network
+
+  filter {
+    name   = "tag:Name"
+    values = ["poc-hub-tgw-rt-hub"]
+  }
+}
+
+# O attachment do proprio hub, tambem ja existe em connectivity/.
+data "aws_ec2_transit_gateway_vpc_attachment" "hub" {
+  provider = aws.network
+
+  filter {
+    name   = "tag:Name"
+    values = ["poc-hub-tgw-attachment"]
+  }
+}
+
+# As duas propagacoes sao o que fecha o circuito de ida e volta: sem a primeira o hub nao
+# aprende a rota para esta spoke; sem a segunda esta spoke nao aprende a rota de volta para
+# o hub (e, atras dela, para o cliente VPN).
+resource "aws_ec2_transit_gateway_route_table_propagation" "spoke_to_hub" {
+  provider = aws.network
+
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
+  transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
+}
+
+resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
+  provider = aws.network
+
+  transit_gateway_attachment_id  = data.aws_ec2_transit_gateway_vpc_attachment.hub.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
+}
+
+# Rota de volta na propria VPC desta spoke: uma so, para o supernet inteiro, mesma logica de
+# connectivity/ — rota e topologia, nao cresce por spoke.
+resource "aws_route" "spoke_to_hub" {
+  route_table_id         = module.network.private_route_table_id
+  destination_cidr_block = local.supernet
+  transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.this]
 }
 
 module "cluster" {
