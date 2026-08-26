@@ -10,33 +10,33 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Camada 2 — subzona de DNS delegada. Cria a hosted zone
-  <label>.<base-domain> no Route 53 da conta network e o registro NS de
-  delegacao na zona PAI, que fica no Azure DNS. O apex nao migra.
+  Layer 2 — delegated DNS subzone. Creates the <label>.<base-domain> hosted
+  zone in Route 53 in the network account, plus the delegating NS record in the
+  PARENT zone, which lives in Azure DNS. The apex does not move.
 
-  Nivel T0: ~US\$ 0,50/mes, prevent_destroy. Fica de pe entre sessoes.
+  Tier T0: ~US\$ 0.50/month, prevent_destroy. Stays up between sessions.
 
-  DESCOBRE e escreve terraform.tfvars (gitignored) quando ele nao existe:
+  DISCOVERS and writes terraform.tfvars (gitignored) when it does not exist:
 
     azure_subscription_id      az account show
-    azure_dns_resource_group   o resource group da zona pai, pela API do Azure
+    azure_dns_resource_group   the parent zone's resource group, via the Azure API
 
-  VALIDA antes de gerar arquivo ou tocar em nada:
+  VALIDATES before writing any file or touching anything:
 
-    - a zona pai existe no Azure e casa com EXATAMENTE um resource group
-    - a pai ainda nao tem um NS para este label vindo de outro lugar
-      (teria conflito no apply, e a mensagem do Azure nao explica por que)
+    - the parent zone exists in Azure and matches EXACTLY one resource group
+    - the parent does not already have an NS for this label from somewhere else
+      (it would conflict at apply time, and the Azure message does not explain why)
 
     Options:
 
       -h,  --help           Show this help
-      -y,  --yes            Nao perguntar antes de aplicar
-      -d,  --base-domain    Zona pai no Azure DNS. Obrigatorio na primeira vez;
-                             depois sai do terraform.tfvars
-      -l,  --label          Rotulo da subzona (default: nonprod)
-           --state-bucket   Nome do bucket (default: tfstate-<organization-id>)
-           --org-profile    Profile que le a Organization (default: personal)
-      -f,  --force-tfvars   Regera o terraform.tfvars mesmo se existir
+      -y,  --yes            Do not ask before applying
+      -d,  --base-domain    Parent zone in Azure DNS. Required the first time;
+                             afterwards it comes from terraform.tfvars
+      -l,  --label          Subzone label (default: nonprod)
+           --state-bucket   Bucket name (default: tfstate-<organization-id>)
+           --org-profile    Profile that reads Organizations (default: personal)
+      -f,  --force-tfvars   Regenerate terraform.tfvars even if it exists
 
     Examples:
 
@@ -102,18 +102,18 @@ set -e
 require_tools aws az jq terraform
 
 root="${terraform_directory}/dns"
-[ -d "${root}" ] || fail "raiz ausente: ${root}"
+[ -d "${root}" ] || fail "missing root: ${root}"
 
 tfvars="${root}/terraform.tfvars"
 
-step "Camada 2 — subzona de DNS delegada"
+step "Layer 2 — delegated DNS subzone"
 
 if [ ! -f "${tfvars}" ] || [ "${force_tfvars}" == "true" ]; then
   [ -n "${base_domain}" ] \
-    || fail "terraform.tfvars ausente e --base-domain nao informado. O dominio identifica quem roda, entao nao tem default no repo."
+    || fail "terraform.tfvars is missing and --base-domain was not given. The domain identifies whoever is running this, so there is no default in the repo."
 
   subscription_id="$(az account show --query id --output tsv 2> /dev/null)" \
-    || fail "az nao esta logado. Rode 'az login'."
+    || fail "az is not logged in. Run 'az login'."
   log "subscription: $(mask "${subscription_id}")"
 
   resource_groups="$(az network dns zone list --output json \
@@ -122,30 +122,31 @@ if [ ! -f "${tfvars}" ] || [ "${force_tfvars}" == "true" ]; then
   zone_count="$(echo "${resource_groups}" | grep --count . || true)"
 
   if [ "${zone_count}" -eq 0 ]; then
-    fail "nenhuma zona '${base_domain}' nesta subscription. Confira o nome, ou 'az account set --subscription <outra>'."
+    fail "no '${base_domain}' zone in this subscription. Check the name, or 'az account set --subscription <another>'."
   fi
 
   if [ "${zone_count}" -gt 1 ]; then
-    fail "${zone_count} zonas '${base_domain}' em resource groups diferentes. Ambiguo — resolva no Azure antes."
+    fail "${zone_count} '${base_domain}' zones across different resource groups. Ambiguous — sort it out in Azure first."
   fi
 
-  log "zona pai '${base_domain}' no resource group '${resource_groups}'"
+  log "parent zone '${base_domain}' in resource group '${resource_groups}'"
 
-  # Um NS para este label vindo de outro lugar (delegacao antiga, outra cloud)
-  # colide no apply, e o erro do Azure nao diz que a causa e um record set que
-  # ja estava la.
+  # An NS for this label coming from somewhere else (an old delegation, another
+  # cloud) collides at apply time, and the Azure error does not say the cause is
+  # a record set that was already there.
   if az network dns record-set ns show \
     --resource-group "${resource_groups}" \
     --zone-name "${base_domain}" \
     --name "${label}" > /dev/null 2>&1; then
-    fail "a zona '${base_domain}' JA tem um NS para '${label}'. Se e delegacao antiga, apague no Azure; se e desta raiz, adote com 'terraform import'."
+    fail "zone '${base_domain}' ALREADY has an NS for '${label}'. If it is an old delegation, delete it in Azure; if it belongs to this root, adopt it with 'terraform import'."
   fi
 
-  log "a pai nao tem NS para '${label}' — sem colisao"
+  log "the parent has no NS for '${label}' — no collision"
 
   cat > "${tfvars}" <<EOF
-# Gerado por ${this_script_name}. Valores de identidade (dominio, subscription,
-# resource group), por isso aqui e nao inline no main.tf: o repo e publico.
+# Generated by ${this_script_name}. Identity values (domain, subscription,
+# resource group), which is why they live here and not inline in main.tf: this
+# repository is public.
 
 base_domain   = "${base_domain}"
 subzone_label = "${label}"
@@ -154,12 +155,12 @@ azure_subscription_id    = "${subscription_id}"
 azure_dns_resource_group = "${resource_groups}"
 EOF
 
-  log "escrito: ${tfvars}"
+  log "wrote: ${tfvars}"
 
   git -C "${root}" check-ignore --quiet "${tfvars}" 2> /dev/null \
-    || fail "${tfvars} NAO esta no .gitignore. Corrija antes de seguir — ele carrega subscription id."
+    || fail "${tfvars} is NOT gitignored. Fix that before going on — it carries the subscription id."
 else
-  log "terraform.tfvars ja existe (use --force-tfvars para regerar)"
+  log "terraform.tfvars already exists (use --force-tfvars to regenerate)"
 fi
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
@@ -172,12 +173,12 @@ subzone="$(cd "${root}" && terraform output -raw subzone_name 2> /dev/null)" || 
 if [ -n "${subzone}" ]; then
   cat >&2 <<EOF
 
-Verificacao (a propagacao do NS leva alguns minutos):
+Verification (NS propagation takes a few minutes):
 
   dig +short NS ${subzone}
   dig +trace ${subzone} | tail -5
 
-Os name servers devolvidos tem de ser os do Route 53 (awsdns), nao os do Azure.
+The name servers returned must be the Route 53 ones (awsdns), not the Azure ones.
 
 EOF
 fi

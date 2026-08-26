@@ -10,26 +10,27 @@ root_directory="$(realpath "${this_script_directory}/..")"
 show_usage() {
   cat <<EOF
 
-  Destroi a camada connectivity (TGW + Client VPN) e guarda o log.
+  Destroys the connectivity layer (TGW + Client VPN) and keeps the log.
 
-  Esta camada e destruida DE PROPOSITO ao fim do dia — nivel T1, ~US\$ 0,15/h.
-  Nao ha prevent_destroy em nada aqui; a protecao e este script dizer em voz
-  alta o que se perde antes de confirmar.
+  This layer is destroyed ON PURPOSE at the end of the day — tier T1,
+  ~US\$ 0.15/h. Nothing here has prevent_destroy; the protection is this
+  script saying out loud what is lost before you confirm.
 
-  Antes de destruir, RECUSA se houver attachment no TGW que nao seja deste
-  state. A AWS ja recusa deletar TGW com attachment vivo, mas o erro dela
-  aparece depois de o destroy ter apagado meia camada — o certificado e o
-  endpoint iriam embora e o TGW ficaria, cobrando e sem uso.
+  Before destroying, it REFUSES if there is any TGW attachment that does not
+  belong to this state. AWS also refuses to delete a TGW with a live
+  attachment, but its error arrives after the destroy has already removed half
+  the layer — the certificate and the endpoint would be gone and the TGW would
+  stay, billing and unused.
 
-  Ordem da cadeia: control-plane ANTES desta (o attachment da spoke vive no
-  state da control-plane).
+  Chain order: control-plane BEFORE this one (the spoke attachment lives in
+  the control-plane state).
 
     Options:
 
       -h,  --help              Show this help
-      -y,  --yes               Nao perguntar (repassa -auto-approve)
-           --skip-attachments  Pula a checagem de attachment
-           --log-directory     Onde gravar o log (default: ${root_directory}/logs)
+      -y,  --yes               Do not ask (passes -auto-approve)
+           --skip-attachments  Skip the attachment check
+           --log-directory     Where to write the log (default: ${root_directory}/logs)
 
     Examples:
 
@@ -74,19 +75,19 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 done
 
 fail() {
-  echo "ERRO: ${1}" >&2
+  echo "ERROR: ${1}" >&2
   exit 1
 }
 
 set -e
 
 for tool in aws terraform; do
-  command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
+  command -v "${tool}" > /dev/null 2>&1 || fail "missing binary: ${tool}"
 done
 
 cd "${root_directory}"
 
-[ -d .terraform ] || fail "backend nao inicializado. Rode 'terraform init -backend-config=\"bucket=<bucket>\"'."
+[ -d .terraform ] || fail "backend not initialized. Run 'terraform init -backend-config=\"bucket=<bucket>\"'."
 
 transit_gateway_id="$(terraform output -raw transit_gateway_id 2> /dev/null)" || transit_gateway_id=""
 
@@ -106,44 +107,45 @@ if [ "${skip_attachments}" != "true" ] && [ -n "${transit_gateway_id}" ]; then
     echo "" >&2
     echo "${attachments}" >&2
     echo "" >&2
-    fail "${attachment_count} attachment(s) vivo(s) no TGW ${transit_gateway_id}, e nenhum deles e desta camada. Destrua a camada dona deles primeiro (a spoke: control-plane/scripts/destroy) ou use --skip-attachments sabendo que o destroy vai falhar no TGW."
+    fail "${attachment_count} live attachment(s) on TGW ${transit_gateway_id}, and none of them belong to this layer. Destroy the layer that owns them first (the spoke: control-plane/scripts/destroy) or use --skip-attachments knowing the destroy will fail on the TGW."
   fi
 
-  echo "  TGW sem attachment de fora deste state" >&2
+  echo "  TGW has no attachment from outside this state" >&2
 fi
 
-# O que se perde, dito antes de perguntar. O ponto nao e assustar: e que duas destas
-# coisas voltam diferentes na recriacao, e quem confirma tem de saber.
+# What is lost, said before asking. The point is not to scare: two of these come back
+# different after recreation, and whoever confirms needs to know that.
 cat >&2 <<EOF
 
-Isto vai embora:
+This goes away:
 
-  TGW ${transit_gateway_id:-<sem output>}
-    e a route table do hub. Recriar da IDs NOVOS, e a camada 4 le o TGW por
-    tag — ela nao guarda o id, entao nao quebra.
+  TGW ${transit_gateway_id:-<no output>}
+    and the hub route table. Recreating yields NEW ids — layer 4 reads the TGW
+    by tag and does not store the id, so it does not break.
 
   Client VPN endpoint
-    o DNS dele MUDA na recriacao. Qualquer .ovpn salvo fica invalido; use
-    'vpn config' para reexportar em vez de reaproveitar arquivo.
+    its DNS name CHANGES on recreation. Any saved .ovpn becomes invalid; use
+    'vpn config' to re-export instead of reusing a file.
 
-  Certificado do ACM e o registro de validacao
-    a subzona (camada 2) FICA — ela e T0 e tem prevent_destroy. O certificado
-    e reemitido no proximo apply, e a espera da validacao leva alguns minutos.
+  ACM certificate and its validation record
+    the subzone (layer 2) STAYS — it is T0 and has prevent_destroy. The
+    certificate is reissued on the next apply, and waiting for validation takes
+    a few minutes.
 
   Authorization rules
-    a politica de quem alcanca o que. Reaparece do terraform.tfvars.
+    the policy of who reaches what. Comes back from terraform.tfvars.
 
-Isto NAO vai embora: subzona de DNS, VPC hub, bucket de state.
+This does NOT go away: the DNS subzone, the hub VPC, the state bucket.
 
 EOF
 
 if [ "${assume_yes}" != "true" ]; then
   if [ ! -t 0 ]; then
-    fail "sem terminal para confirmar. Use --yes se e de proposito."
+    fail "no terminal to confirm on. Use --yes if this is deliberate."
   fi
 
-  read -r -p "Destruir a camada connectivity? [yes/N] " answer
-  [ "${answer}" == "yes" ] || fail "cancelado."
+  read -r -p "Destroy the connectivity layer? [yes/N] " answer
+  [ "${answer}" == "yes" ] || fail "cancelled."
 fi
 
 mkdir --parents "${log_directory}"
@@ -153,17 +155,17 @@ log_file="${log_directory}/destroy-${timestamp}.log"
 
 auto_approve=("-auto-approve")
 
-echo "Destruindo. Log: ${log_file}" >&2
+echo "Destroying. Log: ${log_file}" >&2
 
 terraform destroy -no-color "${auto_approve[@]}" 2>&1 | tee "${log_file}"
-# tee sempre devolve 0; PIPESTATUS guarda o exit code do terraform.
+# tee always returns 0; PIPESTATUS holds the terraform exit code.
 destroy_status="${PIPESTATUS[0]}"
 
 echo "" >&2
 echo "Log: ${log_file}" >&2
 
 if [ "${destroy_status}" -ne 0 ]; then
-  fail "o destroy falhou (exit ${destroy_status}). O TGW e o endpoint continuam cobrando — confira 'terraform state list'."
+  fail "the destroy failed (exit ${destroy_status}). The TGW and the endpoint keep billing — check 'terraform state list'."
 fi
 
-echo "Camada connectivity destruida. dns e network-foundation continuam de pe." >&2
+echo "connectivity layer destroyed. dns and network-foundation are still up." >&2

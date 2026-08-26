@@ -10,28 +10,29 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Camada 1 — VPCs hub, uma raiz por regiao. Custo recorrente ZERO: sem NAT
-  Gateway, porque sem TGW nada roteia pelo hub e um NAT custaria ~US\$ 32/mes
-  servindo zero trafego. Isso muda quando a camada 3 (connectivity) entrar.
+  Layer 1 — hub VPCs, one root per region. ZERO recurring cost: no NAT
+  Gateway, because without a TGW nothing routes through the hub and a NAT would
+  cost ~US\$ 32/month serving zero traffic. That changes once layer 3
+  (connectivity) is in place.
 
-  Sem --region, aplica TODAS as regioes que existem em network-foundation/.
-  Uma raiz por regiao e deliberado: uma raiz so, alternando backend com
-  'init -reconfigure', mistura as regioes se alguem esquecer de trocar, e nada
-  no Terraform pega isso.
+  Without --region, applies EVERY region found under network-foundation/.
+  One root per region is deliberate: a single root switching backends with
+  'init -reconfigure' mixes regions up whenever someone forgets to switch, and
+  nothing in Terraform catches that.
 
-  PRE-REQUISITO NAO AUTOMATIZADO: a regiao tem de estar aprovada na SCP
-  DenyOutsideApprovedRegions. Sem isso o erro aparece no primeiro Create*,
-  parecendo bug de codigo. Aprovar com:
+  NOT-AUTOMATED PREREQUISITE: the region must be approved in the
+  DenyOutsideApprovedRegions SCP. Without it the error shows up on the first
+  Create*, looking like a code bug. Approve it with:
 
     aws/docs/accounts/scripts/apply-baseline-service-control-policy --regions <r1>,<r2>
 
     Options:
 
       -h,  --help           Show this help
-      -y,  --yes            Nao perguntar antes de aplicar
-      -r,  --region         So esta regiao (default: todas as encontradas)
-           --state-bucket   Nome do bucket (default: tfstate-<organization-id>)
-           --org-profile    Profile que le a Organization (default: personal)
+      -y,  --yes            Do not ask before applying
+      -r,  --region         Only this region (default: every one found)
+           --state-bucket   Bucket name (default: tfstate-<organization-id>)
+           --org-profile    Profile that reads Organizations (default: personal)
 
     Examples:
 
@@ -85,7 +86,7 @@ set -e
 
 require_tools aws terraform
 
-step "Camada 1 — VPCs hub"
+step "Layer 1 — hub VPCs"
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
 
@@ -100,17 +101,17 @@ for candidate in "${terraform_directory}"/network-foundation/*/; do
 done
 
 if [ "${#regions[@]}" -eq 0 ]; then
-  fail "nenhuma raiz de regiao encontrada em ${terraform_directory}/network-foundation/${only_region:+ (filtro: ${only_region})}"
+  fail "no region root found in ${terraform_directory}/network-foundation/${only_region:+ (filter: ${only_region})}"
 fi
 
-log "regioes: ${regions[*]}"
+log "regions: ${regions[*]}"
 
 for region in "${regions[@]}"; do
   root="${terraform_directory}/network-foundation/${region}"
 
-  # Um describe barato antecipa o deny da SCP para antes de qualquer Create*.
+  # A cheap describe brings the SCP deny forward, ahead of any Create*.
   if ! aws ec2 describe-vpcs --region "${region}" --profile network --max-items 1 --output text > /dev/null 2>&1; then
-    fail "a conta network nao consegue ler EC2 em ${region}. Provavel deny de DenyOutsideApprovedRegions — aprove a regiao antes (ver --help)."
+    fail "the network account cannot read EC2 in ${region}. Likely a DenyOutsideApprovedRegions deny — approve the region first (see --help)."
   fi
 
   terraform_init "${root}" "${state_bucket}"

@@ -1,8 +1,9 @@
 #!/bin/bash
-# Encanamento comum dos scripts up-*. Sourced, nao executado.
+# Shared plumbing for the up-* scripts. Sourced, not executed.
 #
-# Existe para que "um script por camada" nao signifique cinco copias de log com
-# timestamp, PIPESTATUS e confirmacao — que e como essas coisas divergem.
+# It exists so that "one script per layer" does not mean five copies of
+# timestamped logging, PIPESTATUS handling and confirmation prompts — which is
+# exactly how those things drift apart.
 
 terraform_directory="$(realpath "${BASH_SOURCE[0]%/*}/..")"
 
@@ -16,12 +17,13 @@ step() {
 }
 
 fail() {
-  echo "ERRO: ${1}" >&2
+  echo "ERROR: ${1}" >&2
   exit 1
 }
 
-# Mascara identificador na saida de diagnostico. O arquivo gerado leva o valor
-# inteiro — ele e gitignored; o terminal e o transcript nao precisam do id todo.
+# Masks an identifier in diagnostic output. The generated file gets the whole
+# value — it is gitignored; the terminal and the transcript do not need the
+# full id.
 mask() {
   local value="${1?}"
   echo "***${value: -4}"
@@ -30,12 +32,13 @@ mask() {
 require_tools() {
   local tool
   for tool in "${@}"; do
-    command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
+    command -v "${tool}" > /dev/null 2>&1 || fail "missing binary: ${tool}"
   done
 }
 
-# O nome do bucket de state e derivado do id da Organization, nunca versionado.
-# Aceita override por --state-bucket para quem roda fora desta Organization.
+# The state bucket name is derived from the Organization id, never committed.
+# Accepts an override via --state-bucket for anyone running outside this
+# Organization.
 discover_state_bucket() {
   local org_profile="${1:-personal}"
 
@@ -49,24 +52,25 @@ discover_state_bucket() {
     --profile "${org_profile}" \
     --query Organization.Id \
     --output text 2> /dev/null)" \
-    || fail "nao consegui ler a Organization com o profile '${org_profile}'. Rode 'aws sso login --profile ${org_profile}' ou passe --state-bucket."
+    || fail "could not read the Organization with profile '${org_profile}'. Run 'aws sso login --profile ${org_profile}' or pass --state-bucket."
 
   echo "tfstate-${organization_id}"
 }
 
-# Um init por raiz, idempotente. -reconfigure porque a mesma arvore serve varias
-# raizes e um .terraform herdado de outra key faria o Terraform reclamar.
+# One init per root, idempotent. -reconfigure because the same tree serves
+# several roots, and a .terraform inherited from another state key would make
+# Terraform complain instead of reinitializing.
 terraform_init() {
   local root="${1?}"
   local bucket="${2?}"
 
   (cd "${root}" && terraform init -reconfigure -backend-config="bucket=${bucket}" -input=false > /dev/null) \
-    || fail "init falhou em ${root}"
+    || fail "init failed in ${root}"
 }
 
-# plan -> confirma -> apply, com o plano aplicado EXATAMENTE como revisado (sem o
-# apply recalcular) e log com timestamp em <raiz>/logs/ (gitignored: a saida
-# carrega account id, ARN e endpoint reais).
+# plan -> confirm -> apply, applying EXACTLY the plan that was reviewed (the
+# apply does not recompute it), with a timestamped log in <root>/logs/
+# (gitignored: the output carries real account ids, ARNs and endpoints).
 terraform_plan_and_apply() {
   local root="${1?}"
   local label="${2?}"
@@ -83,29 +87,30 @@ terraform_plan_and_apply() {
 
   log "plan (log: ${plan_log})"
   (cd "${root}" && terraform plan -no-color -input=false -out="${plan_file}") 2>&1 | tee "${plan_log}"
-  # tee sempre devolve 0; PIPESTATUS guarda o exit code do terraform.
-  [ "${PIPESTATUS[0]}" -eq 0 ] || fail "o plan de ${label} falhou. Log: ${plan_log}"
+  # tee always returns 0; PIPESTATUS holds the terraform exit code.
+  [ "${PIPESTATUS[0]}" -eq 0 ] || fail "the ${label} plan failed. Log: ${plan_log}"
 
-  # -detailed-exitcode num plan salvo nao existe; a contagem sai do show.
+  # -detailed-exitcode does not exist for a saved plan; the count comes from show.
   local changes
   changes="$( (cd "${root}" && terraform show -no-color "${plan_file}") | grep --count '^  # ' || true)"
 
   if [ "${changes}" -eq 0 ]; then
-    log "nada a mudar em ${label} — camada ja aplicada"
+    log "nothing to change in ${label} — layer already applied"
     rm --force "${plan_file}"
     return 0
   fi
 
-  log "${changes} recurso(s) a mudar em ${label}"
+  log "${changes} resource(s) to change in ${label}"
 
   if [ "${assume_yes}" != "true" ]; then
     if [ ! -t 0 ]; then
       cat >&2 <<EOF
 
-Plano de ${label} salvo em ${plan_file}, mas nao ha terminal para confirmar.
-Recursos cobrados por hora comecam a contar no apply, entao nao se assume o sim.
+The ${label} plan was saved to ${plan_file}, but there is no terminal to
+confirm on. Resources billed by the hour start counting at apply time, so the
+answer is not assumed to be yes.
 
-Aplique com:
+Apply it with:
 
   ${0##*/} --yes
 
@@ -114,10 +119,10 @@ EOF
     fi
 
     echo "" >&2
-    read -r -p "Aplicar ${label}? [yes/N] " answer
+    read -r -p "Apply ${label}? [yes/N] " answer
     if [ "${answer}" != "yes" ]; then
       rm --force "${plan_file}"
-      fail "cancelado em ${label}."
+      fail "cancelled at ${label}."
     fi
   fi
 
@@ -128,7 +133,7 @@ EOF
   rm --force "${plan_file}"
 
   [ "${apply_status}" -eq 0 ] \
-    || fail "o apply de ${label} falhou (exit ${apply_status}). Recursos parciais podem existir — confira o state antes de repetir. Log: ${apply_log}"
+    || fail "the ${label} apply failed (exit ${apply_status}). Partial resources may exist — check the state before retrying. Log: ${apply_log}"
 
-  log "${label} aplicada"
+  log "${label} applied"
 }

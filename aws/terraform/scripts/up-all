@@ -10,33 +10,33 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Roda as camadas na ordem, parando na primeira que falhar.
+  Runs the layers in order, stopping at the first failure.
 
-  A ordem NAO e preferencia — cada degrau depende do anterior:
+  The order is NOT a preference — each step depends on the previous one:
 
-    00  state-backend        nenhuma outra raiz inicializa o backend sem ele
-    01  network-foundation   VPC hub; a 04 le essa VPC por tag
-    02  dns                  independente das outras, mas pre-requisito de
-                             certificado e ingress mais adiante
-    03  connectivity         TGW + Client VPN; depende da 01 e da 02, e de um
-                             passo de console (aplicacao SAML)
-    04  control-plane        depende da 01
+    00  state-backend        no other root can initialize its backend without it
+    01  network-foundation   hub VPC; layer 04 reads that VPC by tag
+    02  dns                  independent of the others, but a prerequisite for
+                             certificates and ingress further along
+    03  connectivity         TGW + Client VPN; depends on 01 and 02, and on a
+                             console step (the SAML application)
+    04  control-plane        depends on 01
 
-  CUSTO: as camadas 00, 01 e 02 somam centavos. A 03 custa ~US\$ 110/mes e a 04
-  ~US\$ 165/mes enquanto de pe. Por isso NENHUMA das duas entra por default —
-  passe --with-connectivity e --with-control-plane de proposito.
+  COST: layers 00, 01 and 02 add up to cents. Layer 03 costs ~US\$ 110/month and
+  layer 04 ~US\$ 165/month while up. That is why NEITHER is included by default
+  — pass --with-connectivity and --with-control-plane deliberately.
 
-  Por default roda ate a 02, que e o estado de repouso barato desta PoC.
+  By default it runs through layer 02, which is this PoC's cheap resting state.
 
     Options:
 
       -h,  --help                Show this help
-      -y,  --yes                 Nao perguntar antes de cada apply
-      -d,  --base-domain         Repassado a 02 na primeira execucao
-           --with-connectivity   Inclui a camada 03 (~US\$ 110/mes)
-           --with-control-plane  Inclui a camada 04 (~US\$ 165/mes)
-           --state-bucket        Repassado a todas
-           --org-profile         Repassado a todas (default: personal)
+      -y,  --yes                 Do not ask before each apply
+      -d,  --base-domain         Passed through to 02 on the first run
+           --with-connectivity   Include layer 03 (~US\$ 110/month)
+           --with-control-plane  Include layer 04 (~US\$ 165/month)
+           --state-bucket        Passed through to all
+           --org-profile         Passed through to all (default: personal)
 
     Examples:
 
@@ -115,16 +115,16 @@ up-02-dns "${dns_options[@]}"
 if [ "${with_connectivity}" == "true" ]; then
   up-03-connectivity "${common[@]}"
 else
-  step "Camada 3 — connectivity: pulada (~US\$ 110/mes)"
-  log "inclua com --with-connectivity quando for de proposito"
-  log "e derrube ao fim do dia: connectivity/us-east-1/scripts/destroy"
+  step "Layer 3 — connectivity: skipped (~US\$ 110/month)"
+  log "include it with --with-connectivity when that is the intent"
+  log "and tear it down at the end of the day: connectivity/us-east-1/scripts/destroy"
 fi
 
 if [ "${with_control_plane}" == "true" ]; then
   up-04-control-plane "${common[@]}"
 else
-  step "Camada 4 — control-plane: pulada (~US\$ 165/mes)"
-  log "inclua com --with-control-plane quando for de proposito"
+  step "Layer 4 — control-plane: skipped (~US\$ 165/month)"
+  log "include it with --with-control-plane when that is the intent"
 fi
 
-step "Fim"
+step "Done"

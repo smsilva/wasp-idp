@@ -103,26 +103,123 @@ requisitos de target network pede `/27` com 20 IPs livres e uma subnet por AZ �
 passam folgado. A AWS acrescenta sozinha a rota local da VPC na associação; a rota que se escreve é a
 do supernet, e as duas convivem por prefixo mais longo.
 
-### O passo de console, que não é preguiça do plano
+### O passo de console, clique a clique
 
 **A aplicação SAML no Identity Center não pode ser Terraform.** A doc do provider é explícita: *"The
 `CreateApplication` API only supports custom OAuth 2.0 applications. Creation of 3rd party SAML or
 OAuth 2.0 applications require setup to be done through the associated app service or AWS console."*
 
-O `generate-tfvars` para e imprime o roteiro quando o metadata falta — é o passo mais fácil de
-esquecer justamente por não ser código:
+**Onde:** o Identity Center vive na **management account** (`221047292361`, profile `personal`, que já
+tem `AdministratorAccess`) — não na conta `network`. Isso é de propósito e vale saber: a aplicação
+SAML fica na management, e o `aws_iam_saml_provider` que a consome é criado pelo Terraform na conta
+`network`, que é onde o endpoint vive (a doc exige que o provider IAM esteja na mesma conta do
+endpoint). O XML baixado é o que atravessa essa fronteira.
+
+Console: **https://console.aws.amazon.com/singlesignon** — confirme a região no canto superior
+direito antes de começar; a instância é regional.
+
+#### 1. Criar a aplicação
+
+1. Menu à esquerda → **Applications**
+2. Aba **Customer managed** (não *AWS managed* — a aplicação é nossa)
+3. Botão **Add application**
+4. Página *Select application type* → em **Setup preference**, marcar
+   **I have an application I want to set up**
+5. Em **Application type**, marcar **SAML 2.0**
+6. **Next**
+
+#### 2. Nomear e baixar o metadata
+
+7. O campo vem preenchido com `Custom SAML 2.0 application`, que é o default do console. Trocar.
+
+   | Campo | Valor |
+   |---|---|
+   | **Display name** | `hub-client-vpn` |
+   | **Description** | `Acesso de manutencao a rede privada do hub via Client VPN` |
+
+   O Display name **não é consumido por nada** — o Terraform lê apenas o XML —, então o único
+   critério é rastreabilidade humana. O `aws_iam_saml_provider` que o Terraform cria do lado da conta
+   `network` chama-se `poc-hub-client-vpn` (`${local.name}-client-vpn`, com `local.name = "poc-hub"`);
+   a divergência de prefixo é inofensiva, e o par continua óbvio de reconhecer.
+
+8. Na seção **IAM Identity Center metadata** há duas abas: **Default (IPv4 only)** e **Dual-stack**.
+   Ficar na **Default (IPv4 only)** — o endpoint nasce com `endpoint_ip_address_type` no default
+   `ipv4`.
+
+   Em **IAM Identity Center SAML metadata file**, clicar **Download**.
+
+   **É este arquivo.** Salvar como:
+
+   ```
+   aws/terraform/connectivity/us-east-1/saml-metadata.xml
+   ```
+
+   (gitignored — identifica a instância de Identity Center). O certificado ao lado, em *IAM Identity
+   Center certificate*, **não** é necessário: ele já vem embutido no XML. As URLs de *sign-in* e
+   *sign-out* logo abaixo também não — o Client VPN as lê do próprio metadata.
+
+#### 3. Os dois valores que o Client VPN exige
+
+9. Descer até **Application metadata** → escolher **Manually type your metadata values**
+   (o default tenta importar um arquivo do service provider, que não existe aqui)
+10. Preencher exatamente:
 
 | Campo | Valor |
 |---|---|
-| Tipo | SAML 2.0, *"I have an application I want to set up"* |
-| Application ACS URL | `http://127.0.0.1:35001` |
-| Application SAML audience | `urn:amazon:webservices:clientvpn` |
-| `Subject` | `${user:email}`, formato `emailAddress` — a doc exige e-mail no `NameID` |
-| `memberOf` | `${user:groups}`, formato `unspecified` |
+| **Application ACS URL** | `http://127.0.0.1:35001` |
+| **Application SAML audience** | `urn:amazon:webservices:clientvpn` |
 
-- **`memberOf` tem de carregar IDs**, não nomes. O `generate-tfvars` traduz nome → UUID pelo Identity
-  Center e a variável recusa o que não for UUID; errar dá túnel que sobe e não alcança nada.
-- **Portal self-service exige uma segunda aplicação SAML.** Fora por ora; vale para a demo.
+Os dois estão na doc do Client VPN em *Service provider information for creating an app*. O ACS é
+`127.0.0.1` porque quem recebe a assertion é o **client na máquina do operador**, não um servidor —
+daí a porta reservada localmente.
+
+11. **Submit**. Você cai na página de detalhes da aplicação.
+
+#### 4. Mapeamento de atributos — onde erra quem erra
+
+12. Na página de detalhes → botão **Actions** (canto superior direito) → **Edit attribute mappings**
+13. Deixar assim, e conferir letra por letra:
+
+| User attribute in the application | Maps to this string value or user attribute in IAM Identity Center | Format |
+|---|---|---|
+| `Subject` | `${user:email}` | `emailAddress` |
+| `memberOf` | `${user:groups}` | `unspecified` |
+
+- **`Subject` tem de ser e-mail.** *"For the SAML assertion, you must use an email address format for
+  the `NameID` attribute."* Outro formato dá conexão recusada.
+- **`memberOf` é case-sensitive** e a doc diz que tem de ser escrito exatamente assim —
+  `memberof` ou `MemberOf` não funcionam, e a falha não diz por quê.
+- **`${user:groups}` devolve IDs de grupo, não nomes**, e é isso que as authorization rules casam. O
+  `generate-tfvars` traduz nome → UUID do lado do Terraform, e a variável recusa o que não for UUID —
+  as duas pontas falam UUID.
+
+14. **Save changes**
+
+#### 5. Atribuir os grupos
+
+15. Ainda na página da aplicação → aba **Assigned users and groups** → **Assign users and groups**
+16. Aba **Groups** → marcar `platform-admins` → **Assign users**
+
+Sem isso o login SAML completa e a assertion vem **sem** `memberOf` populado — o túnel sobe e não
+alcança nada. É o sintoma mais confuso deste caminho inteiro, porque tudo parece ter dado certo.
+
+#### 6. Voltar para o Terraform
+
+```bash
+cd aws/terraform
+./scripts/up-03-connectivity
+```
+
+O `generate-tfvars` confere que o arquivo existe e tem pelo menos 1000 caracteres (o provider exige, e
+arquivo curto quase sempre é página de erro salva por engano), traduz `platform-admins` para UUID, e
+só então escreve o `terraform.tfvars`.
+
+#### Fora por ora
+
+- **Portal self-service exige uma segunda aplicação SAML**, com ACS URL
+  `https://self-service.clientvpn.amazonaws.com/api/auth/sso/saml` e um segundo
+  `aws_iam_saml_provider`. Vale para a demo — a pessoa baixa a própria configuração em vez de receber
+  arquivo por e-mail. Fica para depois de o túnel subir.
 - **Nunca `authorize_all_groups = true`** — perde-se CIDR-por-grupo, que é metade do valor de ter
   escolhido SAML. Há teste cobrindo.
 

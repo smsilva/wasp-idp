@@ -10,22 +10,23 @@ root_directory="$(realpath "${this_script_directory}/..")"
 show_usage() {
   cat <<EOF
 
-  Destroi a camada control-plane e guarda o log da execucao.
+  Destroys the control-plane layer and keeps the execution log.
 
-  Antes de destruir, confere que o Crossplane nao tem recurso gerenciado vivo.
-  Destruir o cluster com XR/managed de pe deixa recurso orfao na AWS: quem
-  sabia apagar era o Crossplane, e ele vai junto com o cluster.
+  Before destroying, it checks that Crossplane has no live managed resources.
+  Destroying the cluster with XRs/managed resources up leaves orphans in AWS:
+  the thing that knew how to delete them was Crossplane, and it goes away with
+  the cluster.
 
-  Ordem da cadeia: control-plane ANTES de network-foundation.
+  Chain order: control-plane BEFORE network-foundation.
 
-  O log vai para logs/destroy-<timestamp>.log (gitignored).
+  The log goes to logs/destroy-<timestamp>.log (gitignored).
 
     Options:
 
       -h,  --help              Show this help
-      -y,  --yes               Nao perguntar (repassa -auto-approve)
-           --skip-crossplane   Pula a checagem de recursos gerenciados
-           --log-directory     Onde gravar o log (default: ${root_directory}/logs)
+      -y,  --yes               Do not ask (passes -auto-approve)
+           --skip-crossplane   Skip the managed-resource check
+           --log-directory     Where to write the log (default: ${root_directory}/logs)
 
     Examples:
 
@@ -70,47 +71,47 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 done
 
 fail() {
-  echo "ERRO: ${1}" >&2
+  echo "ERROR: ${1}" >&2
   exit 1
 }
 
 set -e
 
-command -v terraform > /dev/null 2>&1 || fail "binario ausente: terraform"
+command -v terraform > /dev/null 2>&1 || fail "missing binary: terraform"
 
 cd "${root_directory}"
 
-[ -d .terraform ] || fail "backend nao inicializado. Rode 'terraform init -backend-config=\"bucket=<bucket>\"'."
+[ -d .terraform ] || fail "backend not initialized. Run 'terraform init -backend-config=\"bucket=<bucket>\"'."
 
 if [ "${skip_crossplane}" != "true" ]; then
   if ! command -v kubectl > /dev/null 2>&1; then
-    fail "kubectl ausente — nao da para conferir os recursos do Crossplane. Use --skip-crossplane se o cluster ja nao existe."
+    fail "kubectl is missing — cannot check Crossplane resources. Use --skip-crossplane if the cluster is already gone."
   fi
 
   if kubectl cluster-info > /dev/null 2>&1; then
-    # O contexto corrente pode ser o k3d control-plane, e nao o EKS desta camada.
-    # Sem essa checagem, um 'get managed' vazio no cluster errado passa por
-    # "nada vivo" e o destroy segue deixando recurso orfao.
+    # The current context may be the k3d control-plane rather than this layer's
+    # EKS. Without this check, an empty 'get managed' against the wrong cluster
+    # reads as "nothing alive" and the destroy goes ahead, leaving orphans.
     cluster_name="$(terraform output -raw cluster_name 2> /dev/null)" || cluster_name=""
     current_context="$(kubectl config current-context)"
 
     if [ -n "${cluster_name}" ] && [[ "${current_context}" != *"${cluster_name}"* ]]; then
-      fail "contexto kubectl atual e '${current_context}', que nao casa com o cluster '${cluster_name}'. Rode '$(terraform output -raw kubeconfig_command)' antes, ou use --skip-crossplane."
+      fail "the current kubectl context is '${current_context}', which does not match cluster '${cluster_name}'. Run '$(terraform output -raw kubeconfig_command)' first, or use --skip-crossplane."
     fi
 
     for kind in managed composite; do
-      # Sem a CRD o get falha; nesse caso o Crossplane nem chegou a subir.
+      # Without the CRD the get fails; in that case Crossplane never even came up.
       alive="$(kubectl get "${kind}" --no-headers 2> /dev/null | wc --lines)"
 
       if [ "${alive}" -gt 0 ]; then
         kubectl get "${kind}" >&2
-        fail "${alive} recurso(s) '${kind}' vivos. Apague os XR primeiro e espere o Crossplane deletar na AWS — senao viram orfaos."
+        fail "${alive} live '${kind}' resource(s). Delete the XRs first and wait for Crossplane to remove them from AWS — otherwise they become orphans."
       fi
     done
 
-    echo "  Crossplane sem recursos gerenciados vivos" >&2
+    echo "  Crossplane has no live managed resources" >&2
   else
-    echo "  AVISO: kubectl nao alcanca nenhum cluster — checagem do Crossplane pulada" >&2
+    echo "  WARNING: kubectl cannot reach any cluster — Crossplane check skipped" >&2
   fi
 fi
 
@@ -124,7 +125,7 @@ if [ "${assume_yes}" == "true" ]; then
   auto_approve=("-auto-approve")
 fi
 
-echo "Destruindo. Log: ${log_file}" >&2
+echo "Destroying. Log: ${log_file}" >&2
 
 terraform destroy -no-color "${auto_approve[@]}" 2>&1 | tee "${log_file}"
 destroy_status="${PIPESTATUS[0]}"
@@ -133,7 +134,7 @@ echo "" >&2
 echo "Log: ${log_file}" >&2
 
 if [ "${destroy_status}" -ne 0 ]; then
-  fail "o destroy falhou (exit ${destroy_status}). Recursos remanescentes ficam cobrando — confira 'terraform state list'."
+  fail "the destroy failed (exit ${destroy_status}). Remaining resources keep billing — check 'terraform state list'."
 fi
 
-echo "Camada control-plane destruida. network-foundation continua de pe." >&2
+echo "control-plane layer destroyed. network-foundation is still up." >&2

@@ -10,21 +10,22 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Camada 0 — bucket de state. Roda UMA vez por Organization; depois disso e
-  no-op. Nao tem regiao de workload: ele guarda o state de todas as camadas e
-  todas as regioes.
+  Layer 0 — state bucket. Runs ONCE per Organization; after that it is a no-op.
+  It has no workload region: it holds the state of every layer and every
+  region.
 
-  Auto-hospedado: o state desta raiz mora no bucket que ela mesma gerencia.
-  Nao e circular na pratica, porque o bucket ja existe quando ela roda — mas
-  se o bucket NAO existir, este script para e diz o caminho de bootstrap em
-  vez de tentar adivinhar. Bootstrap de uma vez nao se automatiza as cegas.
+  Self-hosted: this root's state lives in the bucket it manages. That is not
+  circular in practice, because the bucket already exists when it runs — but if
+  the bucket does NOT exist, this script stops and prints the bootstrap path
+  instead of guessing. A one-time bootstrap is not something to automate
+  blindly.
 
     Options:
 
       -h,  --help           Show this help
-      -y,  --yes            Nao perguntar antes de aplicar
-           --state-bucket   Nome do bucket (default: tfstate-<organization-id>)
-           --org-profile    Profile que le a Organization (default: personal)
+      -y,  --yes            Do not ask before applying
+           --state-bucket   Bucket name (default: tfstate-<organization-id>)
+           --org-profile    Profile that reads Organizations (default: personal)
 
 EOF
 }
@@ -67,21 +68,22 @@ set -e
 require_tools aws terraform
 
 root="${terraform_directory}/state-backend"
-[ -d "${root}" ] || fail "raiz ausente: ${root}"
+[ -d "${root}" ] || fail "missing root: ${root}"
 
-step "Camada 0 — bucket de state"
+step "Layer 0 — state bucket"
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
 log "bucket: ${state_bucket}"
 
-# O profile que le o bucket e o mesmo do backend desta raiz (network). Se o
-# bucket nao existe, esta raiz nao consegue nem inicializar o backend.
+# The profile that reads the bucket is the same one this root's backend uses
+# (network). If the bucket does not exist, this root cannot even initialize its
+# backend.
 if ! aws s3api head-bucket --bucket "${state_bucket}" --profile network > /dev/null 2>&1; then
   cat >&2 <<EOF
 
-O bucket '${state_bucket}' nao existe, e esta raiz guarda o proprio state nele.
+Bucket '${state_bucket}' does not exist, and this root keeps its own state in it.
 
-Bootstrap de uma vez, manual de proposito:
+One-time bootstrap, manual on purpose:
 
   cd ${root}
   printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
@@ -89,16 +91,16 @@ Bootstrap de uma vez, manual de proposito:
   rm backend_override.tf
   terraform init -migrate-state -backend-config="bucket=${state_bucket}"
 
-Depois disto, ${this_script_name} volta a ser no-op.
+After that, ${this_script_name} goes back to being a no-op.
 
 EOF
   exit 1
 fi
 
-log "bucket existe"
+log "bucket exists"
 
 [ -f "${root}/terraform.tfvars" ] \
-  || fail "terraform.tfvars ausente em ${root}. Copie de terraform.tfvars.example e preencha o bucket_name."
+  || fail "terraform.tfvars missing in ${root}. Copy it from terraform.tfvars.example and fill in bucket_name."
 
 terraform_init "${root}" "${state_bucket}"
 terraform_plan_and_apply "${root}" "state-backend" "${assume_yes}"

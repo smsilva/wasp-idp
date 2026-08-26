@@ -10,36 +10,38 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Camada 3 — conectividade do hub. Cria o Transit Gateway (association e
-  propagation default DESLIGADOS, que e o que torna isolamento por tenant
-  possivel), o certificado do endpoint no ACM validado por DNS na subzona da
-  camada 2, o provider SAML, e o Client VPN endpoint com associacao, rota do
-  supernet e authorization rule por grupo.
+  Layer 3 — hub connectivity. Creates the Transit Gateway (default association
+  and propagation DISABLED, which is what makes per-tenant isolation possible),
+  the endpoint certificate in ACM validated by DNS against the layer 2 subzone,
+  the SAML provider, and the Client VPN endpoint with its association, supernet
+  route and per-group authorization rules.
 
-  NIVEL T1: ~US\$ 0,15/h (~US\$ 110/mes) mais US\$ 0,05/h por conexao ativa.
-  Fica de pe DURANTE O DIA de proposito e e destruida a noite — nao presuma
-  que e residuo. Derrube com connectivity/us-east-1/scripts/destroy.
+  TIER T1: ~US\$ 0.15/h (~US\$ 110/month) plus US\$ 0.05/h per active connection.
+  It stays up DURING THE DAY on purpose and is destroyed at night — do not
+  assume it is leftover. Tear it down with
+  connectivity/us-east-1/scripts/destroy.
 
-  DEPENDE de:
+  DEPENDS ON:
 
-    camada 1  a VPC hub, lida por tag (o endpoint nasce nela)
-    camada 2  a subzona delegada (o certificado valida por DNS nela)
+    layer 1  the hub VPC, read by tag (the endpoint is created in it)
+    layer 2  the delegated subzone (the certificate validates by DNS in it)
 
-    E de um passo de CONSOLE: a aplicacao SAML no Identity Center. A API
-    CreateApplication so cria aplicacao OAuth 2.0 customizada, entao SAML nao
-    e Terraform. O generate-tfvars imprime o roteiro se o metadata faltar.
+    And on a CONSOLE step: the SAML application in Identity Center. The
+    CreateApplication API only creates custom OAuth 2.0 applications, so SAML
+    is not Terraform. generate-tfvars prints the walkthrough if the metadata
+    is missing.
 
     Options:
 
       -h,  --help           Show this help
-      -y,  --yes            Nao perguntar antes de aplicar
-      -g,  --group          Grupo do Identity Center. Repetivel.
+      -y,  --yes            Do not ask before applying
+      -g,  --group          Identity Center group. Repeatable.
                              Default: platform-admins
-      -l,  --label          Rotulo da subzona (default: nonprod)
-           --state-bucket   Nome do bucket (default: tfstate-<organization-id>)
-           --org-profile    Profile que le Organization e Identity Center
-                             (default: personal)
-      -f,  --force-tfvars   Regera o terraform.tfvars mesmo se existir
+      -l,  --label          Subzone label (default: nonprod)
+           --state-bucket   Bucket name (default: tfstate-<organization-id>)
+           --org-profile    Profile that reads Organizations and Identity
+                             Center (default: personal)
+      -f,  --force-tfvars   Regenerate terraform.tfvars even if it exists
 
     Examples:
 
@@ -105,12 +107,12 @@ set -e
 require_tools aws jq terraform
 
 root="${terraform_directory}/connectivity/us-east-1"
-[ -d "${root}" ] || fail "raiz ausente: ${root}"
+[ -d "${root}" ] || fail "missing root: ${root}"
 
-step "Camada 3 — conectividade (TGW + Client VPN, ~US\$ 0,15/h)"
+step "Layer 3 — connectivity (TGW + Client VPN, ~US\$ 0.15/h)"
 
 if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
-  log "gerando terraform.tfvars"
+  log "generating terraform.tfvars"
 
   generate_options=(--force --label "${label}" --org-profile "${org_profile}")
   for group in "${groups[@]}"; do
@@ -119,7 +121,7 @@ if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
 
   "${root}/scripts/generate-tfvars" "${generate_options[@]}"
 else
-  log "terraform.tfvars ja existe (use --force-tfvars para regerar — os grupos autorizados mudam com o 4.1)"
+  log "terraform.tfvars already exists (use --force-tfvars to regenerate — authorized groups change in 4.1)"
 fi
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
@@ -134,7 +136,8 @@ if [ -n "${endpoint_dns}" ]; then
 
 Endpoint: ${endpoint_dns}
 
-O DNS acima MUDA a cada recriacao desta camada — nao salve .ovpn, reexporte:
+The DNS name above CHANGES every time this layer is recreated — never save an
+.ovpn, always re-export:
 
   aws ec2 export-client-vpn-client-configuration \\
     --client-vpn-endpoint-id $(cd "${root}" && terraform output -raw client_vpn_endpoint_id 2> /dev/null) \\
@@ -143,7 +146,7 @@ O DNS acima MUDA a cada recriacao desta camada — nao salve .ovpn, reexporte:
   aws-vpn-client import-profile --profile-name hub --config-path /tmp/hub.ovpn
   aws-vpn-client connect --profile-name hub
 
-Lembrete: ~US\$ 0,15/h enquanto de pe. Derrube com
+Reminder: ~US\$ 0.15/h while up. Tear it down with
 connectivity/us-east-1/scripts/destroy.
 
 EOF

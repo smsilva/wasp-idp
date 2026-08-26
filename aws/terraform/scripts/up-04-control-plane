@@ -10,29 +10,30 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Camada 4 — Control Plane: VPC spoke, EKS, node group, tres Pod Identities,
-  ESO, ArgoCD e Crossplane, num unico terraform apply. ~13 min.
+  Layer 4 — Control Plane: spoke VPC, EKS, node group, three Pod Identities,
+  ESO, ArgoCD and Crossplane, in a single terraform apply. ~13 min.
 
-  CUSTO ~US\$ 165/mes enquanto de pe (EKS ~73 + NAT ~32 + 2x t3.medium ~60).
-  Nivel T2: sobe, valida, desce. NAO deixar de pe entre sessoes.
+  COST ~US\$ 165/month while up (EKS ~73 + NAT ~32 + 2x t3.medium ~60).
+  Tier T2: bring it up, validate, tear it down. Do NOT leave it up between
+  sessions.
 
-  Delega a descoberta ao script proprio da raiz (control-plane/scripts/
-  generate-tfvars), que valida a tag da VPC hub, a colisao de CIDR, a regiao na
-  SCP e agora tambem descobre o IP publico desta maquina para o
-  public_access_cidrs do endpoint da API.
+  Discovery is delegated to the root's own script (control-plane/scripts/
+  generate-tfvars), which validates the hub VPC tag, CIDR collisions and the
+  region against the SCP, and also discovers this machine's public IP for the
+  API endpoint's public_access_cidrs.
 
-  DEPENDE da camada 1 (le a VPC hub por tag:Name na conta network). A camada 3
-  (connectivity) ainda nao existe; quando existir, o attachment do TGW entra no
-  state DESTA raiz — a fronteira de state segue o ciclo de vida, nao a conta.
+  DEPENDS ON layer 1 (reads the hub VPC by tag:Name in the network account).
+  Once layer 3 (connectivity) is applied, the TGW attachment belongs in THIS
+  root's state — the state boundary follows the lifecycle, not the account.
 
     Options:
 
       -h,  --help            Show this help
-      -y,  --yes             Nao perguntar antes de aplicar
-           --state-bucket    Nome do bucket (default: tfstate-<organization-id>)
-           --org-profile     Profile que le a Organization (default: personal)
-      -f,  --force-tfvars    Regera o terraform.tfvars mesmo se existir
-                              (necessario ao trocar de rede: o /32 muda)
+      -y,  --yes             Do not ask before applying
+           --state-bucket    Bucket name (default: tfstate-<organization-id>)
+           --org-profile     Profile that reads Organizations (default: personal)
+      -f,  --force-tfvars    Regenerate terraform.tfvars even if it exists
+                              (needed when changing networks: the /32 changes)
 
 EOF
 }
@@ -80,15 +81,15 @@ set -e
 require_tools aws jq terraform
 
 root="${terraform_directory}/control-plane"
-[ -d "${root}" ] || fail "raiz ausente: ${root}"
+[ -d "${root}" ] || fail "missing root: ${root}"
 
-step "Camada 4 — Control Plane (EKS)"
+step "Layer 4 — Control Plane (EKS)"
 
 if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
-  log "gerando terraform.tfvars"
+  log "generating terraform.tfvars"
   "${root}/scripts/generate-tfvars" --force
 else
-  log "terraform.tfvars ja existe (use --force-tfvars para regerar — o /32 do endpoint muda com a rede)"
+  log "terraform.tfvars already exists (use --force-tfvars to regenerate — the endpoint /32 changes with the network)"
 fi
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
@@ -98,11 +99,11 @@ terraform_plan_and_apply "${root}" "control-plane" "${assume_yes}"
 
 cat >&2 <<EOF
 
-Proximo passo:
+Next step:
 
   $(cd "${root}" && terraform output -raw kubeconfig_command 2> /dev/null || echo "terraform output kubeconfig_command")
   kubectl get nodes
 
-Lembrete: ~US\$ 0,23/h. Derrube com control-plane/scripts/destroy.
+Reminder: ~US\$ 0.23/h. Tear it down with control-plane/scripts/destroy.
 
 EOF
