@@ -5,6 +5,72 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 `docs/superpowers/plans/2026-08-25-terraform-network-foundation.md` (camada 1) e
 `docs/superpowers/plans/2026-08-25-terraform-control-plane.md` (camada 2).
 
+## Sequência de provisionamento
+
+Um script por camada em `scripts/`, numerado pela ordem. Cada um é idempotente e roda sozinho;
+`up-all` roda a sequência parando na primeira falha.
+
+```bash
+cd aws/terraform
+
+./scripts/up-all --base-domain <domínio>     # camadas 00 → 02, centavos por mês
+./scripts/up-all --with-control-plane        # inclui a 04 (~US$ 165/mês)
+```
+
+| # | Script | Raiz | Depende de | Custo/mês | Nível |
+|---|---|---|---|---|---|
+| — | — | *aprovar região na SCP* | — | zero | **pré-requisito, não é Terraform** |
+| 00 | `up-00-state-backend` | `state-backend/` | — | centavos | permanente |
+| 01 | `up-01-network-foundation` | `network-foundation/<região>/` | 00 | **zero** | permanente |
+| 02 | `up-02-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
+| 03 | `up-03-connectivity` | `connectivity/` | 00, 01 | ~US$ 110 | T1 — **raiz não existe ainda** |
+| 04 | `up-04-control-plane` | `control-plane/` | 00, 01 (e 03 quando existir) | ~US$ 165 | T2 |
+
+**A ordem não é preferência.** 00 antes de tudo porque nenhuma outra raiz inicializa o backend sem
+o bucket; 01 antes de 04 porque a 04 lê a VPC hub por `tag:Name`; 02 é independente das outras, mas
+é pré-requisito de certificado e ingress adiante. Níveis de permanência em
+`docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md`.
+
+**A camada 04 não entra no `up-all` por default.** As três primeiras somam centavos; a quarta custa
+~US$ 165/mês. Incluir exige `--with-control-plane`, de propósito.
+
+### Aprovar a região vem antes, e não é Terraform
+
+```bash
+aws/docs/accounts/scripts/apply-baseline-service-control-policy --regions us-east-1,us-west-2
+```
+
+Sem isso, um `apply` fora das regiões aprovadas falha no primeiro `Create*` com
+`explicit deny in a service control policy`, e o erro **parece bug de código**. `--regions` vale
+para a Organization inteira — não há como liberar região só numa conta por essa via. O `up-01` faz
+um `describe-vpcs` barato para antecipar o deny para antes de qualquer escrita.
+
+### Três armadilhas que os scripts pegam antes de tocar em nada
+
+| Armadilha | Onde | O que o script faz |
+|---|---|---|
+| Bucket de state inexistente | `up-00` | **Para** e imprime o bootstrap manual (state local → apply → `init -migrate-state`). A raiz guarda o próprio state no bucket que gerencia; automatizar às cegas um passo de uma vez só esconde o problema |
+| Região negada pela SCP | `up-01` | `describe-vpcs` antes do primeiro `Create*` |
+| Zona pai já tem NS para o label | `up-02` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
+
+### O encanamento comum fica em `scripts/lib`
+
+Sourced, não executado. Log com timestamp em `<raiz>/logs/` (gitignored — a saída carrega account
+id, ARN e endpoint reais), `PIPESTATUS[0]` para o `tee` não mascarar falha, confirmação antes de
+qualquer apply, e descoberta do bucket a partir do id da Organization. Um script por camada **não**
+significa cinco cópias disso — é assim que essas coisas divergem.
+
+Sem tty (pipe, CI, harness de agente) o `read` volta vazio na hora e o cancelamento pareceria
+decisão de quem rodou. Nesse caso o script **salva o plano, diz onde está e sai com erro**,
+apontando o `--yes`.
+
+### Descida
+
+Não há `down-*`. Derrubar é por raiz, de propósito — a assimetria é intencional: subir a sequência
+inteira é rotina, derrubar nunca é. A `control-plane` tem `scripts/destroy` com guardas próprios
+(Crossplane sem recurso vivo, contexto kubectl correto). `dns` e `state-backend` têm
+`prevent_destroy` no que importa.
+
 ## Raízes
 
 | Raiz | Conta | State key | Entrega | Estado |
@@ -13,7 +79,7 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 | `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | **aplicada** |
 | `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | **aplicada** |
 | `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, ESO, ArgoCD, Crossplane | **aplicada** |
-| `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | escrita, **não aplicada** |
+| `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | **aplicada** |
 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
 `t3.medium`, três Pod Identities e os três charts. Prova o que estava em aberto no desenho — os

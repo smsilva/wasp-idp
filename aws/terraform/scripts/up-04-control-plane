@@ -1,0 +1,108 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+source "${this_script_directory}/lib"
+
+show_usage() {
+  cat <<EOF
+
+  Camada 4 — Control Plane: VPC spoke, EKS, node group, tres Pod Identities,
+  ESO, ArgoCD e Crossplane, num unico terraform apply. ~13 min.
+
+  CUSTO ~US\$ 165/mes enquanto de pe (EKS ~73 + NAT ~32 + 2x t3.medium ~60).
+  Nivel T2: sobe, valida, desce. NAO deixar de pe entre sessoes.
+
+  Delega a descoberta ao script proprio da raiz (control-plane/scripts/
+  generate-tfvars), que valida a tag da VPC hub, a colisao de CIDR, a regiao na
+  SCP e agora tambem descobre o IP publico desta maquina para o
+  public_access_cidrs do endpoint da API.
+
+  DEPENDE da camada 1 (le a VPC hub por tag:Name na conta network). A camada 3
+  (connectivity) ainda nao existe; quando existir, o attachment do TGW entra no
+  state DESTA raiz — a fronteira de state segue o ciclo de vida, nao a conta.
+
+    Options:
+
+      -h,  --help            Show this help
+      -y,  --yes             Nao perguntar antes de aplicar
+           --state-bucket    Nome do bucket (default: tfstate-<organization-id>)
+           --org-profile     Profile que le a Organization (default: personal)
+      -f,  --force-tfvars    Regera o terraform.tfvars mesmo se existir
+                              (necessario ao trocar de rede: o /32 muda)
+
+EOF
+}
+
+assume_yes="false"
+org_profile="personal"
+force_tfvars="false"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    --state-bucket )
+      shift
+      STATE_BUCKET="${1}"
+      ;;
+
+    --org-profile )
+      shift
+      org_profile="${1}"
+      ;;
+
+    -f | --force-tfvars )
+      force_tfvars="true"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+require_tools aws jq terraform
+
+root="${terraform_directory}/control-plane"
+[ -d "${root}" ] || fail "raiz ausente: ${root}"
+
+step "Camada 4 — Control Plane (EKS)"
+
+if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
+  log "gerando terraform.tfvars"
+  "${root}/scripts/generate-tfvars" --force
+else
+  log "terraform.tfvars ja existe (use --force-tfvars para regerar — o /32 do endpoint muda com a rede)"
+fi
+
+state_bucket="$(discover_state_bucket "${org_profile}")"
+
+terraform_init "${root}" "${state_bucket}"
+terraform_plan_and_apply "${root}" "control-plane" "${assume_yes}"
+
+cat >&2 <<EOF
+
+Proximo passo:
+
+  $(cd "${root}" && terraform output -raw kubeconfig_command 2> /dev/null || echo "terraform output kubeconfig_command")
+  kubectl get nodes
+
+Lembrete: ~US\$ 0,23/h. Derrube com control-plane/scripts/destroy.
+
+EOF

@@ -1,0 +1,122 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+source "${this_script_directory}/lib"
+
+show_usage() {
+  cat <<EOF
+
+  Roda as camadas na ordem, parando na primeira que falhar.
+
+  A ordem NAO e preferencia — cada degrau depende do anterior:
+
+    00  state-backend        nenhuma outra raiz inicializa o backend sem ele
+    01  network-foundation   VPC hub; a 04 le essa VPC por tag
+    02  dns                  independente das outras, mas pre-requisito de
+                             certificado e ingress mais adiante
+    03  connectivity         AINDA NAO EXISTE (TGW + Client VPN, fase 2 do plano)
+    04  control-plane        depende da 01
+
+  CUSTO: as camadas 00, 01 e 02 somam centavos. A 04 custa ~US\$ 165/mes
+  enquanto de pe. Por isso ela NAO entra por default — passe --with-control-plane
+  de proposito.
+
+  Por default roda ate a 02, que e o estado de repouso barato desta PoC.
+
+    Options:
+
+      -h,  --help                Show this help
+      -y,  --yes                 Nao perguntar antes de cada apply
+      -d,  --base-domain         Repassado a 02 na primeira execucao
+           --with-control-plane  Inclui a camada 04 (~US\$ 165/mes)
+           --state-bucket        Repassado a todas
+           --org-profile         Repassado a todas (default: personal)
+
+    Examples:
+
+      ${this_script_name} --base-domain exemplo.com
+
+      ${this_script_name} --yes --with-control-plane
+
+EOF
+}
+
+assume_yes="false"
+base_domain=""
+with_control_plane="false"
+passthrough=()
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    -d | --base-domain )
+      shift
+      base_domain="${1}"
+      ;;
+
+    --with-control-plane )
+      with_control_plane="true"
+      ;;
+
+    --state-bucket )
+      shift
+      passthrough+=(--state-bucket "${1}")
+      ;;
+
+    --org-profile )
+      shift
+      passthrough+=(--org-profile "${1}")
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+common=("${passthrough[@]}")
+if [ "${assume_yes}" == "true" ]; then
+  common+=(--yes)
+fi
+
+up-00-state-backend "${common[@]}"
+up-01-network-foundation "${common[@]}"
+
+dns_options=("${common[@]}")
+if [ -n "${base_domain}" ]; then
+  dns_options+=(--base-domain "${base_domain}")
+fi
+up-02-dns "${dns_options[@]}"
+
+if [ -d "${terraform_directory}/connectivity" ]; then
+  up-03-connectivity "${common[@]}"
+else
+  step "Camada 3 — connectivity: raiz ainda nao existe, pulada"
+  log "TGW + Client VPN sao a fase 2 do plano em docs/superpowers/plans/2026-08-26-private-access-and-ingress/"
+fi
+
+if [ "${with_control_plane}" == "true" ]; then
+  up-04-control-plane "${common[@]}"
+else
+  step "Camada 4 — control-plane: pulada (~US\$ 165/mes)"
+  log "inclua com --with-control-plane quando for de proposito"
+fi
+
+step "Fim"

@@ -1,0 +1,134 @@
+#!/bin/bash
+# Encanamento comum dos scripts up-*. Sourced, nao executado.
+#
+# Existe para que "um script por camada" nao signifique cinco copias de log com
+# timestamp, PIPESTATUS e confirmacao — que e como essas coisas divergem.
+
+terraform_directory="$(realpath "${BASH_SOURCE[0]%/*}/..")"
+
+log() {
+  echo "  ${1}" >&2
+}
+
+step() {
+  echo "" >&2
+  echo "==> ${1}" >&2
+}
+
+fail() {
+  echo "ERRO: ${1}" >&2
+  exit 1
+}
+
+# Mascara identificador na saida de diagnostico. O arquivo gerado leva o valor
+# inteiro — ele e gitignored; o terminal e o transcript nao precisam do id todo.
+mask() {
+  local value="${1?}"
+  echo "***${value: -4}"
+}
+
+require_tools() {
+  local tool
+  for tool in "${@}"; do
+    command -v "${tool}" > /dev/null 2>&1 || fail "binario ausente: ${tool}"
+  done
+}
+
+# O nome do bucket de state e derivado do id da Organization, nunca versionado.
+# Aceita override por --state-bucket para quem roda fora desta Organization.
+discover_state_bucket() {
+  local org_profile="${1:-personal}"
+
+  if [ -n "${STATE_BUCKET}" ]; then
+    echo "${STATE_BUCKET}"
+    return 0
+  fi
+
+  local organization_id
+  organization_id="$(aws organizations describe-organization \
+    --profile "${org_profile}" \
+    --query Organization.Id \
+    --output text 2> /dev/null)" \
+    || fail "nao consegui ler a Organization com o profile '${org_profile}'. Rode 'aws sso login --profile ${org_profile}' ou passe --state-bucket."
+
+  echo "tfstate-${organization_id}"
+}
+
+# Um init por raiz, idempotente. -reconfigure porque a mesma arvore serve varias
+# raizes e um .terraform herdado de outra key faria o Terraform reclamar.
+terraform_init() {
+  local root="${1?}"
+  local bucket="${2?}"
+
+  (cd "${root}" && terraform init -reconfigure -backend-config="bucket=${bucket}" -input=false > /dev/null) \
+    || fail "init falhou em ${root}"
+}
+
+# plan -> confirma -> apply, com o plano aplicado EXATAMENTE como revisado (sem o
+# apply recalcular) e log com timestamp em <raiz>/logs/ (gitignored: a saida
+# carrega account id, ARN e endpoint reais).
+terraform_plan_and_apply() {
+  local root="${1?}"
+  local label="${2?}"
+  local assume_yes="${3:-false}"
+
+  local log_directory="${root}/logs"
+  local timestamp
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  local plan_file="${root}/${label}-${timestamp}.tfplan"
+  local plan_log="${log_directory}/plan-${timestamp}.log"
+  local apply_log="${log_directory}/apply-${timestamp}.log"
+
+  mkdir --parents "${log_directory}"
+
+  log "plan (log: ${plan_log})"
+  (cd "${root}" && terraform plan -no-color -input=false -out="${plan_file}") 2>&1 | tee "${plan_log}"
+  # tee sempre devolve 0; PIPESTATUS guarda o exit code do terraform.
+  [ "${PIPESTATUS[0]}" -eq 0 ] || fail "o plan de ${label} falhou. Log: ${plan_log}"
+
+  # -detailed-exitcode num plan salvo nao existe; a contagem sai do show.
+  local changes
+  changes="$( (cd "${root}" && terraform show -no-color "${plan_file}") | grep --count '^  # ' || true)"
+
+  if [ "${changes}" -eq 0 ]; then
+    log "nada a mudar em ${label} — camada ja aplicada"
+    rm --force "${plan_file}"
+    return 0
+  fi
+
+  log "${changes} recurso(s) a mudar em ${label}"
+
+  if [ "${assume_yes}" != "true" ]; then
+    if [ ! -t 0 ]; then
+      cat >&2 <<EOF
+
+Plano de ${label} salvo em ${plan_file}, mas nao ha terminal para confirmar.
+Recursos cobrados por hora comecam a contar no apply, entao nao se assume o sim.
+
+Aplique com:
+
+  ${0##*/} --yes
+
+EOF
+      exit 1
+    fi
+
+    echo "" >&2
+    read -r -p "Aplicar ${label}? [yes/N] " answer
+    if [ "${answer}" != "yes" ]; then
+      rm --force "${plan_file}"
+      fail "cancelado em ${label}."
+    fi
+  fi
+
+  log "apply (log: ${apply_log})"
+  (cd "${root}" && terraform apply -no-color "${plan_file}") 2>&1 | tee "${apply_log}"
+  local apply_status="${PIPESTATUS[0]}"
+
+  rm --force "${plan_file}"
+
+  [ "${apply_status}" -eq 0 ] \
+    || fail "o apply de ${label} falhou (exit ${apply_status}). Recursos parciais podem existir — confira o state antes de repetir. Log: ${apply_log}"
+
+  log "${label} aplicada"
+}
