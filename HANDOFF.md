@@ -332,7 +332,7 @@ operational experience"* — é isso que, segundo a AWS, separa SaaS de *managed
 O design do módulo foi aprovado e o plano de implementação da camada 2 está escrito:
 
 ```bash
-cd /home/silvios/git/wasp-idp
+cd wasp-idp
 code docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md
 code docs/superpowers/plans/2026-08-25-terraform-control-plane.md
 ```
@@ -359,8 +359,8 @@ Contexto de apoio, se for preciso reconstruir o raciocínio:
 sed -n '/^## 7\. IaC/,/^## 8\./p' decisions.md      # cardinalidade × churn; os dois Crossplanes
 sed -n '/^### Fase 2/,/^### Fase 3/p' decisions.md   # o que a Fase 2 entrega
 ls aws/eks/chart/templates/                          # as 28 fases que o k3d faz hoje
-cat /home/silvios/git/azure-kubernetes/examples/cluster_argocd_ingress_istio/main.tf
-grep -rn oidc /home/silvios/git/azure-kubernetes/src/helm/modules/argo-cd/  # o padrão ESO→argocd-secret
+cat azure-kubernetes/examples/cluster_argocd_ingress_istio/main.tf
+grep -rn oidc azure-kubernetes/src/helm/modules/argo-cd/  # o padrão ESO→argocd-secret
 ```
 
 O exemplo Azure é a referência de **estrutura** pedida: raiz compõe submódulos de `src/`, com
