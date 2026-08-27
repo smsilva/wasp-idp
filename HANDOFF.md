@@ -975,7 +975,7 @@ custo por hora de volta a zero (verificado na API: nenhum TGW, endpoint, EKS ou 
   validação 32s, certificado ACM 1s. O teardown inteiro da connectivity passa de 10 min por causa
   das associations — não é travamento.
 - Zero `Service` do tipo LoadBalancer no cluster, conferido **antes** de destruir: o bug do NLB
-  órfão (FLWP-69147) não tinha como ocorrer aqui. Vale manter a checagem no roteiro.
+  órfão (o ticket da trilha corporativa) não tinha como ocorrer aqui. Vale manter a checagem no roteiro.
 
 ### `2.2` — apply na AWS, e as duas perguntas do aceite resolvidas (2026-08-26)
 
