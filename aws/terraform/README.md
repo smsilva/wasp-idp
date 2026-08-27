@@ -5,6 +5,32 @@ Substitui o bootstrap por k3d + Crossplane. Desenho em
 `docs/superpowers/plans/2026-08-25-terraform-network-foundation.md` (camada 1) e
 `docs/superpowers/plans/2026-08-25-terraform-control-plane.md` (camada 2).
 
+## Manter este arquivo verdadeiro
+
+**Este README é a sequência executável.** Quem chega sem contexto segue o que está aqui e espera que
+funcione; uma linha desatualizada aqui não é doc velha, é comando que falha no meio, às vezes com
+recurso já criado atrás. Duas divergências desse tipo já aconteceram: a 03 ficou marcada como "não
+aplicada" depois de aplicada e aceita, e o `up-all --with-control-plane` continuou documentado
+depois de o passo do túnel virar obrigatório.
+
+Atualizar junto com a mudança, no mesmo trabalho — não depois:
+
+| Mudou isto | Atualizar aqui |
+|---|---|
+| Camada nova (`up-NN`) | bloco de comandos, tabela da sequência, `## Raízes`, `## Ordem de teardown` |
+| Pré-requisito novo que **não é Terraform** (console, túnel, SCP) | linha `—` própria na tabela da sequência, com o que ele custa e de quem depende |
+| Passo que muda o que um `apply` **exige** para completar | o bloco de comandos, e não só a prosa: quem lê copia o bloco |
+| Guarda nova num script | `### Armadilhas que os scripts pegam antes de tocar em nada` |
+| Custo por hora de uma camada | tabela da sequência **e** `## Custo` (as duas divergem calado) |
+| Raiz aplicada de verdade pela primeira vez | coluna `Exercitada` em `## Raízes` |
+
+**O que NÃO entra aqui:** o que está de pé agora, IDs de recurso, valores da conta. Isso é estado de
+sessão e vive em `HANDOFF.md` — repetir aqui garante duas fontes e uma delas errada. Armadilhas de
+código e de comportamento de provider vão para `CLAUDE.md`, não para este arquivo.
+
+Ao fechar um passo de plano que muda a sequência, a checagem é uma pergunta só: **alguém que só leia
+este README consegue subir o ambiente hoje?**
+
 ## Sequência de provisionamento
 
 Um script por camada em `scripts/`, numerado pela ordem. Cada um é idempotente e roda sozinho;
@@ -14,9 +40,29 @@ Um script por camada em `scripts/`, numerado pela ordem. Cada um é idempotente 
 cd aws/terraform
 
 ./scripts/up-all --base-domain <domínio>     # camadas 00 → 02, centavos por mês
-./scripts/up-all --with-connectivity         # inclui a 03 (~US$ 110/mês)
-./scripts/up-all --with-control-plane        # inclui a 04 (~US$ 165/mês)
+./scripts/up-all --with-connectivity         # inclui a 03 (~US$ 146/mês)
 ```
+
+**A 04 não sobe por `up-all`, e não é questão de custo:** entre a 03 e a 04 existe um passo que
+nenhum script faz por você — **conectar o túnel**. Desde o `2.5` o endpoint público da API do EKS
+nasce fechado, e quem fala com o API server durante o apply são os providers `helm`/`kubernetes`, a
+partir da máquina que roda o `terraform apply`. Sem túnel, o apply da 04 morre no primeiro recurso
+`kubernetes`.
+
+```bash
+# entre a 03 e a 04, obrigatoriamente
+endpoint="$(cd connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
+aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
+  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
+aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
+aws-vpn-client connect --profile-name hub
+aws-vpn-client get-connection-status --profile-name hub    # Connected antes de seguir
+
+./scripts/up-04-control-plane --yes          # ~US$ 165/mês
+```
+
+O `.ovpn` **nunca** se reaproveita entre applies da 03: a DNS name do endpoint muda a cada
+recriação. Reexportar sempre.
 
 | # | Script | Raiz | Depende de | Custo/mês | Nível |
 |---|---|---|---|---|---|
@@ -25,13 +71,20 @@ cd aws/terraform
 | 00 | `up-00-state-backend` | `state-backend/` | — | centavos | permanente |
 | 01 | `up-01-network-foundation` | `network-foundation/<região>/` | 00 | **zero** | permanente |
 | 02 | `up-02-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
-| 03 | `up-03-connectivity` | `connectivity/<região>/` | 00, 01, 02 | ~US$ 110 | T1 |
-| 04 | `up-04-control-plane` | `control-plane/` | 00, 01 (e 03 para apply com API fechada) | ~US$ 165 | T2 |
+| 03 | `up-03-connectivity` | `connectivity/<região>/` | 00, 01, 02 | ~US$ 146 | T1 |
+| — | — | *conectar o túnel do Client VPN* | 03 | +US$ 0,05/h | **pré-requisito da 04, não é Terraform** |
+| 04 | `up-04-control-plane` | `control-plane/` | 00, 01, **03 + túnel conectado** | ~US$ 165 | T2 |
 
 **A ordem não é preferência.** 00 antes de tudo porque nenhuma outra raiz inicializa o backend sem
 o bucket; 01 antes de 04 porque a 04 lê a VPC hub por `tag:Name`; 02 antes de 03 porque o
-certificado do endpoint da VPN valida por DNS na subzona que a 02 delega. Níveis de permanência em
+certificado do endpoint da VPN valida por DNS na subzona que a 02 delega; 03 antes de 04 porque o
+caminho até a API do cluster **é** o túnel. Níveis de permanência em
 `docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md`.
+
+**Desbloqueio de emergência, se o túnel não estiver disponível:**
+`control-plane/scripts/generate-tfvars --enable-public-endpoint --force` abre o endpoint público
+só para o IP desta máquina e escreve `endpoint_public_access = true` no `tfvars`. É break-glass
+declarado em arquivo, não default.
 
 **Nem a 03 nem a 04 entram no `up-all` por default.** As três primeiras somam centavos; as duas
 últimas somam ~US$ 275/mês. Incluir exige `--with-connectivity` / `--with-control-plane`, de
@@ -86,14 +139,18 @@ inteira é rotina, derrubar nunca é. A `control-plane` tem `scripts/destroy` co
 
 ## Raízes
 
-| Raiz | Conta | State key | Entrega | Estado |
+**A coluna `Exercitada` diz se a raiz já foi aplicada na AWS ao menos uma vez e teve o resultado
+verificado — não se está de pé agora.** O que está de pé neste momento é pergunta de sessão, não de
+repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state list` por raiz.
+
+| Raiz | Conta | State key | Entrega | Exercitada |
 |---|---|---|---|---|
-| `state-backend/` | `network` | `state-backend/` | O bucket de state, uma vez, sem região | **aplicada** |
-| `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | **aplicada** |
-| `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | **aplicada** |
-| `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, ESO, ArgoCD, Crossplane | **aplicada** |
-| `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | **aplicada** |
-| `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML | **escrita, não aplicada** |
+| `state-backend/` | `network` | `state-backend/` | O bucket de state, uma vez, sem região | sim |
+| `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | sim |
+| `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | sim |
+| `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | sim |
+| `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML | sim — túnel conectado e pacote atravessando até a spoke |
+| `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, ESO, ArgoCD, Crossplane | sim, **menos com o endpoint da API fechado** — esse é o aceite que falta |
 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
 `t3.medium`, três Pod Identities e os três charts. Prova o que estava em aberto no desenho — os
@@ -234,7 +291,13 @@ account id, ARN e endpoint reais.
 
 ## Ordem de teardown
 
-**Inverso do apply: `control-plane` antes de `network-foundation`.**
+**Inverso do apply: `control-plane` → `connectivity` → `network-foundation`.**
+
+O `control-plane` antes da `connectivity` **não é convenção, é imposição da AWS**: o attachment da
+spoke vive no state da `control-plane`, e a AWS recusa deletar um TGW com attachment vivo. O
+`connectivity/us-east-1/scripts/destroy` antecipa isso — recusa com exit 1 enquanto houver attachment
+de fora do próprio state e nomeia quem destruir primeiro. Contar **~10 min** no destroy da 03: cada
+`aws_ec2_client_vpn_network_association` leva 7–10 min, simétrico com a criação. Não é travamento.
 
 Dentro de uma camada a ordem é de graça — é o grafo de dependências do Terraform. O que **não**
 é de graça: XRs que o Crossplane tenha criado dentro do cluster depois do bootstrap. Eles não
@@ -298,6 +361,12 @@ A camada 2 é a que custa: **~US$ 165/mês** — EKS control plane ~73 + NAT ~32
 Números anteriores de ~US$ 105 omitiam os nós. O NAT aqui é deliberado, ao contrário do hub: sem
 TGW não há egress pelo hub, e os nós dependem dele para chegar à API do EKS e aos registries.
 
+A camada 03 custa **~US$ 146/mês** (~US$ 0,20/h), mais US$ 0,05/h por conexão ativa. A cobrança é
+por **associação de target network**, não por endpoint: as duas subnets privadas do hub (uma por AZ)
+dobram essa parcela, e a redundância de AZ foi mantida sabendo disso. Números de ~US$ 110/mês em
+texto mais antigo assumiam uma associação só.
+
 Por isso a camada 2 não fica de pé entre sessões de trabalho — sobe, valida, desce
 (`control-plane/scripts/destroy`). O state fica no bucket, então subir de novo é o mesmo
-`generate-tfvars` + `apply`.
+`generate-tfvars` + `apply`. A 03 é a exceção declarada: fica de pé durante o dia de trabalho e é
+derrubada à noite, não ao fim de cada tarefa.

@@ -118,6 +118,14 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - **A sequência das camadas é executável, não só documentada:** `scripts/up-NN-<camada>` na ordem de
   dependência, mais `up-all`. Ordem, custos e dependências no `README.md`. Mexer numa camada nova
   significa acrescentar um `up-NN`, não instruções soltas.
+- **O `README.md` desta pasta é a sequência que alguém sem contexto vai copiar — atualizar no MESMO
+  trabalho que muda a sequência, nunca depois.** Ele tem a seção "Manter este arquivo verdadeiro" com
+  a tabela de o-que-mudou → onde-atualizar. Linha desatualizada ali não é doc velha: é comando que
+  falha no meio, às vezes com recurso já criado atrás. Duas divergências desse tipo já aconteceram
+  (camada marcada como não aplicada depois de aceita; `up-all --with-control-plane` documentado depois
+  de o túnel virar obrigatório).
+- **Estado de sessão não entra no `README.md`** — o que está de pé agora, IDs de recurso e valores da
+  conta vivem em `HANDOFF.md`. Duas fontes garantem que uma esteja errada.
 - **`scripts/lib` é sourced, não executado.** Log com timestamp, `PIPESTATUS[0]`, confirmação e
   descoberta do bucket vivem lá uma vez só.
 - **Contar mudanças de um plano SALVO não tem `-detailed-exitcode`** (a flag é do `plan`, não do
