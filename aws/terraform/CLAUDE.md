@@ -84,6 +84,20 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   `cidrhost` e outra também, um valor malformado faz a segunda lançar *"Call to function cidrhost
   failed"* e essa é a mensagem que o usuário lê — não a que explica o problema. Cadeia de validação
   precisa de guarda: `!can(cidrhost(var.x, 0)) || <condição real>`.
+- **`local.*` do módulo em teste é alcançável na asserção** — não só `output` e recurso. É a saída
+  quando o atributo do recurso é *unknown* no plan: `public_access_cidrs` omitido fica "known after
+  apply" e nenhuma asserção sobre ele avalia, mas o `local` que decide a omissão é legível.
+- **Asserção entre dois computados é impossível offline.** Comparar
+  `aws_vpc_security_group_ingress_rule.x.security_group_id` com
+  `module.cluster.cluster_security_group_id` dá *"Unknown condition value"* — os dois lados só
+  existem depois do apply. Não vale materializar com `override_resource` do `aws_eks_cluster`: o
+  override substitui os computados por inteiro e leva `vpc_config` junto. Escrever a ausência da
+  asserção e por quê.
+- **Passar a consumir atributo de data source num campo VALIDADO obriga a overridar aquele data
+  source em TODO arquivo de teste da raiz, não só no novo.** A regra de `443` passou a ler
+  `data.aws_vpc.hub.cidr_block`; sob mock o valor é sintético (`oz8pk32m`), a validação client-side
+  de `cidr_ipv4` recusa, e o plan morre — derrubando `composition` e `spoke-attachment`, que nada
+  tinham a ver com a mudança. Sintoma que parece regressão alheia.
 - **Ordenação é aresta do grafo, e `terraform test` não assere grafo.** Se `A` referencia
   `B.attr` só para nascer depois de `B`, e `B.attr` tem o mesmo valor de `C.attr`, nenhuma asserção de
   valor distingue as duas referências — a mutação passa verde. Comprovado com
@@ -147,6 +161,33 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   Para o `stable`, ler `https://charts.crossplane.io/stable/index.yaml` direto.
 - ESO 2.9.0 **não serve mais** `external-secrets.io/v1beta1` nem `v1alpha1`. Manifestos
   `ExternalSecret` têm que ser `v1`.
+
+## Endpoint da API do EKS: o que é DNS e o que é rede
+
+- **A private hosted zone do endpoint privado do EKS é INVISÍVEL na conta.** Doc do EKS: a AWS a cria
+  e associa à VPC do cluster, mas ela *"is managed by Amazon EKS, and it doesn't appear in your
+  account's Route 53 resources"*. Não há `zone_id` para `data "aws_route53_zone"` e não se autoriza
+  associação de zona que não é sua — qualquer desenho que dependa de associá-la a outra VPC está
+  morto na origem, não frágil.
+- **Com o endpoint público desligado, o hostname resolve para IP privado pelo DNS PÚBLICO** — *"the
+  cluster's API server endpoint is resolved by public DNS servers to a private IP address from the
+  VPC"*. Não precisa de Resolver inbound endpoint (~US$ 0,25/h, mais que o control plane do EKS), nem
+  de zona própria, nem de `dns_servers` no Client VPN. Ressalva da doc: para cluster que já existia e
+  não resolve privado, ligar e desligar o acesso público uma vez resolve para sempre — criar o
+  cluster já fechado, ou ligar-e-desligar, satisfaz isso.
+- **O que a doc exige para rede conectada por TGW é UMA regra de security group:** `443/tcp` a partir
+  do CIDR da rede conectada, **no security group do cluster** (é ele que governa o endpoint privado;
+  `public_access_cidrs` não o afeta — *"the public access CIDRs don't affect the private endpoint"*).
+  E a origem é o CIDR da **VPC hub**, não o client CIDR: o Client VPN faz SNAT.
+- **`public_access_cidrs` tem de ser OMITIDO, não vazio, quando o endpoint público está desligado.**
+  A doc do provider: o valor vale *"when enabled"* e o Terraform *"will only perform drift detection
+  of its value when present in a configuration"*. Presente-e-vazio com o endpoint fechado é perpetual
+  diff — a EKS guarda `0.0.0.0/0` como default e todo plan proporia `[]`. Mesma família do perpetual
+  diff do attachment cross-conta, e a solução aqui é `null`, não `ignore_changes`.
+- **A regra de `443` precisa de `depends_on` explícito nos módulos de helm e no ConfigMap.** Com o
+  endpoint público fechado, é ela que abre o caminho por onde os providers `helm`/`kubernetes` falam
+  com o API server, e nada na configuração do provider cria essa aresta. Sem ela, o sintoma é timeout
+  no primeiro release — longe da causa.
 
 ## Load balancer: quem é dono do quê
 

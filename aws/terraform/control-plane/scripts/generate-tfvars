@@ -18,14 +18,19 @@ show_usage() {
     target_account_ids   organizations list-accounts, resolving name -> id
     kubernetes_version   describe-cluster-versions, the EKS default version
     public_access_cidrs  THIS machine's public IP, as a /32, via checkip.amazonaws.com
+                           — ONLY with --enable-public-endpoint
     <state bucket>       tfstate-<organization-id>, printed for -backend-config
 
-  About public_access_cidrs: whoever talks to the EKS API server is the machine
-  running terraform apply — the helm and kubernetes providers originate here. So the
-  right value is THIS machine's egress IP, and that is why it is rediscovered on every
-  generation instead of being pinned in the file. A dynamic IP, changing networks or
-  connecting/disconnecting a VPN all change it: regenerate. The public endpoint goes
-  away at step 2.5, once the private path is up.
+  About the API endpoint (step 2.5): the public endpoint is OFF by default, so nothing
+  is discovered for it and public_access_cidrs is left out of the file. The path to the
+  API is the private one — Client VPN tunnel, then TGW, then the endpoint ENI in the
+  spoke VPC. That path is not only for the operator: the helm and kubernetes providers
+  talk to the API server from the machine running the apply, so an apply without a
+  connected tunnel does not complete.
+
+  With --enable-public-endpoint (break-glass), the machine's egress IP is discovered
+  and written as a /32. It is rediscovered on every generation instead of being pinned:
+  a dynamic IP, changing networks, or connecting a VPN all change it.
 
   What is DECIDED (comes from an option, not discovered):
 
@@ -57,10 +62,14 @@ show_usage() {
                                   (default: wasp-nonprod)
            --availability-zones  How many AZs to use (default: 2)
            --kubernetes-version  Pin the version instead of discovering it
+           --enable-public-endpoint
+                                 Break-glass: open the public API endpoint and discover
+                                  this machine's IP for it. OFF by default — the private
+                                  path is the supported one (step 2.5)
            --public-access-cidr  CIDR allowed on the public API endpoint. Repeatable.
-                                  Passing at least one TURNS OFF IP discovery — use it
-                                  when the apply runs elsewhere (CodeBuild, a CI runner)
-                                  or to add the Client VPN CIDR
+                                  IMPLIES --enable-public-endpoint and turns OFF IP
+                                  discovery — use it when the apply runs elsewhere
+                                  (CodeBuild, a CI runner)
            --format              tfvars | json  (default: tfvars)
       -o,  --output              Output file (default: ../terraform.tfvars;
                                   use - for stdout)
@@ -75,6 +84,8 @@ show_usage() {
       ${this_script_name} --format json --output -
 
       ${this_script_name} --region us-west-2 --vpc-cidr 10.4.0.0/16 --hub-vpc-name poc-hub-vpc
+
+      ${this_script_name} --enable-public-endpoint --force
 
       ${this_script_name} --public-access-cidr 203.0.113.10/32 --force
 
@@ -92,6 +103,7 @@ kubernetes_version=""
 format="tfvars"
 output=""
 force="false"
+enable_public_endpoint="false"
 target_accounts=()
 public_access_cidrs=()
 
@@ -147,9 +159,17 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       kubernetes_version="${1}"
       ;;
 
+    --enable-public-endpoint )
+      enable_public_endpoint="true"
+      ;;
+
     --public-access-cidr )
       shift
       public_access_cidrs+=("${1}")
+      # Passing a CIDR is an explicit statement of intent about the public endpoint —
+      # requiring the second flag alongside it would only produce a confusing failure
+      # where the CIDR lands in the file and has no effect.
+      enable_public_endpoint="true"
       ;;
 
     --format )
@@ -338,11 +358,13 @@ fi
 log "Kubernetes version: ${kubernetes_version}"
 
 # --- CIDRs allowed on the public API endpoint -------------------------------
-# Whoever talks to the EKS API server is the machine running the apply — the helm
-# and kubernetes providers originate here. So the right value is THIS machine's
-# egress IP, not something pinned in the file. An empty list will not do: AWS reads
-# empty as 0.0.0.0/0, and the root rejects that in validation.
-if [ "${#public_access_cidrs[@]}" -eq 0 ]; then
+# Only reachable with the public endpoint explicitly enabled (break-glass). With it
+# off — the default since step 2.5 — there is nothing to restrict, no IP to discover,
+# and one less failure mode on the default path: no captive portal, no proxy.
+if [ "${enable_public_endpoint}" != "true" ]; then
+  log "public API endpoint: OFF (private path only; --enable-public-endpoint for break-glass)"
+  public_access_cidrs=()
+elif [ "${#public_access_cidrs[@]}" -eq 0 ]; then
   # No pipe on purpose: with "curl | tr" the exit code would be tr's and a curl
   # failure would pass silently — the same trap the apply/destroy scripts solve with
   # PIPESTATUS. --fail turns HTTP >= 400 into an exit code.
@@ -390,6 +412,32 @@ fi
 target_account_ids_json="$(printf '%s\n' "${target_account_ids[@]}" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
 public_access_cidrs_json="$(printf '%s\n' "${public_access_cidrs[@]}" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
 
+# The API endpoint stanza. Two shapes, and which one lands in the file is the whole
+# posture of step 2.5 — so it is written out in full rather than toggled by a comment.
+if [ "${enable_public_endpoint}" == "true" ]; then
+  endpoint_block="$(cat <<BLOCK
+# BREAK-GLASS: the public API endpoint is OPEN, and accepts ONLY these CIDRs. Discovered
+# during this generation; changing network or VPN invalidates the value — regenerate
+# instead of hand-editing. The supported path is the private one: leave this out and
+# reach the API through the Client VPN tunnel.
+endpoint_public_access = true
+public_access_cidrs    = $(echo "${public_access_cidrs_json}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
+BLOCK
+)"
+else
+  endpoint_block="$(cat <<BLOCK
+# The public API endpoint is CLOSED (step 2.5). The API is reachable only through the
+# Client VPN tunnel -> TGW -> the endpoint ENI in this spoke, and that applies to the
+# machine running terraform apply too: the helm and kubernetes providers talk to the API
+# server from here, so an apply without a connected tunnel does not complete.
+#
+# public_access_cidrs is left out on purpose: it only has effect with the endpoint open,
+# and an inert value in the file reads like a control that exists.
+endpoint_public_access = false
+BLOCK
+)"
+fi
+
 if [ "${format}" == "json" ]; then
   rendered="$(jq --null-input \
     --arg region "${region}" \
@@ -402,6 +450,7 @@ if [ "${format}" == "json" ]; then
     --arg network_account_id "${network_account_id}" \
     --arg cluster_account_id "${cicd_account_id}" \
     --arg state_bucket "${state_bucket}" \
+    --argjson endpoint_public_access "${enable_public_endpoint}" \
     --argjson availability_zones "${availability_zones}" \
     --argjson target_account_ids "${target_account_ids_json}" \
     --argjson public_access_cidrs "${public_access_cidrs_json}" \
@@ -415,6 +464,7 @@ if [ "${format}" == "json" ]; then
       availability_zones: $availability_zones,
       network_account_id: $network_account_id,
       target_account_ids: $target_account_ids,
+      endpoint_public_access: $endpoint_public_access,
       public_access_cidrs: $public_access_cidrs,
       discovered: {
         hub_vpc_id: $hub_vpc_id,
@@ -440,10 +490,7 @@ availability_zones = $(echo "${availability_zones}" | jq --raw-output '"[" + (ma
 network_account_id = "${network_account_id}"
 target_account_ids = $(echo "${target_account_ids_json}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
 
-# The EKS API public endpoint accepts ONLY these CIDRs. Discovered during this
-# generation; changing network or VPN invalidates the value — regenerate instead of
-# hand-editing. This goes away when step 2.5 closes the public endpoint.
-public_access_cidrs = $(echo "${public_access_cidrs_json}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
+${endpoint_block}
 EOF
 )"
 fi

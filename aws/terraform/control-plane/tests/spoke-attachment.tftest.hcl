@@ -32,6 +32,17 @@ override_data {
   }
 }
 
+# Obrigatório desde o 2.4: o cidr_block desta VPC alimenta a regra de 443 do security group
+# do cluster, e a validação de schema do provider (que roda sob mock, client-side) recusa o
+# valor sintético — o plan inteiro morre com "must be a valid IPv4 CIDR".
+override_data {
+  target = data.aws_vpc.hub
+  values = {
+    id         = "vpc-hub000000000001"
+    cidr_block = "10.1.0.0/16"
+  }
+}
+
 override_data {
   target = data.aws_ec2_transit_gateway_route_table.hub
   values = {

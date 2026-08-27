@@ -185,12 +185,44 @@ resource "aws_route" "spoke_to_hub" {
 module "cluster" {
   source = "../src/cluster"
 
-  name                = var.name
-  kubernetes_version  = var.kubernetes_version
-  subnet_ids          = module.network.control_plane_subnet_ids
-  public_access_cidrs = var.public_access_cidrs
-  access_entries      = var.access_entries
-  tags                = local.tags
+  name                   = var.name
+  kubernetes_version     = var.kubernetes_version
+  subnet_ids             = module.network.control_plane_subnet_ids
+  endpoint_public_access = var.endpoint_public_access
+  public_access_cidrs    = var.public_access_cidrs
+  access_entries         = var.access_entries
+  tags                   = local.tags
+}
+
+# --------------------------------------------------------------------------------------
+# 2.4 — o caminho privado ate a API. NAO e trabalho de DNS.
+# --------------------------------------------------------------------------------------
+
+# O passo nasceu no plano como "associar a private hosted zone do endpoint a VPC hub". Esse
+# caminho nao existe: a zona e criada pela AWS e, na letra da doc do EKS, "is managed by
+# Amazon EKS, and it doesn't appear in your account's Route 53 resources" — nao ha zona para
+# ler por data source nem para autorizar associacao.
+#
+# E o plano B (Route 53 Resolver inbound endpoint, ~US$ 0,25/h) e desnecessario: com o
+# endpoint publico desligado, "the cluster's API server endpoint is resolved by public DNS
+# servers to a private IP address from the VPC". O nome resolve para IP privado no DNS que o
+# operador ja usa; o que falta e so o pacote chegar.
+#
+# Sobra o que a doc prescreve para o caso "connected network" (TGW): "You must ensure that
+# your Amazon EKS control plane security group contains rules to allow ingress traffic on
+# port 443 from your connected network."
+#
+# A origem e o CIDR da VPC HUB, nao o client CIDR: o Client VPN faz SNAT, e o pacote do
+# operador chega aqui com 10.1.x.x — comprovado com ping no 2.3. Mesmo motivo pelo qual esta
+# camada nao tem rota para 100.64.0.0/22.
+resource "aws_vpc_security_group_ingress_rule" "api_from_hub" {
+  security_group_id = module.cluster.cluster_security_group_id
+  description       = "Kubernetes API from the hub VPC (Client VPN SNATs to the hub CIDR)"
+
+  cidr_ipv4   = data.aws_vpc.hub.cidr_block
+  ip_protocol = "tcp"
+  from_port   = 443
+  to_port     = 443
 }
 
 module "nodegroup" {
@@ -256,6 +288,11 @@ module "pod_identity_crossplane" {
 
 # A association de Pod Identity vem ANTES do release: se o pod subir sem ela, falha em
 # AccessDenied e fica em CrashLoop ate um restart manual.
+#
+# E a regra de 443 vem antes de TUDO que fala com o API server: com o endpoint publico
+# fechado, o provider helm alcanca o cluster pelo tunel, e sem a regra o SG do cluster recusa
+# a conexao. O sintoma seria timeout no primeiro release, longe da causa. A aresta e
+# explicita porque nada na configuracao do provider a cria.
 module "external_secrets" {
   source = "../src/helm/modules/external-secrets"
   count  = local.install_external_secrets ? 1 : 0
@@ -263,6 +300,7 @@ module "external_secrets" {
   depends_on = [
     module.nodegroup,
     module.pod_identity_eso,
+    aws_vpc_security_group_ingress_rule.api_from_hub,
   ]
 }
 
@@ -282,6 +320,7 @@ module "crossplane" {
   depends_on = [
     module.nodegroup,
     module.pod_identity_crossplane,
+    aws_vpc_security_group_ingress_rule.api_from_hub,
   ]
 }
 
@@ -303,5 +342,8 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
     targetAccountIds  = join(",", var.target_account_ids)
   }
 
-  depends_on = [module.crossplane]
+  depends_on = [
+    module.crossplane,
+    aws_vpc_security_group_ingress_rule.api_from_hub,
+  ]
 }

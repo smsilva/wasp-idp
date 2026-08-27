@@ -9,8 +9,8 @@ provisionamento (ver `README.md`).
 | `2.1` | **PORTÃO:** verificar o client da AWS VPN nesta distro | — | zero | **FEITO** — instala, daemon sobe, GUI abre, CLI gerencia perfil SAML |
 | `2.2` | `connectivity/`: TGW + cert do ACM + SAML provider + Client VPN + associação + rota do supernet | T1 | ~US$ 0,15/h | **escrita** (22 testes, 13/14 mutações). Falta o apply: túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated`; **e o login SAML completa** |
 | `2.3` | Attachment das DUAS pontas (hub e spoke) + RAM + `tgw-rt-<spoke>` + associação/propagações + rotas | T2 | +US$ 0,05/h | **FEITO** — `ping` a um nó da spoke pelo túnel, 3/3, RTT ~140 ms |
-| `2.4` | DNS: zona privada do cluster associada à VPC hub + `dns_servers` | T2 | zero | `dig` devolve IP privado; `kubectl get nodes` pelo túnel |
-| `2.5` | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
+| `2.4` | ~~DNS privado~~ → regra de `443` a partir do CIDR da VPC hub no SG do cluster | T2 | zero | **escrita** (a zona privada do EKS é invisível na conta; o DNS público já resolve para IP privado). Aceite junto com o `2.5` |
+| `2.5` | `endpoint_public_access = false`, e por **default** | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
 
 ## `2.1` — o portão — **PASSOU** (2026-08-26)
 
@@ -311,28 +311,101 @@ natural. Regra removida depois.
 entender de onde o pacote realmente vinha. Vale como método: hipótese sobre caminho de rede se
 confere com um pacote, não com leitura de route table.
 
-## `2.4` — DNS, e o risco conhecido
+## `2.4` — o caminho privado até a API. **Não é trabalho de DNS** (2026-08-27)
 
-TGW entrega **roteamento IP, não resolução de nome**. O endpoint privado da API do EKS resolve por
-uma private hosted zone que a AWS cria e associa à VPC do cluster; de dentro do hub, `kubectl` falha
-porque o hostname não resolve ali.
+O passo foi escrito como associação de zona privada, e a doc do EKS desfez as duas metades da
+premissa. O que sobra é uma regra de security group — e o `2.4` deixa de ser passo de DNS para ser o
+**pré-requisito de rede do `2.5`**.
 
-Caminho: associar a zona privada do cluster à **VPC do hub** — par `CreateVPCAssociationAuthorization`
-na conta do cluster + `AssociateVPCWithHostedZone` na do hub — e empurrar o resolver da VPC hub
-(`10.1.0.2`) como `dns_servers` do Client VPN. As ENIs do endpoint vivem na VPC hub, então esse
-resolver é local a elas.
+### O que o passo dizia, e por que não existe
 
-**Risco:** a zona privada **não é output do `aws_eks_cluster`** — achá-la exige `data
-"aws_route53_zone"` casando pelo hostname do endpoint, o que é frágil, e ela é **recriada a cada
-provisão do cluster**. Plano B: **Route 53 Resolver inbound endpoint na spoke** com `dns_servers`
-apontando para os IPs dele — robusto e generaliza para N spokes, mas custa ~US$ 0,25/h em 2 AZs.
-Começar pela associação (grátis) e cair para o Resolver se travar.
+> *"Associar a zona privada do cluster à VPC do hub — par `CreateVPCAssociationAuthorization` na
+> conta do cluster + `AssociateVPCWithHostedZone` na do hub."*
+
+Não há zona para associar:
+
+> "Amazon EKS creates a Route 53 private hosted zone on your behalf and associates it with your
+> cluster's VPC. **This private hosted zone is managed by Amazon EKS, and it doesn't appear in your
+> account's Route 53 resources.**"
+
+O risco registrado no plano — *"achá-la exige `data "aws_route53_zone"` casando pelo hostname, o que
+é frágil"* — subestimava o problema: não é frágil, é impossível. Não se autoriza associação de zona
+que não é sua, e não há `zone_id` para ler.
+
+### E o plano B era desnecessário
+
+O Resolver inbound endpoint (~US$ 0,25/h em 2 AZs, ≈ US$ 180/mês — mais que o cluster inteiro) resolveria
+um problema que a AWS já resolve. Com o endpoint público **desligado**:
+
+> "The cluster's API server endpoint **is resolved by public DNS servers to a private IP address**
+> from the VPC. In the past, the endpoint could only be resolved from within the VPC. If your
+> endpoint does not resolve to a private IP address within the VPC for an existing cluster, you can:
+> enable public access and then disable it again. **You only need to do so once for a cluster.**"
+
+O nome resolve para IP privado no DNS que o operador já usa — sem `dns_servers` no Client VPN, sem
+zona nossa, sem Resolver. E o nosso ciclo (cluster nasce com os dois endpoints ligados, o `2.5`
+desliga o público) **é** a sequência enable-then-disable que a ressalva pede.
+
+### O que o passo entrega
+
+Uma regra, que é literalmente o que a doc prescreve para o nosso caso:
+
+> **Connected network:** "Connect your network to the VPC with an AWS transit gateway (…) You must
+> ensure that your Amazon EKS control plane security group contains rules to **allow ingress traffic
+> on port 443 from your connected network**."
+
+| | |
+|---|---|
+| Recurso | `aws_vpc_security_group_ingress_rule.api_from_hub`, no state `control-plane/` |
+| Security group | o **do cluster** (`module.cluster.cluster_security_group_id`) — é ele que controla o endpoint privado; `public_access_cidrs` não o afeta |
+| Origem | `data.aws_vpc.hub.cidr_block` — o CIDR da **VPC hub**, não o client CIDR: o Client VPN faz **SNAT** (comprovado com pacote no `2.3`) |
+| Porta | `443/tcp`, só |
+| Custo | zero |
+
+**Ordenação, e ela não é decorativa:** a regra tem de nascer antes de qualquer recurso dos providers
+`helm`/`kubernetes`, porque é ela que abre o caminho por onde esses providers falam com o API server.
+A aresta está no `depends_on` dos módulos de helm e do ConfigMap; nada na configuração do provider a
+cria sozinha. Sem ela o sintoma é timeout no primeiro release — longe da causa.
+
+E ela morre com o cluster: o security group é gerenciado pelo EKS e recriado a cada cluster, então a
+regra é do Terraform (não drift manual como o ICMP temporário do `2.3`) e nasce junto.
 
 ## `2.5` — fechar
 
-`endpointPublicAccess = false`. O aceite é o único do plano que exige **um apply inteiro**: se
-`terraform apply` completar com a VPN conectada, a plataforma é operável privada. Enquanto não
-passar, fechar é regressão de operabilidade, não ganho de segurança.
+`endpoint_public_access = false`, e **por default**, não por opção: o valor certo do flag é o
+fechado, e abrir passa a ser break-glass declarado no `terraform.tfvars`
+(`generate-tfvars --enable-public-endpoint`, que só aí descobre o IP da máquina).
+
+Isso inverte o mecanismo de falha-fechado do `1.2` por um mais forte. Lá era *"variável sem default,
+quem aplica é obrigado a declarar o `/32`"*; aqui é *"o endpoint público não existe a menos que
+alguém edite o tfvars"* — e é o que fecha o `Known Broken 3` de verdade: deixa de haver valor de
+tfvars que exponha a API ao mundo.
+
+Duas consequências de semântica, as duas da doc do provider (`public_access_cidrs` vale *"when
+enabled"* e o Terraform *"will only perform drift detection of its value when present in a
+configuration"*):
+
+- Com o endpoint fechado, o atributo é **omitido**, não mandado vazio. Mandar `[]` brigaria para
+  sempre com o `0.0.0.0/0` que a EKS guarda como default — perpetual diff, mesma família do
+  attachment cross-conta.
+- A omissão mora no **módulo** (semântica da AWS, vale para qualquer chamador); a política de quem
+  alcança a API mora no **root**.
+
+O aceite é o único do plano que exige **um apply inteiro**: se `terraform apply` completar com a VPN
+conectada, a plataforma é operável privada. Enquanto não passar, fechar é regressão de operabilidade,
+não ganho de segurança.
 
 A partir daqui, subir a camada 2 do zero **exige VPN conectada antes do apply** — é o que torna
 TGW + Client VPN camada mais permanente que o cluster.
+
+### Aceite conjunto `2.4` + `2.5`
+
+Os dois só são verificáveis juntos: enquanto o endpoint público estiver ligado, o DNS devolve IP
+público e `kubectl` pelo túnel não prova nada.
+
+1. `up-03-connectivity`, conectar o túnel (`vpn`/`aws-vpn-client connect`).
+2. `up-04-control-plane` com o tfvars regenerado — **apply inteiro com o endpoint público já
+   fechado desde a criação do cluster**.
+3. `dig +short <endpoint>` devolve IP de `10.2.0.0/16`.
+4. `kubectl get nodes` pelo túnel responde.
+5. Com o túnel **desconectado**, `kubectl` falha por rede — não por autenticação.

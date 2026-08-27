@@ -19,6 +19,15 @@ locals {
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
+
+  # OMITIDO (null), nao vazio, quando o endpoint publico esta desligado. A doc do provider:
+  # public_access_cidrs vale "when enabled", e o Terraform "will only perform drift detection
+  # of its value when present in a configuration". Presente-e-vazio com o endpoint fechado
+  # seria perpetual diff: a EKS guarda 0.0.0.0/0 como default e todo plan proporia [].
+  #
+  # A semantica da AWS mora aqui, no modulo, onde vale para qualquer chamador — a POLITICA de
+  # quem alcanca a API mora no root.
+  public_access_cidrs = var.endpoint_public_access ? var.public_access_cidrs : null
 }
 
 resource "aws_iam_role" "cluster" {
@@ -67,7 +76,7 @@ resource "aws_eks_cluster" "this" {
     subnet_ids              = var.subnet_ids
     endpoint_public_access  = var.endpoint_public_access
     endpoint_private_access = var.endpoint_private_access
-    public_access_cidrs     = var.public_access_cidrs
+    public_access_cidrs     = local.public_access_cidrs
   }
 
   tags = merge(var.tags, { Name = var.name })

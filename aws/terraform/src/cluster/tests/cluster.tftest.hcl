@@ -103,6 +103,42 @@ run "sem_endpoint_publico_a_lista_vazia_e_valida" {
   }
 }
 
+# 2.5 — com o endpoint publico desligado, o atributo tem de ser OMITIDO, nao mandado vazio.
+# A doc do provider: public_access_cidrs indica quem alcanca o endpoint publico "when
+# enabled", e o Terraform "will only perform drift detection of its value when present in a
+# configuration". Presente e vazio, com o endpoint fechado, e o pior dos mundos: a EKS guarda
+# 0.0.0.0/0 como default e todo plan proporia mudar para [] — perpetual diff que nunca
+# converge, mesma familia do attachment cross-conta.
+#
+# A asserção lê o LOCAL pelo output, nao o vpc_config: com o atributo omitido o valor no
+# recurso e "known after apply" (Optional+Computed), e asserção sobre unknown nao avalia.
+run "endpoint_publico_desligado_omite_a_lista_em_vez_de_mandar_vazia" {
+  command = plan
+
+  variables {
+    endpoint_public_access = false
+    # Nao-vazia DE PROPOSITO: o valor tem de ser descartado pelo flag, nao por acaso de a
+    # lista estar vazia. Sem isto a asserção passaria com a condicional invertida.
+    public_access_cidrs = ["203.0.113.10/32"]
+  }
+
+  assert {
+    condition     = var.endpoint_public_access == false && local.public_access_cidrs == null
+    error_message = "com o endpoint publico desligado a lista deveria ser omitida (null), recebido ${jsonencode(local.public_access_cidrs)}"
+  }
+}
+
+run "endpoint_publico_ligado_manda_a_lista" {
+  command = plan
+
+  assert {
+    # tolist nos dois lados: literal em HCL e TUPLE, e comparar com list(string) devolve
+    # "LHS and RHS values are of different types" em vez de comparar.
+    condition     = local.public_access_cidrs == tolist(["203.0.113.10/32"])
+    error_message = "com o endpoint publico ligado a lista tem de ser mandada, recebido ${jsonencode(local.public_access_cidrs)}"
+  }
+}
+
 run "cidr_malformado_e_erro" {
   command = plan
 

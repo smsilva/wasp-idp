@@ -211,10 +211,19 @@ module.pod_identity_eso:                    # ns external-secrets · inline secr
 module.pod_identity_crossplane:             # ns crossplane-system · inline sts:AssumeRole per target account
   aws_iam_role.this + aws_iam_role_policy.this + aws_eks_pod_identity_association.this
 
-module.external_secrets[0]:                 # helm_release · needs: nodegroup, pod_identity_eso
+aws_vpc_security_group_ingress_rule.api_from_hub:  # 443/tcp from data.aws_vpc.hub.cidr_block
+                                            # in the CLUSTER security group · the connected-network
+                                            # rule the EKS docs require · source is the HUB CIDR,
+                                            # not the client CIDR (Client VPN SNATs)
+
+module.external_secrets[0]:                 # helm_release · needs: nodegroup, pod_identity_eso,
+                                            #   security_group_ingress_rule.api_from_hub
                                             # the association MUST precede the release, or CrashLoop
+                                            # the SG rule MUST precede it too: with the public
+                                            # endpoint closed, this is the path the helm provider uses
   module.argo_cd[0]:                        # helm_release · needs: external_secrets
-module.crossplane[0]:                       # helm_release · needs: nodegroup, pod_identity_crossplane
+module.crossplane[0]:                       # helm_release · needs: nodegroup, pod_identity_crossplane,
+                                            #   security_group_ingress_rule.api_from_hub
   kubernetes_config_map_v1.platform_bootstrap:    # ns crossplane-system · the Terraform → GitOps contract
 
 outputs:
@@ -228,21 +237,40 @@ outputs:
 
 **Definitions:** [aws_ec2_transit_gateway_vpc_attachment_accepter](2026-08-27-resource-dictionary/aws_ec2_transit_gateway_vpc_attachment_accepter.md) · [aws_ec2_transit_gateway_route_table_propagation](2026-08-27-resource-dictionary/aws_ec2_transit_gateway_route_table_propagation.md) · [aws_iam_role](2026-08-27-resource-dictionary/aws_iam_role.md) · [aws_iam_role_policy_attachment](2026-08-27-resource-dictionary/aws_iam_role_policy_attachment.md) · [aws_iam_role_policy](2026-08-27-resource-dictionary/aws_iam_role_policy.md) · [aws_eks_cluster](2026-08-27-resource-dictionary/aws_eks_cluster.md) · [aws_eks_access_entry](2026-08-27-resource-dictionary/aws_eks_access_entry.md) · [aws_eks_access_policy_association](2026-08-27-resource-dictionary/aws_eks_access_policy_association.md) · [aws_eks_addon](2026-08-27-resource-dictionary/aws_eks_addon.md) · [aws_eks_node_group](2026-08-27-resource-dictionary/aws_eks_node_group.md) · [aws_eks_pod_identity_association](2026-08-27-resource-dictionary/aws_eks_pod_identity_association.md) · [helm_release](2026-08-27-resource-dictionary/helm_release.md) · [kubernetes_config_map_v1](2026-08-27-resource-dictionary/kubernetes_config_map_v1.md)
 
-## 06 · private DNS and closing the endpoint  📋
+## 06 · closing the API endpoint — **dissolved into 05**  ✅ written
 
-Steps `2.4` and `2.5`. TGW delivers IP routing, not name resolution: the EKS API's private hosted
-zone has to be reachable from the hub before the public endpoint can be switched off. Which root
-owns these is **undecided**.
+Steps `2.4` and `2.5`. This was drafted as a DNS layer, and it is not one: **no resource of its own
+survived**, so there is no sixth root and nothing new owns state. What the two steps became lives
+inside layer `05` — one security group rule plus a flag on `module.cluster`.
+
+Two sentences of AWS documentation dissolved it:
+
+- **The private hosted zone cannot be reached, because it cannot be seen.** "Amazon EKS creates a
+  Route 53 private hosted zone on your behalf and associates it with your cluster's VPC. This private
+  hosted zone is **managed by Amazon EKS, and it doesn't appear in your account's Route 53
+  resources**." There is no zone to look up and none to authorize — plan A was impossible, not
+  fragile.
+- **And nothing has to replace it.** With the public endpoint disabled, "the cluster's API server
+  endpoint **is resolved by public DNS servers to a private IP address** from the VPC". Resolution
+  arrives for free, from the DNS the operator already uses. Plan B — a Resolver inbound endpoint at
+  ~US$ 0.25/h, more than the cluster itself — would have paid for a solved problem.
+
+What the docs *do* require for a TGW-connected network is a single rule: "your Amazon EKS control
+plane security group contains rules to allow ingress traffic on port 443 from your connected
+network."
 
 ```yaml
-private-hosted-zone-association:  # associate the cluster API's private zone with the hub VPC (free)
-                                  # risk: the zone is not an aws_eks_cluster output and is recreated
-                                  # per provision · plan B: Resolver inbound endpoint, ~US$ 0.25/h
-  client-vpn-dns-servers:         # push the hub resolver (VPC base + 2) to the endpoint
-    eks-endpoint-public-access:    # → false · acceptance: a full apply succeeds with the VPN connected
+# both in layer 05, control-plane/terraform.tfstate — see the tree above
+aws_vpc_security_group_ingress_rule.api_from_hub:  # 2.4 · free · source = hub VPC CIDR (SNAT)
+  module.cluster:                                  # 2.5 · endpoint_public_access = false BY DEFAULT
+                                                   # public_access_cidrs OMITTED when closed, not []
+                                                   # acceptance: a full apply with the VPN connected
 ```
 
-**Definitions:** [aws_route53_zone_association](2026-08-27-resource-dictionary/aws_route53_zone_association.md) · [aws_route53_resolver_endpoint](2026-08-27-resource-dictionary/aws_route53_resolver_endpoint.md)
+**Consequence for the teardown order below:** unchanged. Neither piece is a new state boundary — both
+leave with the spoke.
+
+**Definitions:** [aws_vpc_security_group_ingress_rule](2026-08-27-resource-dictionary/aws_vpc_security_group_ingress_rule.md) · rejected: [aws_route53_zone_association](2026-08-27-resource-dictionary/aws_route53_zone_association.md) · [aws_route53_resolver_endpoint](2026-08-27-resource-dictionary/aws_route53_resolver_endpoint.md)
 
 ## 07 · ingress — ALB at the hub, NLB in the spoke  📋
 

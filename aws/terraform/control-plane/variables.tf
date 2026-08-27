@@ -63,22 +63,36 @@ variable "target_account_ids" {
   type        = list(string)
 }
 
+variable "endpoint_public_access" {
+  description = <<-EOT
+    Expor o endpoint da API do EKS na internet. DEFAULT false — este e o 2.5.
+
+    Fechado, o caminho ate a API e o privado: tunel do Client VPN -> TGW -> ENI do endpoint
+    na VPC spoke. Quem depende disto NAO e so o operador: os providers helm e kubernetes
+    falam com o API server a partir da maquina que roda o apply, entao um apply sem tunel
+    conectado nao completa. E o preco consciente da postura privada.
+
+    Ligar e break-glass, e exige public_access_cidrs junto (o modulo recusa lista vazia com
+    o endpoint aberto). Ato visivel em diff, nao valor esquecido num tfvars.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "public_access_cidrs" {
   description = <<-EOT
-    CIDRs autorizados no endpoint publico da API do EKS. SEM DEFAULT de proposito: quem fala
-    com o API server e a maquina que roda o terraform apply, entao o valor certo depende de
-    onde o apply roda e nao ha default seguro. scripts/generate-tfvars descobre o IP publico
-    corrente e escreve o /32.
+    CIDRs autorizados no endpoint publico da API do EKS. So tem efeito com
+    endpoint_public_access = true; com o endpoint fechado o modulo OMITE o atributo em vez de
+    mandar lista vazia (mandar vazia daria perpetual diff contra o 0.0.0.0/0 que a EKS guarda
+    como default).
 
-    Some quando o 2.5 fechar o endpoint publico; ate lah e o unico controle de quem alcanca
-    a API.
+    O default vazio aqui NAO reabre o Known Broken 3: a lista vazia so e alcancavel com o
+    endpoint publico desligado. Com ele ligado, quem recusa vazio e o modulo src/cluster,
+    onde mora a semantica da AWS ("vazio significa o mundo"). scripts/generate-tfvars
+    descobre o IP publico corrente quando a descoberta e pedida.
   EOT
   type        = list(string)
-
-  validation {
-    condition     = length(var.public_access_cidrs) > 0
-    error_message = "public_access_cidrs nao pode ser vazio: a AWS le lista vazia como 0.0.0.0/0. Rode scripts/generate-tfvars para descobrir o IP corrente."
-  }
+  default     = []
 
   validation {
     # A checagem de CIDR valido mora no modulo. Aqui mora a POLITICA da celula: nem por

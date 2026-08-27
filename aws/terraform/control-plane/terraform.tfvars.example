@@ -7,7 +7,15 @@ availability_zones = ["us-east-1a", "us-east-1b"]
 network_account_id = "<id-da-conta-network>"
 target_account_ids = ["<id-da-conta-alvo>"]
 
-# CIDRs autorizados no endpoint publico da API do EKS. O valor certo e o IP de saida da
-# maquina que roda o apply — scripts/generate-tfvars descobre e escreve o /32. Nao ha
-# default: lista vazia seria 0.0.0.0/0 para a AWS.
-public_access_cidrs = ["<ip-publico-desta-maquina>/32"]
+# O endpoint publico da API do EKS nasce FECHADO (2.5). O caminho ate a API e o tunel do
+# Client VPN -> TGW -> ENI do endpoint nesta spoke, e isso vale tambem para a maquina que
+# roda o apply: os providers helm e kubernetes falam com o API server a partir dela.
+endpoint_public_access = false
+
+# Break-glass, para quando o caminho privado nao estiver disponivel: abrir o endpoint publico
+# exige tambem a lista de CIDRs (o modulo recusa lista vazia com o endpoint aberto). O valor
+# certo e o IP de saida da maquina que roda o apply — gere com
+# scripts/generate-tfvars --enable-public-endpoint, que descobre e escreve o /32.
+#
+# endpoint_public_access = true
+# public_access_cidrs    = ["<ip-publico-desta-maquina>/32"]

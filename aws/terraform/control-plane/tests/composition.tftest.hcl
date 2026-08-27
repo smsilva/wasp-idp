@@ -22,6 +22,17 @@ variables {
   public_access_cidrs = ["203.0.113.10/32"]
 }
 
+# Obrigatório desde o 2.4: o cidr_block desta VPC alimenta a regra de 443 do security group
+# do cluster, e a validação de schema do provider (que roda sob mock, client-side) recusa o
+# valor sintético — o plan inteiro morre com "must be a valid IPv4 CIDR".
+override_data {
+  target = data.aws_vpc.hub
+  values = {
+    id         = "vpc-hub000000000001"
+    cidr_block = "10.1.0.0/16"
+  }
+}
+
 run "spoke_usa_o_segundo_octeto_reservado" {
   command = plan
 
@@ -88,8 +99,15 @@ run "cidr_fora_do_supernet_e_erro" {
 
 # A restricao do endpoint atravessa duas camadas: o root escolhe o valor, o modulo o entrega
 # ao vpc_config. Um desses fios cortado deixa a API aberta sem nada reclamar.
+#
+# Cenario de endpoint ABERTO, que desde o 2.5 e break-glass e nao o default — com ele fechado
+# o atributo e omitido e este output fica "known after apply".
 run "o_cidr_do_root_chega_ao_endpoint_do_cluster" {
   command = plan
+
+  variables {
+    endpoint_public_access = true
+  }
 
   assert {
     condition     = module.cluster.public_access_cidrs == toset(["203.0.113.10/32"])
