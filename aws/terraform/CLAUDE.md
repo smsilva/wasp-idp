@@ -199,6 +199,32 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   destroy noturno da connectivity não pode desligá-la e religá-la todo dia por um recurso que não
   é seu. Com ele ligado, o attachment cross-conta nasce já associado, sem convite — não há
   `aws_ram_resource_share_accepter` do lado da spoke.
+- **RAM resolve o convite de compartilhamento; o aceite do ATTACHMENT em si é outro mecanismo.**
+  Comprovado no primeiro apply real do `2.3`: com `auto_accept_shared_attachments = "disable"` no
+  TGW (o padrão, e o que esta camada define de propósito), o attachment cross-conta nasce em
+  `pendingAcceptance` mesmo com RAM habilitado — e associação, propagação e rota falham com
+  `IncorrectState`/`InvalidTransitGatewayID.NotFound`, mensagens que não dizem que a causa é o
+  aceite pendente. Fix: `aws_ec2_transit_gateway_vpc_attachment_accepter`, criado com o provider
+  `aws.network` (dono do TGW), com `depends_on` explícito nas três peças que dependem do
+  attachment estar `available`.
+- **O Client VPN faz SNAT: o tráfego chega à spoke com origem no CIDR da VPC HUB, não no client
+  CIDR.** Comprovado no aceite do `2.3`: com o security group do cluster liberando só
+  `100.64.0.0/22` (o client CIDR), o ping não passava; liberando `10.1.0.0/16` (a VPC hub),
+  passou — 3/3, RTT ~140 ms. A doc do cenário *"Access a peered VPC"* diz o mesmo por outro
+  caminho: manda liberar o **security group do endpoint** nos recursos de destino, não o client
+  CIDR. **Consequência:** não existe (nem precisa existir) rota para `100.64.0.0/22` na spoke —
+  o retorno vai para `10.1.x.x`, já coberto pela rota do supernet. Duas rotas para o client CIDR
+  chegaram a ser escritas perseguindo a hipótese contrária e foram removidas depois do teste
+  real. **Regra: hipótese sobre caminho de rede se confere com um pacote, não com raciocínio
+  sobre tabela de rotas** — as tabelas estavam todas certas e mesmo assim não passava.
+- **Attachment cross-conta tem perpetual diff em `transit_gateway_default_route_table_*`.** Os
+  dois atributos são write-only (só valem na criação, não existem na API do attachment) e o
+  provider os deriva inspecionando as route tables do TGW — que pertencem à conta `network`. O
+  recurso é lido pelo provider default (`cicd`), que não as enxerga, então o refresh devolve o
+  default `true` e o plan propõe `true -> false` **para sempre**. Fix: `ignore_changes` nos dois,
+  com o comentário explicando que a verdade sobre isolamento está no TGW e nas
+  associação/propagações explícitas, não ali. Verificado na AWS antes de ignorar: o attachment
+  propaga só para `tgw-rt-hub`, nada em default.
 - **A authorization rule por spoke já não era necessária.** O texto do `2.3` previa uma rule para
   `10.2.0.0/16`; a `2.2` já cobre o supernet inteiro (`10.0.0.0/12`) por grupo, que inclui
   qualquer spoke futura. Rota é topologia (uma só, para sempre); authorization rule é política —

@@ -207,3 +207,40 @@ run "a_rota_da_spoke_para_o_supernet_usa_o_tgw" {
     error_message = "a rota deveria ir na route table privada desta spoke, recebido ${aws_route.spoke_to_hub.route_table_id}"
   }
 }
+
+# --------------------------------------------------------------------------------------
+# O TGW nasce com AutoAcceptSharedAttachments = disable — o attachment cross-conta fica em
+# pendingAcceptance até o dono do TGW (conta network) aceitar explicitamente. RAM só resolve
+# o convite de compartilhamento, não este aceite; são dois mecanismos distintos.
+# --------------------------------------------------------------------------------------
+
+run "o_attachment_e_aceito_do_lado_do_dono_do_tgw" {
+  command = plan
+
+  override_resource {
+    target          = aws_ec2_transit_gateway_vpc_attachment.this
+    override_during = plan
+    values = {
+      id = "tgw-attach-spoke01"
+    }
+  }
+
+  assert {
+    condition     = aws_ec2_transit_gateway_vpc_attachment_accepter.this.transit_gateway_attachment_id == "tgw-attach-spoke01"
+    error_message = "o accepter deveria ser do attachment desta spoke, recebido ${aws_ec2_transit_gateway_vpc_attachment_accepter.this.transit_gateway_attachment_id}"
+  }
+}
+
+run "o_accepter_nao_briga_com_o_attachment_pelos_defaults" {
+  command = plan
+
+  assert {
+    condition     = aws_ec2_transit_gateway_vpc_attachment_accepter.this.transit_gateway_default_route_table_association == false
+    error_message = "recebido ${aws_ec2_transit_gateway_vpc_attachment_accepter.this.transit_gateway_default_route_table_association}"
+  }
+
+  assert {
+    condition     = aws_ec2_transit_gateway_vpc_attachment_accepter.this.transit_gateway_default_route_table_propagation == false
+    error_message = "recebido ${aws_ec2_transit_gateway_vpc_attachment_accepter.this.transit_gateway_default_route_table_propagation}"
+  }
+}

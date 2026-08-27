@@ -62,7 +62,41 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
 
   # Mesma disciplina de connectivity/: nada por default, associacao e propagacao explicitas.
   transit_gateway_default_route_table_association = false
-  transit_gateway_default_route_table_propagation  = false
+  transit_gateway_default_route_table_propagation = false
+
+  tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
+
+  lifecycle {
+    # Perpetual diff estrutural de attachment CROSS-CONTA: estes dois atributos nao existem
+    # na API do attachment (sao write-only, so valem na criacao) e o provider os deriva
+    # inspecionando as route tables do TGW. Elas pertencem a conta network, e este recurso e
+    # lido pelo provider default (cicd), que nao as enxerga — entao o refresh devolve o
+    # default `true` e o plan propoe `true -> false` para sempre, sem nunca convergir.
+    #
+    # A verdade sobre isolamento NAO esta aqui: esta no TGW (default association/propagation
+    # desabilitados em connectivity/) e nas associacao/propagacoes explicitas abaixo.
+    # Verificado na AWS: este attachment propaga SO para tgw-rt-hub, nada em default.
+    ignore_changes = [
+      transit_gateway_default_route_table_association,
+      transit_gateway_default_route_table_propagation,
+    ]
+  }
+}
+
+# O TGW nasce com AutoAcceptSharedAttachments = disable (connectivity/) — RAM resolve o
+# convite de COMPARTILHAMENTO, mas o attachment em si fica em pendingAcceptance ate o dono
+# do TGW (conta network) aceitar explicitamente. Sao dois mecanismos distintos; sem este
+# accepter, associacao/propagacao/rota falham com "is in invalid state".
+resource "aws_ec2_transit_gateway_vpc_attachment_accepter" "this" {
+  provider = aws.network
+
+  transit_gateway_attachment_id = aws_ec2_transit_gateway_vpc_attachment.this.id
+
+  # As duas metades do MESMO attachment gerenciam os mesmos atributos — sem os valores
+  # explícitos aqui também, o accepter reverteria para o default `true` a cada apply e
+  # brigaria com o attachment, num "perpetual diff" que nunca estabiliza.
+  transit_gateway_default_route_table_association = false
+  transit_gateway_default_route_table_propagation = false
 
   tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
 }
@@ -82,6 +116,8 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
 
 # tgw-rt-hub — a route table do proprio hub, ja existe em connectivity/. Lida por tag, nao
@@ -113,6 +149,8 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "spoke_to_hub" {
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
   transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
@@ -124,12 +162,24 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
 
 # Rota de volta na propria VPC desta spoke: uma so, para o supernet inteiro, mesma logica de
 # connectivity/ — rota e topologia, nao cresce por spoke.
+#
+# NAO existe rota para o client CIDR do Client VPN (100.64.0.0/22), e a ausencia e deliberada:
+# o Client VPN faz SNAT. O trafego do operador chega a esta spoke com origem no CIDR da VPC
+# hub (10.1.x.x), nao em 100.64.x.x — comprovado no aceite do 2.3, liberando so 10.1.0.0/16 no
+# security group do cluster. O retorno cai nesta mesma rota do supernet.
+#
+# A doc do cenario "peered VPC" do Client VPN diz o mesmo por outro caminho: manda liberar o
+# SECURITY GROUP do endpoint nos recursos de destino, nao o client CIDR. Duas rotas para
+# 100.64.0.0/22 (uma aqui, outra estatica em tgw-rt-spoke) chegaram a ser escritas perseguindo
+# a hipotese contraria; foram removidas depois do teste real.
 resource "aws_route" "spoke_to_hub" {
   route_table_id         = module.network.private_route_table_id
   destination_cidr_block = local.supernet
   transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
 
-  depends_on = [aws_ec2_transit_gateway_vpc_attachment.this]
+  # Sem esperar o accepter, o attachment ainda está em pendingAcceptance e a AWS recusa a
+  # rota com "TransitGatewayID.NotFound" — mensagem que não diz que a causa é o aceite.
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.this, aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
 
 module "cluster" {

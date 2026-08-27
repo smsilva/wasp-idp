@@ -8,7 +8,7 @@ provisionamento (ver `README.md`).
 |---|---|---|---|---|
 | `2.1` | **PORTÃO:** verificar o client da AWS VPN nesta distro | — | zero | **FEITO** — instala, daemon sobe, GUI abre, CLI gerencia perfil SAML |
 | `2.2` | `connectivity/`: TGW + cert do ACM + SAML provider + Client VPN + associação + rota do supernet | T1 | ~US$ 0,15/h | **escrita** (22 testes, 13/14 mutações). Falta o apply: túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated`; **e o login SAML completa** |
-| `2.3` | Attachment da spoke + `tgw-rt-<spoke>` + rotas + authorization rule do grupo para `10.2.0.0/16` | T2 | +US$ 0,05/h | pelo túnel, alcança IP privado dentro da spoke |
+| `2.3` | Attachment das DUAS pontas (hub e spoke) + RAM + `tgw-rt-<spoke>` + associação/propagações + rotas | T2 | +US$ 0,05/h | **FEITO** — `ping` a um nó da spoke pelo túnel, 3/3, RTT ~140 ms |
 | `2.4` | DNS: zona privada do cluster associada à VPC hub + `dns_servers` | T2 | zero | `dig` devolve IP privado; `kubectl get nodes` pelo túnel |
 | `2.5` | `endpointPublicAccess = false` | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
 
@@ -265,12 +265,19 @@ account), e mora em `dns/` — T0, permanente — não em `connectivity/` (T1, d
 é configuração da Organization inteira, não do ciclo de vida do TGW. Aplicado uma vez, descoberto
 na prática ao tentar o primeiro apply do `2.3` (a AWS recusou com a mensagem exata).
 
-Com ele ligado, o attachment cross-conta nasce **já associado**, sem convite — não há
-`aws_ram_resource_share_accepter` do lado da spoke.
+Com ele ligado, o attachment cross-conta nasce **já associado ao compartilhamento**, sem convite
+RAM — não há `aws_ram_resource_share_accepter` do lado da spoke. **Mas isso não é o mesmo que o
+attachment estar pronto para uso:** o TGW nasce com `auto_accept_shared_attachments = "disable"`
+(propositalmente, mesma disciplina do resto desta camada), então o attachment em si fica em
+`pendingAcceptance` até alguém do lado do dono aceitar — achado só no primeiro apply real,
+associação/propagação/rota falhando com `IncorrectState`/`InvalidTransitGatewayID.NotFound`.
 
 **Lado da spoke** (`control-plane/`, conta `cicd`):
 
 - Attachment da VPC spoke — criado com o provider **default** (`cicd`, dono da VPC).
+- `aws_ec2_transit_gateway_vpc_attachment_accepter`, criado com o provider `aws.network` (dono
+  do TGW) — aceita o attachment. `depends_on` explícito nas três peças abaixo, que falham se o
+  attachment ainda estiver `pendingAcceptance`.
 - `tgw-rt-<spoke>` — pertence à conta do TGW (`network`) mas o ciclo de vida é da spoke, então
   mora no state dela via o provider `aws.network` já existente (fronteira de state por ciclo de
   vida, decisão 5 do `README.md`).
@@ -283,8 +290,26 @@ Com ele ligado, o attachment cross-conta nasce **já associado**, sem convite �
 cobre o supernet inteiro por grupo, o que já inclui qualquer spoke — rota é topologia (cresce
 aqui, uma vez), authorization rule é política (já estava coberta).
 
+**Também não entrou, e por um motivo que só o pacote revelou:** rota para o client CIDR
+(`100.64.0.0/22`) na spoke. O **Client VPN faz SNAT** — o tráfego do operador chega ao nó com
+origem no CIDR da VPC hub (`10.1.x.x`), não em `100.64.x.x`. Duas rotas chegaram a ser escritas
+perseguindo a hipótese contrária (uma na VPC, uma estática em `tgw-rt-spoke`) e foram removidas
+depois do teste real. A doc do cenário *"Access a peered VPC"* já dizia por outro caminho: libere
+o **security group do endpoint** no destino, não o client CIDR.
+
+### Aceite — FEITO (2026-08-26)
+
 Aceite deliberadamente fraco: alcançar um **IP** privado dentro da spoke. Nome ainda não resolve —
 isso é o `2.4`.
+
+**Passou:** `ping 10.2.45.230` (nó do EKS na spoke) pelo túnel — 3/3 pacotes, 0% de perda, RTT
+~140 ms. Exigiu uma regra temporária de ICMP no security group do cluster a partir de
+`10.1.0.0/16`; a spoke não tem workload nenhum que aceite tráfego externo, então não havia alvo
+natural. Regra removida depois.
+
+**As tabelas de rota estavam todas certas e mesmo assim não passava** — o que faltava era
+entender de onde o pacote realmente vinha. Vale como método: hipótese sobre caminho de rede se
+confere com um pacote, não com leitura de route table.
 
 ## `2.4` — DNS, e o risco conhecido
 
