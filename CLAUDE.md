@@ -195,8 +195,10 @@ Flagged by automated security review — intentional PoC shortcuts, to revisit b
   Never generate one; if it reappears, fold it into `HANDOFF.md` and delete it.
 - PII (emails) and anything identifying a person/company go in `CLAUDE.local.md` (gitignored), never
   in `HANDOFF.md` — the repo is public.
-- Completed-work narrative moves out of `HANDOFF.md` into `docs/archive.md` once a step is done, to
-  keep the active handoff short. Keep only a one-line summary + date in `HANDOFF.md`.
+- Completed-work narrative moves out of `HANDOFF.md` once a step is done, to keep the active handoff
+  short. Each entry gets its own file under `docs/archived/<theme>/<short-topic-description>.md`,
+  listed in `docs/archived/index.md` — never delete an indexed entry, only add. Keep only a one-line
+  summary + date in `HANDOFF.md`.
 
 ## This file
 

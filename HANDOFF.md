@@ -3,7 +3,8 @@
 > **Arquivo único, sem par local.** Este repo não gera `HANDOFF.local.md` — a divisão
 > versionado/local duplicava contexto e cada sessão tinha de reconciliar os dois (última
 > consolidação: 2026-08-27). Frente ativa, estado aplicado e backlog vivem só aqui. Narrativa
-> detalhada de trabalho concluído vai para `docs/archive.md`, não fica acumulando aqui.
+> detalhada de trabalho concluído vai para `docs/archived/` (índice em `docs/archived/index.md`), não
+> fica acumulando aqui.
 >
 > **Account IDs desta Organization estão neste arquivo, deliberadamente.** São de uma conta pessoal
 > descartável para exercitar a PoC; nada aqui vai para ambiente real. E-mails de root e qualquer
@@ -415,7 +416,9 @@ são camadas separadas.
 
 ## Comparação com desenho de referência e resolução PrivateLink vs TGW
 
-Narrativa completa em `docs/archive.md` (2026-08-26). Conclusões que ficam ativas:
+Narrativa completa em
+[`docs/archived/private-access/reference-design-comparison.md`](docs/archived/private-access/reference-design-comparison.md)
+(2026-08-26). Conclusões que ficam ativas:
 
 - Desenho de referência não tem ingress centralizado (é trânsito puro, ingress distribuído por
   spoke) — não valida "entrada pública no hub"; a decisão de ingress único pelo hub foi tomada
@@ -480,8 +483,10 @@ Narrativa completa em `docs/archive.md` (2026-08-26). Conclusões que ficam ativ
 
 ## Known Broken
 
-Itens fechados/retirados (tags de LBC `1.1`, TGW em `src/network` `2.3`, existência de
-`up-03-connectivity`) saíram desta lista — detalhe em `docs/archive.md`.
+Itens fechados/retirados (tags de LBC
+[`1.1`](docs/archived/private-access/step-1-1-lbc-tags.md), TGW em `src/network`
+[`2.3`](docs/archived/private-access/step-2-3-spoke-joins-mesh.md), existência de
+`up-03-connectivity`) saíram desta lista — detalhe em `docs/archived/index.md`.
 
 1. **Endpoint da API do EKS público para `0.0.0.0/0`** — fechado por default no `2.5`, mecanismo mais
    forte que o do `1.2`: não existe mais valor de tfvars que exponha a API ao mundo (abrir é
@@ -688,7 +693,8 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 
 ### Achados a não reaprender
 
-Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por linha:
+Narrativa completa de cada achado em `docs/archived/` (índice em `docs/archived/index.md`). Fato +
+porquê, um por linha:
 
 **Terraform / camadas**
 
@@ -895,8 +901,9 @@ Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por l
 
 ## Completed Work
 
-Narrativa detalhada de cada entrega concluída vive em `docs/archive.md` (um item por sessão/passo).
-Resumo do que já está lá, do mais recente ao mais antigo:
+Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada em
+[`docs/archived/index.md`](docs/archived/index.md). Resumo do que já está lá, do mais recente ao mais
+antigo:
 
 - **2026-08-27** — `2.4`+`2.5`: SG rule para o endpoint privado do EKS, endpoint público fechado por
   default (Route 53 privada da EKS é inacessível de propósito — dois recursos viraram `Rejected`);
