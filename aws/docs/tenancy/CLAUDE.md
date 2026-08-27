@@ -77,7 +77,7 @@ passo restringe o seguinte:
 | 1 | **Quais tiers o produto oferece** e qual modelo (pool/bridge/silo) em cada | Decisão comercial, não técnica | Bloqueia 2–4 abaixo; toda estimativa de custo por tenant fica sem base |
 | 2 | **Spoke de tenant participa do roteamento central?** | Depende de como o control plane alcança a spoke (API pública vs. rede privada) | Define se CIDR de tenant é único ou repetido — a única decisão irreversível da cadeia (`03-cidr.md`) |
 | 3 | **Perfis de residência oferecidos** (quais jurisdições) | Depende do mercado-alvo | Definir depois vira reorganização da árvore de OUs, com janela sem SCP durante o move |
-| 4 | **IPAM agora ou octeto calculado** | Só vale se 2 for "único"; hoje seria trabalho possivelmente descartável | `decisions.md` §7 registra "IPAM cedo" como armadilha — o custo aparece no ambiente 8, não no 2 |
+| 4 | **IPAM agora ou octeto calculado** | Só vale se 2 for "único"; hoje seria trabalho possivelmente descartável | `decisions.md` §7 registra "IPAM cedo" como armadilha — de **timing**, não de mérito: [REL02-BP05](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_non_overlap_ip.html) recomenda IPAM e chama tabela manual de anti-pattern. **Se 2 for "repetido", o IPAM vira o caminho natural** — escopo é a primitiva do CIDR repetido. Desenho e gatilhos: `../network/08-ipam.md` |
 | 5 | **`04-crossplane-map.md` deste domínio** — não escrito de propósito | Depende do schema do registry de tenants (`decisions.md` §11, decisão 1) | Nenhum hoje; o mapa sem o registry seria especulação. **Ausência é deliberada, não esquecimento** |
 
 ## Fontes

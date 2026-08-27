@@ -78,7 +78,11 @@ Alternativas quando a premissa cai:
    endpoint necessário. PrivateLink funciona com CIDR sobreposto.
 2. **VPC IPAM** com pools por região e por tier, em vez de octeto calculado em patch — é a
    ferramenta certa para alocação em escala, e `../../../decisions.md` §7 já registra "IPAM cedo"
-   como armadilha conhecida.
+   como armadilha conhecida. **Armadilha de timing, não de mérito:** REL02-BP05 recomenda IPAM
+   nominalmente e chama a tabela manual de anti-pattern. Mais importante para *esta* página, o
+   **escopo** do IPAM é a primitiva do CIDR repetido — duas redes que não se falam podem ter o
+   mesmo bloco sem que a ferramenta acuse conflito. Desenho completo e gatilhos de adoção em
+   [`../network/08-ipam.md`](../network/08-ipam.md).
 3. **Alocação bidimensional** (N por tier/região, `/20` por tenant dentro do bloco do tier) —
    exige cálculo de IP, o que hoje demandaria `function-kcl`
    (`../network/01-cidr-addressing.md`).

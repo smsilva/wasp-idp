@@ -93,10 +93,35 @@ CIDR é a única decisão irreversível deste domínio.
 
 | Caminho | Custo | Quando é o certo |
 |---|---|---|
+| **Encolher o CIDR roteável do spoke** (CIDR secundário em `100.64.0.0/10` para pods) | Configuração do VPC CNI; não mexe na supernet | **Provavelmente o primeiro a tentar** — ver abaixo |
 | **Ampliar a supernet** (`/12` → `/10`, `/8`) | Migração se houver spoke; um `/8` come todo o espaço privado classe A e colide com peer externo futuro | Só se **todas** as spokes precisarem de rota central |
 | **CIDR repetido para spoke isolada** | Zero — é reinterpretação, não mudança | Se spoke de tenant não participa do roteamento central. Unicidade só é exigida entre VPCs que se falam |
-| **VPC IPAM** com pools por região/tier | Trabalho novo; substitui o octeto calculado | Alocação em escala com múltiplas regiões e tiers |
+| **VPC IPAM** com pools por região/tier | Trabalho novo; substitui o octeto calculado. Desenho completo em [`08-ipam.md`](08-ipam.md) | Alocação em escala com múltiplas regiões e tiers |
+| **PrivateLink ou private NAT Gateway** | Recurso por conexão, não por VPC | Quando o CIDR repetido é a escolha **e** uma exceção precisa falar com o hub. Nomeados por REL02-BP05 |
 | **Alocação bidimensional** (`/20` por spoke dentro do bloco do tier) | Exige cálculo de IP → `function-kcl` | Muitas spokes pequenas por região |
+| **Dual-stack IPv6** | Reescreve o plano inteiro | Não avaliado. REL02-BP03 o sugere nominalmente para EKS |
+
+### O `/16` por spoke é o consumo caro — não o prefixo da supernet
+
+Vale antes de qualquer conversa sobre ampliar a supernet. Um cluster EKS consome muito endereço
+porque **cada pod recebe um IP roteável da VPC** pelo VPC CNI — é a razão de o `/16` por spoke ter
+parecido necessário. Mas esse consumo pode sair inteiro do espaço roteável:
+
+- **CIDR secundário em `100.64.0.0/10`** (espaço CGNAT, RFC 6598) associado à VPC, com o VPC CNI em
+  *custom networking* pondo os pods nas subnets desse bloco.
+- O CIDR **primário** — o que entra na malha do TGW e precisa ser único — passa a hospedar só nós,
+  ENIs e load balancers. Um `/22` costuma bastar.
+- O espaço de pod **não é roteável nem único entre clusters**: pode repetir em todos.
+
+Efeito no plano vigente: um spoke que consumia 1 bloco de `/16` passa a consumir 1/64 disso. O teto
+de 15 blocos deixa de ser teto de 15 *clusters* e vira teto de 15 *agrupamentos* — **sem tocar na
+decisão irreversível**. Por isso está no topo da tabela acima.
+
+Duas ressalvas para não errar na hora de fazer: o bloco de pod não pode colidir com o
+`client_cidr_block` do Client VPN, que já usa `100.64.0.0/22` do mesmo espaço CGNAT
+([`04-vpn-access.md`](04-vpn-access.md)); e tráfego de pod que precise sair da VPC por rota (não por
+NAT) continua exigindo endereço roteável — o que empurra para PrivateLink, coerente com o resto
+desta tabela.
 
 A escolha depende de uma pergunta ainda aberta: **spoke de tenant precisa de rota privada para o
 hub, ou só é alcançada pela API da AWS e pelo endpoint do cluster?** Análise em

@@ -45,6 +45,42 @@ Spoke A quer falar com Spoke B?
   (Só alcança se uma rota for adicionada explicitamente — decisão consciente, via Hub.)
 ```
 
+### ⚠️ O teto deste desenho são **20 route tables por TGW**, não o plano de CIDR
+
+Route table de TGW é grátis, mas **não é ilimitada**. Do
+[quotas do TGW](https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-quotas.html)
+(verificado 2026-08-27):
+
+| Quota | Default | Ajustável |
+|---|---|---|
+| **Route tables por TGW** | **20** | sim (Service Quotas) |
+| Attachments por TGW | 5.000 | sim |
+| Rotas totais (dinâmicas + estáticas) em **todas** as route tables de um TGW | 10.000 | só via SA/TAM |
+| Peering attachments por TGW | 50 | sim |
+| Rotas estáticas para um mesmo prefixo apontando a um attachment | 1 | não |
+
+**Por que 20 morde primeiro aqui.** O desenho acima gasta uma `tgw-rt-<spoke>` por spoke, e o
+desenho de VPN por cliente (`04-vpn-access.md`) gasta mais uma `tgw-rt-cliente-<x>` por cliente.
+São **2 por cliente** — logo ~9 clientes mais a `tgw-rt-hub` e o default está esgotado. Isso
+acontece **antes** de qualquer teto do plano de endereçamento (15 blocos sob a supernet `/12`,
+ver [`01-cidr-addressing.md`](01-cidr-addressing.md)).
+
+Consequências práticas:
+
+- **É pedido de Service Quotas, não mudança de desenho.** Ajustável, mas com lead time — não se
+  descobre isso na véspera de onboardear o décimo cliente.
+- **Os 10.000 de rotas totais valem para o TGW inteiro**, somando todas as tabelas. Com rota por
+  spoke em cada tabela de cliente, o número cresce como produto, não como soma. É o quota mais
+  rígido dos quatro (só sobe falando com SA/TAM).
+- **Acima dessa faixa, o mecanismo deixa de ser route table.** É onde entra o **AWS Cloud WAN**:
+  segmento é política declarativa aplicada a attachments por tag, não objeto que alguém cria e
+  associa um a um. Há peering TGW ↔ Cloud WAN com policy tables, então a migração é incremental.
+  A [Hybrid Networking Lens](https://docs.aws.amazon.com/wellarchitected/latest/hybrid-networking-lens/hnsec01-bp01.html)
+  do Well-Architected trata os dois no mesmo best practice de segmentação.
+
+**Não é problema hoje** (há 1 route table de spoke). É o número a ter em mente ao desenhar a
+fase de provas de isolamento, que é a primeira a criar `tgw-rt-cliente-<x>`.
+
 ## Compartilhamento cross-account via AWS RAM (modelo descentralizado)
 
 Para uma VPC de outra account attachar-se ao TGW do Hub, o TGW precisa ser compartilhado

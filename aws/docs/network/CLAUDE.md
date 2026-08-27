@@ -22,6 +22,7 @@ o Well-Architected Framework.
 | 5 | [`05-dns.md`](05-dns.md) | Zonas Route53 por spoke, delegação, resolução cross-account | Operational Excellence |
 | 6 | [`06-security.md`](06-security.md) | Security Groups, NACLs, VPC Flow Logs, endpoints privados | Security |
 | 7 | [`07-crossplane-map.md`](07-crossplane-map.md) | Como cada peça vira XRD/Composition; estado atual vs alvo; gap do CIDR e migração | — |
+| 8 | [`08-ipam.md`](08-ipam.md) | IPAM hierárquico (escopo → pool top-level → regional → finalidade); por que a tabela manual é anti-pattern de REL02-BP05; gatilhos de adoção. **Desenho, nada implementado** | Reliability |
 
 ## Sequência de construção (conta vazia → rede pronta)
 
