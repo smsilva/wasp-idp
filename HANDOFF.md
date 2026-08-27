@@ -90,9 +90,14 @@ portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por 
 | `state-backend` | `network` | `state-backend/` | centavos | aplicada |
 | `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
-| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 quando de pé | **destruída** (state com 0 recursos) |
-| `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.`, delegação verificada |
+| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) | ⚠️ **DE PÉ** — subida no `2.3` e **não derrubada** |
+| `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
 | `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **aplicada** — T1, de pé agora |
+
+> ⚠️ **As duas camadas caras estão ligadas: ~US$ 0,43/h somadas.** Derrubar na ordem inversa —
+> `control-plane/scripts/destroy` **antes** de `connectivity/us-east-1/scripts/destroy` (o
+> attachment da spoke vive no state da control-plane, e a AWS recusa deletar TGW com attachment
+> vivo). A `connectivity` é T1 e pode ficar durante o dia; a `control-plane` não.
 
 Bucket de state: `tfstate-o-e4r8ndteju`, na conta `network`. Nenhum cluster k3d de pé.
 
@@ -216,6 +221,9 @@ Decisões fechadas nesta frente:
    qualquer entrada, logo VGW em spoke também está fora.
 2. **`Site-to-Site VPN` por cliente**, terminando no TGW do hub. Um attachment por cliente ⟹ route
    table de tenant isola nas **duas** direções.
+   **Nota do `2.3`:** o Client VPN de manutenção faz **SNAT** — quem chega na spoke por ele aparece
+   com IP da VPC hub. Isolar *por origem* na spoke, portanto, não distingue operador de operador;
+   a distinção vive na authorization rule por grupo, do lado do endpoint.
 3. **Acesso de manutenção: AWS Client VPN no hub, autenticação SAML** pelo Identity Center. Escolhido
    sobre certificado mútuo porque **conceder e revogar acesso a uma pessoa é a demonstração**, e
    porque `access_group_id` dá **CIDR por grupo** — com certificado todo portador alcança tudo que
@@ -462,9 +470,9 @@ nenhum hoje.
    inicial dele. O achado veio da leitura do desenho de referência, não do código, e sobreviveu a
    duas sessões de handoff sem ninguém abrir o `main.tf`. Fechado no `1.1` com o teste que faltava
    (`src/network/tests/tags.tftest.hcl`). **Lição: achado sobre módulo do repo se confere no módulo.**
-2. **`src/network` não tem nada de TGW** — *intentional*. O TGW em si passou a existir na camada 03
-   (`connectivity/`), com association e propagation default desligados. O que falta é o lado do spoke:
-   attachment, associação/propagação em `tgw-rt-<spoke>` e rotas para CIDRs remotos. **É o `2.3`.**
+2. ~~**`src/network` não tem nada de TGW**~~ — **FECHADO no `2.3`.** O attachment, a
+   associação/propagações em `tgw-rt-<spoke>` e as rotas existem, nas duas pontas. `src/network`
+   segue sem TGW de propósito (é módulo genérico de VPC); quem anexa são as raízes.
 3. **Endpoint da API do EKS público para `0.0.0.0/0`** — *era* `public_access_cidrs = []`, e vazio
    significa o mundo. **Fechado no `1.2` no que dá para fechar offline:** a variável do root não tem
    default, lista vazia é erro de validação no módulo e `0.0.0.0/0` é recusado no root mesmo
@@ -757,7 +765,12 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       endpoint `cvpn-endpoint-0ed2eee5abea362d4`. De pé agora, ~US$ 0,20/h.
 - [x] Testar se o login SAML completa (aceite do `2.2`) e se `aws-vpn-client connect` sob SAML abre o
       navegador sozinho — **os dois sim**, confirmado por túnel real conectado.
-- [ ] **`2.3`–`2.5`** — attachment, DNS privado, fechar a API.
+- [x] **`2.3`** — attachment das **duas** pontas (o hub nunca esteve anexado ao próprio TGW), RAM
+      + `aws_ram_sharing_with_organization` na raiz `dns/`, accepter do attachment cross-conta,
+      `tgw-rt-spoke`, as duas propagações e as rotas. **Aceito com ping real:** 3/3, RTT ~140 ms
+      a um nó do EKS dentro de `10.2.0.0/16`, pelo túnel.
+- [ ] **`2.4`–`2.5`** — DNS privado, fechar a API.
+- [ ] **Derrubar a `control-plane`** — subiu no `2.3` e ficou de pé (~US$ 0,23/h).
 - [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
       laptop segue funcionando, e a API recusa de outro IP.
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
@@ -778,7 +791,7 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 
 ### Frente E — scripts shell em inglês
 
-- [ ] Commitar os 7 scripts já convertidos em `aws/eks/scripts/` (estão na working tree).
+- [x] Commitar os 7 scripts já convertidos em `aws/eks/scripts/` — feito em `1a6cc34`.
 - [ ] Converter `aws/eks/scripts/provision-eks`, `teardown`, `aws/eks/apps/deploy`, `aws/eks/apps/clean`
       — os quatro maiores e mais arriscados; reler cada comentário de fase antes de traduzir, várias
       decisões de ordenação (races de Pod Identity) estão documentadas só ali.
@@ -816,6 +829,54 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       ligação. Duas com valores diferentes provam. Descoberto no `1.3`.
 
 ## Completed Work
+
+### `2.3` — a spoke entra na malha, e três coisas que só um pacote revelou (2026-08-26)
+
+Aceito com ping real: **3/3 pacotes, 0% de perda, RTT ~140 ms** a um nó do EKS dentro de
+`10.2.0.0/16`, pelo túnel. Commits `895e242` (escrita) e `a39430c` (as correções do apply).
+Regressão: **104 testes em 13 diretórios, 0 falhas** (eram 86).
+
+**O passo era maior do que o plano dizia — faltava metade.** O texto original descrevia só o lado
+da spoke; a exploração achou que **o hub nunca tinha sido anexado ao próprio TGW**. A
+`connectivity` criava o TGW e `tgw-rt-hub` e deixava os dois órfãos, sem attachment nenhum — sem
+isso o tráfego que chega pelo túnel na subnet privada do hub não tem para onde ir.
+
+**Três achados que nenhuma leitura de tabela de rota daria, todos vindos do apply real:**
+
+- **RAM tem dois portões, não um.** Primeiro `aws_ram_sharing_with_organization` (organization-wide,
+  só pela management account) — sem ele, `AssociateResourceShare` é recusado com
+  `OperationNotPermittedException`. Ele mora na raiz **`dns/`** (T0, permanente), não em
+  `connectivity/` (T1, destruída toda noite): é config da Organization inteira, e um destroy
+  noturno não pode desligá-la e religá-la todo dia. Depois, o **aceite do attachment em si** —
+  o TGW tem `auto_accept_shared_attachments = disable` de propósito, então o attachment fica em
+  `pendingAcceptance` mesmo com RAM resolvido, e associação/propagação/rota falham com
+  `IncorrectState`/`InvalidTransitGatewayID.NotFound`, erros que não citam o aceite pendente.
+- **O Client VPN faz SNAT.** O tráfego chega à spoke com origem no CIDR da **VPC hub**
+  (`10.1.x.x`), não no client CIDR (`100.64.x.x`): liberando só `100.64.0.0/22` no SG do cluster
+  o ping não passava; liberando `10.1.0.0/16`, passou. **Duas rotas para o client CIDR chegaram a
+  ser escritas** perseguindo a hipótese contrária e foram removidas depois do teste — o retorno
+  vai para `10.1.x.x`, já coberto pela rota do supernet. A doc do cenário *"Access a peered VPC"*
+  dizia o mesmo por outro caminho: libere o **security group do endpoint** no destino.
+  **As tabelas de rota estavam todas certas e mesmo assim não passava** — vale como método:
+  hipótese sobre caminho de rede se confere com um pacote, não com leitura de config.
+- **Attachment cross-conta tem perpetual diff estrutural** em
+  `transit_gateway_default_route_table_{association,propagation}`: write-only, ausentes da API, e
+  o provider os deriva das route tables do TGW — que são da conta `network` e invisíveis ao
+  provider default (`cicd`). Todo refresh lê `true`, todo plan propõe `true -> false`, para
+  sempre. Resolvido com `ignore_changes`, depois de conferir na AWS que o attachment propaga só
+  para `tgw-rt-hub`.
+
+**A `authorization rule` por spoke que o plano previa não entrou:** a `2.2` já cobre o supernet
+inteiro por grupo. Rota é topologia (cresce aqui, uma vez); authorization rule é política.
+
+**Um `terraform apply` morreu no meio** (o processo caiu; a AWS seguiu provisionando), deixando o
+cluster EKS e o NAT criados **fora do state** e um lock órfão. Recuperação: `force-unlock` +
+`terraform import` dos dois + plan limpo confirmando zero duplicata. Vale saber que é recuperável
+sem destruir nada.
+
+O `connectivity/scripts/destroy` foi corrigido junto: o guard de "attachment de fora" contava o
+attachment do **próprio hub** como estranho e teria recusado um destroy legítimo. Agora o exclui
+via o output novo `transit_gateway_attachment_id`.
 
 ### `2.2` — apply na AWS, e as duas perguntas do aceite resolvidas (2026-08-26)
 
