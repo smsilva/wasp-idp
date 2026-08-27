@@ -138,7 +138,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   # Mesma disciplina do TGW em si: nada entra por default, associação e propagação são
   # explícitas abaixo.
   transit_gateway_default_route_table_association = false
-  transit_gateway_default_route_table_propagation  = false
+  transit_gateway_default_route_table_propagation = false
 
   tags = merge(local.tags, { Name = "${local.name}-tgw-attachment" })
 }
