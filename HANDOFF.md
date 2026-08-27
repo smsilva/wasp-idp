@@ -157,7 +157,7 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.3` aceito, nada de pé**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.4`/`2.5` escritos, nada de pé**)
 
 **Último passo:** `2.4` **reescrito e implementado** junto com o `2.5`, offline, sem tocar AWS. O
 `2.4` não era trabalho de DNS: a private hosted zone do endpoint do EKS é **invisível na conta**
@@ -180,8 +180,8 @@ aplicar a cluster novo, mas é a primeira vez que se exercita), e a aresta `depe
 regra de `443` antes dos releases de helm **não é testável offline** — se estiver errada, o sintoma é
 timeout no primeiro release.
 
-**Nada está de pé.** Subir para trabalhar no `2.4` exige, nesta ordem: `up-03-connectivity` (TGW +
-Client VPN, ~US$ 0,20/h) e depois `up-04-control-plane` (~US$ 0,23/h). Derrubar na ordem **inversa**.
+**Nada está de pé.** A sequência completa de subida — sete passos, com o túnel conectado **entre** a
+camada 03 e a 04 — está em **How to Resume**. Derrubar na ordem **inversa**, e o guard impõe.
 
 **IDs abaixo são de recursos JÁ DESTRUÍDOS** — servem para reconhecer o padrão, nunca para reusar.
 Todo `tgw-*`, `cvpn-*`, `vpc-*` da spoke e ARN de certificado muda a cada recriação.
@@ -198,18 +198,9 @@ por endpoint. Com 2 subnets privadas do hub, o real é ~US$ 0,20/h (~US$ 146/mê
 ~US$ 0,15/h (~US$ 110) que o `README.md` do plano documenta. Decidido manter as duas associações
 (redundância de AZ).
 
-Conectar, **depois** de a camada 03 subir de novo. O `~/trash/hub.ovpn` de hoje está **inválido**:
-a DNS name do endpoint muda a cada recriação, então reexportar sempre, nunca reaproveitar.
-
-```bash
-endpoint="$(cd aws/terraform/connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
-aws ec2 export-client-vpn-client-configuration \
-  --client-vpn-endpoint-id "${endpoint}" \
-  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
-aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
-aws-vpn-client connect --profile-name hub
-aws-vpn-client get-connection-status --profile-name hub
-```
+O `~/trash/hub.ovpn` que sobrou de qualquer sessão anterior está **inválido**: a DNS name do endpoint
+muda a cada recriação da camada 03, então reexportar sempre, nunca reaproveitar. Comandos nos passos
+3–4 da sequência de subida, em **How to Resume**.
 
 **Testar alcance à spoke exige regra temporária de SG.** O SG do cluster EKS nasce só com a regra
 auto-referenciada e a spoke não tem workload — não há alvo natural. E o SG tem de liberar o CIDR da
@@ -569,15 +560,60 @@ done
 k3d cluster list                    # esperado: vazio
 ```
 
-**Subir camada é por script, na ordem** (`aws/terraform/README.md` tem a tabela com custos e
-dependências):
+### Sequência de subida do ambiente inteiro
+
+Sete passos, e a ordem **não é preferência**: cada um consome o que o anterior entrega. O que mudou
+com o `2.5` é que **conectar o túnel deixou de ser passo de operador e passou a ser pré-requisito de
+apply** — os providers `helm`/`kubernetes` falam com o API server a partir da máquina que roda o
+`terraform apply`, e o endpoint público não existe mais.
 
 ```bash
 cd wasp-idp/aws/terraform
-./scripts/up-all                      # 00 state-backend → 01 network → 02 dns; centavos/mês
-./scripts/up-03-connectivity          # TGW + Client VPN, ~US$ 0,20/h — pré-requisito do 2.4
-./scripts/up-04-control-plane --yes   # ~US$ 0,23/h; fora do up-all de propósito
+
+# 1. T0 — centavos/mês. 00 state-backend → 01 network-foundation → 02 dns.
+./scripts/up-all
+
+# 2. T1 — TGW + Client VPN, ~US$ 0,20/h. Fora do up-all de propósito.
+./scripts/up-03-connectivity
+
+# 3. Exportar a configuração do túnel. O DNS do endpoint MUDA a cada recriação da camada 3:
+#    reexportar sempre, nunca reaproveitar um .ovpn antigo.
+endpoint="$(cd connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
+aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
+  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
+aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
+
+# 4. Conectar. Abre o navegador sozinho para o login SAML (handshake em 127.0.0.1:35001).
+aws-vpn-client connect --profile-name hub
+aws-vpn-client get-connection-status --profile-name hub   # tem de dizer Connected ANTES do passo 6
 ```
+
+```bash
+# 5. Regerar o tfvars da camada 4. Sem --enable-public-endpoint, o cluster nasce com o endpoint
+#    público FECHADO e nenhum IP é descoberto.
+cd control-plane && ./scripts/generate-tfvars --force && cd ..
+
+# 6. T2 — spoke + EKS + charts, ~US$ 0,23/h. É este apply que É o aceite do 2.5: se ele completa
+#    com o túnel de pé, a plataforma é operável privada.
+./scripts/up-04-control-plane --yes
+
+# 7. Provar o caminho: nome resolvendo para IP privado, e API respondendo pelo túnel.
+aws eks update-kubeconfig --name control-plane --region us-east-1 --profile cicd
+dig +short "$(aws eks describe-cluster --name control-plane --region us-east-1 --profile cicd \
+  --query 'cluster.endpoint' --output text | sed 's|https://||')"   # espera-se 10.2.x.x
+kubectl get nodes
+```
+
+**Se o passo 6 travar com timeout no primeiro release de helm, o suspeito é a aresta de ordenação**
+(`depends_on` da regra de `443` nos módulos de helm), não credencial — é a falha que nenhum teste
+offline pega.
+
+**Se o passo 4 não for feito antes do 6, o apply morre** no primeiro recurso `kubernetes`/`helm`. Não
+é bug: é a postura privada funcionando. O desbloqueio de emergência é
+`generate-tfvars --enable-public-endpoint --force` + reaplicar, que abre o endpoint só para o IP desta
+máquina.
+
+Custos e dependências por camada: `aws/terraform/README.md`.
 
 **Derrubar é na ordem INVERSA, e o guard impõe:** `control-plane/scripts/destroy` antes de
 `connectivity/us-east-1/scripts/destroy`. O segundo recusa com exit 1 enquanto houver attachment
@@ -591,7 +627,8 @@ salvo não sobrevive à expiração de credencial** — replanejar, não reaprov
 Branch corrente: `feat/private-access-phase-2`. A fase 1 foi mergeada em `main` por fast-forward e
 empurrada. Convenção — uma branch por fase — registrada em **In Progress**.
 
-**O trabalho ativo é o `2.4`** (DNS privado). O `2.3` está aceito e derrubado:
+**O trabalho ativo é o aceite conjunto `2.4` + `2.5` na AWS** — o código dos dois está escrito e
+verificado offline; falta o apply. Roteiro de aceite na seção "Aceite conjunto" do arquivo da fase:
 
 ```bash
 code docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md
@@ -605,13 +642,14 @@ aws-vpn-client --version          # 6.0.1 — se o comando não existir, alguém
 systemctl is-active aws-client-vpn-daemon.service
 ```
 
-Se for preciso subir a camada 2 para experimentar:
+Para subir só a camada 4 sobre uma 03 que já esteja de pé (o `init` é necessário na primeira vez em
+cada máquina; o bucket não é versionado, vem por `-backend-config`):
 
 ```bash
 cd aws/terraform/control-plane
 ./scripts/generate-tfvars --force
 terraform init -backend-config="bucket=tfstate-o-e4r8ndteju"
-./scripts/apply
+./scripts/apply                      # exige o túnel conectado desde o 2.5
 ```
 
 `terraform apply`/`destroy` rodam por `! <comando>` — o classifier de auto-mode bloqueia para o

@@ -38,6 +38,15 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 
 ## Testes
 
+- **Premissa sobre comportamento de serviço da AWS se confere na doc da AWS ANTES de escrever
+  código** — mesma disciplina de "achado sobre módulo do repo se confere no módulo". O passo `2.4`
+  inteiro (associação de zona privada, com Resolver inbound endpoint de plano B) caiu em duas frases
+  de uma página do EKS: o plano A era impossível e o plano B desnecessário. Custo de não conferir:
+  ~US$ 180/mês de recurso que não precisava existir.
+- **A regressão offline completa (13 diretórios) passa de 2 min** — rodar em background ou por
+  diretório, senão o teto de tempo de uma chamada corta no meio. E usar `-no-color`: os códigos ANSI
+  quebram qualquer `grep` na linha `Success!`/`Failure!`.
+
 - `terraform test` com `mock_provider` + `command = plan` roda **sem credencial e sem tocar a
   AWS**. É o ciclo red-green padrão aqui; usar antes de qualquer `apply`.
 - **`terraform init -backend=false` num diretório só com `tests/` falha** com `unknown provider`.
