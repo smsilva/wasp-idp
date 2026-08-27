@@ -159,16 +159,26 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.3` aceito, nada de pé**)
 
-**Último passo:** a sessão de 2026-08-27 não tocou AWS — escreveu a especificação da sequência de
-provisionamento (ver Frente C) e não mudou nenhum `.tf`. Antes dela: `2.3` implementado, aplicado,
-**aceito com pacote real** e derrubado. Aceite:
-`ping` a um nó do EKS em `10.2.0.0/16` pelo túnel — 3/3, 0% de perda, RTT ~140 ms. Detalhe completo
-e os quatro achados em **Completed Work**.
+**Último passo:** `2.4` **reescrito e implementado** junto com o `2.5`, offline, sem tocar AWS. O
+`2.4` não era trabalho de DNS: a private hosted zone do endpoint do EKS é **invisível na conta**
+(plano A impossível) e, com o endpoint público desligado, o **DNS público já resolve para IP
+privado** (plano B desnecessário, e custaria ~US$ 180/mês). Sobrou uma regra de security group —
+`443/tcp` a partir do CIDR da VPC hub — mais o flag do `2.5` fechando o endpoint **por default**.
+Detalhe e citações em **Completed Work**. Antes disso, a sessão de 2026-08-27 escreveu a
+especificação da sequência (Frente C); antes dela, o `2.3` foi aceito com pacote real e derrubado.
 
-**Próximo passo pretendido: `2.4`** — DNS privado (zona privada do cluster associada à VPC hub +
-`dns_servers` no endpoint). O risco conhecido está em Open Questions: a zona privada **não é output
-do `aws_eks_cluster`** e é recriada a cada provisão do cluster; plano B é Resolver inbound endpoint
-(~US$ 0,25/h).
+**Próximo passo: o aceite conjunto `2.4` + `2.5`, que exige AWS de pé.** Os dois não são
+verificáveis separados — com o endpoint público ligado o DNS devolve IP público e `kubectl` pelo
+túnel não prova nada. Roteiro em `02-private-access.md`, seção "Aceite conjunto": subir 03 → conectar
+túnel → subir 04 com o tfvars regenerado (o cluster nasce já fechado) → `dig` devolve IP de
+`10.2.0.0/16` → `kubectl get nodes` responde → com o túnel derrubado, `kubectl` falha por **rede**,
+não por autenticação. Custo enquanto de pé: ~US$ 0,43/h.
+
+**O apply é o teste de verdade, e há dois riscos declarados nele:** o cluster nasce com o endpoint
+público fechado desde a criação (a ressalva da doc sobre "ligar e desligar uma vez" não deveria se
+aplicar a cluster novo, mas é a primeira vez que se exercita), e a aresta `depends_on` que põe a
+regra de `443` antes dos releases de helm **não é testável offline** — se estiver errada, o sintoma é
+timeout no primeiro release.
 
 **Nada está de pé.** Subir para trabalhar no `2.4` exige, nesta ordem: `up-03-connectivity` (TGW +
 Client VPN, ~US$ 0,20/h) e depois `up-04-control-plane` (~US$ 0,23/h). Derrubar na ordem **inversa**.
@@ -446,9 +456,11 @@ Narrativa completa em `docs/archive.md` (2026-08-26). Conclusões que ficam ativ
 - **Quantas subnets privadas o hub tem por AZ, e o custo da associação.** A AWS cobra por associação de
   target network, então associar as duas subnets privadas dobra essa parcela em troca de redundância de
   AZ. O plano assume duas; se o custo apertar, uma resolve para PoC.
-- **Zona privada do endpoint do EKS** não é output do `aws_eks_cluster` e é recriada a cada provisão —
-  o lookup por hostname é frágil. Plano B (Resolver inbound endpoint) custa ~US$ 0,25/h. Risco do
-  `2.4`.
+- ~~**Zona privada do endpoint do EKS** não é output do `aws_eks_cluster`~~ — **RESOLVIDO no `2.4`, e
+  a pergunta estava mal posta.** A zona não é *"difícil de achar"*: ela **não aparece na conta**
+  (*"managed by Amazon EKS, and it doesn't appear in your account's Route 53 resources"*). E não
+  precisa ser achada — com o endpoint público desligado, o DNS **público** resolve o hostname para o IP
+  privado. Nem plano A nem plano B; sobrou uma regra de security group.
 - **Parametrizar** valores de `CLAUDE.local.md` (chart values? env? EnvironmentConfig?).
 - **Domínio pessoal em arquivo versionado:** `01-preparation.md:88` cita o domínio real por extenso,
   vindo do desenho original. Não está na lista de tokens proibidos (que é sobre a trilha corporativa),
@@ -476,9 +488,11 @@ Narrativa completa em `docs/archive.md` (2026-08-26). Conclusões que ficam ativ
 Itens fechados/retirados (tags de LBC `1.1`, TGW em `src/network` `2.3`, existência de
 `up-03-connectivity`) saíram desta lista — detalhe em `docs/archive.md`.
 
-1. **Endpoint da API do EKS público para `0.0.0.0/0`** — fechado offline no `1.2` (sem default,
-   lista vazia e `0.0.0.0/0` recusados no módulo/root); falta confirmar os 2 critérios que exigem a
-   camada 2 de pé (~US$ 165/mês). Fecha de vez no `2.5`, que depende de VPN + DNS.
+1. **Endpoint da API do EKS público para `0.0.0.0/0`** — fechado por default no `2.5`, mecanismo mais
+   forte que o do `1.2`: não existe mais valor de tfvars que exponha a API ao mundo (abrir é
+   break-glass explícito via `generate-tfvars --enable-public-endpoint`). **Falta o `apply`** que
+   prova o caminho privado inteiro (aceite conjunto `2.4`+`2.5`); até lá, o que existe é código e
+   teste, não comportamento observado.
 2. **Break-glass documentado, controles ausentes** — *unexpected*: MFA de root não verificado, alarme
    de uso de root não existe (falta regra EventBridge), ensaio nunca executado.
 3. **Management account com `AdministratorAccess` em usuário, não grupo** — *unexpected*: migrar para
@@ -677,6 +691,20 @@ Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por l
 - Um NLB por cluster, não por Service — fan-out por aplicação no mesh; hub escala por listener rule.
 - `X-Forwarded-For` + `numTrustedProxies`: com ALB na frente, o Istio vê o IP do ALB.
 
+**Endpoint da API do EKS**
+
+- **A private hosted zone do endpoint privado é invisível na conta** — a AWS a cria e associa à VPC do
+  cluster, mas ela não aparece nos recursos de Route 53 da conta. Qualquer desenho que dependa de
+  associá-la a outra VPC está morto na origem.
+- **Com o público fechado, o DNS público resolve para IP privado.** Não precisa de Resolver inbound
+  endpoint, zona própria nem `dns_servers` no Client VPN. Ressalva da doc: cluster que já existia e não
+  resolve privado se corrige ligando e desligando o acesso público uma vez.
+- **O que a doc exige para rede conectada por TGW é `443/tcp` no security group do CLUSTER** — é ele
+  que governa o endpoint privado, e `public_access_cidrs` não o afeta. Origem: o CIDR do **hub** (SNAT).
+- **`public_access_cidrs` omitido, nunca vazio, quando o endpoint público está desligado** — o provider
+  só faz drift detection do atributo *"when present in a configuration"*, e `[]` brigaria para sempre
+  com o `0.0.0.0/0` que a EKS guarda.
+
 **Rede / VPN**
 
 - TGW nasce com association/propagation default ligados — desligar os dois é o que torna
@@ -747,10 +775,19 @@ Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por l
       + `aws_ram_sharing_with_organization` na raiz `dns/`, accepter do attachment cross-conta,
       `tgw-rt-spoke`, as duas propagações e as rotas. **Aceito com ping real:** 3/3, RTT ~140 ms
       a um nó do EKS dentro de `10.2.0.0/16`, pelo túnel.
-- [ ] **`2.4`–`2.5`** — DNS privado, fechar a API.
+- [x] **`2.4`** — deixou de ser DNS: regra de `443/tcp` a partir do CIDR da VPC hub no SG do cluster.
+      A zona privada do EKS é invisível na conta (plano A impossível) e o DNS público resolve para IP
+      privado com o endpoint fechado (plano B desnecessário). **Escrito, 111 testes offline, 6
+      mutações capturadas.**
+- [x] **`2.5`** — `endpoint_public_access = false` **por default**, com a lista de CIDRs omitida (não
+      vazia) quando fechado. Abrir é break-glass declarado no tfvars.
+- [ ] **Aceite conjunto `2.4` + `2.5` na AWS** — o único que exige um apply inteiro com VPN
+      conectada. Roteiro de 5 passos em `02-private-access.md`.
 - [x] Derrubar as duas camadas na ordem inversa — feito, 46 + 18 recursos, 0 falhas, custo/h zero.
-- [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
-      laptop segue funcionando, e a API recusa de outro IP.
+- [ ] Os dois critérios pendentes do `1.2` **mudaram de forma com o `2.5`**: "a API recusa de outro IP"
+      deixa de fazer sentido (não há endpoint público para recusar ninguém) e "o apply do laptop segue
+      funcionando" virou o próprio aceite do `2.5`, agora **com o túnel**. Verificar na forma nova, não
+      na antiga. O caminho `1.2` sobrevive só como break-glass.
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
 - [ ] **`3.1`–`3.2`** — NLB interno + gateway Istio; depois lado hub com cert e listener rule.
 - [ ] **`4.1`–`4.2`** — as duas provas negativas. **Antes de executar, reler o desenho delas à luz
@@ -825,8 +862,10 @@ Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por l
 Narrativa detalhada de cada entrega concluída vive em `docs/archive.md` (um item por sessão/passo).
 Resumo do que já está lá, do mais recente ao mais antigo:
 
-- **2026-08-27** — especificação da sequência de provisionamento + dicionário de 61 recursos. Não
-  tocou AWS.
+- **2026-08-27** — `2.4`+`2.5`: SG rule para o endpoint privado do EKS, endpoint público fechado por
+  default (Route 53 privada da EKS é inacessível de propósito — dois recursos viraram `Rejected`);
+  falta o `apply` de aceite. Especificação da sequência de provisionamento + dicionário de 61
+  recursos. Nenhum dos dois tocou AWS.
 - **2026-08-26** — `2.3` (spoke entra na malha via TGW, aceito com ping real) + teardown exercitado;
   `2.2` (apply da `connectivity/` + resolução das duas perguntas do aceite + a raiz escrita); `2.1`
   (portão do client VPN); scripts de sequência (`up-*`) + camada 2 de DNS aplicada; `1.3` (raiz
