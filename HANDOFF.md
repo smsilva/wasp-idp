@@ -156,41 +156,59 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.2` aplicada, aceite confirmado**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.3` aceito, nada de pé**)
 
-**Último passo:** `2.2` aplicada na AWS por `up-03-connectivity --yes` — 12 recursos criados, 0
-falhas, ~10 min (a maior parte em `aws_ec2_client_vpn_network_association`, ~6m40s cada). TGW
-`tgw-09a8a60996c37ad64`, endpoint `cvpn-endpoint-0ed2eee5abea362d4`, certificado ACM validado por
-DNS para `vpn.nonprod.wasp.silvios.me`. O passo de console foi concluído antes: aplicação SAML
+**Último passo:** `2.3` implementado, aplicado, **aceito com pacote real** e derrubado. Aceite:
+`ping` a um nó do EKS em `10.2.0.0/16` pelo túnel — 3/3, 0% de perda, RTT ~140 ms. Detalhe completo
+e os quatro achados em **Completed Work**.
+
+**Próximo passo pretendido: `2.4`** — DNS privado (zona privada do cluster associada à VPC hub +
+`dns_servers` no endpoint). O risco conhecido está em Open Questions: a zona privada **não é output
+do `aws_eks_cluster`** e é recriada a cada provisão do cluster; plano B é Resolver inbound endpoint
+(~US$ 0,25/h).
+
+**Nada está de pé.** Subir para trabalhar no `2.4` exige, nesta ordem: `up-03-connectivity` (TGW +
+Client VPN, ~US$ 0,20/h) e depois `up-04-control-plane` (~US$ 0,23/h). Derrubar na ordem **inversa**.
+
+**IDs abaixo são de recursos JÁ DESTRUÍDOS** — servem para reconhecer o padrão, nunca para reusar.
+Todo `tgw-*`, `cvpn-*`, `vpc-*` da spoke e ARN de certificado muda a cada recriação.
+
+**O passo de console do `2.2` continua válido e não precisa ser refeito:** aplicação SAML
 `hub-client-vpn` no Identity Center (management account), attribute mappings
 (`Subject`→`${user:email}`/emailAddress, `memberOf`→`${user:groups}`/unspecified), grupo
-`platform-admins` atribuído, metadata XML em `aws/terraform/connectivity/us-east-1/saml-metadata.xml`
-(gitignored).
+`platform-admins` atribuído. O metadata XML segue em
+`aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored) — ele **sobrevive** ao
+destroy da camada.
 
-**Aceite do `2.2` confirmado ponta a ponta:** `aws-vpn-client import-profile` + `connect` abriu o
-navegador **sozinho**, sem intervenção manual — a hipótese de que o handshake SAML dependeria da GUI
-não se confirmou. Login completou em `127.0.0.1:35001` (o ACS URL da aplicação SAML — confirma o
-**guia do administrador**, não o `8096–8115` do guia do usuário Linux, para essa etapa do fluxo).
-Túnel `Connected`, IP `100.64.0.2/27` (dentro de `100.64.0.0/22`), rotas `10.0.0.0/12` e `10.1.0.0/16`
-via `tun0` — target network `associated` nas duas AZs, supernet inteiro roteando pelo túnel.
+**Custo do T1 ainda por corrigir no plano:** o Client VPN cobra por **associação de subnet**, não
+por endpoint. Com 2 subnets privadas do hub, o real é ~US$ 0,20/h (~US$ 146/mês), não os
+~US$ 0,15/h (~US$ 110) que o `README.md` do plano documenta. Decidido manter as duas associações
+(redundância de AZ).
 
-**Achado do plan, ainda não registrado no plano em si:** o Client VPN cobra por **associação de
-subnet**, não por endpoint. Com 2 subnets privadas do hub (uma por AZ), o custo real do T1 é
-~US$ 0,20/h (~US$ 146/mês parado), não os ~US$ 0,15/h (~US$ 110) que o `README.md` do plano ainda
-documenta. Decidido manter as duas associações (redundância de AZ); atualizar a tabela de custo do
-plano quando alguém voltar a editá-la.
-
-Conectar (perfil exportado para `~/trash/hub.ovpn` — sobrevive a reboot, ao contrário de `/tmp`; a
-DNS name do endpoint muda a cada recriação da camada, nunca reaproveitar `.ovpn` velho):
+Conectar, **depois** de a camada 03 subir de novo. O `~/trash/hub.ovpn` de hoje está **inválido**:
+a DNS name do endpoint muda a cada recriação, então reexportar sempre, nunca reaproveitar.
 
 ```bash
+endpoint="$(cd aws/terraform/connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
 aws ec2 export-client-vpn-client-configuration \
-  --client-vpn-endpoint-id cvpn-endpoint-0ed2eee5abea362d4 \
+  --client-vpn-endpoint-id "${endpoint}" \
   --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
 aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
 aws-vpn-client connect --profile-name hub
 aws-vpn-client get-connection-status --profile-name hub
 ```
+
+**Testar alcance à spoke exige regra temporária de SG.** O SG do cluster EKS nasce só com a regra
+auto-referenciada e a spoke não tem workload — não há alvo natural. E o SG tem de liberar o CIDR da
+**VPC hub**, não o do cliente (o Client VPN faz SNAT):
+
+```bash
+aws ec2 authorize-security-group-ingress --profile cicd --region us-east-1 \
+  --group-id <sg-do-cluster> \
+  --ip-permissions IpProtocol=icmp,FromPort=-1,ToPort=-1,IpRanges='[{CidrIp=10.1.0.0/16}]'
+```
+
+Revogar depois: é drift manual num SG gerenciado pelo EKS.
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
 uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
@@ -439,6 +457,14 @@ nenhum hoje.
 - ~~**O certificado do endpoint tem nome (`vpn.<subzona>`) diferente do hostname de conexão.**~~ —
   **RESOLVIDO no `2.2`:** o túnel conectou normalmente com o certificado `vpn.nonprod.wasp.silvios.me`
   contra um endpoint de hostname diferente. `remote-cert-tls server` de fato não confere nome.
+- **O SNAT do Client VPN afeta as provas negativas do `4.1`/`4.2`?** Quem chega numa spoke pelo
+  Client VPN de manutenção aparece com IP da **VPC hub**, não do cliente. Logo uma prova de
+  isolamento baseada em "origem X não alcança spoke Y" **não distingue operador de operador** por
+  endereço — a distinção vive na authorization rule por grupo, do lado do endpoint. Verificar se o
+  `4.1` como escrito ainda prova o que pretende, ou se precisa de outro vetor. **Não analisado.**
+- **Fase 3 (ingress) não foi revisitada à luz do SNAT.** O caminho ALB→NLB→gateway não passa pelo
+  Client VPN, então provavelmente não muda nada — mas o `X-Forwarded-For`/`numTrustedProxies` já
+  era ponto de atenção ali, e vale conferir junto.
 - **Quantas subnets privadas o hub tem por AZ, e o custo da associação.** A AWS cobra por associação de
   target network, então associar as duas subnets privadas dobra essa parcela em troca de redundância de
   AZ. O plano assume duas; se o custo apertar, uma resolve para PoC.
@@ -541,6 +567,19 @@ nenhum hoje.
 22. **Portal self-service do Client VPN não configurado** — *intentional*: exige uma **segunda**
     aplicação SAML no Identity Center. Vale para a demo (a pessoa baixa a própria configuração em vez
     de receber arquivo por e-mail); fora por ora.
+23. **Attachment cross-conta tem perpetual diff em `transit_gateway_default_route_table_*`** —
+    *intentional*, contornado com `ignore_changes`. Os dois atributos são write-only (não existem na
+    API do attachment) e o provider os deriva das route tables do TGW, que pertencem à conta
+    `network` e são invisíveis ao provider default (`cicd`). Sem o `ignore_changes`, todo plan
+    propõe `true -> false` para sempre. **Custo do contorno:** o state passa a guardar `true`, que
+    não é a verdade; a verdade está no TGW (defaults desligados) e nas associação/propagações
+    explícitas. Conferido na AWS antes de ignorar.
+24. **Nenhuma prova de que spoke↔spoke não roteia** — *unexpected*, e é a propriedade central do
+    desenho. Só existe **uma** spoke; o isolamento por route table de tenant está construído mas
+    nunca foi exercitado contra uma segunda. É o `4.1`/`4.2`.
+25. **`aws/terraform/scripts/` não tem `up-05`+ nem `status`** — *unexpected*: continua sem forma de
+    perguntar "o que está de pé e quanto custa por hora". Ficou mais visível nesta sessão, em que
+    duas camadas caras subiram e a resposta veio de `terraform state list` conta-a-conta.
 
 ## How to Resume
 
@@ -554,11 +593,16 @@ for p in personal network cicd; do printf '%-10s ' "${p}"; aws sts get-caller-id
 ARN vazio ⟹ `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az`
 expira **independentemente** — conferir com `az account show`.
 
-**Custo hoje: ~US$ 0,50/mês** (a subzona de DNS, que fica de pé de propósito). Confirmar o resto:
+**Custo por hora hoje: ZERO.** Só a subzona de DNS (~US$ 0,50/mês) e o bucket de state (centavos).
+Confirmar por camada, não por memória — a leitura da AWS CLI nesta máquina passa por wrapper, então
+`terraform state list` é o caminho confiável:
 
 ```bash
-cd wasp-idp/aws/terraform/control-plane
-terraform state list | wc --lines   # 0 = destruída; 39 = de pé (~US$ 0,23/h)
+cd wasp-idp/aws/terraform
+for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1; do
+  printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
+done
+# esperado: 0, 0, 3, 13
 k3d cluster list                    # esperado: vazio
 ```
 
@@ -568,8 +612,15 @@ dependências):
 ```bash
 cd wasp-idp/aws/terraform
 ./scripts/up-all                      # 00 state-backend → 01 network → 02 dns; centavos/mês
-./scripts/up-04-control-plane --yes   # ~US$ 165/mês; fora do up-all de propósito
+./scripts/up-03-connectivity          # TGW + Client VPN, ~US$ 0,20/h — pré-requisito do 2.4
+./scripts/up-04-control-plane --yes   # ~US$ 0,23/h; fora do up-all de propósito
 ```
+
+**Derrubar é na ordem INVERSA, e o guard impõe:** `control-plane/scripts/destroy` antes de
+`connectivity/us-east-1/scripts/destroy`. O segundo recusa com exit 1 enquanto houver attachment
+de fora, e nomeia quem destruir primeiro. Contar ~10 min no destroy da connectivity: as
+`aws_ec2_client_vpn_network_association` levam ~7–10 min cada, simétrico com a criação — **não é
+travamento**.
 
 Sem tty, os `up-*` salvam o plano, dizem onde está e saem com erro em vez de assumir o sim. **Plano
 salvo não sobrevive à expiração de credencial** — replanejar, não reaproveitar.
@@ -577,7 +628,7 @@ salvo não sobrevive à expiração de credencial** — replanejar, não reaprov
 Branch corrente: `feat/private-access-phase-2`. A fase 1 foi mergeada em `main` por fast-forward e
 empurrada. Convenção — uma branch por fase — registrada em **In Progress**.
 
-**O trabalho ativo é o `2.2`**, primeiro passo da cadeia que cobra por hora:
+**O trabalho ativo é o `2.4`** (DNS privado). O `2.3` está aceito e derrubado:
 
 ```bash
 code docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md
@@ -697,6 +748,19 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 - **Client VPN com SAML exige o client da AWS**; **cert de servidor é obrigatório em qualquer tipo de
   autenticação**; `memberOf` tem de carregar **IDs** de grupo, não nomes; **nunca**
   `authorize_all_groups = true`.
+- **O Client VPN faz SNAT.** O tráfego chega à spoke com origem no CIDR da **VPC hub**, não no client
+  CIDR. Consequência prática: **não escrever rota para o client CIDR** em spoke nenhuma (o retorno
+  vai para o CIDR do hub, já coberto pela rota do supernet), e liberar o CIDR **do hub** nos security
+  groups de destino. Comprovado com pacote no `2.3`; a doc do cenário *"Access a peered VPC"* diz o
+  mesmo mandando liberar o **security group do endpoint**.
+- **Attachment cross-conta de TGW tem DOIS portões, não um.** Primeiro RAM
+  (`aws_ram_sharing_with_organization` na Organization + share + associations); depois o **aceite do
+  attachment em si**, porque o TGW nasce com `auto_accept_shared_attachments = disable`. Sem o
+  segundo, o attachment fica em `pendingAcceptance` e associação/propagação/rota falham com
+  `IncorrectState` / `InvalidTransitGatewayID.NotFound` — erros que não citam o aceite pendente.
+- **Hipótese sobre caminho de rede se confere com um PACOTE, não lendo route table.** No `2.3` as
+  tabelas estavam todas certas nas duas contas, no TGW e nas duas VPCs, e mesmo assim não passava.
+  Duas rotas foram escritas perseguindo a hipótese errada antes de o `ping` responder.
 - **O client da AWS VPN roda nesta máquina, e desde a 6.0.1 é scriptável** (portão `2.1`,
   2026-08-26). Ubuntu 24.04 AMD64 é oficialmente suportado — 22.04, 24.04 e 26.04 estão na doc — e o
   build hoje é GTK/Electron, não o Mono/WPF que exigia distro antiga. O pacote instala `awsvpnclient`
@@ -779,7 +843,13 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       laptop segue funcionando, e a API recusa de outro IP.
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
 - [ ] **`3.1`–`3.2`** — NLB interno + gateway Istio; depois lado hub com cert e listener rule.
-- [ ] **`4.1`–`4.2`** — as duas provas negativas.
+- [ ] **`4.1`–`4.2`** — as duas provas negativas. **Antes de executar, reler o desenho delas à luz
+      do SNAT** (Open Questions): prova de isolamento por endereço de origem não distingue operador
+      de operador quando todos chegam com IP da VPC hub.
+- [ ] **Ao final da fase 4 inteira** (não antes), gerar um **diagrama da solução completa** com a
+      skill `aws-architecture-diagram-skill`: hub (TGW, Client VPN, SAML), spokes (VPC, EKS,
+      attachment, `tgw-rt-spoke`), RAM sharing na management account, ingress da fase 3
+      (NLB + Istio) e as propagações do TGW. **Pedido explícito do usuário nesta sessão.**
 - [x] Criar `aws/terraform/scripts/` — feito, com `lib` + `up-00`/`up-01`/`up-02`/`up-04`/`up-all`.
 - [ ] Acrescentar `status` a `aws/terraform/scripts/` (o `platform-status` do plano): o que está de pé
       por nível e quanto custa/h. Antídoto para "esqueci ligado" e para "achei que era resíduo e

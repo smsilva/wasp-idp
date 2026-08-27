@@ -29,6 +29,12 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   o critério de parada de cada passo.
 - Trocar a `key` de um state existente: copiar o objeto no S3 para a nova key, `init` na nova
   raiz, conferir `state list` e `plan -detailed-exitcode` = 0, e só então apagar a key antiga.
+- **`apply` que morre no meio deixa recurso criado FORA do state, e um lock órfão — e é
+  recuperável sem destruir nada.** A AWS continua provisionando depois de o processo morrer.
+  Receita: `terraform force-unlock -force <id>` (confirmar antes que não há processo `terraform`
+  vivo), `terraform import` de cada recurso órfão, e então um `plan` — que tem de vir **sem
+  duplicata**, provando a adoção. Aconteceu com o cluster EKS e o NAT Gateway; os dois voltaram
+  ao state sem recriar nada.
 
 ## Testes
 
@@ -123,6 +129,11 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - **`-target` volta a ser necessário noutro caso:** um data source que fica "known after
   apply" cascateia para os providers e faz o Terraform propor recriar **todos** os
   `helm_release`. Sintoma: plan propondo substituir releases sem motivo.
+- **O `helm_release` do ArgoCD deixa CRDs para trás no destroy**, com aviso
+  *"These resources were kept due to the resource policy"* (`applications`, `applicationsets`,
+  `appprojects.argoproj.io`). Inócuo quando o cluster inteiro vai junto; **importa se um dia só o
+  release for removido** de um cluster que fica de pé — os CRDs sobrevivem e um reinstall encontra
+  schema antigo.
 - No **provider `helm` 3.x o `kubernetes` virou atributo**, não bloco: `kubernetes = { ... }`
   com `exec = { ... }` dentro. Exemplo vivo da composição inteira (AKS + ArgoCD + Istio) em
   `examples/cluster_argocd_ingress_istio` do repo `azure-kubernetes` (caminho em
@@ -213,6 +224,11 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   aceite pendente. Fix: `aws_ec2_transit_gateway_vpc_attachment_accepter`, criado com o provider
   `aws.network` (dono do TGW), com `depends_on` explícito nas três peças que dependem do
   attachment estar `available`.
+- **Uma spoke recém-provisionada não tem alvo natural para teste de alcance.** O security group do
+  cluster EKS nasce só com a regra auto-referenciada (tráfego EFA); nada de fora entra, e não há
+  workload. Provar conectividade exige uma regra **temporária** (ICMP a partir do CIDR da VPC hub
+  — ver SNAT abaixo) e removê-la depois. Não deixar a regra: ela é drift manual num SG gerenciado
+  pelo EKS, some no próximo recreate do cluster e ninguém sabe por que o teste parou de funcionar.
 - **O Client VPN faz SNAT: o tráfego chega à spoke com origem no CIDR da VPC HUB, não no client
   CIDR.** Comprovado no aceite do `2.3`: com o security group do cluster liberando só
   `100.64.0.0/22` (o client CIDR), o ping não passava; liberando `10.1.0.0/16` (a VPC hub),
