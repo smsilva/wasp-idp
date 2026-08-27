@@ -147,31 +147,11 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 
 ## Architecture decisions (recorded)
 
-- **azurerm version:** `infra/terraform/cluster-zero/` uses `azurerm ~> 4.x` (modern). Do NOT add the new AKS module to `azure-platform-foundation` — that repo is pinned to `azurerm 2.72.0` and would require a risky full upgrade.
-- **Cluster-zero Terraform boundary:** Terraform provisions AKS + installs ArgoCD only. Crossplane and Azure providers arrive via GitOps (app-of-apps) after ArgoCD is up — not via Terraform.
-- **Platform Library vs. per-project GitOps repo:** central Crossplane Compositions/XRDs live in a read-only Platform Library repo; each project's GitOps config lives in its own write-restricted repo (only that project's Backstage instance can write to it). This is the blast-radius/write-access isolation boundary.
-- **Per-project isolation model:** security boundary is a separate Backstage instance per project (separate namespace, separate GitOps repo, separate GitHub org) — not RBAC inside a shared instance. One project's team must not be able to discover another project's existence.
-- **Crossplane provider wait timeout:** on a resource-contrained host (8 cores, 3-node k3d), the 10 Azure providers can take >600 s to reach `Healthy` due to apiserver patch pressure under etcd load. Use `--timeout=900s` for `kubectl wait provider --all --for condition=Healthy`.
-- **Ingress é único, pelo hub (decidido 2026-08-26):** nenhuma spoke expõe acesso a si direto na
-  internet. Vale para qualquer entrada, HTTPS ou VPN — logo um VGW numa spoke também está fora.
-- **VPN de cliente termina no hub, uma `Site-to-Site VPN` por cliente (decidido 2026-08-26):** um
-  attachment por cliente no TGW ⟹ a route table de tenant no TGW isola nas **duas** direções, sem
-  depender de security group para separar cliente de cliente.
-- **Fronteira de state segue o ciclo de vida, não a conta (decidido 2026-08-26):** recurso da conta
-  do hub cujo ciclo de vida é o de um spoke (route table de tenant, target group, listener rule,
-  certificado do cluster) mora no state do spoke, via provider aliasado. Destruir a célula leva tudo
-  junto, sem órfão do lado do hub.
-- **Ingress: ALB no hub → NLB interno na spoke → gateway Istio (decidido 2026-08-26):** o NLB é do
-  Terraform e o `istio-ingressgateway` vira `ClusterIP` com `TargetGroupBinding` — cardinalidade 1
-  por cluster, e se o LBC criasse o NLB o ARN só existiria depois do workload, quebrando o apply
-  único. Nada cruza conta em tempo de execução.
-- **Sequência de provisionamento — dois pares de specs, um só autoritativo (2026-08-27):**
-  `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` + `-resource-dictionary.md` (61
-  recursos, um arquivo cada) descrevem a sequência **deste** repo, de `00 · accounts` a `08 · provas
-  de isolamento`. O par `2026-08-20-*` é retrato histórico do monólito Crossplane da trilha
-  corporativa — consultar como referência, não como estado. Ao acrescentar camada ou recurso,
-  atualizar os três: sequência, índice e arquivo do recurso.
-- **Cluster naming idea (not decided):** OpenStack's TripleO project uses `Undercloud` (the bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project Backstage clusters (overcloud-like).
+- **Ingress é único, pelo hub (decidido 2026-08-26):** nenhuma spoke expõe acesso a si direto na internet. Vale para qualquer entrada, HTTPS ou VPN — logo um VGW numa spoke também está fora.
+- **VPN de cliente termina no hub, uma `Site-to-Site VPN` por cliente (decidido 2026-08-26):** um attachment por cliente no TGW ⟹ a route table de tenant no TGW isola nas **duas** direções, sem depender de security group para separar cliente de cliente.
+- **Fronteira de state segue o ciclo de vida, não a conta (decidido 2026-08-26):** recurso da conta do hub cujo ciclo de vida é o de um spoke (route table de tenant, target group, listener rule, certificado do cluster) mora no state do spoke, via provider aliasado. Destruir a célula leva tudo junto, sem órfão do lado do hub.
+- **Ingress: ALB no hub → NLB interno na spoke → gateway Istio (decidido 2026-08-26):** o NLB é do Terraform e o `istio-ingressgateway` vira `ClusterIP` com `TargetGroupBinding` — cardinalidade 1 por cluster, e se o LBC criasse o NLB o ARN só existiria depois do workload, quebrando o apply único. Nada cruza conta em tempo de execução.
+- **Sequência de provisionamento — dois pares de specs, um só autoritativo (2026-08-27):** `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` + `-resource-dictionary.md` (61 recursos, um arquivo cada) descrevem a sequência **deste** repo, de `00 · accounts` a `08 · provas de isolamento`. O par `2026-08-20-*` é retrato histórico do monólito Crossplane da trilha corporativa — consultar como referência, não como estado. Ao acrescentar camada ou recurso, atualizar os três: sequência, índice e arquivo do recurso.
 
 ## Security TODOs (PoC hardening, deferred)
 
@@ -191,14 +171,9 @@ Flagged by automated security review — intentional PoC shortcuts, to revisit b
 
 ## Handoff conventions
 
-- `HANDOFF.md` (root) is the single, versioned session handoff — no `HANDOFF.local.md` counterpart.
-  Never generate one; if it reappears, fold it into `HANDOFF.md` and delete it.
-- PII (emails) and anything identifying a person/company go in `CLAUDE.local.md` (gitignored), never
-  in `HANDOFF.md` — the repo is public.
-- Completed-work narrative moves out of `HANDOFF.md` once a step is done, to keep the active handoff
-  short. Each entry gets its own file under `docs/archived/<theme>/<short-topic-description>.md`,
-  listed in `docs/archived/index.md` — never delete an indexed entry, only add. Keep only a one-line
-  summary + date in `HANDOFF.md`.
+- `HANDOFF.md` (root) is the single, versioned session handoff — no `HANDOFF.local.md` counterpart. Never generate one; if it reappears, fold it into `HANDOFF.md` and delete it.
+- PII (emails) and anything identifying a person/company go in `CLAUDE.local.md` (gitignored), never in `HANDOFF.md` — the repo is public.
+- Completed-work narrative moves out of `HANDOFF.md` once a step is done, to keep the active handoff short. Keep only a one-line summary + date in `HANDOFF.md`. How the archive itself is organised (folder-per-theme, naming, immutability, `index.md` as the single entry point) is documented once, in `docs/archived/README.md` — read it there instead of restating the rule here.
 
 ## This file
 

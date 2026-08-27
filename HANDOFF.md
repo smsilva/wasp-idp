@@ -480,6 +480,10 @@ Narrativa completa em
   observabilidade centralizada; nenhuma existe.
 - **Trilha Azure pausada ganhou destino:** `azure/terraform/simulated-client/` cria o slot
   `azure/terraform/`, onde `cluster-zero` pode aterrar depois.
+- **Cluster naming idea (not decided):** OpenStack's TripleO project uses `Undercloud` (the
+  bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it
+  produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project
+  Backstage clusters (overcloud-like).
 
 ## Known Broken
 
