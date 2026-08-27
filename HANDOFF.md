@@ -90,14 +90,18 @@ portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por 
 | `state-backend` | `network` | `state-backend/` | centavos | aplicada |
 | `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
-| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) | ⚠️ **DE PÉ** — subida no `2.3` e **não derrubada** |
+| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **destruída** (state com 0 recursos) |
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
-| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **aplicada** — T1, de pé agora |
+| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **destruída** (state com 0 recursos) |
 
-> ⚠️ **As duas camadas caras estão ligadas: ~US$ 0,43/h somadas.** Derrubar na ordem inversa —
-> `control-plane/scripts/destroy` **antes** de `connectivity/us-east-1/scripts/destroy` (o
-> attachment da spoke vive no state da control-plane, e a AWS recusa deletar TGW com attachment
-> vivo). A `connectivity` é T1 e pode ficar durante o dia; a `control-plane` não.
+**Custo por hora hoje: ZERO.** Verificado ao fim do `2.3`: nenhum TGW, Client VPN endpoint, EKS ou
+NAT vivo em nenhuma das contas. Sobra só `dns` (3 recursos) e as duas `network-foundation` (13
+cada, sem NAT).
+
+> **Ordem de teardown, agora exercitada e não só documentada:** `control-plane/scripts/destroy`
+> **antes** de `connectivity/us-east-1/scripts/destroy`. O attachment da spoke vive no state da
+> control-plane, e a AWS recusa deletar TGW com attachment vivo. O guard do `destroy` da
+> connectivity impõe isso — recusa com exit 1 e nomeia quem destruir primeiro.
 
 Bucket de state: `tfstate-o-e4r8ndteju`, na conta `network`. Nenhum cluster k3d de pé.
 
@@ -770,7 +774,7 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       `tgw-rt-spoke`, as duas propagações e as rotas. **Aceito com ping real:** 3/3, RTT ~140 ms
       a um nó do EKS dentro de `10.2.0.0/16`, pelo túnel.
 - [ ] **`2.4`–`2.5`** — DNS privado, fechar a API.
-- [ ] **Derrubar a `control-plane`** — subiu no `2.3` e ficou de pé (~US$ 0,23/h).
+- [x] Derrubar as duas camadas na ordem inversa — feito, 46 + 18 recursos, 0 falhas, custo/h zero.
 - [ ] Verificar os dois critérios pendentes do `1.2` na próxima vez que a camada 4 subir: o apply do
       laptop segue funcionando, e a API recusa de outro IP.
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
@@ -877,6 +881,31 @@ sem destruir nada.
 O `connectivity/scripts/destroy` foi corrigido junto: o guard de "attachment de fora" contava o
 attachment do **próprio hub** como estranho e teria recusado um destroy legítimo. Agora o exclui
 via o output novo `transit_gateway_attachment_id`.
+
+#### O teardown, exercitado na mesma sessão — e o que ele provou
+
+Derrubado na ordem inversa: **`control-plane` 46 recursos, `connectivity` 18, 0 falhas nos dois**,
+custo por hora de volta a zero (verificado na API: nenhum TGW, endpoint, EKS ou NAT vivo).
+
+- **O guard de precedência foi provado nas três posições**, rodando o `destroy` da connectivity
+  fora de ordem de propósito: recusou acusando 2 attachments, recusou acusando 1 depois do fix, e
+  passou com 0 depois da control-plane sair. Precedência executável, não parágrafo de README.
+- **Armadilha que quase passou batido: fix em script que depende de output novo só funciona
+  depois de o output existir no STATE.** O `transit_gateway_attachment_id` tinha sido escrito no
+  `outputs.tf` mas nunca aplicado, então `terraform output -raw` devolvia vazio, o guard não
+  excluía nada, e a mensagem acusava 2 em vez de 1 — código certo, comportamento errado. Um
+  `apply` de **zero recursos** (só materializa o output) resolveu. Vale para qualquer script deste
+  repo que leia `terraform output`.
+- **O corte de state cross-conta se sustentou no teardown**, que é onde ele seria testado de
+  verdade: `tgw-rt-spoke` é recurso da conta `network` mas vive no state do spoke — e **saiu junto
+  com o spoke**, sem órfão. É a decisão "fronteira de state segue o ciclo de vida, não a conta"
+  funcionando na direção que importa.
+- **Tempos, para reconhecer o padrão:** attachment do hub 1m16s, `tgw-rt-hub` 55s, rotas do Client
+  VPN ~3m30s cada, **network associations ~7–10 min cada** (simétrico com a criação), registro de
+  validação 32s, certificado ACM 1s. O teardown inteiro da connectivity passa de 10 min por causa
+  das associations — não é travamento.
+- Zero `Service` do tipo LoadBalancer no cluster, conferido **antes** de destruir: o bug do NLB
+  órfão (FLWP-69147) não tinha como ocorrer aqui. Vale manter a checagem no roteiro.
 
 ### `2.2` — apply na AWS, e as duas perguntas do aceite resolvidas (2026-08-26)
 

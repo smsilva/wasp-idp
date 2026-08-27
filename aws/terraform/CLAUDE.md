@@ -103,6 +103,12 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   no terminal deixa quem está acompanhando sem nenhum sinal de que algo está de fato em execução
   — indistinguível de travado. `scripts/lib` já grava log com timestamp; o que falta em applies
   soltos (fora dos scripts `up-NN`) é garantir que a saída também aparece ao vivo no terminal.
+- **Guard de script que lê `terraform output` só funciona depois de o output existir no STATE.**
+  O `transit_gateway_attachment_id` foi escrito no `outputs.tf` e o `destroy` da camada 03 passou a
+  consumi-lo — mas como nenhum `apply` tinha rodado desde então, `terraform output -raw` devolvia
+  vazio e o guard acusava 2 attachments de fora em vez de 1. **Código certo, comportamento errado,
+  e nada no plan aponta isso.** Um `apply` de zero recursos materializa o output. Vale para
+  qualquer script deste repo que leia `terraform output`.
 - **Todo `terraform apply`/`destroy` rodado fora dos scripts `up-NN` precisa de `-no-color`.**
   `scripts/lib` já usa; um `apply`/`destroy` improvisado com `| tee arquivo.log` sem essa flag
   salva o log cheio de códigos ANSI, ilegível fora de um terminal que os interpreta.
