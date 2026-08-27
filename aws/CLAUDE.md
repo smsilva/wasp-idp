@@ -393,3 +393,22 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 - Imagem do waiter: `registry.k8s.io/kubectl:v1.35.7`. **`bitnami/kubectl` não resolve mais
   no Docker Hub** → `ImagePullBackOff` → helm install falha por timeout (mas o Crossplane
   cria a infra mesmo assim — o hook é só barreira observável).
+
+## Onde cada camada do provisionamento in-cluster realmente existe
+
+- **XR `Environment` (`resources/environment/`) está BLOQUEADO e superado** — o orquestrador
+  dependia de um `spec.id` compartilhado que morreu na migração de identidade para `metadata.name`;
+  os filhos compostos ganham nome com hash e o match por label entre XRs quebra. Usar os charts
+  `hub`/`spoke`/`cluster` diretamente. O `README.md` de lá ainda diz "walk skeleton COMPLETE" —
+  é resíduo, o banner de BLOQUEADO é a verdade atual.
+- **As Compositions param no equivalente às fases 72/74** (`cluster-auth` + os dois
+  `remote-providerconfig`). Tudo de 76 em diante — sub-zona Route53, ESO, external-dns, LBC, Istio,
+  cert-manager, app de validação — existe **só** no chart faseado (`aws/eks/chart/templates/`).
+  Ao procurar ordenação dessas camadas, ler o chart, não as Compositions.
+- **`ArgoCDInstance`: só a etapa 1 está feita** (ProviderConfig helm + Release). O teardown ordenado
+  por `Usage` esbarrou em dois limites do Crossplane v2 — só `Usage` namespaced referencia recurso
+  namespaced (o Secret), e ele exige `spec.by`, que seria o `Release` de nome com hash, impatchável.
+  Alternativa não construída: proteger o MR `ClusterAuth` (cluster-scoped) em vez do Secret.
+- `Zone.forceDestroy: true` é aresta de teardown, não conveniência: external-dns e os desafios
+  DNS-01 do cert-manager escrevem records que não são MRs, e sem isso o `DeleteHostedZone` falha
+  com `HostedZoneNotEmpty`.

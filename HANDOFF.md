@@ -158,7 +158,9 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.3` aceito, nada de pé**)
 
-**Último passo:** `2.3` implementado, aplicado, **aceito com pacote real** e derrubado. Aceite:
+**Último passo:** a sessão de 2026-08-27 não tocou AWS — escreveu a especificação da sequência de
+provisionamento (ver Frente C) e não mudou nenhum `.tf`. Antes dela: `2.3` implementado, aplicado,
+**aceito com pacote real** e derrubado. Aceite:
 `ping` a um nó do EKS em `10.2.0.0/16` pelo túnel — 3/3, 0% de perda, RTT ~140 ms. Detalhe completo
 e os quatro achados em **Completed Work**.
 
@@ -392,6 +394,18 @@ Oito domínios: `bootstrap`, `network`, `accounts`, `security`, `dns`, `compute`
 `tenancy`. Os sete primeiros descrevem estado real ou alvo próximo; **`tenancy/` é puramente
 prospectivo**. `network/03-transit-gateway-isolation.md`, `network/04-vpn-access.md` e o domínio
 `dns/` inteiro já prescrevem o que o plano ativo implementa.
+
+**Especificação da sequência de provisionamento (2026-08-27, entregue):**
+`docs/superpowers/specs/2026-08-27-provisioning-sequence.md` é a sequência autoritativa deste repo,
+de `00 · accounts` (pré-Terraform) a `08 · provas de isolamento`, com o dicionário companheiro de 61
+recursos (`-resource-dictionary.md` + um arquivo por recurso). Cada camada traz árvore de
+dependência, contrato de `outputs:`, qual state possui o recurso e o estado (aplicado / derrubado /
+escrito / planejado). **Ao acrescentar camada ou recurso, atualizar os três juntos:** sequência,
+índice e arquivo do recurso — o par está checado por link e não tem órfão.
+
+O par `2026-08-20-*` ao lado é retrato histórico do monólito Crossplane da trilha corporativa,
+marcado como referência. **Não é estado deste repo** — começa na VPC e mistura conceitos que aqui
+são camadas separadas.
 
 ## O que a comparação com o desenho de referência ensinou (2026-08-26)
 
@@ -901,8 +915,58 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       (Known Broken 16).
 - [ ] Auditar asserções que dependem de um único `override_resource`: elas provam o valor, não a
       ligação. Duas com valores diferentes provam. Descoberto no `1.3`.
+- [x] Sequência de provisionamento e dicionário de recursos deste repo — ver Completed Work.
+- [ ] Ao fechar `2.4`, `2.5` e a fase 3: mover as camadas `06` e `07` da sequência de 📋 para ✅ e
+      trocar `undecided` por qual raiz possui a associação da zona privada.
+- [ ] Decidir e registrar como a trilha Crossplane (`aws/eks/resources/`) converge com as camadas
+      Terraform para uma spoke genérica — hoje são dois caminhos paralelos, e a sequência diz
+      `undecided`.
 
 ## Completed Work
+
+### Especificação da sequência de provisionamento e dicionário de recursos (2026-08-27)
+
+Duas entregas, nenhuma toca AWS.
+
+**Portada da trilha corporativa:** o par que descreve o monólito `environment-eks` — árvore de
+dependência por camada em YAML mais um dicionário com um arquivo por recurso (34 arquivos).
+Traduzido para inglês (nome, título e corpo) e limpo de toda referência que não pode aparecer em repo
+público: o API group virou `platform.example.com` e a atribuição de origem não cita caminho interno.
+
+**Escrita para este repo:** a sequência autoritativa (`00 · accounts` → `08 · provas`) e o dicionário
+de 61 recursos, um arquivo cada. Levantada por inventário do código real, não de memória — as três
+raízes Terraform, `aws/docs/accounts/` e o plano da Frente D.
+
+**As invariantes que o inventário confirmou** e que agora estão registradas no documento:
+
+- Leitura entre camadas é **sempre data source com filtro de tag**, nunca `terraform_remote_state` —
+  o lado que lê sobrevive a troca de backend ou de chave no lado que escreve. O filtro tem de
+  devolver exatamente um id, e `generate-tfvars` confere antes.
+- A **fronteira de state segue o ciclo de vida, não a conta**: recurso da conta do hub cuja vida é a
+  de um spoke mora no state do spoke, via provider aliasado.
+- **Attachment cross-account tem dois portões** — RAM organization-wide (camada `03`, one-off) e o
+  `..._accepter` explícito do lado do hub (camada `05`).
+- **Pod Identity tem ordenação real aqui**, ao contrário do monólito: a association precisa existir
+  antes do Helm release que a consome, ou o pod entra em CrashLoop com `AccessDenied`.
+- As **duas propagações de TGW não são simétricas** — trocar os argumentos quebra o roteamento em
+  silêncio.
+- A camada `00` **não é Terraform e não pode ser**. Região fora da lista aprovada da SCP aparece como
+  deny explícito no primeiro `Create*` de qualquer camada posterior, e parece bug de código.
+
+**Onde cada camada in-cluster realmente existe** (levantado nesta sessão, registrado em
+`aws/CLAUDE.md`): o XR `Environment` está bloqueado e superado — o `README.md` dele ainda diz
+"walk skeleton COMPLETE", que é resíduo. As Compositions param no equivalente às fases 72/74; tudo de
+76 em diante (sub-zona, ESO, external-dns, LBC, Istio, cert-manager, app de validação) existe só no
+chart faseado. `ArgoCDInstance` tem só a etapa 1.
+
+**Duas armadilhas de higiene de repo público:**
+
+- `FLWP` (chave do Jira interno) tinha sobrado numa linha versionada do `HANDOFF.md`. Removida.
+  **Continua alcançável pelo histórico do git** — decidido não reescrever, porque chave de projeto
+  sozinha não identifica empresa nem cliente.
+- O token `flow` **pega a palavra inglesa comum**: "in the echo flow", "account-creation flow" casam
+  no grep e viram falso positivo eterno. Reescrever para `walkthrough` / `sequence` ao gerar doc em
+  inglês aqui.
 
 ### `2.3` — a spoke entra na malha, e três coisas que só um pacote revelou (2026-08-26)
 

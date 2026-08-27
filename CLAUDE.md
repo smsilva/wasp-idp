@@ -165,6 +165,12 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
   Terraform e o `istio-ingressgateway` vira `ClusterIP` com `TargetGroupBinding` — cardinalidade 1
   por cluster, e se o LBC criasse o NLB o ARN só existiria depois do workload, quebrando o apply
   único. Nada cruza conta em tempo de execução.
+- **Sequência de provisionamento — dois pares de specs, um só autoritativo (2026-08-27):**
+  `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` + `-resource-dictionary.md` (61
+  recursos, um arquivo cada) descrevem a sequência **deste** repo, de `00 · accounts` a `08 · provas
+  de isolamento`. O par `2026-08-20-*` é retrato histórico do monólito Crossplane da trilha
+  corporativa — consultar como referência, não como estado. Ao acrescentar camada ou recurso,
+  atualizar os três: sequência, índice e arquivo do recurso.
 - **Cluster naming idea (not decided):** OpenStack's TripleO project uses `Undercloud` (the bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project Backstage clusters (overcloud-like).
 
 ## Security TODOs (PoC hardening, deferred)
