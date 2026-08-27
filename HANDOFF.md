@@ -180,6 +180,10 @@ aplicar a cluster novo, mas é a primeira vez que se exercita), e a aresta `depe
 regra de `443` antes dos releases de helm **não é testável offline** — se estiver errada, o sintoma é
 timeout no primeiro release.
 
+**Nada mais a escrever antes de executar.** Código, testes, plano, sequência do `README.md` e docs de
+recurso estão fechados; a próxima sessão sobe e mede. Comandos do aceite, com os critérios de passa/não
+passa e a prova negativa, em **How to Resume** → "Executar o teste".
+
 **Nada está de pé.** A sequência completa de subida — sete passos, com o túnel conectado **entre** a
 camada 03 e a 04 — está em **How to Resume**. Derrubar na ordem **inversa**, e o guard impõe.
 
@@ -560,96 +564,86 @@ done
 k3d cluster list                    # esperado: vazio
 ```
 
-### Sequência de subida do ambiente inteiro
+### Subir o ambiente — a sequência está no `aws/terraform/README.md`, não aqui
 
-Sete passos, e a ordem **não é preferência**: cada um consome o que o anterior entrega. O que mudou
-com o `2.5` é que **conectar o túnel deixou de ser passo de operador e passou a ser pré-requisito de
-apply** — os providers `helm`/`kubernetes` falam com o API server a partir da máquina que roda o
-`terraform apply`, e o endpoint público não existe mais.
+Os comandos completos (7 passos: `up-all` → `up-03` → exportar/importar `.ovpn` → **conectar** →
+`generate-tfvars --force` → `up-04` → provar) vivem em `aws/terraform/README.md`, seção "Sequência de
+provisionamento", com custo e dependência por camada. **Ler de lá, não daqui** — a duplicata é o que
+faz uma das duas ficar errada, e o README ganhou nesta sessão a seção "Manter este arquivo verdadeiro"
+justamente por isso.
 
-```bash
-cd wasp-idp/aws/terraform
+O que é de sessão e **não** está no README:
 
-# 1. T0 — centavos/mês. 00 state-backend → 01 network-foundation → 02 dns.
-./scripts/up-all
+- **Nada está de pé, e o ponto de partida é o zero.** Custo/h atual: zero. Subir tudo para o teste
+  custa ~US$ 0,48/h enquanto ligado (0,20 da 03 + 0,05 da conexão + 0,23 da 04).
+- **O client da VPN já está instalado nesta máquina** (6.0.1, portão `2.1`) — conferir, não
+  reinstalar. `latest` entrega 5.4.1, **sem CLI**: regressão silenciosa de capacidade.
+- **`~/trash/hub.ovpn` de sessões anteriores está inválido** — a DNS name do endpoint muda a cada
+  recriação da 03. Reexportar sempre.
+- **O passo de console do `2.2` não precisa ser refeito** (aplicação SAML, mappings, grupo) e o
+  `saml-metadata.xml` sobrevive ao destroy da camada.
 
-# 2. T1 — TGW + Client VPN, ~US$ 0,20/h. Fora do up-all de propósito.
-./scripts/up-03-connectivity
+### Executar o teste — o aceite conjunto `2.4` + `2.5`
 
-# 3. Exportar a configuração do túnel. O DNS do endpoint MUDA a cada recriação da camada 3:
-#    reexportar sempre, nunca reaproveitar um .ovpn antigo.
-endpoint="$(cd connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
-aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
-  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
-aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
-
-# 4. Conectar. Abre o navegador sozinho para o login SAML (handshake em 127.0.0.1:35001).
-aws-vpn-client connect --profile-name hub
-aws-vpn-client get-connection-status --profile-name hub   # tem de dizer Connected ANTES do passo 6
-```
+É o trabalho ativo, e é a única coisa que falta na fase 2. Depois de o `up-04` completar:
 
 ```bash
-# 5. Regerar o tfvars da camada 4. Sem --enable-public-endpoint, o cluster nasce com o endpoint
-#    público FECHADO e nenhum IP é descoberto.
-cd control-plane && ./scripts/generate-tfvars --force && cd ..
-
-# 6. T2 — spoke + EKS + charts, ~US$ 0,23/h. É este apply que É o aceite do 2.5: se ele completa
-#    com o túnel de pé, a plataforma é operável privada.
-./scripts/up-04-control-plane --yes
-
-# 7. Provar o caminho: nome resolvendo para IP privado, e API respondendo pelo túnel.
 aws eks update-kubeconfig --name control-plane --region us-east-1 --profile cicd
-dig +short "$(aws eks describe-cluster --name control-plane --region us-east-1 --profile cicd \
-  --query 'cluster.endpoint' --output text | sed 's|https://||')"   # espera-se 10.2.x.x
-kubectl get nodes
+host="$(aws eks describe-cluster --name control-plane --region us-east-1 --profile cicd \
+  --query 'cluster.endpoint' --output text | sed 's|https://||')"
+dig +short "${host}"     # PASSA se devolver 10.2.x.x — IP privado por DNS público
+kubectl get nodes        # PASSA se responder
 ```
 
-**Se o passo 6 travar com timeout no primeiro release de helm, o suspeito é a aresta de ordenação**
-(`depends_on` da regra de `443` nos módulos de helm), não credencial — é a falha que nenhum teste
-offline pega.
+**O apply do `up-04` é metade do aceite**, não preparação para ele: se ele completa com o túnel de pé
+e o endpoint público fechado desde a criação do cluster, a plataforma é operável privada. Registrar o
+tempo total (referência: ~13 min quando o endpoint era público).
 
-**Se o passo 4 não for feito antes do 6, o apply morre** no primeiro recurso `kubernetes`/`helm`. Não
-é bug: é a postura privada funcionando. O desbloqueio de emergência é
-`generate-tfvars --enable-public-endpoint --force` + reaplicar, que abre o endpoint só para o IP desta
-máquina.
+Fechar com a **prova negativa**, que é o que distingue "funciona" de "funciona pelo motivo certo":
 
-Custos e dependências por camada: `aws/terraform/README.md`.
+```bash
+aws-vpn-client disconnect --profile-name hub
+kubectl get nodes        # tem de falhar por REDE (timeout / no route), nunca por autenticação
+```
 
-**Derrubar é na ordem INVERSA, e o guard impõe:** `control-plane/scripts/destroy` antes de
-`connectivity/us-east-1/scripts/destroy`. O segundo recusa com exit 1 enquanto houver attachment
-de fora, e nomeia quem destruir primeiro. Contar ~10 min no destroy da connectivity: as
-`aws_ec2_client_vpn_network_association` levam ~7–10 min cada, simétrico com a criação — **não é
-travamento**.
+Falha com `Unauthorized`/`credentials` em vez de timeout significa que o tráfego ainda sai por um
+caminho público — investigar antes de declarar o `2.5` aceito.
 
-Sem tty, os `up-*` salvam o plano, dizem onde está e saem com erro em vez de assumir o sim. **Plano
-salvo não sobrevive à expiração de credencial** — replanejar, não reaproveitar.
+**Os dois modos de falha esperados, para reconhecer em vez de depurar do zero:**
 
-Branch corrente: `feat/private-access-phase-2`. A fase 1 foi mergeada em `main` por fast-forward e
-empurrada. Convenção — uma branch por fase — registrada em **In Progress**.
+| Sintoma | Causa provável |
+|---|---|
+| `up-04` trava com timeout no primeiro release de helm | a aresta `depends_on` que põe a regra de `443` antes dos releases (Known Broken 25) — não é credencial |
+| `dig` devolve IP público depois do apply | cluster criado já fechado pode não resolver privado (Known Broken 26). Caminho: ligar o endpoint público, aplicar, desligar, aplicar |
 
-**O trabalho ativo é o aceite conjunto `2.4` + `2.5` na AWS** — o código dos dois está escrito e
-verificado offline; falta o apply. Roteiro de aceite na seção "Aceite conjunto" do arquivo da fase:
+**Derrubar no fim do dia, sempre**, mesmo com o teste inconcluso: ordem inversa, `control-plane`
+antes de `connectivity`.
+
+`control-plane/scripts/destroy` recusa se houver XR vivo no Crossplane ou se o contexto do `kubectl`
+apontar para outro cluster; o `destroy` da `connectivity` recusa enquanto houver attachment de fora do
+próprio state. Contar **~10 min** no destroy da 03 (cada `aws_ec2_client_vpn_network_association` leva
+7–10 min, simétrico com a criação) — não é travamento.
+
+**Preflight antes de subir qualquer coisa:**
+
+```bash
+aws-vpn-client --version                              # 6.0.1 — ausente ⟹ alguém instalou por `latest`
+systemctl is-active aws-client-vpn-daemon.service
+terraform -chdir=aws/terraform/control-plane init -backend-config="bucket=tfstate-o-e4r8ndteju"
+```
+
+O `init` é necessário uma vez por máquina: o nome do bucket não é versionado, entra por
+`-backend-config`. Sem tty, os `up-*` salvam o plano, dizem onde está e saem com erro em vez de
+assumir o sim — usar `--yes`. **Plano salvo não sobrevive à expiração de credencial**: replanejar,
+não reaproveitar.
+
+Branch corrente: `feat/private-access-phase-2`. Convenção — uma branch por fase — em **In Progress**.
+
+Contexto de desenho, se precisar do porquê antes de executar:
 
 ```bash
 code docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md
 code docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md
-```
-
-O client da VPN já está instalado nesta máquina (6.0.1, portão `2.1`). Conferir em vez de reinstalar:
-
-```bash
-aws-vpn-client --version          # 6.0.1 — se o comando não existir, alguém instalou por `latest`
-systemctl is-active aws-client-vpn-daemon.service
-```
-
-Para subir só a camada 4 sobre uma 03 que já esteja de pé (o `init` é necessário na primeira vez em
-cada máquina; o bucket não é versionado, vem por `-backend-config`):
-
-```bash
-cd aws/terraform/control-plane
-./scripts/generate-tfvars --force
-terraform init -backend-config="bucket=tfstate-o-e4r8ndteju"
-./scripts/apply                      # exige o túnel conectado desde o 2.5
 ```
 
 `terraform apply`/`destroy` rodam por `! <comando>` — o classifier de auto-mode bloqueia para o
@@ -819,8 +813,12 @@ Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por l
       mutações capturadas.**
 - [x] **`2.5`** — `endpoint_public_access = false` **por default**, com a lista de CIDRs omitida (não
       vazia) quando fechado. Abrir é break-glass declarado no tfvars.
-- [ ] **Aceite conjunto `2.4` + `2.5` na AWS** — o único que exige um apply inteiro com VPN
-      conectada. Roteiro de 5 passos em `02-private-access.md`.
+- [ ] **PRÓXIMA AÇÃO — executar o aceite conjunto `2.4` + `2.5` na AWS.** Único item da fase 2 que
+      falta, e o único do plano que exige um apply inteiro com VPN conectada. Subir pela sequência do
+      `aws/terraform/README.md`, medir, e fechar com a **prova negativa** (túnel derrubado ⟹ `kubectl`
+      falha por rede, não por autenticação). Comandos e critérios em **How to Resume**.
+- [ ] Registrar no plano e aqui: tempo do apply com o endpoint fechado (referência ~13 min com ele
+      aberto) e se `dig` devolveu IP privado sem precisar do ligar-desligar do Known Broken 26.
 - [x] Derrubar as duas camadas na ordem inversa — feito, 46 + 18 recursos, 0 falhas, custo/h zero.
 - [ ] Os dois critérios pendentes do `1.2` **mudaram de forma com o `2.5`**: "a API recusa de outro IP"
       deixa de fazer sentido (não há endpoint público para recusar ninguém) e "o apply do laptop segue
