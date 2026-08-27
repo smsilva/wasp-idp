@@ -961,12 +961,13 @@ chart faseado. `ArgoCDInstance` tem só a etapa 1.
 
 **Duas armadilhas de higiene de repo público:**
 
-- `FLWP` (chave do Jira interno) tinha sobrado numa linha versionada do `HANDOFF.md`. Removida.
+- A chave do Jira da trilha corporativa tinha sobrado numa linha versionada deste arquivo. Removida.
   **Continua alcançável pelo histórico do git** — decidido não reescrever, porque chave de projeto
-  sozinha não identifica empresa nem cliente.
-- O token `flow` **pega a palavra inglesa comum**: "in the echo flow", "account-creation flow" casam
-  no grep e viram falso positivo eterno. Reescrever para `walkthrough` / `sequence` ao gerar doc em
-  inglês aqui.
+  sozinha não identifica empresa nem cliente. Ela entrou na lista de tokens em `CLAUDE.local.md`.
+- Um dos tokens proibidos **é também palavra inglesa comum**, e casa em frase legítima de doc em
+  inglês, virando falso positivo eterno na varredura. Reescrever a frase (`walkthrough`, `sequence`).
+  Qual token e quais frases: `CLAUDE.local.md`. **Não repetir o token aqui** — este arquivo é
+  versionado, e documentar a armadilha citando-a reintroduz o problema.
 
 ### `2.3` — a spoke entra na malha, e três coisas que só um pacote revelou (2026-08-26)
 
