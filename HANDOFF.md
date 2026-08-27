@@ -1,16 +1,17 @@
 # HANDOFF
 
-> **Arquivo único.** Este repo NÃO usa `HANDOFF.local.md` — a divisão versionado/local foi desfeita
-> em 2026-08-25, porque duplicava contexto e cada sessão tinha de reconciliar os dois. Frente ativa,
-> estado aplicado e backlog vivem aqui. `HANDOFF.local.md` segue no `.gitignore` como rede de
-> segurança; se aparecer um, é resíduo — consolidar aqui e apagar.
+> **Arquivo único, sem par local.** Este repo não gera `HANDOFF.local.md` — a divisão
+> versionado/local duplicava contexto e cada sessão tinha de reconciliar os dois (última
+> consolidação: 2026-08-27). Frente ativa, estado aplicado e backlog vivem só aqui. Narrativa
+> detalhada de trabalho concluído vai para `docs/archive.md`, não fica acumulando aqui.
 >
 > **Account IDs desta Organization estão neste arquivo, deliberadamente.** São de uma conta pessoal
-> descartável para exercitar a PoC; nada aqui vai para ambiente real. E-mails de root **não** entram
-> (PII, e um handoff não precisa deles) — ficam em `CLAUDE.local.md`.
+> descartável para exercitar a PoC; nada aqui vai para ambiente real. E-mails de root e qualquer
+> outro dado que identifique pessoa/empresa **não** entram — ficam em `CLAUDE.local.md`.
 >
 > **Repo público.** Não citar nomes de empresa, de projeto interno ou caminho de repo interno aqui
-> nem em conversa. Dizer "a trilha corporativa". Lista de tokens proibidos em `CLAUDE.local.md`.
+> nem em conversa. Dizer "a trilha corporativa". Lista de tokens proibidos e varredura em
+> `CLAUDE.local.md`.
 
 ## Why
 
@@ -407,46 +408,18 @@ O par `2026-08-20-*` ao lado é retrato histórico do monólito Crossplane da tr
 marcado como referência. **Não é estado deste repo** — começa na VPC e mistura conceitos que aqui
 são camadas separadas.
 
-## O que a comparação com o desenho de referência ensinou (2026-08-26)
+## Comparação com desenho de referência e resolução PrivateLink vs TGW
 
-Comparação feita contra um desenho hub-and-spoke de referência (Crossplane/KCL) mantido em outra
-trilha. **Achado principal: aquele desenho não tem ingress centralizado — não tem ingress nenhum no
-hub.** O hub é **trânsito puro**: TGW + route table + túneis IPSec, e a doc dele declara *"o template
-não cria VPCs ou subnets; o TGW hub existe sem attachment de VPC próprio"*. Não há onde pôr um ALB.
+Narrativa completa em `docs/archive.md` (2026-08-26). Conclusões que ficam ativas:
 
-O ingress lá é **distribuído**: cada spoke com cluster tem o próprio AWS Load Balancer Controller
-(role + policy + Pod Identity) e o próprio ALB, com tags de subnet (`kubernetes.io/role/elb`,
-`internal-elb`) para descoberta.
-
-Convergências: hub-and-spoke multi-conta; cross-account por dois ProviderConfigs (equivalente aos
-nossos providers aliasados); PrivateLink usado, mas **só para serviços da AWS** (`s3`, `dynamodb`,
-`rds`, `secretsmanager`, `sqs`, `ecr.*`, `eks*`); LBC com Pod Identity.
-
-Divergência, e é de propósito, não de qualidade — o eixo é **de onde vem o tráfego**: lá o tráfego
-chega de redes privadas de cliente por IPSec (problema = conectividade L3 entre redes que já se
-conhecem ⟹ TGW); aqui chega da internet (problema = exposição unidirecional de um serviço).
-
-**Consequência dura:** aquele desenho **não valida** "entrada pública no hub" — valida o oposto. A
-decisão de manter ingress único pelo hub foi tomada sabendo disso.
-
-**Mecanismo de isolamento que vale copiar:** TGW sem propagação automática + uma route table por
-tenant ⟹ spoke↔spoke não roteia **por ausência de rota, não por deny**; habilitar é aditivo e
-explícito. Spoke nasce isolada.
-
-## Ingress: PrivateLink vs TGW — resolvido
-
-O spec `docs/superpowers/specs/2026-08-25-private-ingress-via-privatelink.md` continua **válido na
-fundamentação** (a citação do whitepaper que separa PrivateLink de TGW por tipo de conectividade), mas
-a escolha foi **reaberta e resolvida a favor do TGW** para o caminho hub→spoke: com VPN de cliente
-decidida, o TGW entra de qualquer forma e o custo marginal de usá-lo também no ingress cai a zero.
-
-**PrivateLink não morre.** Volta como candidato natural na fatia de **spoke de recursos
-compartilhados** (banco, mensageria), onde CIDR sobreposto e autorização por principal de conta valem
-dinheiro — ao contrário do caso de ingress, onde não usamos nenhum dos dois.
-
-O que continua válido do spec: o NLB fica na **spoke** (o PrivateLink exige NLB no lado provedor, a
-AWS não aceita ALB ali); provar conectividade de dentro antes de expor; e o hub não tem compute
-nenhum hoje.
+- Desenho de referência não tem ingress centralizado (é trânsito puro, ingress distribuído por
+  spoke) — não valida "entrada pública no hub"; a decisão de ingress único pelo hub foi tomada
+  sabendo disso.
+- **Mecanismo de isolamento que vale copiar:** TGW sem propagação automática + route table por
+  tenant ⟹ spoke↔spoke não roteia por ausência de rota, não por deny. Habilitar é aditivo.
+- **PrivateLink vs TGW para ingress: resolvido a favor do TGW** (custo marginal cai a zero com a
+  VPN de cliente já decidida). PrivateLink continua candidato para spoke de recursos compartilhados
+  (banco, mensageria).
 
 ## Open Questions / Hypotheses
 
@@ -462,15 +435,6 @@ nenhum hoje.
 - **Session tags em `assumeRoleChain`:** a contenção regional por
   `aws:RequestedRegion` = `aws:PrincipalTag/region` depende de o provider-aws propagar tags de sessão.
   **Não verificado.** Se não propagar, a condição nunca casa e tudo é negado.
-- ~~**Client da AWS VPN no Linux**~~ — **RESOLVIDO no `2.1`:** roda, 24.04 é suportado oficialmente, e
-  desde a 6.0.1 tem CLI. As três saídas de contingência não foram usadas; ficam escritas em
-  `02-private-access.md` para o caso de a distro mudar.
-- ~~**`aws-vpn-client connect` sob SAML abre o navegador sozinho?**~~ — **RESOLVIDO no `2.2`:** sim,
-  sozinho, sem intervenção manual. Login completou em `127.0.0.1:35001` (guia do administrador, não o
-  `8096–8115` do guia do usuário Linux). O script `vpn` pode ter `connect` de ponta a ponta.
-- ~~**O certificado do endpoint tem nome (`vpn.<subzona>`) diferente do hostname de conexão.**~~ —
-  **RESOLVIDO no `2.2`:** o túnel conectou normalmente com o certificado `vpn.nonprod.wasp.silvios.me`
-  contra um endpoint de hostname diferente. `remote-cert-tls server` de fato não confere nome.
 - **O SNAT do Client VPN afeta as provas negativas do `4.1`/`4.2`?** Quem chega numa spoke pelo
   Client VPN de manutenção aparece com IP da **VPC hub**, não do cliente. Logo uma prova de
   isolamento baseada em "origem X não alcança spoke Y" **não distingue operador de operador** por
@@ -509,91 +473,62 @@ nenhum hoje.
 
 ## Known Broken
 
-1. ~~**`src/network` não aplica as tags de descoberta do AWS Load Balancer Controller.**~~
-   **RETIRADO — o item estava errado.** As duas tags estão no módulo desde `b32eb68`, o commit
-   inicial dele. O achado veio da leitura do desenho de referência, não do código, e sobreviveu a
-   duas sessões de handoff sem ninguém abrir o `main.tf`. Fechado no `1.1` com o teste que faltava
-   (`src/network/tests/tags.tftest.hcl`). **Lição: achado sobre módulo do repo se confere no módulo.**
-2. ~~**`src/network` não tem nada de TGW**~~ — **FECHADO no `2.3`.** O attachment, a
-   associação/propagações em `tgw-rt-<spoke>` e as rotas existem, nas duas pontas. `src/network`
-   segue sem TGW de propósito (é módulo genérico de VPC); quem anexa são as raízes.
-3. **Endpoint da API do EKS público para `0.0.0.0/0`** — *era* `public_access_cidrs = []`, e vazio
-   significa o mundo. **Fechado no `1.2` no que dá para fechar offline:** a variável do root não tem
-   default, lista vazia é erro de validação no módulo e `0.0.0.0/0` é recusado no root mesmo
-   explícito. **Falta a confirmação com a camada 2 de pé** (o apply do laptop segue funcionando; a API
-   recusa de outro IP) — os dois critérios exigem ~US$ 165/mês ligados. Fechar de vez é o `2.5`, que
-   depende de VPN + DNS.
-4. **Break-glass documentado, controles ausentes** — *unexpected*: MFA no root da management account e
-   das contas-membro **não verificado**; alarme de uso de root **não existe** (CloudTrail já captura,
-   falta a regra EventBridge); ensaio nunca executado.
-5. **Management account com `AdministratorAccess` atribuído a usuário, não a grupo** — *unexpected*:
-   viola a própria regra `--group` da doc, na conta mais privilegiada. Migrar para `platform-admins`
-   (atribuir o grupo **antes** de revogar o usuário).
-6. **Credencial-raiz do Crossplane é access key de longa duração** — *intentional*: contraria
-   [SEC02-BP02](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html).
-   Sobrevive **só na trilha k3d**, que não suporta Pod Identity — no EKS o pod subiu com
-   `AWS_CONTAINER_CREDENTIALS_FULL_URI`, sem access key. **Mitigação não aplicada:** reduzir o IAM
-   user a só `sts:AssumeRole`; hoje tem `PowerUserAccess` direto.
-7. **`bootstrapClusterCreatorAdminPermissions` divergente** — *unexpected*: `true` na camada 2,
-   `false` no cluster do chart Crossplane. Herdado de caminhos diferentes, não decidido.
-8. **VPC default da `cicd` de pé em toda região**, com security group aberto — *unexpected*, e há
-   workload real na conta quando a camada 2 sobe.
-9. **Link quebrado em `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md`** →
-   `infra/terraform/cluster-zero/README.md` — *intentional*: artefato da trilha Azure nunca
+Itens fechados/retirados (tags de LBC `1.1`, TGW em `src/network` `2.3`, existência de
+`up-03-connectivity`) saíram desta lista — detalhe em `docs/archive.md`.
+
+1. **Endpoint da API do EKS público para `0.0.0.0/0`** — fechado offline no `1.2` (sem default,
+   lista vazia e `0.0.0.0/0` recusados no módulo/root); falta confirmar os 2 critérios que exigem a
+   camada 2 de pé (~US$ 165/mês). Fecha de vez no `2.5`, que depende de VPN + DNS.
+2. **Break-glass documentado, controles ausentes** — *unexpected*: MFA de root não verificado, alarme
+   de uso de root não existe (falta regra EventBridge), ensaio nunca executado.
+3. **Management account com `AdministratorAccess` em usuário, não grupo** — *unexpected*: migrar para
+   `platform-admins` (atribuir grupo antes de revogar usuário).
+4. **Credencial-raiz do Crossplane é access key de longa duração** — *intentional*, só na trilha k3d
+   (sem Pod Identity; no EKS o pod usa `AWS_CONTAINER_CREDENTIALS_FULL_URI`). Mitigação pendente:
+   reduzir o IAM user a só `sts:AssumeRole` (hoje `PowerUserAccess` direto).
+5. **`bootstrapClusterCreatorAdminPermissions` divergente** — *unexpected*: `true` na camada 2,
+   `false` no cluster do chart Crossplane. Não decidido.
+6. **VPC default da `cicd` de pé em toda região**, SG aberto — *unexpected*, workload real quando a
+   camada 2 sobe.
+7. **Link quebrado** em `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md` →
+   `infra/terraform/cluster-zero/README.md` — *intentional*, artefato da trilha Azure nunca
    construído.
-10. **Valores reais em docs genéricas** — *unexpected*: `aws/docs/bootstrap/00-crossplane-iam-user.md:91`
-    tem account id hardcoded; `accounts/03-provisioning.md` e `accounts/scripts/create-account` têm
-    e-mail real. Pré-existente.
-11. `crossplane render` não injeta defaults do XRD — *intentional*: passar
-    `providerConfigName`/`metadata.name` explícitos no XR de teste. `providerConfigName` é
-    OBRIGATÓRIO, sem fallback.
-12. `enum` de `providerConfigName` inclui `wasp-nonprod` (nome específico de conta) nos XRDs
-    versionados — *intentional*: trade-off aceito vs. genericização.
-13. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*: Helm templates.
-14. `revoke-permission-set` só foi exercido no caminho feliz; os ramos "atribuição inexistente" e
-    "permission set inexistente" nunca rodaram.
-15. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts` `allow-all`
-    policy; `idp/packages/backend/src/googleAuthModule.ts`
-    `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional* (PoC).
-16. **Asserção com um único `override_resource` prova o valor, não a ligação** — *unexpected*, e
-    genérico: se o consumidor tiver o valor **fixo no código** igual ao injetado, a asserção passa sem
-    haver fio. Comprovado no `1.3` — a mutação que colava name servers à mão passou **verde**. Corrigido
-    ali com dois runs de valores e tamanhos diferentes. **Auditar o resto do repo.**
-17. ~~**`up-03-connectivity` não existe**~~ — **RETIRADO:** existe, e a raiz `connectivity/us-east-1/`
-    também. Fora do `up-all` por default (`--with-connectivity`), pelo mesmo critério de custo da 04.
-18. **Sem `status`/`platform-status` em `aws/terraform/scripts/`** — *unexpected*: não há como
-    perguntar "o que está de pé e quanto custa por hora". Fica perigoso na fase 2, que introduz um
-    nível T1 que fica de pé **de propósito** e não pode ser confundido com resíduo.
-19. **Sob `mock_provider`, data source de provider devolve valor sintético** — *intentional*
+8. **Valores reais em docs genéricas** — *unexpected*: account id em
+   `aws/docs/bootstrap/00-crossplane-iam-user.md:91`; e-mail real em `accounts/03-provisioning.md` e
+   `accounts/scripts/create-account`. Pré-existente.
+9. `crossplane render` não injeta defaults do XRD — *intentional*: `providerConfigName`/
+   `metadata.name` explícitos no XR de teste; `providerConfigName` é obrigatório, sem fallback.
+10. `enum` de `providerConfigName` inclui `wasp-nonprod` nos XRDs versionados — *intentional*,
+    trade-off vs. genericização.
+11. `aws/eks/apps/echo/templates/*.yaml` falham em parser YAML puro — *intentional*, Helm templates.
+12. `revoke-permission-set` só exercido no caminho feliz — ramos "atribuição/permission set
+    inexistente" nunca rodaram.
+13. `idp/app-config.production.yaml` `guest: {}`; `idp/packages/backend/src/index.ts` `allow-all`
+    policy; `googleAuthModule.ts` `dangerouslyAllowSignInWithoutUserInCatalog: true` — *intentional*
+    (PoC).
+14. **Asserção com um único `override_resource` prova o valor, não a ligação** — *unexpected*,
+    genérico: valor fixo no código igual ao injetado passa sem haver fio. Comprovado e corrigido no
+    `1.3` (dois runs, valores/tamanhos diferentes). Auditar o resto do repo.
+15. **`aws/terraform/scripts/` sem `status`/`platform-status`** — *unexpected*: nenhuma forma de
+    perguntar "o que está de pé e quanto custa por hora"; perigoso com o T1 que fica de pé de
+    propósito na fase 2.
+16. **Sob `mock_provider`, data source de provider devolve valor sintético** — *intentional*
     (limitação do framework): assertion sobre JSON computado pelo provider passa sem verificar nada.
-    Regra: policy document via `jsonencode`, ou `override_data` para tornar a ligação real (é o que a
-    camada 03 faz com VPC, subnets e hosted zone). **Auditar se há outro lugar no repo com a mesma
-    armadilha.**
-20. **Ordenação por referência não é testável offline** — *intentional*, e é limitação de framework,
-    não do código: o endpoint do Client VPN referencia
-    `aws_acm_certificate_validation.vpn.certificate_arn` **para nascer depois** da validação, mas esse
-    ARN é idêntico ao de `aws_acm_certificate.vpn.arn` — a mutação que troca uma referência pela outra
-    **passa verde** (verificada). Está escrito no teste em vez de escondido. Só o apply pega: o sintoma
-    é endpoint criado com certificado `PENDING_VALIDATION`, e aparece na conexão do operador.
-21. **`connection_log_options.enabled = false` no endpoint do Client VPN** — *intentional*: logging por
-    conexão exige log group, que é custo e retenção a decidir. O que se perde é a trilha de quem
-    conectou quando. Hardening, não operabilidade.
-22. **Portal self-service do Client VPN não configurado** — *intentional*: exige uma **segunda**
-    aplicação SAML no Identity Center. Vale para a demo (a pessoa baixa a própria configuração em vez
-    de receber arquivo por e-mail); fora por ora.
-23. **Attachment cross-conta tem perpetual diff em `transit_gateway_default_route_table_*`** —
-    *intentional*, contornado com `ignore_changes`. Os dois atributos são write-only (não existem na
-    API do attachment) e o provider os deriva das route tables do TGW, que pertencem à conta
-    `network` e são invisíveis ao provider default (`cicd`). Sem o `ignore_changes`, todo plan
-    propõe `true -> false` para sempre. **Custo do contorno:** o state passa a guardar `true`, que
-    não é a verdade; a verdade está no TGW (defaults desligados) e nas associação/propagações
-    explícitas. Conferido na AWS antes de ignorar.
-24. **Nenhuma prova de que spoke↔spoke não roteia** — *unexpected*, e é a propriedade central do
-    desenho. Só existe **uma** spoke; o isolamento por route table de tenant está construído mas
-    nunca foi exercitado contra uma segunda. É o `4.1`/`4.2`.
-25. **`aws/terraform/scripts/` não tem `up-05`+ nem `status`** — *unexpected*: continua sem forma de
-    perguntar "o que está de pé e quanto custa por hora". Ficou mais visível nesta sessão, em que
-    duas camadas caras subiram e a resposta veio de `terraform state list` conta-a-conta.
+    Regra: `jsonencode` ou `override_data` (é o que a camada 03 faz). Auditar outros usos no repo.
+17. **Ordenação por referência não é testável offline** — *intentional*/limitação de framework: a
+    mutação que troca `aws_acm_certificate_validation.vpn.certificate_arn` por
+    `aws_acm_certificate.vpn.arn` passa verde (ARNs idênticos). Só o apply pega — sintoma é
+    certificado `PENDING_VALIDATION` no endpoint.
+18. `connection_log_options.enabled = false` no Client VPN — *intentional*: custo/retenção do log
+    group não decidido; perde-se a trilha de quem conectou quando.
+19. Portal self-service do Client VPN não configurado — *intentional*, exige segunda aplicação SAML
+    no Identity Center.
+20. **Attachment cross-conta com perpetual diff em `transit_gateway_default_route_table_*`** —
+    *intentional*, `ignore_changes` (atributos write-only, invisíveis ao provider default `cicd`).
+    State guarda `true`; a verdade está no TGW e nas associação/propagações explícitas. Conferido na
+    AWS antes de ignorar.
+21. **Nenhuma prova de que spoke↔spoke não roteia** — *unexpected*, propriedade central do desenho.
+    Só existe uma spoke; é o `4.1`/`4.2`.
 
 ## How to Resume
 
@@ -707,121 +642,82 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 
 ### Achados a não reaprender
 
+Narrativa completa de cada achado em `docs/archive.md`. Fato + porquê, um por linha:
+
 **Terraform / camadas**
 
-- **A referência funcional do provisionamento EKS são as Compositions Crossplane**, não as fases do
-  chart `aws/eks/chart/templates/`.
-- **As ~40 `ClusterUsage` do teardown ordenado não têm tradução em Terraform** — são aresta de
-  dependência construída à mão. Terraform destrói em ordem reversa nativamente, **mas só se rede e
-  cluster estiverem no mesmo state** — por isso o corte é `hub | spoke+cluster`, nunca `rede |
-  cluster`.
-- **O corte `hub | spoke+cluster` sobrevive ao TGW** (item que estava aberto desde a camada 2): o
-  egress da spoke continua saindo pelo NAT dela (`0.0.0.0/0` não passa a apontar para o TGW), e a AWS
-  **recusa deletar TGW com attachment vivo** — proteção da API, não de convenção. **Cai** se um dia
-  houver egress centralizado pelo hub.
-- **EBS CSI pertence à abstração `Cluster` (L2b)**, ao lado do `eks-pod-identity-agent`.
+- Referência funcional do provisionamento EKS são as Compositions Crossplane, não o chart
+  `aws/eks/chart/templates/`.
+- Corte de teardown é `hub | spoke+cluster`, nunca `rede | cluster` — Terraform destrói em ordem
+  reversa só dentro do mesmo state, e o corte sobrevive ao TGW (AWS recusa deletar TGW com
+  attachment vivo).
+- EBS CSI pertence à abstração `Cluster` (L2b), ao lado do `eks-pod-identity-agent`.
 - Trust de Pod Identity exige `sts:TagSession` além de `sts:AssumeRole`.
 - `authentication_mode = "API"` — sem `aws-auth` ConfigMap.
-- A `Network` de referência tem as 4 subnets **hardcoded** em `172.16.{1,2,3,4}.0/24`. **Não herdar.**
-- **A race de Pod Identity do EBS CSI não existe no Terraform** — o grafo já ordena addon depois da
+- `Network` de referência tem as 4 subnets hardcoded em `172.16.{1,2,3,4}.0/24` — não herdar.
+- Race de Pod Identity do EBS CSI não existe no Terraform — o grafo já ordena addon depois da
   association.
-- **Nunca fixar versão de Kubernetes (nem de chart, nem de addon) em documento de plano.** O
-  `generate-tfvars` descobre.
-- **`curl | tr` engole a falha do `curl`** — o exit code do pipeline é o do `tr`. Mesma família do
-  `PIPESTATUS[0]` do `apply`/`destroy`, em roupa nova. Sem pipe, e `--fail` para transformar HTTP ≥
-  400 em exit code. E o exit code **não basta**: portal cativo devolve HTML com 200, então o formato
-  do que voltou também é validado.
+- Nunca fixar versão de Kubernetes/chart/addon em documento de plano — `generate-tfvars` descobre.
+- `curl | tr` engole a falha do `curl` (exit code é o do `tr`) — sem pipe, `--fail`, e validar
+  também o formato da resposta (portal cativo devolve HTML com 200).
 
 **Load balancer e TLS**
 
-- **As tags de papel do LBC não têm fallback:** o controller **não examina route table** para deduzir
-  público/privado (o controller in-tree examina; o LBC não). Já estão em `src/network`, com teste.
-- **A tag `kubernetes.io/cluster/<nome>` é opcional a partir do LBC `2.1.2`** e só desempata entre
-  clusters que compartilham a VPC — fora daqui de propósito, porque `src/network` não conhece nome de
-  cluster. Inverte se um dia dois clusters dividirem uma VPC.
-- **`TargetGroupBinding` aceita target group criado fora do controller** — a doc do LBC descreve
-  provisionar o LB *"completely outside of Kubernetes"*. `networking.ingress` é o campo que faz o
-  controller cuidar das regras de SG para targets IP. Logo **Terraform pode ser dono do NLB sem
-  quebrar o apply único**.
-- **Ler IPs privados de NLB é frágil** — `aws_lb` não os expõe. **Fixar** com
+- Tags de papel do LBC não têm fallback (controller não examina route table) — já em `src/network`,
+  com teste.
+- Tag `kubernetes.io/cluster/<nome>` é opcional desde o LBC `2.1.2` (só desempata VPC
+  compartilhada) — fora de `src/network` de propósito, que não conhece nome de cluster.
+- `TargetGroupBinding` aceita target group criado fora do controller — Terraform pode ser dono do
+  NLB sem quebrar o apply único.
+- Ler IPs privados de NLB é frágil (`aws_lb` não os expõe) — fixar com
   `subnet_mapping { private_ipv4_address = cidrhost(...) }`.
-- **O ALB só lê certificado do ACM**, nunca Secret do Kubernetes. E **não valida certificado de
-  backend** — no trecho ALB→NLB→gateway, autoassinado basta.
-- **Wildcard cobre um nível só e `*.*.` não existe** — daí ser um wildcard por cluster.
-- **Um NLB por cluster, não por Service** — o fan-out por aplicação acontece no mesh, de graça. E o
-  hub escala **por listener rule**, também de graça.
-- **`X-Forwarded-For` + `numTrustedProxies`**: com ALB na frente, o Istio vê o IP do ALB.
+- ALB só lê certificado do ACM, nunca Secret do Kubernetes, e não valida certificado de backend —
+  autoassinado basta no trecho ALB→NLB→gateway.
+- Wildcard cobre um nível só (`*.*.` não existe) — daí um wildcard por cluster.
+- Um NLB por cluster, não por Service — fan-out por aplicação no mesh; hub escala por listener rule.
+- `X-Forwarded-For` + `numTrustedProxies`: com ALB na frente, o Istio vê o IP do ALB.
 
 **Rede / VPN**
 
-- **TGW nasce com association/propagation default LIGADOS** — desligar os dois é o que torna
+- TGW nasce com association/propagation default ligados — desligar os dois é o que torna
   isolamento por tenant possível.
-- **TGW entrega roteamento IP, não resolução de nome.**
-- **Route table por spoke não isola cliente de cliente** — é preciso route table **por cliente**
-  também.
-- **Client VPN com SAML exige o client da AWS**; **cert de servidor é obrigatório em qualquer tipo de
-  autenticação**; `memberOf` tem de carregar **IDs** de grupo, não nomes; **nunca**
-  `authorize_all_groups = true`.
-- **O Client VPN faz SNAT.** O tráfego chega à spoke com origem no CIDR da **VPC hub**, não no client
-  CIDR. Consequência prática: **não escrever rota para o client CIDR** em spoke nenhuma (o retorno
-  vai para o CIDR do hub, já coberto pela rota do supernet), e liberar o CIDR **do hub** nos security
-  groups de destino. Comprovado com pacote no `2.3`; a doc do cenário *"Access a peered VPC"* diz o
-  mesmo mandando liberar o **security group do endpoint**.
-- **Attachment cross-conta de TGW tem DOIS portões, não um.** Primeiro RAM
-  (`aws_ram_sharing_with_organization` na Organization + share + associations); depois o **aceite do
-  attachment em si**, porque o TGW nasce com `auto_accept_shared_attachments = disable`. Sem o
-  segundo, o attachment fica em `pendingAcceptance` e associação/propagação/rota falham com
-  `IncorrectState` / `InvalidTransitGatewayID.NotFound` — erros que não citam o aceite pendente.
-- **Hipótese sobre caminho de rede se confere com um PACOTE, não lendo route table.** No `2.3` as
-  tabelas estavam todas certas nas duas contas, no TGW e nas duas VPCs, e mesmo assim não passava.
-  Duas rotas foram escritas perseguindo a hipótese errada antes de o `ping` responder.
-- **O client da AWS VPN roda nesta máquina, e desde a 6.0.1 é scriptável** (portão `2.1`,
-  2026-08-26). Ubuntu 24.04 AMD64 é oficialmente suportado — 22.04, 24.04 e 26.04 estão na doc — e o
-  build hoje é GTK/Electron, não o Mono/WPF que exigia distro antiga. O pacote instala `awsvpnclient`
-  (GUI), o serviço `aws-client-vpn-daemon` e o CLI `/usr/local/bin/aws-vpn-client`, que gerencia
-  perfil **sem `sudo`** e reconhece `auth-type: saml` a partir de `auth-federate`.
-- **`latest` do client entrega a 5.4.1, que NÃO tem CLI.** O repo apt da doc e
-  `.../GTK/latest/awsvpnclient_amd64.deb` servem a linha 5.x; o CLI só existe na **6.0.1**, que exige
-  URL de versão explícita (`.../GTK/6.0.1/...`) e conferência do sha256 das release notes. Instalar
-  por `latest` é **regressão silenciosa de capacidade** — o pacote instala, a GUI abre, e o
-  `aws-vpn-client` simplesmente não existe.
-- **`import-profile` aceita configuração que `connect` recusa.** A validação do CA acontece no
-  `connect` (`Invalid configuration file`), não no import. Import bem-sucedido não prova configuração
-  boa — o script `vpn` não pode tratar como prova.
-- **Se `connect` sob SAML abre o navegador sozinho, ainda não se sabe.** O `--auth-user-pass` do CLI é
-  usuário/senha, não SAML, e a tentativa contra endpoint sintético morreu na validação antes do túnel.
-  Responde-se no `2.2`. As portas que o client reserva para SAML são **8096–8115** (não 35001).
-- **`client_cidr_block` precisa de /22 ou maior**, sem sobreposição — daí `100.64.0.0/22`.
-- **`transit_gateway_configuration` no endpoint do Client VPN é armadilha para quem destrói a camada
-  todo dia.** O bloco existe e pareceria mais direto que associar subnet, mas o attachment que ele cria
-  leva *"several hours"* para deletar, o provider **não espera**, e isso **impede deletar o TGW**.
-  Associação por subnet é o caminho — e é o que põe as ENIs na VPC hub, de onde o resolver da VPC é
-  alcançável (o `2.4` depende disso).
-- **Subnet privada serve como target network.** A exigência de rota para o IGW é dos *Prerequisites* do
-  tutorial de mutual auth, onde o túnel É o caminho de internet. Os requisitos de target network pedem
-  `/27` com 20 IPs livres e uma subnet por AZ. **E a AWS acrescenta a rota local da VPC sozinha** na
-  associação — a rota que se escreve é a do supernet, e as duas convivem por prefixo mais longo.
-- **Aplicação SAML do Identity Center não pode ser Terraform.** *"The `CreateApplication` API only
-  supports custom OAuth 2.0 applications. Creation of 3rd party SAML or OAuth 2.0 applications require
-  setup to be done through the associated app service or AWS console."* O metadata XML entra por
-  arquivo; o `generate-tfvars` da camada 03 imprime o roteiro quando falta.
-- **O certificado do endpoint pode ser público do ACM, validado por DNS** — não precisa ser
-  autoassinado importado, e isso ficou possível quando a camada de DNS entregou a subzona. Compra duas
-  coisas: **nenhuma chave privada em state nem em disco**, e rotação automática que o Client VPN
-  acompanha (*"whether through ACM auto-rotation..."*). O nome do certificado **não** casa com o
-  hostname do endpoint, e não precisa: o client usa `remote-cert-tls server`, que confere extended key
-  usage, não nome.
-- **O `NameID` da assertion tem de ser e-mail.** Exigência escrita da doc de federated authentication,
-  junto com: assertion e resposta assinadas, um IdP só por endpoint, sem single logout, e as portas do
-  handshake reservadas na máquina do cliente.
-- **As portas do handshake SAML divergem entre duas páginas da AWS:** o guia do usuário Linux diz
-  `8096–8115`, o guia do administrador diz `35001`. Não afirmar uma sem conferir qual guia; o ACS URL da
-  aplicação SAML usa `35001`.
-- **Azure VPN Gateway leva 30–45 min para provisionar**; a subnet tem de se chamar literalmente
-  `GatewaySubnet`; ASN do lado Azure é **65515**; inside CIDRs em `169.254.21.0–169.254.22.255`, `/30`
-  cada.
-- **Raiz com dois providers de cloud:** sem credencial do segundo, o `plan` falha mesmo para mudança
-  que só toca o primeiro. Guardar atrás de `local.manage_*`.
+- TGW entrega roteamento IP, não resolução de nome.
+- Route table por spoke não isola cliente de cliente — precisa route table por cliente.
+- Client VPN com SAML exige o client da AWS; cert de servidor obrigatório em qualquer autenticação;
+  `memberOf` carrega IDs de grupo, não nomes; nunca `authorize_all_groups = true`.
+- Client VPN faz SNAT — tráfego chega à spoke com origem no CIDR da VPC hub, não no client CIDR.
+  Não escrever rota para o client CIDR em spoke nenhuma; liberar o CIDR do hub nos SGs de destino.
+  Comprovado com pacote no `2.3`.
+- Attachment cross-conta de TGW tem dois portões: RAM (`aws_ram_sharing_with_organization` +
+  share/associations) e depois o aceite do attachment em si (`auto_accept_shared_attachments =
+  disable`) — sem o segundo, fica `pendingAcceptance` e falha com erros que não citam a causa.
+- Hipótese sobre caminho de rede se confere com um pacote, não lendo route table — no `2.3` as
+  tabelas estavam certas e mesmo assim não passava.
+- Client da AWS VPN roda nesta máquina e desde a 6.0.1 é scriptável (Ubuntu 24.04 oficialmente
+  suportado, build GTK/Electron); instala GUI + daemon + CLI `/usr/local/bin/aws-vpn-client`
+  (gerencia perfil sem `sudo`).
+- `latest` do client entrega 5.4.1, sem CLI — o CLI só existe na 6.0.1, que exige URL de versão
+  explícita. Regressão silenciosa: instala, GUI abre, `aws-vpn-client` não existe.
+- `import-profile` aceita configuração que `connect` recusa — validação do CA é só no `connect`.
+- `client_cidr_block` precisa de /22 ou maior, sem sobreposição — daí `100.64.0.0/22`.
+- `transit_gateway_configuration` no endpoint do Client VPN é armadilha para quem destrói a camada
+  todo dia: o attachment que cria leva horas para deletar e impede deletar o TGW. Associação por
+  subnet é o caminho certo.
+- Subnet privada serve como target network — exigência de rota para IGW é só do tutorial de mutual
+  auth. AWS acrescenta a rota local da VPC sozinha na associação.
+- Aplicação SAML do Identity Center não pode ser Terraform — `CreateApplication` só cria OAuth 2.0
+  customizado. Metadata XML entra por arquivo.
+- Certificado do endpoint pode ser público do ACM validado por DNS (não precisa autoassinado) —
+  nenhuma chave privada em state/disco, rotação automática. Nome do certificado não precisa casar
+  com o hostname (`remote-cert-tls server` confere extended key usage, não nome).
+- `NameID` da assertion SAML tem de ser e-mail; assertion e resposta assinadas; um IdP só por
+  endpoint; sem single logout.
+- Portas do handshake SAML divergem entre guias da AWS: usuário Linux diz `8096–8115`, administrador
+  diz `35001` (o que vale — ACS URL usa `35001`).
+- Azure VPN Gateway leva 30–45 min para provisionar; subnet tem de se chamar `GatewaySubnet`; ASN do
+  lado Azure é 65515; inside CIDRs em `169.254.21.0–169.254.22.255`, `/30` cada.
+- Raiz com dois providers de cloud: sem credencial do segundo, o `plan` falha mesmo para mudança que
+  só toca o primeiro — guardar atrás de `local.manage_*`.
 
 ## Next Steps
 
@@ -872,8 +768,10 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
       confere na ordem em que quebra, `connect` chama `aws-vpn-client connect` — **scriptável**, ao
       contrário do que o plano assumia.
 - [x] `up-03-connectivity` nasceu com a raiz `connectivity/`, fora do `up-all` por default.
-- [ ] Abrir branch dedicada em `wasp-gitops` para os manifestos do lado cluster; path interno decidido
-      na implementação.
+- [ ] Abrir branch dedicada em `wasp-gitops` (`~/git/wasp-gitops`) para os manifestos do lado cluster
+      (gateway Istio como `ClusterIP` + `TargetGroupBinding`); path interno decidido na implementação.
+      Repo já tem `charts/httpbin` (workload de teste) e `update-istio-charts`. `wasp-idp` não ganha
+      diretório de GitOps próprio.
 - [ ] Atualizar a tabela de custo do T1 em `docs/superpowers/plans/.../README.md`: Client VPN cobra
       por associação de subnet, não por endpoint — o real é ~US$ 0,20/h com 2 AZs, não ~0,15/h.
 
@@ -924,446 +822,21 @@ depois `connection reset`) e SSO admin ativo (`aws sso login --profile personal`
 
 ## Completed Work
 
-### Especificação da sequência de provisionamento e dicionário de recursos (2026-08-27)
-
-Duas entregas, nenhuma toca AWS.
-
-**Portada da trilha corporativa:** o par que descreve o monólito `environment-eks` — árvore de
-dependência por camada em YAML mais um dicionário com um arquivo por recurso (34 arquivos).
-Traduzido para inglês (nome, título e corpo) e limpo de toda referência que não pode aparecer em repo
-público: o API group virou `platform.example.com` e a atribuição de origem não cita caminho interno.
-
-**Escrita para este repo:** a sequência autoritativa (`00 · accounts` → `08 · provas`) e o dicionário
-de 61 recursos, um arquivo cada. Levantada por inventário do código real, não de memória — as três
-raízes Terraform, `aws/docs/accounts/` e o plano da Frente D.
-
-**As invariantes que o inventário confirmou** e que agora estão registradas no documento:
-
-- Leitura entre camadas é **sempre data source com filtro de tag**, nunca `terraform_remote_state` —
-  o lado que lê sobrevive a troca de backend ou de chave no lado que escreve. O filtro tem de
-  devolver exatamente um id, e `generate-tfvars` confere antes.
-- A **fronteira de state segue o ciclo de vida, não a conta**: recurso da conta do hub cuja vida é a
-  de um spoke mora no state do spoke, via provider aliasado.
-- **Attachment cross-account tem dois portões** — RAM organization-wide (camada `03`, one-off) e o
-  `..._accepter` explícito do lado do hub (camada `05`).
-- **Pod Identity tem ordenação real aqui**, ao contrário do monólito: a association precisa existir
-  antes do Helm release que a consome, ou o pod entra em CrashLoop com `AccessDenied`.
-- As **duas propagações de TGW não são simétricas** — trocar os argumentos quebra o roteamento em
-  silêncio.
-- A camada `00` **não é Terraform e não pode ser**. Região fora da lista aprovada da SCP aparece como
-  deny explícito no primeiro `Create*` de qualquer camada posterior, e parece bug de código.
-
-**Onde cada camada in-cluster realmente existe** (levantado nesta sessão, registrado em
-`aws/CLAUDE.md`): o XR `Environment` está bloqueado e superado — o `README.md` dele ainda diz
-"walk skeleton COMPLETE", que é resíduo. As Compositions param no equivalente às fases 72/74; tudo de
-76 em diante (sub-zona, ESO, external-dns, LBC, Istio, cert-manager, app de validação) existe só no
-chart faseado. `ArgoCDInstance` tem só a etapa 1.
-
-**Duas armadilhas de higiene de repo público:**
-
-- A chave do Jira da trilha corporativa tinha sobrado numa linha versionada deste arquivo. Removida.
-  **Continua alcançável pelo histórico do git** — decidido não reescrever, porque chave de projeto
-  sozinha não identifica empresa nem cliente. Ela entrou na lista de tokens em `CLAUDE.local.md`.
-- Um dos tokens proibidos **é também palavra inglesa comum**, e casa em frase legítima de doc em
-  inglês, virando falso positivo eterno na varredura. Reescrever a frase (`walkthrough`, `sequence`).
-  Qual token e quais frases: `CLAUDE.local.md`. **Não repetir o token aqui** — este arquivo é
-  versionado, e documentar a armadilha citando-a reintroduz o problema.
-
-### `2.3` — a spoke entra na malha, e três coisas que só um pacote revelou (2026-08-26)
-
-Aceito com ping real: **3/3 pacotes, 0% de perda, RTT ~140 ms** a um nó do EKS dentro de
-`10.2.0.0/16`, pelo túnel. Commits `895e242` (escrita) e `a39430c` (as correções do apply).
-Regressão: **104 testes em 13 diretórios, 0 falhas** (eram 86).
-
-**O passo era maior do que o plano dizia — faltava metade.** O texto original descrevia só o lado
-da spoke; a exploração achou que **o hub nunca tinha sido anexado ao próprio TGW**. A
-`connectivity` criava o TGW e `tgw-rt-hub` e deixava os dois órfãos, sem attachment nenhum — sem
-isso o tráfego que chega pelo túnel na subnet privada do hub não tem para onde ir.
-
-**Três achados que nenhuma leitura de tabela de rota daria, todos vindos do apply real:**
-
-- **RAM tem dois portões, não um.** Primeiro `aws_ram_sharing_with_organization` (organization-wide,
-  só pela management account) — sem ele, `AssociateResourceShare` é recusado com
-  `OperationNotPermittedException`. Ele mora na raiz **`dns/`** (T0, permanente), não em
-  `connectivity/` (T1, destruída toda noite): é config da Organization inteira, e um destroy
-  noturno não pode desligá-la e religá-la todo dia. Depois, o **aceite do attachment em si** —
-  o TGW tem `auto_accept_shared_attachments = disable` de propósito, então o attachment fica em
-  `pendingAcceptance` mesmo com RAM resolvido, e associação/propagação/rota falham com
-  `IncorrectState`/`InvalidTransitGatewayID.NotFound`, erros que não citam o aceite pendente.
-- **O Client VPN faz SNAT.** O tráfego chega à spoke com origem no CIDR da **VPC hub**
-  (`10.1.x.x`), não no client CIDR (`100.64.x.x`): liberando só `100.64.0.0/22` no SG do cluster
-  o ping não passava; liberando `10.1.0.0/16`, passou. **Duas rotas para o client CIDR chegaram a
-  ser escritas** perseguindo a hipótese contrária e foram removidas depois do teste — o retorno
-  vai para `10.1.x.x`, já coberto pela rota do supernet. A doc do cenário *"Access a peered VPC"*
-  dizia o mesmo por outro caminho: libere o **security group do endpoint** no destino.
-  **As tabelas de rota estavam todas certas e mesmo assim não passava** — vale como método:
-  hipótese sobre caminho de rede se confere com um pacote, não com leitura de config.
-- **Attachment cross-conta tem perpetual diff estrutural** em
-  `transit_gateway_default_route_table_{association,propagation}`: write-only, ausentes da API, e
-  o provider os deriva das route tables do TGW — que são da conta `network` e invisíveis ao
-  provider default (`cicd`). Todo refresh lê `true`, todo plan propõe `true -> false`, para
-  sempre. Resolvido com `ignore_changes`, depois de conferir na AWS que o attachment propaga só
-  para `tgw-rt-hub`.
-
-**A `authorization rule` por spoke que o plano previa não entrou:** a `2.2` já cobre o supernet
-inteiro por grupo. Rota é topologia (cresce aqui, uma vez); authorization rule é política.
-
-**Um `terraform apply` morreu no meio** (o processo caiu; a AWS seguiu provisionando), deixando o
-cluster EKS e o NAT criados **fora do state** e um lock órfão. Recuperação: `force-unlock` +
-`terraform import` dos dois + plan limpo confirmando zero duplicata. Vale saber que é recuperável
-sem destruir nada.
-
-O `connectivity/scripts/destroy` foi corrigido junto: o guard de "attachment de fora" contava o
-attachment do **próprio hub** como estranho e teria recusado um destroy legítimo. Agora o exclui
-via o output novo `transit_gateway_attachment_id`.
-
-#### O teardown, exercitado na mesma sessão — e o que ele provou
-
-Derrubado na ordem inversa: **`control-plane` 46 recursos, `connectivity` 18, 0 falhas nos dois**,
-custo por hora de volta a zero (verificado na API: nenhum TGW, endpoint, EKS ou NAT vivo).
-
-- **O guard de precedência foi provado nas três posições**, rodando o `destroy` da connectivity
-  fora de ordem de propósito: recusou acusando 2 attachments, recusou acusando 1 depois do fix, e
-  passou com 0 depois da control-plane sair. Precedência executável, não parágrafo de README.
-- **Armadilha que quase passou batido: fix em script que depende de output novo só funciona
-  depois de o output existir no STATE.** O `transit_gateway_attachment_id` tinha sido escrito no
-  `outputs.tf` mas nunca aplicado, então `terraform output -raw` devolvia vazio, o guard não
-  excluía nada, e a mensagem acusava 2 em vez de 1 — código certo, comportamento errado. Um
-  `apply` de **zero recursos** (só materializa o output) resolveu. Vale para qualquer script deste
-  repo que leia `terraform output`.
-- **O corte de state cross-conta se sustentou no teardown**, que é onde ele seria testado de
-  verdade: `tgw-rt-spoke` é recurso da conta `network` mas vive no state do spoke — e **saiu junto
-  com o spoke**, sem órfão. É a decisão "fronteira de state segue o ciclo de vida, não a conta"
-  funcionando na direção que importa.
-- **Tempos, para reconhecer o padrão:** attachment do hub 1m16s, `tgw-rt-hub` 55s, rotas do Client
-  VPN ~3m30s cada, **network associations ~7–10 min cada** (simétrico com a criação), registro de
-  validação 32s, certificado ACM 1s. O teardown inteiro da connectivity passa de 10 min por causa
-  das associations — não é travamento.
-- Zero `Service` do tipo LoadBalancer no cluster, conferido **antes** de destruir: o bug do NLB
-  órfão (o ticket da trilha corporativa) não tinha como ocorrer aqui. Vale manter a checagem no roteiro.
-
-### `2.2` — apply na AWS, e as duas perguntas do aceite resolvidas (2026-08-26)
-
-`up-03-connectivity --yes` aplicou os 12 recursos planejados, 0 falhas, ~10 min — a maior parte do
-tempo em `aws_ec2_client_vpn_network_association` (~6m40s cada associação) e
-`aws_ec2_client_vpn_route` (~1m40s/~4m55s). Nada surpreendeu no apply em si; a região no console tem
-de ser `us-east-1`, não a região default do último workspace usado (achado colateral: **um `acm:List
-Certificates` em `us-east-2` bate na SCP `DenyOutsideApprovedRegions` mesmo sendo leitura** — mesmo
-mecanismo já comprovado para `ec2:DescribeVpcs`, agora confirmado também para ACM).
-
-**As duas perguntas que só um apply real respondia, resolvidas:**
-
-- **`aws-vpn-client connect` sob SAML abre o navegador sozinho.** Sim — sem intervenção manual além do
-  login na página. A hipótese de que dependeria da GUI não se confirmou.
-- **Em que porta o handshake SAML acontece.** `127.0.0.1:35001` — bate com o **guia do administrador**
-  do Client VPN, não com o `8096–8115` do guia do usuário Linux (as duas páginas da AWS divergiam
-  nisso, e não havia como saber qual valia sem testar).
-
-Túnel `Connected`, verificado por `ip addr`/`ip route`: `100.64.0.2/27` (dentro do `client_cidr_block`
-`100.64.0.0/22`) e rotas `10.0.0.0/12` + `10.1.0.0/16` via `tun0` — supernet inteiro e VPC hub
-alcançáveis pelo túnel, confirmando a authorization rule e as duas rotas de subnet.
-
-**Perfil exportado para `~/trash/hub.ovpn`**, não `/tmp` — sobrevive a reboot. A DNS name do endpoint
-(`*.cvpn-endpoint-0ed2eee5abea362d4.prod.clientvpn.us-east-1.amazonaws.com`) muda a cada recriação da
-camada; o `.ovpn` nunca deve ser reaproveitado entre applies, só reexportado.
-
-Camada de pé: ~US$ 0,20/h. Derrubar à noite com `connectivity/us-east-1/scripts/destroy` — regra já
-registrada, sem exceção nova.
-
-### `2.2` — a raiz `connectivity/` escrita, e três desvios que a execução impôs (2026-08-26)
-
-TGW isolado por default, certificado do ACM, provider SAML e Client VPN completo, em
-`aws/terraform/connectivity/us-east-1/`. **22 testes offline, 14 mutações, 13 capturadas.** Custo até
-aqui: zero — nada tocou a AWS além de leitura de documentação.
-
-**Três desvios do esboço, cada um por achado, não por preferência:**
-
-- **O certificado virou público do ACM validado por DNS.** O esboço descartava a opção porque *"cert
-  público exigiria o domínio, que só chega no `1.3`"* — e o `1.3` chegou. Compra nenhuma chave privada
-  em state nem em disco, e rotação automática que o Client VPN acompanha. Isso **moveu o certificado de
-  T0 para T1**, e o argumento sobrevive melhor: a estabilidade que importava (material de client
-  inalterado entre recriações) vem da CA pública da Amazon, não da vida longa do recurso.
-- **`transit_gateway_configuration` ficou de fora**, apesar de existir e parecer mais direto que
-  associar subnet: o attachment que aquele bloco cria leva horas para deletar, o provider não espera, e
-  isso impede deletar o TGW — incompatível com destruir a camada toda noite.
-- **Subnet privada confirmada como target network.** A exigência de rota para o IGW que preocupava é dos
-  *Prerequisites* do tutorial de mutual auth, não dos requisitos de target network.
-
-**O passo que não é código, e a razão:** a aplicação SAML no Identity Center **não pode ser Terraform**
-— a API `CreateApplication` só cria aplicação OAuth 2.0 customizada. O `generate-tfvars` para e imprime
-o roteiro completo (ACS URL `http://127.0.0.1:35001`, audience `urn:amazon:webservices:clientvpn`,
-`Subject` → `${user:email}`, `memberOf` → `${user:groups}`) em vez de deixar o apply falhar num provider
-com mensagem que não explica o que falta.
-
-**Cinco coisas aprendidas escrevendo os testes**, todas registradas em `aws/terraform/CLAUDE.md`:
-
-- **Bloco repetível do provider costuma ser SET, não lista** — `authentication_options[0]` não compila
-  (*"set elements do not have addressable keys"*). Para bloco único, `one(...)`.
-- **`override_resource` substitui os atributos computados por inteiro.** Sobrescrever só o `arn` de
-  `aws_acm_certificate` deixa `domain_validation_options` como set vazio, e o erro parece bug do código.
-- **Validação de schema do provider roda sob `mock_provider`** — é client-side. O
-  `aws_iam_saml_provider` recusa metadata com menos de 1000 caracteres no plan, então a fixture tem de
-  ser realista em **tamanho**, não só em forma.
-- **Validações de uma variável são todas avaliadas, não param na primeira.** Duas chamando `cidrhost`
-  fazem um valor malformado produzir *"Call to function cidrhost failed"* em vez da mensagem que
-  explica. Cadeia precisa de guarda `!can(...) || <condição>`.
-- **Ordenação por referência não é testável offline.** O endpoint referencia
-  `aws_acm_certificate_validation.vpn.certificate_arn` para nascer depois da validação, mas o ARN é
-  idêntico ao do certificado — a mutação passa verde. Escrito no teste, não escondido.
-
-O `up-all` mudou: `connectivity` saiu do "roda se o diretório existir" e virou `--with-connectivity`,
-pelo mesmo critério de custo da 04. Antes, criar a raiz teria feito o `up-all` ligar ~US$ 110/mês por
-default — o oposto do que o script promete.
-
-### `2.1` — o portão do client passou, e derrubou uma premissa do plano (2026-08-26)
-
-Branch `feat/private-access-phase-2`, a partir de `main` já com a fase 1 mergeada por fast-forward.
-Custo: zero — nada tocou a AWS, só a máquina local.
-
-**O risco que motivou o portão não existe mais.** A doc lista **Ubuntu 22.04, 24.04 e 26.04 (AMD64)**
-como suportados; esta máquina é 24.04.4 x86_64 sob GNOME/X11. O client de hoje é build GTK/Electron
-(o caminho de download é `/GTK/`), não o Mono/WPF que exigia distro antiga e era a origem do medo.
-
-Instalado o **6.0.1** por URL de versão, sha256 conferido contra as release notes. `dpkg --install`
-exit 0, `apt-get check` limpo, daemon `enabled`+`active`, GUI abrindo e renderizando, CLI respondendo.
-Perfil SAML sintético importado, listado, lido por `get-config` e apagado — **tudo sem `sudo`**, e o
-client classificou `auth-type: saml` a partir do `auth-federate`. Portas 8096–8115 livres. Nenhum
-resíduo: perfil apagado, `/tmp` limpo.
-
-**A premissa que caiu:** a decisão 3 do plano pagava como preço *"o client da AWS no Linux é aplicação
-desktop, então `connect` não é scriptável"*. A **6.0.1 (12/08/2026)** instala
-`/usr/local/bin/aws-vpn-client`, com `connect`, `disconnect`, `import-profile`, `get-config`,
-`get-connection-status`, `list-connections`, `put-preference`. O script `vpn` deixa de ser
-`config`/`status` só.
-
-Três coisas aprendidas que valem mais que o resultado do portão:
-
-- **`latest` é uma armadilha.** `.../GTK/latest/` e o repo apt da própria doc entregam **5.4.1**
-  (25/08/2026), que **não tem CLI** — a AWS mantém o 5.x como linha default enquanto o 6.0.x é major
-  mais novo e não promovido. Data maior, capacidade menor. E a falha é silenciosa: instala, a GUI abre,
-  e o `aws-vpn-client` só não existe.
-- **Dependência satisfeita por `Provides` conta.** O 6.0.1 declara `libgtk-3-0` e `libasound2`, que
-  **não existem com esse nome no noble** — a transição t64 renomeou os dois. Instala porque
-  `libgtk-3-0t64` e `libasound2t64` declaram `Provides` com versão. Conferir `apt-cache policy` do nome
-  declarado e concluir "não existe, vai quebrar" é errado.
-- **`import-profile` aceita o que `connect` recusa.** A validação do CA é no `connect`
-  (`Invalid configuration file`), não no import. O script `vpn` não pode tratar import bem-sucedido
-  como configuração válida.
-
-**O que o portão não podia provar:** o aceite escrito no passo pedia "completa login SAML", e completar
-login SAML exige o endpoint e a aplicação SAML — que são o `2.2`. O critério foi movido para lá, junto
-com a pergunta que sobrou: se `aws-vpn-client connect` num perfil SAML abre o navegador sozinho.
-
-### Sequência de provisionamento em scripts, e a camada 2 de DNS aplicada (2026-08-26)
-
-**Fase 1 do plano completa.** A preocupação que motivou o trabalho era a sequência: a ordem das
-camadas existia só na cabeça de quem já tinha rodado.
-
-`aws/terraform/scripts/` — um script por camada, numerado pela ordem de dependência, mais `up-all`
-que roda a sequência parando na primeira falha. `scripts/lib` é sourced e concentra o encanamento
-(log com timestamp, `PIPESTATUS[0]`, confirmação, descoberta do bucket pelo id da Organization) —
-"um script por camada" não podia significar cinco cópias disso.
-
-A ordem, e por quê: 00 `state-backend` antes de tudo porque nenhuma outra raiz inicializa o backend
-sem o bucket; 01 `network-foundation` antes de 04 porque a 04 lê a VPC hub por `tag:Name`; 02 `dns` é
-independente das outras, mas pré-requisito de certificado e ingress; 03 `connectivity` ainda não
-existe e o `up-all` a pula avisando; 04 `control-plane` **não entra por default** (~US$ 165/mês contra
-centavos das três primeiras).
-
-**Três armadilhas viraram guarda executável**, em vez de parágrafo de README: bucket de state
-inexistente (o `up-00` para e imprime o bootstrap manual — a raiz guarda o próprio state no bucket que
-gerencia, e automatizar às cegas um passo de uma vez esconde o problema); região negada pela SCP (o
-`up-01` faz um `describe-vpcs` antes do primeiro `Create*`); e **zona pai que já tem NS para o label**
-(o `up-02` recusa — delegação antiga colide no apply e a mensagem do Azure não diz que a causa é um
-record set preexistente).
-
-**Camada 2 aplicada e verificada.** Subzona `nonprod.<domínio>`, `Z087731898SD8PA9OXYR`, conta
-`network`, 2 record sets. Delegação provada por `dig +trace`: o name server do Azure entrega a
-delegação e o do Route 53 responde o SOA — a cadeia atravessa as duas clouds. Propagação quase
-imediata.
-
-Três coisas aprendidas na execução:
-
-- **A pai já tinha uma delegação NS no mesmo formato** (`NS sandbox` → zona Azure). O `NS nonprod`
-  ficou ao lado dela, apontando para o Route 53 em vez de para outra zona Azure. Nada de novo na pai —
-  e foi o que justificou o guard de colisão do `up-02`.
-- **O TTL 300 está no NS da PAI, não na subzona.** O `NS` dentro da zona do Route 53 nasce com 172800
-  (default da AWS). Quem governa a repropagação da delegação é o da pai — que é o que se configurou.
-- **A conta `network` não tem permission set**, então ver a zona no console exige switch-role para
-  `OrganizationAccountAccessRole`. Já era item do backlog da Frente A; agora incomoda na prática.
-
-### `1.3` — raiz `dns/` escrita, e o que um `override_resource` não prova (2026-08-26)
-
-Subzona `nonprod.<domínio>` no Route 53 da conta `network` + registro NS de delegação na zona pai no
-Azure DNS, numa raiz com dois providers de cloud. **9 runs, 0 falhas. `apply` pendente.**
-
-Quatro desvios do esboço do plano, todos deliberados: `manage_delegation` é **variável** e não
-`local` (um `local` não é alcançável por teste, e o propósito — desligar sem editar o resto — se
-mantém); valores em `terraform.tfvars` e não inline (única raiz assim: nas outras o inline é decisão
-de desenho, aqui é **identidade de quem roda**, e o repo é público); `subzone_label` como variável,
-para `prod.` ser outra instância e não exceção; e `azurerm ~> 5.0`, conferido no registry em vez de
-herdado do repo Azure pessoal (`~> 4.x`).
-
-**O achado, e vale muito além deste passo: um `override_resource` testa o VALOR, dois testam a
-LIGAÇÃO.** `name_servers` só existe depois do apply, então a asserção que prova
-delegação-como-código precisa de override. Mas com uma lista fixa no `main.tf` igual aos valores
-injetados, a asserção passa sem haver fio — e foi o que aconteceu: a mutação que colava os name
-servers à mão passou **verde**. O conserto são dois runs com overrides de valores e tamanhos
-diferentes; nenhuma lista fixa satisfaz os dois. Verificado nas duas direções.
-
-**Auditar o repo por asserções com um único `override_resource`** — a de `routing.tftest.hcl` (NAT na
-subnet pública) é da mesma família e já usa IDs distintos entre si de propósito, mas não foi checada
-sob esta lente.
-
-Regressão: **64 testes em 12 diretórios, 0 falhas** (eram 55).
-
-### `1.2` — endpoint da API restrito ao IP de quem aplica (2026-08-26)
-
-Branch `feat/lbc-subnet-discovery-tags` (o `1.2` seguiu na mesma).
-
-**A fronteira foi a decisão do passo**, e ela se dividiu em duas por natureza do que se protege:
-
-| Onde | O que | Natureza |
-|---|---|---|
-| `src/cluster` | recusa lista vazia **se** o endpoint público está ligado; recusa CIDR sem prefixo | **semântica da AWS** — vazio é `0.0.0.0/0`, e a armadilha vale para qualquer chamador |
-| `control-plane` | variável **sem default**; recusa `0.0.0.0/0` mesmo explícito | **política da célula** — abrir exige editar a validação, ato visível em diff |
-| `generate-tfvars` | descobre o IP em `checkip.amazonaws.com`, escreve o `/32`; `--public-access-cidr` (repetível) desliga a descoberta | o script já existia para descobrir antes de gerar arquivo |
-
-Sem default é o que fecha o `Known Broken 3`: omitir a variável era o caminho silencioso para o
-mundo, e agora é erro de validação antes de qualquer chamada à AWS. Custo do fechamento: o
-`terraform.tfvars` local precisa ser regenerado.
-
-**Seis mutações rodadas, seis capturadas.** Duas ensinaram algo:
-
-- **Condição de `validation` tem de referenciar a própria variável.** Trocar por `true` para testar
-  não deixa o teste vermelho — deixa a configuração inválida, e **nenhum run executa**. Mutação de
-  validação precisa **enfraquecer** (`length(...) >= 0`), não remover. Duas tentativas foram
-  perdidas nisso.
-- **A invariante do módulo torna o fio do root impossível de cortar calado:** apagar o
-  `public_access_cidrs = var.public_access_cidrs` deixa a lista vazia e o módulo derruba o plan no
-  primeiro run. Só a mutação que passa um CIDR **válido mas errado** isola a asserção do root — e é
-  ela que a justifica.
-
-**O que NÃO foi verificado:** os outros dois critérios de aceite do passo (*o apply do laptop segue
-funcionando*, *a API recusa de outro IP*) exigem a camada 2 de pé, ~US$ 165/mês. Ficam para a próxima
-vez que ela subir.
-
-Regressão: **55 testes em 11 diretórios, 0 falhas** (eram 49). Nada tocou a AWS além de um GET em
-`checkip.amazonaws.com`.
-
-### `1.1` — tags de descoberta do LBC, e a lição sobre achado não conferido (2026-08-26)
-
-Branch `feat/lbc-subnet-discovery-tags`, a partir de `main`.
-
-**O passo não era o que o plano dizia.** `Known Broken 1` e o `1.1` afirmavam que `src/network` não
-aplicava `kubernetes.io/role/{elb,internal-elb}`. As duas tags estão no módulo desde `b32eb68`, o
-commit inicial dele, com comentário explicando o propósito. O achado nasceu da comparação com o
-desenho de referência — que trata as tags como flag explícita de spoke — e foi registrado como bug do
-código sem ninguém abrir o `main.tf`. Atravessou duas sessões de handoff assim.
-
-O que de fato faltava era o critério de aceite escrito no próprio passo: **nenhum dos dois arquivos de
-teste olhava tag alguma**. Entregue `src/network/tests/tags.tftest.hcl`, 4 runs — perda da tag
-pública, perda da privada, cruzamento das duas famílias, e inversão da ordem do `merge`.
-
-**Quatro mutações rodadas, quatro capturas**, cada uma pela asserção pretendida. A quarta só passou a
-valer depois de a `var.tags` do teste **colidir de propósito** com a tag de papel, e com o valor
-errado: sem colisão, inverter `merge(var.tags, {papel})` para `merge({papel}, var.tags)` passava sem
-ser notado. Todo `alltrue` tem contagem ao lado — `alltrue([])` é `true`.
-
-Duas decisões fechadas, com a doc do EKS no lugar de memória: **a tag `kubernetes.io/cluster/<nome>`
-fica fora** (opcional desde o LBC `2.1.2`, só desempata clusters que dividem VPC, e o módulo não
-conhece nome de cluster); e **as tags de papel não têm fallback**, porque o LBC não examina route
-table como o controller in-tree.
-
-Regressão da árvore: **49 testes em 11 diretórios, 0 falhas** (eram 45). Custo: zero, nada tocou a
-AWS.
-
-### Desenho de acesso privado e ingress — plano fechado (2026-08-26)
-
-Frente inteira desenhada e escrita como plano executável em quatro fases, sem decisão de desenho em
-aberto. Ordem descoberta, não presumida: o acesso privado subiu para antes do ingress quando ficou
-claro que **quem fala com o API server é o Terraform**, não o operador.
-
-Nove decisões fechadas — ingress único pelo hub, VPN por cliente, Client VPN com SAML, T1 permanente
-durante o dia, fronteira de state por ciclo de vida, ingress variante B, wildcard de ACM por cluster,
-subzona `nonprod.` com delegação em código, e cliente simulado no Azure com os dois lados do túnel
-numa raiz só.
-
-Quatro achados que mudaram o rumo:
-
-- **O desenho de referência não tem ingress no hub** — o hub dele é trânsito puro, sem VPC. Ingress
-  centralizado ficou sem precedente interno, e a decisão foi tomada sabendo disso.
-- **Route table de tenant só isola nas duas direções se o attachment for por cliente.** Com attachment
-  agregado, a entrada depende de security group — uma camada, a mais interna.
-- **`TargetGroupBinding` aceita target group externo**, o que permite Terraform ser dono do NLB sem
-  quebrar o apply único.
-- **O ALB não lê Secret do Kubernetes**, o que move o certificado público do cert-manager para o ACM e
-  encerra a emissão por cluster.
-
-Fechou também o item aberto desde a camada 2: **o corte `hub | spoke+cluster` sobrevive ao TGW**.
-
-### Port das camadas Terraform para a trilha corporativa (2026-08-26)
-
-Árvore `aws/terraform/` levada para lá numa branch própria: 8 módulos de `src/` sem alteração, três
-raízes, scripts, testes, mais README, CLAUDE.md e spec de desenho adaptados. Todo vocabulário local
-trocado por `PLACEHOLDER-*`; zero account id, zero nome de bucket, zero nome de conta daqui.
-Regressão offline verificada **lá**: 43 testes em 10 diretórios, 0 falhas. As duas lacunas (TGW e tags
-de LBC) foram deixadas documentadas como ponto de entrada, não implementadas às cegas.
-
-### Camada 2 do Terraform — escrita, aplicada, verificada e destruída (2026-08-25/26)
-
-Tasks 1–7 em TDD offline, Task 8 é o apply.
-
-| Task | Módulo | Testes |
-|---|---|---|
-| 1 | `src/pod-identity` | 4 |
-| 2 | `src/cluster` | 6 |
-| 3 | `src/nodegroup` | 4 |
-| 4 | `src/helm/modules/external-secrets` | 3 |
-| 5 | `src/helm/modules/argo-cd` | 4 |
-| 6 | `src/helm/modules/crossplane` | 2 |
-| 7 | root `control-plane/` | 5 |
-| 8 | apply na AWS | 39 recursos |
-
-Regressão da árvore inteira: **45 testes em 11 diretórios, 0 falhas**.
-
-O root compõe VPC spoke `10.2.0.0/16` + EKS + node group + três Pod Identities + os três charts + o
-ConfigMap `platform-bootstrap`, que é o contrato com o GitOps — nenhum manifesto do lado GitOps
-carrega account id ou VPC id hardcoded. **O plano ativo acrescenta a chave `ingressTargetGroupArn` a
-esse contrato.**
-
-**Quatro correções ao plano exigidas pelos próprios testes:** `jsonencode` no lugar de
-`data.aws_iam_policy_document` (sob `mock_provider` o data source devolve valor sintético e o provider
-rejeita); a asserção das Pod Identities passou a verificar `role_name` em vez de `role_arn`, que é
-ineliminavelmente *unknown* no plan; `kubernetes_config_map` → `kubernetes_config_map_v1`; e a
-cláusula morta `cidrsubnet("10.0.0.0/12", 4, 0) != null` saiu da validação de `vpc_cidr`.
-
-**Versões conferidas nos repositórios, não herdadas:** ESO `2.9.0`, argo-cd `7.7.7` → **`10.4.0`**
-(atravessa um major), crossplane `2.3.1` → **`2.4.0`** do canal `stable`.
-
-### Camada 1 do Terraform (2026-08-25)
-
-Bucket de state em raiz própria com `prevent_destroy`, desacoplado de qualquer região; uma raiz por
-região com state key própria. Reuso do módulo entre regiões provado com um segundo hub em `us-west-2`
-sem alterar uma linha de `src/network`. Isolamento verificado: `plan -destroy` de uma região não
-alcança a outra nem o bucket.
-
-### Frente A — contas (2026-08-24/25)
-
-Vocabulário do whitepaper aplicado em doc, scripts e na Organization real. CloudTrail organizacional +
-conta `log-archive` + bucket de auditoria. SCPs baseline em Root/Security/Infrastructure/Workloads/
-Deployments. Permission set de rotina da `log-archive` em `ReadOnlyAccess`. Break-glass documentado.
-OU `Deployments` + conta `cicd` criadas e movidas, com deny de região comprovado na prática.
-
-### Frente C — documentação (2026-08-24/26)
-
-Domínio `tenancy/` a partir da SaaS Lens; `security/08-control-plane-identity.md`; correções na
-família conta × região × papel; nomes de arquivo e H1 em inglês; hierarquia de fontes WAF →
-whitepaper → SRA. Nesta sessão, os `CLAUDE.md` de `network/`, `dns/` e `terraform/` ganharam as
-armadilhas descobertas no desenho.
-
-A SaaS Lens confirma por escrito o que `decisions.md` §3 já havia derivado: mesmo com recursos
-dedicados, um silo *"still relies on a shared identity, onboarding, and operational experience"* — é
-isso que separa SaaS de *managed service*.
+Narrativa detalhada de cada entrega concluída vive em `docs/archive.md` (um item por sessão/passo).
+Resumo do que já está lá, do mais recente ao mais antigo:
+
+- **2026-08-27** — especificação da sequência de provisionamento + dicionário de 61 recursos. Não
+  tocou AWS.
+- **2026-08-26** — `2.3` (spoke entra na malha via TGW, aceito com ping real) + teardown exercitado;
+  `2.2` (apply da `connectivity/` + resolução das duas perguntas do aceite + a raiz escrita); `2.1`
+  (portão do client VPN); scripts de sequência (`up-*`) + camada 2 de DNS aplicada; `1.3` (raiz
+  `dns/`); `1.2` (endpoint da API restrito por IP); `1.1` (tags de descoberta do LBC); plano de acesso
+  privado e ingress fechado (9 decisões); port das camadas Terraform para a trilha corporativa.
+- **2026-08-25/26** — camada 2 do Terraform (`control-plane`) escrita, aplicada, verificada e
+  destruída.
+- **2026-08-25** — camada 1 do Terraform (`network-foundation`, bucket de state).
+- **2026-08-24/25** — Frente A: contas, OUs, SCPs, CloudTrail organizacional.
+- **2026-08-24/26** — Frente C: domínios de `aws/docs/`, hierarquia de fontes WAF → whitepaper → SRA.
+- **2026-08-17** — bootstrap do IAM user `crossplane-poc` + hub Crossplane de pé no k3d.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
