@@ -41,6 +41,12 @@ show_usage() {
   What is VALIDATED (fails before writing a file, instead of failing at apply):
 
     - the hub VPC Name tag matches EXACTLY one VPC in the network account
+    - EXACTLY one public hosted zone named '<subzone-label>.*' exists in the network
+      account, and base_domain is derived from it — the cell certificate is
+      *.<name>.<subzone>.<base_domain>, so base_domain is not a choice
+    - the hub ingress ALB exists in the network account. Absent is the NORMAL
+      overnight state (layer 3 is a T1, destroyed daily), so this check tells you to
+      bring layer 3 up rather than letting the plan fail on data "aws_lb"
     - the requested vpc_cidr does not collide with any VPC in the target account
     - the region passes the DenyOutsideApprovedRegions SCP
     - the state bucket exists
@@ -57,6 +63,8 @@ show_usage() {
                                   names into ids (default: personal)
            --hub-vpc-name        Name tag of the layer 1 hub VPC (default: poc-hub-vpc)
            --vpc-cidr            Spoke CIDR (default: 10.2.0.0/16)
+           --subzone-label       Label of the subzone delegated by layer 2
+                                 (default: nonprod)
            --target-account      Account where Crossplane creates resources. Accepts a
                                   name ("wasp-nonprod") or a 12-digit id. Repeatable.
                                   (default: wasp-nonprod)
@@ -97,6 +105,8 @@ profile="cicd"
 network_profile="network"
 org_profile="personal"
 hub_vpc_name="poc-hub-vpc"
+hub_alb_name="poc-hub-ingress"
+subzone_label="nonprod"
 vpc_cidr="10.2.0.0/16"
 availability_zone_count="2"
 kubernetes_version=""
@@ -137,6 +147,11 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     --hub-vpc-name )
       shift
       hub_vpc_name="${1}"
+      ;;
+
+    --subzone-label )
+      shift
+      subzone_label="${1}"
       ;;
 
     --vpc-cidr )
@@ -285,6 +300,43 @@ if [ "${hub_vpc_count}" -gt 1 ]; then
   fail "${hub_vpc_count} VPCs tagged Name='${hub_vpc_name}' in ${region}. The filter must be unambiguous — data \"aws_vpc\" breaks at plan time."
 fi
 log "hub VPC: ${hub_vpc_ids}"
+
+# --- layer 2 delegated subzone ----------------------------------------------
+# The cell certificate is *.<name>.<subzone>.<base_domain>, so base_domain is not a choice —
+# it is whatever layer 2 delegated. Discover it instead of asking, and fail loudly when the
+# subzone is missing or ambiguous: the root's data "aws_route53_zone" breaks at plan time.
+subzone_names="$(aws route53 list-hosted-zones \
+  --profile "${network_profile}" \
+  --query "HostedZones[?starts_with(Name, '${subzone_label}.')].Name" \
+  --output text)"
+subzone_count="$(echo "${subzone_names}" | wc -w)"
+
+if [ "${subzone_count}" -eq 0 ]; then
+  fail "no public hosted zone named '${subzone_label}.*' in the network account. Was layer 2 applied (scripts/up-02-dns)?"
+fi
+
+if [ "${subzone_count}" -gt 1 ]; then
+  fail "${subzone_count} hosted zones named '${subzone_label}.*' in the network account: ${subzone_names}. Cannot tell which one is the delegated subzone."
+fi
+
+# Route 53 returns the name with a trailing dot; base_domain is the subzone minus its label.
+base_domain="${subzone_names%.}"
+base_domain="${base_domain#${subzone_label}.}"
+log "delegated subzone: ${subzone_names%.} (base_domain ${base_domain})"
+
+# --- layer 3 ingress ALB ----------------------------------------------------
+# The cell hangs its certificate and its host rule on the SHARED :443 listener of this ALB.
+# The root reads it by name with data "aws_lb", which breaks at plan time when absent — and
+# absent is the NORMAL state overnight, because layer 3 is destroyed at the end of the day.
+if ! aws elbv2 describe-load-balancers \
+  --region "${region}" \
+  --profile "${network_profile}" \
+  --names "${hub_alb_name}" \
+  --query 'LoadBalancers[].LoadBalancerArn' \
+  --output text > /dev/null 2>&1; then
+  fail "no load balancer named '${hub_alb_name}' in ${region} in the network account. Layer 3 has to be up first (scripts/up-03-connectivity) — it owns the ALB and the shared :443 listener."
+fi
+log "hub ingress ALB: ${hub_alb_name}"
 
 # --- CIDR collision ---------------------------------------------------------
 colliding_vpc="$(aws ec2 describe-vpcs \
@@ -444,6 +496,9 @@ if [ "${format}" == "json" ]; then
     --arg aws_profile "${profile}" \
     --arg network_profile "${network_profile}" \
     --arg hub_vpc_name "${hub_vpc_name}" \
+    --arg hub_alb_name "${hub_alb_name}" \
+    --arg base_domain "${base_domain}" \
+    --arg subzone_label "${subzone_label}" \
     --arg hub_vpc_id "${hub_vpc_ids}" \
     --arg vpc_cidr "${vpc_cidr}" \
     --arg kubernetes_version "${kubernetes_version}" \
@@ -459,6 +514,9 @@ if [ "${format}" == "json" ]; then
       aws_profile: $aws_profile,
       network_profile: $network_profile,
       hub_vpc_name: $hub_vpc_name,
+      hub_alb_name: $hub_alb_name,
+      base_domain: $base_domain,
+      subzone_label: $subzone_label,
       vpc_cidr: $vpc_cidr,
       kubernetes_version: $kubernetes_version,
       availability_zones: $availability_zones,
@@ -484,6 +542,9 @@ region             = "${region}"
 aws_profile        = "${profile}"
 network_profile    = "${network_profile}"
 hub_vpc_name       = "${hub_vpc_name}"
+hub_alb_name       = "${hub_alb_name}"
+base_domain        = "${base_domain}"
+subzone_label      = "${subzone_label}"
 vpc_cidr           = "${vpc_cidr}"
 kubernetes_version = "${kubernetes_version}"
 availability_zones = $(echo "${availability_zones}" | jq --raw-output '"[" + (map("\"" + . + "\"") | join(", ")) + "]"')
