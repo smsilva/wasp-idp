@@ -84,7 +84,8 @@ OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workloads`, `
 
 ## Estado aplicado na AWS
 
-Snapshot de 2026-08-28, **fim da sessão do aceite do `3.1`, com tudo derrubado**. Custo por hora de
+Snapshot de 2026-08-28, **fim da sessão que escreveu o `3.2` inteiro; nada aplicado, tudo derrubado**.
+Nenhum cluster k3d de pé (o laboratório do ArgoCD foi removido no fim da sessão). Custo por hora de
 volta a zero, confirmado camada a camada (`0, 0, 3, 13, 13`) e nenhum cluster k3d de pé.
 
 | Camada | Conta | State key | Custo/mês | Estado |
@@ -96,8 +97,9 @@ volta a zero, confirmado camada a camada (`0, 0, 3, 13, 13`) e nenhum cluster k3
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
 | `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **destruída** (state em 0) |
 
-**Custo por hora agora: zero.** Quando as duas subirem de novo são ~US$ 0,43/h (0,20 da 03 + 0,23 da
-04). **Derrubar na ordem inversa antes de encerrar a sessão** — comando em How to Resume. Se esta seção ainda disser "DE PÉ" numa sessão futura,
+**Custo por hora agora: zero.** Quando as duas subirem de novo são ~US$ 0,45/h — a 03 subiu de
+~US$ 0,20/h para **~US$ 0,22/h** porque agora entrega também o ALB de ingress (~US$ 16/mês + LCU),
+mais os ~US$ 0,23/h da 04. **Derrubar na ordem inversa antes de encerrar a sessão** — comando em How to Resume. Se esta seção ainda disser "DE PÉ" numa sessão futura,
 não presumir que é o T1 de propósito (esse é só a camada 03) — a 04 nunca fica de um dia para o outro.
 
 > **Ordem de teardown, agora exercitada e não só documentada:** `control-plane/scripts/destroy`
@@ -169,7 +171,38 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **Fase 2 e `3.1` COMPLETOS, `3.2` é o próximo**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **`3.2` COMPLETO NO CÓDIGO, aceite na AWS é o próximo**)
+
+**Estado em 2026-08-28, fim da sessão: o `3.2` está escrito inteiro nas três raízes e nunca foi
+aplicado.** Regressão offline **146 testes / 14 diretórios / 0 falhas**. O que falta é exclusivamente
+o que exige AWS de verdade — ver **How to Resume**, passo "Aceite do `3.2`".
+
+**O `3.2` era maior do que o plano dizia.** Ele supunha que só faltava uma listener rule; o ALB do hub
+**não existia em nenhuma camada**. Saiu em 12 peças: 1 output na `network-foundation` (nas duas
+regiões), 6 na `connectivity/us-east-1` (SG, ALB, listener `:443` com `fixed-response` 404, listener
+`:80` redirect, 5 outputs, guard do `destroy`) e 5 na `control-plane` (certificado da célula, SNI,
+target group do hub, listener rule, registro alias).
+
+**Decisão de fronteira fechada: o ALB vive na `connectivity/` (T1).** Razão de maior peso — **sem TGW
+o ALB não alcança spoke nenhuma**, é um listener servindo 404, então o ciclo de vida dele é o do plano
+de conectividade. Composabilidade por região NÃO discrimina T0 de T1 (a `network-foundation` também é
+uma raiz por região). **Consequência aceita: o teardown noturno da 03 derruba o ingress público de
+todas as células.** Rejeitados: ALB na `network-foundation` (tiraria o custo-zero da T0 e amarraria
+ingress a camada que não sabe se há conectividade) e raiz própria (quinta camada por um recurso).
+Horizonte declarado, fora de escopo: **ingress por célula**, para o ALB do hub deixar de ser ponto
+único de falha — o que reforça mantê-lo em camada descartável.
+
+**`matcher = "200-404"` na target group do hub é decisão consciente e provisória.** Confirmado na doc
+do ELB que **não há como sobrescrever o `Host` no health check** (só protocolo, porta, path, timeouts,
+thresholds, matcher). O check chega ao Envoy com `Host` = IP, não casa `VirtualService` e recebe 404;
+com o matcher default TODOS os targets ficariam `unhealthy` sem nada errado. Preço: aceita como
+saudável um Envoy sem configuração. Estreitar para `200` exige rota de health casando qualquer host —
+manifesto de GitOps, não Terraform.
+
+**`base_domain` entrou sem default na camada 04**, mesma falha-fechado da 03: **qualquer `plan` falha
+pedindo a variável até rodar `./scripts/generate-tfvars --force`.** O script aprendeu a descobrir o
+domínio pela hosted zone `nonprod.*` na conta `network` e a **recusar quando o ALB do hub não existe** —
+ausente é o estado normal da noite.
 
 **Fase 2 (acesso privado) fechada 2026-08-27: aceite conjunto `2.4`+`2.5` PASSOU**, os cinco
 critérios (`up-03` aplicado, túnel conectado com SAML, `up-04` aplicado com endpoint já fechado,
@@ -205,12 +238,12 @@ group apontando para os dois endereços fixos e listener rule no ALB. Roteiro em
 (nenhuma diferença entre código e AWS) e a suíte offline da raiz passou 25/25 — ou seja, as três
 correções do `3.1` estão no código, não só no ambiente. Nada ficou pela metade.
 
-**Próximo passo pretendido: `3.2`.** Lado hub, na conta `network`, com provider aliasado a partir do
-state da `control-plane` (fronteira de state segue o ciclo de vida, não a conta): certificado wildcard
-do ACM para `*.<id>.nonprod.<domínio>`, target group de tipo `ip` apontando para `10.2.32.10` e
-`10.2.48.10` (saem de `module.ingress.private_ips`, conhecidos em tempo de plan — foi para isso que os
-endereços foram fixados) e listener rule no ALB casando o host. Roteiro em `03-ingress.md`. **O ALB do
-hub ainda não existe** — conferir antes de assumir que só falta a rule.
+**Próximo passo pretendido: o ACEITE do `3.2` na AWS**, que é a única coisa que falta. Sequência
+exata em **How to Resume**. Duas coisas vão aparecer só no apply e não são testáveis offline: a
+ordenação `aws_acm_certificate_validation` → `aws_lb_listener_certificate` (os dois ARNs são o mesmo
+valor, então nenhuma asserção distingue as referências; o sintoma é certificado `PENDING_VALIDATION`
+no listener) e a necessidade de uma rota no `Gateway`/`VirtualService` para o host da célula — sem ela
+a target group fica "saudável" pelo matcher largo e o `curl` recebe 404 do Envoy.
 
 **Três coisas que só o AWS real mostrou no `3.1`** (todas já corrigidas e commitadas):
 - **A porta do gateway Istio é 80, não 8080.** O 8080 é do Istio antigo; o chart `gateway` do
@@ -317,6 +350,45 @@ Decisões fechadas nesta frente:
    (raiz `dns/` com providers `aws` + `azurerm`). O apex segue no Azure DNS.
 9. **Cliente simulado do `4.2` no Azure**, VPN Gateway gerenciado active-active com BGP, numa raiz só
    (`azure/terraform/simulated-client/`) que contém **os dois lados do túnel**.
+
+### Frente F — wire do ArgoCD ao repositório de GitOps (ATIVA, **mecanismo validado em k3d, célula não tocada**)
+
+**Objetivo:** o ArgoCD da célula sobe sem credencial de repositório, então o lado GitOps do `3.1` foi
+instalado por `helm upgrade --install` do checkout local. Enquanto isso, "GitOps instala o chart" é
+desenho, não estado.
+
+**Decidido: GitHub App, não deploy key SSH.** Token de instalação de ~1 h renovado pelo próprio
+ArgoCD, contra chave de vida longa em disco — escolher SSH recriaria de propósito o problema do
+`Known Broken 4`. A App existe (identificadores e caminho da chave em `CLAUDE.local.md`), com
+`Contents: Read-only`, sem webhook, sem callback.
+
+**Validado ponta a ponta num k3d local** (chart `argo-cd` 10.4.0 = ArgoCD 3.5.1, a mesma versão da
+célula) e **o laboratório foi derrubado no fim da sessão**. Roteiro, forma dos manifestos e todas as
+armadilhas em
+[`docs/superpowers/specs/2026-08-28-argocd-github-app.md`](docs/superpowers/specs/2026-08-28-argocd-github-app.md).
+O essencial:
+
+- **`secret-type: repo-creds`** (prefixo `https://github.com/<owner>`), não `repository`. Consequência:
+  **`argocd repo list` fica VAZIO** — a credencial aparece em `argocd repocreds list`.
+- **Entrega por `extraObjects` do próprio chart do ArgoCD**, como `ExternalSecret`. Isso resolve a
+  dúvida de ownership: não há `Secret` criado fora do release disputando com ele. O módulo
+  `src/helm/modules/argo-cd` já aceita `var.extra_values` e já usa esse padrão para o OIDC.
+- **`githubAppID` é NUMÉRICO.** O GitHub sugere usar o Client ID para gerar token; o campo do ArgoCD
+  recusa no parse, com erro que não menciona o formato.
+- **PEM em base64 no cofre, `b64dec` no template** — multilinha sobrevive mal a JSON de secret e a
+  template. Padrão copiado da trilha Azure.
+- **`AppProject infra` não existe em nenhum dos dois repos** e é declarado por default por todo
+  `Application` do app-of-apps. Decidido: nasce **onde o ArgoCD nasce** (Terraform na célula), porque
+  ele precisa existir ANTES de qualquer `Application` sincronizar — não pode vir por GitOps. Precisa
+  de `clusterResourceWhitelist` e `namespaceResourceWhitelist`, senão o sync falha com `resource not
+  permitted in project`.
+- **`repoURL` de SSH para HTTPS por values overlay**, não editando o default: a trilha Azure depende
+  da deploy key SSH e a lista de consumidores é desconhecida. O overlay `values-aws.yaml` existe no
+  repositório de GitOps, com os cinco charts por wave — e **`aws-target-group-binding` fora de
+  propósito**, porque o ARN da target group muda a cada recriação (`Known Broken 24`).
+
+**Falta para a célula, e é a única incógnita:** qual prefixo de secret a policy da Role Pod Identity
+do ESO da camada 04 permite, e se lá há `ClusterSecretStore` ou `SecretStore` por namespace.
 
 ### Frente E — scripts shell em inglês (ATIVA, parcial)
 
@@ -621,6 +693,24 @@ Itens fechados/retirados (tags de LBC
     sintoma é binding que sincroniza para sempre sem registrar target. Resolver junto com o wire do
     ArgoCD (o app-of-apps pode ler o ConfigMap).
 
+25. **O repositório de GitOps era PÚBLICO e foi fechado em 2026-08-28** — *unexpected*, e invalidava o
+    teste que se pretendia fazer: com repo público o ArgoCD clona sem credencial, então um sync verde
+    não prova autenticação nenhuma. Fechado durante a validação, com o risco conferido antes (as
+    composite actions de `actions/` só são referenciadas pelo próprio repo). **Consequência para quem
+    vier depois: qualquer consumidor anônimo daquele repositório parou de funcionar.**
+26. **Sync verde do ArgoCD não prova autenticação, nem com o repo privado** — *intentional*/limitação:
+    o `repo-server` serve de cache um clone anterior. A prova exige mutação — apagar o secret,
+    **reiniciar `argocd-repo-server` E redis**, exigir `authentication required`, e só então restaurar.
+    Sem o vermelho, o verde não significa nada. Vale para qualquer verificação futura de credencial.
+27. **`ingress.enabled` do chart `httpbin` é decorativo** — *unexpected*, e do repositório de GitOps:
+    só o `NOTES.txt` o lê. O gate real dos dois templates de Ingress é
+    `global.environment.cluster.ingress.type` (default `nginx`). Num cluster sem nginx o Ingress nasce,
+    nunca ganha `status.loadBalancer`, e a `Application` fica em `Progressing` para sempre — falso
+    negativo que se lê como falha de credencial.
+28. **O `3.2` inteiro nunca foi aplicado** — *intentional*: escrito e verificado offline (146 testes),
+    aceite pendente. Em particular a ordenação `validation` → `listener_certificate` e a rota de host
+    no `Gateway`/`VirtualService` só aparecem no apply.
+
 ## How to Resume
 
 **Primeiro comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd` assumem
@@ -638,7 +728,7 @@ o `Account`/`Arn` inteiro, nunca `--query`. Erro de profile inexistente ou ARN v
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Custo por hora ao fim desta sessão (2026-08-28): zero — 03 e 04 derrubadas.** Confirmar por camada
+**Custo por hora ao fim desta sessão (2026-08-28): zero — 03 e 04 derrubadas, nenhum cluster k3d.** Confirmar por camada
 antes de qualquer coisa, já que a leitura da AWS CLI nesta máquina passa por wrapper:
 
 ```bash
@@ -668,6 +758,35 @@ Recuperação já conhecida: `terraform state rm` dos objetos Kubernetes presos 
 aws-vpn-client get-connection-status --profile-name hub   # tem de dizer "Connected"
 ! aws-vpn-client connect --profile-name hub               # abre navegador; precisa ser o usuário
 ```
+
+### Aceite do `3.2` — a única coisa que falta, e a ordem importa
+
+```bash
+cd wasp-idp/aws/terraform
+./scripts/up-03-connectivity --yes            # agora entrega TAMBÉM o ALB (~US$ 0,22/h)
+# exportar e importar o .ovpn, CONECTAR o túnel (passos 3-4 do README)
+cd control-plane && ./scripts/generate-tfvars --force   # OBRIGATÓRIO: base_domain sem default
+./scripts/apply --yes
+```
+
+`generate-tfvars` agora **recusa** se o ALB do hub não existir e **descobre** `base_domain` pela hosted
+zone `nonprod.*` na conta `network`. Se ele reclamar de domínio, a camada 02 é que não está aplicada.
+
+Verificar na ordem em que quebra:
+
+1. `terraform output cell_ingress_fqdn` — o wildcard da célula.
+2. `dig +short app.<célula>.nonprod.<domínio>` devolve IPs públicos do ALB.
+3. `aws elbv2 describe-listener-certificates` mostra o certificado da célula no listener.
+4. Os dois endereços do NLB `healthy` na target group do hub. **Saudável aqui não significa
+   funcionando** — o matcher aceita 404.
+5. `curl https://app.<célula>.nonprod.<domínio>/httpbin/get` **da internet, sem túnel**, sem `-k`.
+
+**O passo 5 vai dar 404 até existir rota para esse host no `Gateway`/`VirtualService`** — isso é
+manifesto no repositório de GitOps, e hoje entra por `helm upgrade --install` do checkout local. Se o
+`curl` der 404 com TLS válido, o hub está certo e falta o lado cluster; se der erro de TLS, o problema
+é o certificado (provavelmente `PENDING_VALIDATION`, ordenação errada). O `3.1` segue verificável em
+paralelo pelo túnel, com `curl` direto em `10.2.32.10`/`10.2.48.10` — é o que separa "quebrou no hub"
+de "quebrou na spoke".
 
 ### Subir o ambiente — a sequência está no `aws/terraform/README.md`, não aqui
 
@@ -723,7 +842,7 @@ O `init` é necessário uma vez por máquina: o nome do bucket não é versionad
 assumir o sim — usar `--yes`. **Plano salvo não sobrevive à expiração de credencial**: replanejar,
 não reaproveitar.
 
-Branch corrente: `feat/private-access-phase-2`. Convenção — uma branch por fase — em **In Progress**.
+Branch corrente: `feat/private-access-phase-3`. Convenção — uma branch por fase — em **In Progress**.
 
 Contexto de desenho, se precisar do porquê antes de executar:
 
@@ -741,11 +860,12 @@ reais.
 `public_access_cidrs` **sem default**, então qualquer `plan` falha pedindo a variável até rodar
 `./scripts/generate-tfvars --force`. É a falha-fechado funcionando, não regressão.
 
-Regressão offline (**86 testes**, 13 diretórios, 0 falhas — a lista abaixo inclui `connectivity`):
+Regressão offline (**146 testes, 14 diretórios**, 0 falhas). Números anteriores de 86/13 estavam
+velhos E a lista omitia `src/ingress`, que entrou com o `3.1` — leva 3-4 min, rodar em background:
 
 ```bash
 cd aws/terraform
-for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup \
+for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup src/ingress \
          src/helm/modules/external-secrets src/helm/modules/argo-cd src/helm/modules/crossplane \
          network-foundation/us-east-1 network-foundation/us-west-2 control-plane dns \
          connectivity/us-east-1; do
@@ -935,6 +1055,20 @@ porquê, um por linha:
       camada até agora, então `3.2` pode incluir criá-lo. Health check do lado hub vai à porta 80 dos
       endereços do NLB (não há porta de status ali; a de 15021 é do gateway, dentro da spoke).
       **Roteiro detalhado, com as armadilhas e o aceite: `docs/superpowers/specs/2026-08-28-hub-side-ingress.md`.**
+- [x] **`3.2` escrito inteiro** — 12 peças em três raízes, 146 testes offline, 0 falhas. ALB na
+      `connectivity/` (decisão de fronteira fechada), `matcher = "200-404"` consciente, `base_domain`
+      sem default com descoberta no `generate-tfvars`.
+- [ ] **Aceite do `3.2` na AWS (PRÓXIMO)** — sequência em How to Resume. É a única coisa que falta na
+      fase 3.
+- [ ] **Estreitar o `matcher` da target group do hub para `200`** quando existir rota de health no
+      `Gateway`/`VirtualService` casando qualquer host. Hoje `200-404` aceita como saudável um Envoy
+      sem configuração.
+- [ ] **Fechar o wire do ArgoCD na célula** (Frente F): `ExternalSecret` por `extraObjects` +
+      `AppProject infra` pelo Terraform. Mecanismo já validado em k3d; falta só descobrir o prefixo de
+      secret permitido pela policy do ESO da camada 04 e se há `ClusterSecretStore` lá.
+- [ ] **Unificar o nome do hub**, hoje em três lugares na camada 04: `hub_vpc_name`, `hub_alb_name` e a
+      tag do TGW literal no `main.tf`. Não feito no `3.2` para não arrastar mudança de variável
+      existente.
 - [ ] **Verificar a metade do `depends_on` que atua no destroy** — no próximo teardown da 04, ler a
       ordem no log antes de declarar corrigido (Known Broken 22).
 - [ ] **Wire do ArgoCD desta célula ao `wasp-gitops`** — hoje ele sobe sem credencial de repositório
@@ -1024,6 +1158,12 @@ Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<pa
 [`docs/archived/index.md`](docs/archived/index.md). Resumo do que já está lá, do mais recente ao mais
 antigo:
 
+- **2026-08-28 (segunda sessão)** — `3.2` escrito inteiro (12 peças em três raízes, ALB do hub
+  incluído, que o plano supunha existir) + GitHub App do ArgoCD validada ponta a ponta num k3d
+  descartável. **Nada aplicado na AWS.** Dois achados que mudaram premissas: o repositório de GitOps
+  era **público** (o handoff afirmava o contrário), o que invalidava o teste de autenticação até ele ser
+  fechado; e o `matcher` do health check do hub tem de aceitar 404, porque a doc do ELB confirma que
+  **não há como sobrescrever o `Host`** e o Envoy responde 404 ao host do IP.
 - **2026-08-28** — `3.1` (ingress da spoke) escrito e **aceito na AWS**: módulo `src/ingress` (NLB
   interno com endereços fixos por `cidrhost`, target group de tipo `ip` que nasce vazia, security
   group que só aceita o CIDR do hub), 4ª Pod Identity (o role do Load Balancer Controller; o chart vem

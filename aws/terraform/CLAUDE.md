@@ -58,6 +58,9 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - Validação que vive numa `variable` some quando os valores viram inline. Ao mover valores para
   dentro do `main.tf`, transformar a validação em assertion de teste — senão vira buraco
   silencioso. Foi o que aconteceu com a checagem de supernet do CIDR.
+- **Antes de concluir "a mutação não foi detectada", provar que ela foi APLICADA.** Um `sed` com a
+  indentação errada não casa nada e o teste segue verde — indistinguível de teste fraco. Conferir com
+  `diff` (ou reler a linha) depois de mutar. Já custou um falso achado de lacuna.
 - **Mutar `validation` exige ENFRAQUECER a condição, não removê-la.** Trocar por `condition = true`
   não deixa o teste vermelho: o Terraform recusa condição que não referencia a própria variável, a
   configuração fica inválida e **nenhum run executa** — o que se lê como "mutação não detectada".
@@ -76,6 +79,12 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   consumidor tiver o valor **fixo no código** igual ao injetado — comprovado: a mutação que colava
   name servers à mão passou verde. Usar dois runs com valores **e tamanhos** diferentes; nenhuma lista
   fixa satisfaz os dois.
+- **Output de `override_module`/`override_data` chega como *tuple*, não `list(string)`.** `==` contra
+  `tolist([...])` falha com *"LHS and RHS values are of different types"* — e a mensagem de erro
+  imprime o valor CERTO, então parece bug de implementação. `toset()` nos dois lados resolve.
+- **Acrescentar variável sem default a uma raiz quebra TODOS os arquivos de teste dela**, não só o
+  novo (`No value for required variable`). Mesma família do data source consumido em campo validado:
+  o custo de uma mudança fail-closed é mecânico e previsível — orçar os arquivos irmãos junto.
 - **`setequal` não existe.** Há `setunion`/`setintersection`/`setsubtract`; igualdade é `==` entre
   dois `toset()`. E comparar atributo `list(string)` com literal `["a","b"]` (que é *tuple*) falha com
   *"LHS and RHS values are of different types"* em vez de comparar — `toset()` nos dois lados resolve.
@@ -253,6 +262,15 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   quem declara o quê, não o comentário que diz o que o autor pretendia.
 
 ## Load balancer: quem é dono do quê
+
+- **Health check de ALB não permite sobrescrever o `Host`.** As únicas alavancas são protocolo,
+  porta, path, timeouts, thresholds e `matcher` (confirmado na doc do ELB). Quando o destino roteia
+  POR host — Istio, por exemplo — a doc manda garantir que o health check case qualquer host, ou usar
+  outra porta. Consequência no `3.2`: o health check chega ao Envoy com `Host` = IP e recebe 404, daí
+  `matcher = "200-404"` até existir rota de health casando qualquer host.
+- **`priority` de listener rule derivada de hash do nome da célula** é o preço de não coordenar entre
+  states: colisão entre duas células é possível e falha ALTO no apply (priority duplicada). O
+  inaceitável seria sobrescrever a rule de outra célula em silêncio — nunca derivar de `count.index`.
 
 - **`src/network` aplica as tags de descoberta do AWS Load Balancer Controller** desde o commit
   inicial do módulo: `kubernetes.io/role/elb` nas públicas, `kubernetes.io/role/internal-elb` nas
