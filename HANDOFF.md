@@ -84,21 +84,20 @@ OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workloads`, `
 
 ## Estado aplicado na AWS
 
-Snapshot de 2026-08-28, **fim da sessão do aceite do `3.1`**. **As camadas 03 e 04 ficaram DE PÉ** —
-derrubar antes de encerrar (ordem e comandos em How to Resume). O teardown ainda não foi feito, e ele
-é a prova que falta do `depends_on` na direção do destroy.
+Snapshot de 2026-08-28, **fim da sessão do aceite do `3.1`, com tudo derrubado**. Custo por hora de
+volta a zero, confirmado camada a camada (`0, 0, 3, 13, 13`) e nenhum cluster k3d de pé.
 
 | Camada | Conta | State key | Custo/mês | Estado |
 |---|---|---|---|---|
 | `state-backend` | `network` | `state-backend/` | centavos | aplicada |
 | `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
-| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **DE PÉ** — 64 entradas no state, EKS 1.36, ingress do `3.1` aceito |
+| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **destruída** (24 recursos, state em 0) |
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
-| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **DE PÉ** — 18 recursos; túnel conectado nesta sessão |
+| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **destruída** (state em 0) |
 
-**Custo por hora agora: ~US$ 0,43/h** (0,20 da 03 + 0,23 da 04). **Derrubar na ordem inversa antes de
-encerrar a sessão** — comando em How to Resume. Se esta seção ainda disser "DE PÉ" numa sessão futura,
+**Custo por hora agora: zero.** Quando as duas subirem de novo são ~US$ 0,43/h (0,20 da 03 + 0,23 da
+04). **Derrubar na ordem inversa antes de encerrar a sessão** — comando em How to Resume. Se esta seção ainda disser "DE PÉ" numa sessão futura,
 não presumir que é o T1 de propósito (esse é só a camada 03) — a 04 nunca fica de um dia para o outro.
 
 > **Ordem de teardown, agora exercitada e não só documentada:** `control-plane/scripts/destroy`
@@ -589,10 +588,15 @@ Itens fechados/retirados (tags de LBC
     AWS antes de ignorar.
 21. **Nenhuma prova de que spoke↔spoke não roteia** — *unexpected*, propriedade central do desenho.
     Só existe uma spoke; é o `4.1`/`4.2`.
-22. **A metade do `depends_on` que atua no DESTROY continua não verificada** — *unexpected*: a
-    direção do apply foi provada em 2026-08-28 (61 recursos, attachment antes dos releases), mas a do
-    destroy só é exercida por um teardown real, e o teardown desta sessão não foi feito. **Fazer no
-    próximo, e olhar a ordem no log antes de declarar corrigido.**
+22. **A metade do `depends_on` que atua no DESTROY continua não verificada** — *unexpected*, e já
+    falhou DUAS vezes. A direção do apply está provada (61 recursos, attachment antes dos releases).
+    No teardown de 2026-08-28, já com a aresta desinvertida, o destroy morreu de novo no mesmo ponto:
+    `module.network.aws_route_table_association.private[*]` foi apagada antes do ConfigMap, e
+    desassociar a route table das subnets privadas corta o caminho até as ENIs do endpoint tão bem
+    quanto apagar a rota. **Correção aplicada depois do incidente**: os consumidores passaram a
+    depender de `module.network` inteiro, não de uma lista de recursos do TGW. **Ainda sem teardown
+    que a exercite — no próximo, ler a ordem no log antes de declarar corrigido.** Recuperação
+    conhecida: `terraform state rm` dos objetos Kubernetes presos + reaplicar o `destroy`.
 23. **ArgoCD desta célula sobe sem credencial de repositório** — *unexpected*: zero `Application`,
     nenhum secret de repo, e o `wasp-gitops` é privado. Consequência: o lado GitOps do `3.1` foi
     instalado por `helm upgrade --install` a partir do checkout local. **"GitOps instala o chart" é
@@ -621,17 +625,15 @@ o `Account`/`Arn` inteiro, nunca `--query`. Erro de profile inexistente ou ARN v
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Custo por hora ao fim desta sessão (2026-08-28): ~US$ 0,43/h — as camadas 03 e 04 ficaram DE PÉ.**
-O primeiro trabalho da próxima sessão é decidir entre **derrubar** (se não for continuar hoje) ou
-**seguir para o `3.2`** com elas de pé. Confirmar por camada antes de qualquer coisa, já que a leitura
-da AWS CLI nesta máquina passa por wrapper:
+**Custo por hora ao fim desta sessão (2026-08-28): zero — 03 e 04 derrubadas.** Confirmar por camada
+antes de qualquer coisa, já que a leitura da AWS CLI nesta máquina passa por wrapper:
 
 ```bash
 cd wasp-idp/aws/terraform
 for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1; do
   printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
 done
-# esperado se ainda de pé: 61, 18, 3, 13   |   esperado se derrubadas: 0, 0, 3, 13
+# esperado agora: 0, 0, 3, 13   |   de pé seria: 61, 18, 3, 13
 k3d cluster list                    # esperado: vazio
 ```
 
