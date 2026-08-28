@@ -232,6 +232,26 @@ resource "aws_route" "spoke_to_hub" {
   ]
 }
 
+# A MESMA rota, na tabela das públicas. Não é redundância: `module.cluster` recebe
+# `control_plane_subnet_ids` (as 4 subnets), e a AWS escolhe livremente onde põe as ENIs do
+# endpoint privado. No apply de 2026-08-28 elas caíram nas duas PÚBLICAS (10.2.9.250 e
+# 10.2.31.21) — o pacote do hub chegava pelo TGW, mas o retorno seguia o default da tabela
+# pública, o IGW, e os dois helm_release morreram com `i/o timeout` contra o API server. Os
+# applies anteriores passaram por sorte, com as ENIs nas privadas.
+#
+# Alcance da malha é propriedade da SPOKE, não de uma subnet dela: enquanto o cluster
+# consumir as 4, a rota existe nas duas tabelas ou a reachability é sorteada a cada apply.
+resource "aws_route" "spoke_to_hub_public" {
+  route_table_id         = module.network.public_route_table_id
+  destination_cidr_block = local.supernet
+  transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
+
+  depends_on = [
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+  ]
+}
+
 module "cluster" {
   source = "../src/cluster"
 
@@ -473,6 +493,7 @@ module "external_secrets" {
     aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
     aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
     aws_route.spoke_to_hub,
+    aws_route.spoke_to_hub_public,
   ]
 }
 
@@ -514,6 +535,7 @@ module "crossplane" {
     aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
     aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
     aws_route.spoke_to_hub,
+    aws_route.spoke_to_hub_public,
   ]
 }
 
@@ -564,6 +586,7 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
     aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
     aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
     aws_route.spoke_to_hub,
+    aws_route.spoke_to_hub_public,
   ]
 }
 

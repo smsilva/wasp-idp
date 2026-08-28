@@ -39,3 +39,13 @@ output "private_route_table_id" {
   description = "Única, compartilhada por todas as subnets privadas — quem anexa TGW referencia esta."
   value       = aws_route_table.private.id
 }
+
+output "public_route_table_id" {
+  description = <<-EOT
+    Única, compartilhada por todas as subnets públicas. Existe porque a rota até a malha não
+    pode viver só na privada: o EKS distribui as ENIs do endpoint entre TODAS as subnets que
+    recebe (control_plane_subnet_ids), então uma ENI numa pública responde pelo default da
+    tabela dela — o IGW — e o tráfego que veio do hub pelo TGW morre assimétrico.
+  EOT
+  value       = aws_route_table.public.id
+}

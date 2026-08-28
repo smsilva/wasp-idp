@@ -243,6 +243,54 @@ run "a_rota_da_spoke_para_o_supernet_usa_o_tgw" {
   }
 }
 
+# A rota da malha existe nas DUAS tabelas da spoke, e isso não é redundância: `module.cluster`
+# recebe as 4 subnets (`control_plane_subnet_ids`) e a AWS escolhe onde põe as ENIs do endpoint
+# privado. No apply de 2026-08-28 elas caíram nas PÚBLICAS, o retorno para o hub seguiu o IGW e
+# os dois helm_release morreram com `i/o timeout`. Os applies anteriores passaram por sorte.
+#
+# Dois overrides com IDs DIFERENTES, e não um: com um só, uma implementação que mandasse as duas
+# rotas para a mesma tabela passaria — é a lição do `1.3` (um override prova o valor, dois provam
+# a ligação).
+run "a_rota_da_malha_existe_nas_duas_tabelas_da_spoke" {
+  command = plan
+
+  override_resource {
+    target          = module.network.aws_route_table.private
+    override_during = plan
+    values = {
+      id = "rtb-spoke-private01"
+    }
+  }
+
+  override_resource {
+    target          = module.network.aws_route_table.public
+    override_during = plan
+    values = {
+      id = "rtb-spoke-public99"
+    }
+  }
+
+  assert {
+    condition     = aws_route.spoke_to_hub_public.route_table_id == "rtb-spoke-public99"
+    error_message = "a segunda rota deveria ir na route table PÚBLICA, recebido ${aws_route.spoke_to_hub_public.route_table_id}"
+  }
+
+  assert {
+    condition     = aws_route.spoke_to_hub_public.route_table_id != aws_route.spoke_to_hub.route_table_id
+    error_message = "as duas rotas estão na mesma route table — as ENIs numa das duas ficaria sem caminho de volta"
+  }
+
+  assert {
+    condition     = aws_route.spoke_to_hub_public.destination_cidr_block == "10.0.0.0/12"
+    error_message = "a rota pública tem de cobrir o supernet inteiro, recebido ${aws_route.spoke_to_hub_public.destination_cidr_block}"
+  }
+
+  assert {
+    condition     = aws_route.spoke_to_hub_public.transit_gateway_id == "tgw-hub00000000001"
+    error_message = "a rota pública tem de apontar para o TGW do hub, recebido ${aws_route.spoke_to_hub_public.transit_gateway_id}"
+  }
+}
+
 # --------------------------------------------------------------------------------------
 # O TGW nasce com AutoAcceptSharedAttachments = disable — o attachment cross-conta fica em
 # pendingAcceptance até o dono do TGW (conta network) aceitar explicitamente. RAM só resolve
