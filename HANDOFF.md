@@ -919,6 +919,7 @@ porquê, um por linha:
       vida, não a conta. **Conferir primeiro se o ALB do hub existe:** ele não foi criado em nenhuma
       camada até agora, então `3.2` pode incluir criá-lo. Health check do lado hub vai à porta 80 dos
       endereços do NLB (não há porta de status ali; a de 15021 é do gateway, dentro da spoke).
+      **Roteiro detalhado, com as armadilhas e o aceite: `docs/superpowers/specs/2026-08-28-hub-side-ingress.md`.**
 - [ ] **Verificar a metade do `depends_on` que atua no destroy** — no próximo teardown da 04, ler a
       ordem no log antes de declarar corrigido (Known Broken 22).
 - [ ] **Wire do ArgoCD desta célula ao `wasp-gitops`** — hoje ele sobe sem credencial de repositório
