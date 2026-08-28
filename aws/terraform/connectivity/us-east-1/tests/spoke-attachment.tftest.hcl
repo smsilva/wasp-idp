@@ -39,6 +39,13 @@ override_data {
   }
 }
 
+override_data {
+  target = data.aws_route_table.hub_public
+  values = {
+    id = "rtb-hubpublic000001"
+  }
+}
+
 # Mesma razão do override global em isolation.tftest.hcl: sem um arn válido aqui,
 # aws_ram_resource_association falha na validação de schema do provider (client-side, sob
 # mock) por um motivo que nada tem a ver com o que cada run pretende testar.
@@ -188,6 +195,30 @@ run "a_rota_do_hub_para_o_tgw_e_do_supernet_inteiro" {
   assert {
     condition     = aws_route.hub_to_tgw.route_table_id == "rtb-hubprivate00001"
     error_message = "a rota deveria ir na route table privada do hub, recebido ${aws_route.hub_to_tgw.route_table_id}"
+  }
+
+  # A PÚBLICA também, e não é redundância: é nela que vive o ALB de ingress. Sem esta rota o
+  # health check do hub para os endereços fixos do NLB da célula não tem caminho de ida, e o
+  # sintoma é target `unhealthy` com `Request timed out` enquanto o target group DA SPOKE está
+  # `healthy` — o que se lê, errado, como problema de security group. Visto no aceite do 3.2.
+  assert {
+    condition     = aws_route.hub_public_to_tgw.route_table_id == "rtb-hubpublic000001"
+    error_message = "a rota pública deveria ir na route table pública do hub, recebido ${aws_route.hub_public_to_tgw.route_table_id}"
+  }
+
+  assert {
+    condition     = aws_route.hub_public_to_tgw.route_table_id != aws_route.hub_to_tgw.route_table_id
+    error_message = "as duas rotas do hub estão na mesma tabela — uma das duas metades do hub fica sem caminho"
+  }
+
+  assert {
+    condition     = aws_route.hub_public_to_tgw.destination_cidr_block == "10.0.0.0/12"
+    error_message = "a rota pública cobre o supernet, recebido ${aws_route.hub_public_to_tgw.destination_cidr_block}"
+  }
+
+  assert {
+    condition     = aws_route.hub_public_to_tgw.transit_gateway_id == "tgw-aaaaaaaaaaaaaaaa1"
+    error_message = "a rota pública tem de apontar para o TGW desta raiz, recebido ${aws_route.hub_public_to_tgw.transit_gateway_id}"
   }
 }
 

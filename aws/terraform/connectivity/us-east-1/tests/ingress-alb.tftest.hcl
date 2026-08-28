@@ -50,6 +50,13 @@ override_data {
   }
 }
 
+override_data {
+  target = data.aws_route_table.hub_public
+  values = {
+    id = "rtb-hubpublic000001"
+  }
+}
+
 # Mesma razão do override global em spoke-attachment.tftest.hcl: sem um arn válido,
 # aws_ram_resource_association falha na validação de schema do provider (client-side, sob
 # mock) por um motivo que nada tem a ver com o que cada run pretende testar.

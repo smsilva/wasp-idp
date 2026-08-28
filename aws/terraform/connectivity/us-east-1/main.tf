@@ -190,6 +190,27 @@ resource "aws_route" "hub_to_tgw" {
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
 }
 
+# A route table PÚBLICA do hub, onde vive o ALB de ingress — e é por isso que ela também
+# precisa da rota. A privada acima serve ao Client VPN (as ENIs do endpoint estão nela); o ALB
+# está do outro lado, e sem esta rota o health check dele para os endereços fixos do NLB da
+# célula não tem caminho de ida. O sintoma é target `unhealthy` com `Request timed out` e
+# NENHUM erro do lado da spoke, cujo próprio target group está `healthy` — o que se lê, errado,
+# como problema de security group.
+data "aws_route_table" "hub_public" {
+  filter {
+    name   = "tag:Name"
+    values = ["${local.name}-rt-public"]
+  }
+}
+
+resource "aws_route" "hub_public_to_tgw" {
+  route_table_id         = data.aws_route_table.hub_public.id
+  destination_cidr_block = local.supernet
+  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
+
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment.hub]
+}
+
 # --------------------------------------------------------------------------------------
 # Certificado do endpoint
 # --------------------------------------------------------------------------------------

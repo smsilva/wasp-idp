@@ -41,6 +41,13 @@ override_data {
   }
 }
 
+override_data {
+  target = data.aws_route_table.hub_public
+  values = {
+    id = "rtb-hubpublic000001"
+  }
+}
+
 # aws_ram_resource_association valida resource_arn como ARN de verdade — validação de schema
 # do provider, roda sob mock_provider (mesma família da checagem de tamanho do metadata SAML).
 # Sem este override global, o id sintético que o mock atribui a aws_ec2_transit_gateway.hub
