@@ -38,6 +38,43 @@ output "server_certificate_domain" {
   value       = aws_acm_certificate.vpn.domain_name
 }
 
+output "alb_arn" {
+  description = <<-EOT
+    O ALB público do hub. Como o TGW acima, a camada 4 o descobre por data source (por nome)
+    e não por terraform_remote_state; o output existe para script e conferência humana.
+  EOT
+  value       = aws_lb.hub.arn
+}
+
+output "alb_listener_arn" {
+  description = "Listener :443 compartilhado. Cada célula anexa o próprio certificado por SNI e a própria rule."
+  value       = aws_lb_listener.https.arn
+}
+
+output "alb_dns_name" {
+  description = <<-EOT
+    Alvo dos registros A alias das células. MUDA a cada recriação do ALB — e o ALB é recriado
+    com esta camada. Não cachear: a ordem de subida (03 antes de 04) e de descida (04 antes de
+    03) é o que garante que nenhum alias aponte para um ALB morto.
+  EOT
+  value       = aws_lb.hub.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone id canônica do ALB, par obrigatório do dns_name num registro alias."
+  value       = aws_lb.hub.zone_id
+}
+
+output "alb_security_group_id" {
+  description = "SG do ALB. Origem que a spoke libera no SG do próprio NLB seria este, se o caminho não fosse por CIDR — hoje a spoke libera o CIDR da VPC hub."
+  value       = aws_security_group.alb.id
+}
+
+output "alb_default_certificate_domain" {
+  description = "Certificado default do listener, wildcard de um nível da subzona. Não serve tráfego de célula — os certificados por célula entram por SNI."
+  value       = aws_acm_certificate.alb.domain_name
+}
+
 output "aws_profile" {
   description = "Profile que aplicou esta camada. O script `destroy` o consome para consultar attachments com a credencial certa em vez de adivinhar."
   value       = var.aws_profile

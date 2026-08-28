@@ -17,6 +17,13 @@ locals {
 
   subzone_fqdn = "${var.subzone_label}.${var.base_domain}"
 
+  # Certificado DEFAULT do listener :443. Wildcard cobre um nível só, então este casa
+  # `app.nonprod.<domínio>` e NÃO casa `app.<id>.nonprod.<domínio>` — o certificado de cada
+  # célula entra por SNI (aws_lb_listener_certificate) a partir do state da própria célula.
+  # Ele existe para o listener nascer válido e responder 404 a host desconhecido, não para
+  # servir tráfego.
+  alb_default_fqdn = "*.${local.subzone_fqdn}"
+
   # O nome do certificado não precisa casar com o hostname do endpoint: o client usa
   # `remote-cert-tls server`, que confere extended key usage, não nome. Um nome sob a
   # subzona é o que permite validar por DNS na zona que já é nossa.
@@ -56,6 +63,22 @@ data "aws_subnets" "hub_private" {
   filter {
     name   = "tag:Name"
     values = ["${local.name}-private-*"]
+  }
+}
+
+# As públicas, para o ALB de ingress. Mesmo padrão do irmão acima, de propósito: a raiz
+# network-foundation/ também expõe `hub_public_subnet_ids` como output, mas ler o state dela
+# amarraria esta camada ao backend e à key do outro lado. Descobrir por tag depende só de o
+# recurso existir.
+data "aws_subnets" "hub_public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.hub.id]
+  }
+
+  filter {
+    name   = "tag:Name"
+    values = ["${local.name}-public-*"]
   }
 }
 
@@ -299,4 +322,154 @@ resource "aws_ec2_client_vpn_authorization_rule" "operators" {
   client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.hub.id
   target_network_cidr    = local.supernet
   access_group_id        = each.value
+}
+
+# --------------------------------------------------------------------------------------
+# Ingress do hub — ALB público (3.2)
+# --------------------------------------------------------------------------------------
+
+# Por que o ALB vive NESTA camada e não na network-foundation (T0, permanente): sem TGW ele
+# não alcança spoke nenhuma — é um listener servindo 404. O ciclo de vida dele é o do plano
+# de conectividade, e um hub novo (outra região) ganha o seu com a própria raiz
+# connectivity/<região>/.
+#
+# Consequência aceita e declarada: o teardown noturno desta camada leva o ingress público de
+# TODAS as células junto. O horizonte é ingress por célula, para o ALB do hub deixar de ser
+# ponto único de falha — quando isso existir, ele passa a ser um caminho entre vários, o que
+# reforça mantê-lo em camada descartável.
+resource "aws_security_group" "alb" {
+  name        = "${local.name}-ingress-alb"
+  description = "Public ingress ALB: accepts HTTPS from the internet, reaches spokes only"
+  vpc_id      = data.aws_vpc.hub.id
+
+  tags = merge(local.tags, { Name = "${local.name}-ingress-alb" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# 0.0.0.0/0 na ENTRADA é o valor certo aqui, e é o oposto do NLB da spoke, onde a mesma
+# constante é proibida por decisão. Este é o ponto de entrada público único do desenho.
+resource "aws_vpc_security_group_ingress_rule" "alb_https" {
+  security_group_id = aws_security_group.alb.id
+  description       = "Public HTTPS"
+
+  cidr_ipv4   = "0.0.0.0/0"
+  ip_protocol = "tcp"
+  from_port   = 443
+  to_port     = 443
+}
+
+# O listener :80 só redireciona, mas sem esta regra o redirect é inalcançável e o sintoma
+# ("http não responde") parece problema de DNS.
+resource "aws_vpc_security_group_ingress_rule" "alb_http_redirect" {
+  security_group_id = aws_security_group.alb.id
+  description       = "Public HTTP, redirected to HTTPS"
+
+  cidr_ipv4   = "0.0.0.0/0"
+  ip_protocol = "tcp"
+  from_port   = 80
+  to_port     = 80
+}
+
+# A SAÍDA é o que contém o blast radius: o supernet cobre qualquer spoke presente ou futura
+# pelo TGW, e nada além. 0.0.0.0/0 aqui transformaria o ALB num caminho de saída para a
+# internet. Porta 80 porque o trecho hub→spoke é HTTP puro de propósito — o ALB não valida
+# certificado de backend, então TLS ali custaria gerência sem ganhar verificação.
+resource "aws_vpc_security_group_egress_rule" "alb_to_spokes" {
+  security_group_id = aws_security_group.alb.id
+  description       = "Reach the internal ingress NLB of any spoke"
+
+  cidr_ipv4   = local.supernet
+  ip_protocol = "tcp"
+  from_port   = 80
+  to_port     = 80
+}
+
+resource "aws_lb" "hub" {
+  name               = "${local.name}-ingress"
+  load_balancer_type = "application"
+  internal           = false
+  ip_address_type    = "ipv4"
+  security_groups    = [aws_security_group.alb.id]
+
+  # As PÚBLICAS. Um internet-facing em subnet privada não tem rota para o IGW e falha em
+  # silêncio: o ALB é criado, fica `active`, e nada da internet chega.
+  subnets = data.aws_subnets.hub_public.ids
+
+  tags = merge(local.tags, { Name = "${local.name}-ingress" })
+}
+
+# Certificado default do listener. Mesmo padrão do certificado do Client VPN acima: público
+# do ACM, validado por DNS na subzona que já é nossa, nenhuma chave privada em state ou disco.
+resource "aws_acm_certificate" "alb" {
+  domain_name       = local.alb_default_fqdn
+  validation_method = "DNS"
+
+  tags = merge(local.tags, { Name = local.alb_default_fqdn })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# UM registro, indexado — mesma razão detalhada no vpn_validation acima: as chaves de um
+# for_each sobre domain_validation_options viriam de atributo computado. Um domínio, nenhum
+# SAN, um elemento.
+resource "aws_route53_record" "alb_validation" {
+  zone_id = data.aws_route53_zone.subzone.zone_id
+  name    = tolist(aws_acm_certificate.alb.domain_validation_options)[0].resource_record_name
+  type    = tolist(aws_acm_certificate.alb.domain_validation_options)[0].resource_record_type
+  records = [tolist(aws_acm_certificate.alb.domain_validation_options)[0].resource_record_value]
+
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "alb" {
+  certificate_arn         = aws_acm_certificate.alb.arn
+  validation_record_fqdns = [aws_route53_record.alb_validation.fqdn]
+}
+
+# O listener compartilhado. Um só, por SNI: cada célula anexa o próprio certificado por
+# aws_lb_listener_certificate a partir do state dela, e casa o próprio host por listener rule.
+#
+# O certificate_arn vem do VALIDATION, não do certificate: só ele espera a validação
+# terminar. Os dois ARNs são o mesmo valor, então nenhum teste offline distingue as duas
+# referências — o sintoma de errar é certificado PENDING_VALIDATION no listener.
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.hub.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate_validation.alb.certificate_arn
+
+  # Host que não casa nenhuma rule recebe 404 explícito. O default do ALB seria erro de
+  # configuração, e um 503 não distinguiria "host desconhecido" de "backend caído".
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "no route for this host"
+      status_code  = "404"
+    }
+  }
+}
+
+resource "aws_lb_listener" "http_redirect" {
+  load_balancer_arn = aws_lb.hub.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
 }
