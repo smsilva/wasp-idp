@@ -212,22 +212,33 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   endpoint público fechado, é ela que abre o caminho por onde os providers `helm`/`kubernetes` falam
   com o API server, e nada na configuração do provider cria essa aresta. Sem ela, o sintoma é timeout
   no primeiro release — longe da causa.
-- **A mesma aresta faltava na direção do `destroy`, e o sintoma só aparece na hora de derrubar —
-  CORRIGIDO 2026-08-27, não verificado ponta a ponta ainda.** Comprovado no primeiro `destroy` real da
-  camada `control-plane`: o `aws_ec2_transit_gateway_vpc_attachment` da spoke (e a rota
-  `aws_route.spoke_to_hub`, provavelmente a causa direta — sua destruição é quase instantânea, ao
-  contrário do attachment) foram destruídos **antes** de o Terraform terminar de apagar o
-  `kubernetes_config_map_v1` e o `helm_release` do Crossplane — cortando a rota até o endpoint privado
-  no meio do processo. Erro: `dial tcp <ip-privado>:443: i/o timeout`, não credencial. Recuperação do
-  incidente: os dois recursos presos são só objetos da API do Kubernetes sem contraparte AWS própria
-  (o destroy do cluster EKS já os leva junto), então `terraform state rm` dos dois + reaplicar o
-  `destroy` resolveu sem órfão. **Fix aplicado:** os seis recursos de rede que cortam o caminho
-  (attachment, accepter, as duas route_table_association/propagation e a rota) ganharam `depends_on`
-  explícito nos quatro consumidores da API (`kubernetes_config_map_v1.platform_bootstrap`,
-  `module.crossplane`, `module.external_secrets`, `module.argo_cd`) — simétrico ao fix de apply acima,
-  na direção contrária. `terraform validate` + suíte offline (21 testes) passam; **ordenação por
-  referência não é testável offline** (mesma limitação já catalogada em "Testes" abaixo) — só um
-  `destroy` real prova que a aresta funciona.
+- **`depends_on` é UMA aresta que serve às duas direções — apply e destroy não são dois problemas.**
+  O destroy percorre o mesmo grafo ao contrário, então `consumidor depends_on rede` já garante que o
+  apply cria a rede primeiro e que o destroy apaga o consumidor primeiro. Não existe "aresta simétrica
+  na direção contrária" a acrescentar, e **tentar escrevê-la inverte a de apply**. Custou dois
+  incidentes com o MESMO erro (`dial tcp <ip-privado>:443: i/o timeout`), em direções opostas:
+    - **2026-08-27, no destroy:** sem nenhuma aresta, `aws_route.spoke_to_hub` e as propagações do TGW
+      foram destruídas antes de o `kubernetes_config_map_v1` e o `helm_release` do Crossplane
+      terminarem, cortando a rota até o endpoint privado no meio do processo. Recuperação: os dois
+      recursos presos são só objetos da API do Kubernetes sem contraparte AWS própria (o destroy do
+      cluster EKS já os leva junto), então `terraform state rm` dos dois + reaplicar o `destroy`
+      resolveu sem órfão.
+    - **2026-08-28, no apply:** a correção daquele incidente pôs `depends_on` nos seis recursos de rede
+      apontando para os quatro consumidores da API — attachment esperando o Crossplane, rota esperando
+      o ConfigMap. O apply seguinte morreu com **49 de 61 recursos** e a rede toda fora do state: os
+      dois `helm_release` tentaram alcançar o API server antes de o attachment existir. `validate` e as
+      21 asserções offline passavam nas duas versões.
+  **Forma correta, aplicada e verificada em 2026-08-28:** os recursos de rede guardam só a ordem
+  interna real (accepter antes de associação, propagações e rota); os três consumidores diretos
+  (`kubernetes_config_map_v1.platform_bootstrap`, `module.external_secrets`, `module.crossplane`)
+  declaram os seis, ao lado da regra de 443; `module.argo_cd` herda por transitividade via
+  `external_secrets` — repetir a lista lá não acrescentaria ordem, só mais um lugar para esquecer de
+  atualizar. Apply de 61 recursos limpo, attachment `available`/`associated`, 24 pods `Running` com o
+  endpoint público fechado. **A metade do destroy continua não verificada** — conferir no próximo
+  teardown desta camada.
+  **Regra que sai daqui:** ordenação por referência não é testável offline, então mudança de
+  `depends_on` só se dá por boa depois de um apply E um destroy reais — e a direção se confere lendo
+  quem declara o quê, não o comentário que diz o que o autor pretendia.
 
 ## Load balancer: quem é dono do quê
 
