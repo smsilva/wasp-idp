@@ -443,6 +443,15 @@ module "external_secrets" {
 
     # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
     # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
+    #
+    # module.network inteiro, e não só a rota: no destroy de 2026-08-28 os
+    # aws_route_table_association.private foram apagados ANTES deste consumidor, e desassociar a
+    # route table das subnets privadas corta o caminho até as ENIs do endpoint tão bem quanto
+    # apagar a rota. A associação é recurso separado e não tem aresta com aws_route.spoke_to_hub,
+    # então enumerar os seis recursos do TGW deixava esse buraco. Depender do módulo cobre
+    # subnets, route tables e associações de uma vez, e não precisa ser revisitado quando o
+    # módulo ganhar recurso novo.
+    module.network,
     aws_ec2_transit_gateway_vpc_attachment.this,
     aws_ec2_transit_gateway_vpc_attachment_accepter.this,
     aws_ec2_transit_gateway_route_table_association.spoke,
@@ -475,6 +484,15 @@ module "crossplane" {
 
     # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
     # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
+    #
+    # module.network inteiro, e não só a rota: no destroy de 2026-08-28 os
+    # aws_route_table_association.private foram apagados ANTES deste consumidor, e desassociar a
+    # route table das subnets privadas corta o caminho até as ENIs do endpoint tão bem quanto
+    # apagar a rota. A associação é recurso separado e não tem aresta com aws_route.spoke_to_hub,
+    # então enumerar os seis recursos do TGW deixava esse buraco. Depender do módulo cobre
+    # subnets, route tables e associações de uma vez, e não precisa ser revisitado quando o
+    # módulo ganhar recurso novo.
+    module.network,
     aws_ec2_transit_gateway_vpc_attachment.this,
     aws_ec2_transit_gateway_vpc_attachment_accepter.this,
     aws_ec2_transit_gateway_route_table_association.spoke,
@@ -516,6 +534,15 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
 
     # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
     # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
+    #
+    # module.network inteiro, e não só a rota: no destroy de 2026-08-28 os
+    # aws_route_table_association.private foram apagados ANTES deste consumidor, e desassociar a
+    # route table das subnets privadas corta o caminho até as ENIs do endpoint tão bem quanto
+    # apagar a rota. A associação é recurso separado e não tem aresta com aws_route.spoke_to_hub,
+    # então enumerar os seis recursos do TGW deixava esse buraco. Depender do módulo cobre
+    # subnets, route tables e associações de uma vez, e não precisa ser revisitado quando o
+    # módulo ganhar recurso novo.
+    module.network,
     aws_ec2_transit_gateway_vpc_attachment.this,
     aws_ec2_transit_gateway_vpc_attachment_accepter.this,
     aws_ec2_transit_gateway_route_table_association.spoke,

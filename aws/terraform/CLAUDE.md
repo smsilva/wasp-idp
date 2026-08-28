@@ -232,14 +232,22 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
       o ConfigMap. O apply seguinte morreu com **49 de 61 recursos** e a rede toda fora do state: os
       dois `helm_release` tentaram alcançar o API server antes de o attachment existir. `validate` e as
       21 asserções offline passavam nas duas versões.
-  **Forma correta, aplicada e verificada em 2026-08-28:** os recursos de rede guardam só a ordem
-  interna real (accepter antes de associação, propagações e rota); os três consumidores diretos
-  (`kubernetes_config_map_v1.platform_bootstrap`, `module.external_secrets`, `module.crossplane`)
-  declaram os seis, ao lado da regra de 443; `module.argo_cd` herda por transitividade via
+    - **2026-08-28, no destroy, de novo:** com a aresta já desinvertida e os SEIS recursos do TGW
+      declarados, o destroy ainda morreu no mesmo ponto. Causa: `module.network.aws_route_table_
+      association.private[*]` foi destruída ANTES do `kubernetes_config_map_v1` — e **desassociar a
+      route table das subnets privadas corta o caminho até as ENIs do endpoint tão bem quanto apagar
+      a rota**. A associação é recurso separado e não tem aresta com `aws_route.spoke_to_hub`, então
+      enumerar os recursos do TGW deixava esse buraco. **Lição: não enumerar recursos de rede —
+      depender do MÓDULO inteiro** (`module.network`), que cobre subnets, route tables e associações
+      de uma vez e não precisa ser revisitado quando o módulo ganhar recurso novo.
+  **Forma correta:** os recursos de rede guardam só a ordem interna real (accepter antes de
+  associação, propagações e rota); os três consumidores diretos (`kubernetes_config_map_v1.platform_
+  bootstrap`, `module.external_secrets`, `module.crossplane`) declaram `module.network` **mais** os
+  seis do TGW, ao lado da regra de 443; `module.argo_cd` herda por transitividade via
   `external_secrets` — repetir a lista lá não acrescentaria ordem, só mais um lugar para esquecer de
-  atualizar. Apply de 61 recursos limpo, attachment `available`/`associated`, 24 pods `Running` com o
-  endpoint público fechado. **A metade do destroy continua não verificada** — conferir no próximo
-  teardown desta camada.
+  atualizar. **A direção do apply está provada** (61 recursos, attachment `available`/`associated`, 24
+  pods `Running` com o endpoint público fechado); **a do destroy ainda não** — a correção do
+  `module.network` entrou depois do teardown que a revelou. Conferir no próximo.
   **Regra que sai daqui:** ordenação por referência não é testável offline, então mudança de
   `depends_on` só se dá por boa depois de um apply E um destroy reais — e a direção se confere lendo
   quem declara o quê, não o comentário que diz o que o autor pretendia.
