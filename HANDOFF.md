@@ -84,17 +84,18 @@ OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workloads`, `
 
 ## Estado aplicado na AWS
 
-Snapshot de 2026-08-27, **fim da sessão do aceite `2.4`+`2.5`**, derrubado ao término. **Custo por hora
-de volta a zero**, verificado por `terraform state list` (0, 0, 3, 13 — bate com o esperado).
+Snapshot de 2026-08-28, **fim da sessão do aceite do `3.1`**. **As camadas 03 e 04 ficaram DE PÉ** —
+derrubar antes de encerrar (ordem e comandos em How to Resume). O teardown ainda não foi feito, e ele
+é a prova que falta do `depends_on` na direção do destroy.
 
 | Camada | Conta | State key | Custo/mês | Estado |
 |---|---|---|---|---|
 | `state-backend` | `network` | `state-backend/` | centavos | aplicada |
 | `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
-| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **destruída** (state com 0 recursos) |
+| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **DE PÉ** — 64 entradas no state, EKS 1.36, ingress do `3.1` aceito |
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
-| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **destruída** (state com 0 recursos) |
+| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **DE PÉ** — 18 recursos; túnel conectado nesta sessão |
 
 **Custo por hora agora: ~US$ 0,43/h** (0,20 da 03 + 0,23 da 04). **Derrubar na ordem inversa antes de
 encerrar a sessão** — comando em How to Resume. Se esta seção ainda disser "DE PÉ" numa sessão futura,
@@ -135,8 +136,15 @@ VPC spoke `10.2.0.0/16`; EKS `control-plane` Kubernetes **1.36**; 2× `t3.medium
 Roles de Pod Identity, na conta `cicd`: `control-plane-crossplane`
 (`crossplane-system`/`crossplane`), `control-plane-external-secrets`
 (`external-secrets`/`external-secrets`), `control-plane-ebs-csi`
-(`kube-system`/`ebs-csi-controller-sa`). Mais `control-plane-cluster` e `control-plane-node` (roles do
-EKS, não Pod Identity).
+(`kube-system`/`ebs-csi-controller-sa`), `control-plane-load-balancer-controller`
+(`kube-system`/`aws-load-balancer-controller`). Mais `control-plane-cluster` e `control-plane-node`
+(roles do EKS, não Pod Identity).
+
+Ingress do `3.1`: NLB interno `control-plane-ingress`, endereços FIXOS `10.2.32.10` e `10.2.48.10`
+(um por AZ, `cidrhost(<cidr da privada>, 10)`), listener 80/TCP, target group de tipo `ip` com nome
+gerado por `name_prefix` (o ARN muda a cada recriação — ler de `terraform output
+ingress_target_group_arn`, nunca fixar). O `platform-bootstrap` em `crossplane-system` carrega 9
+chaves, incluindo `ingressTargetGroupArn` e `loadBalancerControllerRoleArn`.
 
 Tempos do apply: EKS 11m09s, node group 2m, addon `aws-ebs-csi-driver` 6m28s,
 `eks-pod-identity-agent` 9s, release do Crossplane 42s, apply completo **~13 min**.
@@ -158,7 +166,7 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **Fase 2 COMPLETA, Fase 3 é a próxima**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **Fase 2 e `3.1` COMPLETOS, `3.2` é o próximo**)
 
 **Fase 2 (acesso privado) fechada 2026-08-27: aceite conjunto `2.4`+`2.5` PASSOU**, os cinco
 critérios (`up-03` aplicado, túnel conectado com SAML, `up-04` aplicado com endpoint já fechado,
@@ -167,8 +175,9 @@ Narrativa completa, incidente de recuperação (dois applies mortos por timeout,
 duplicata) e achados em
 [`docs/archived/private-access/step-2-4-2-5-apply.md`](docs/archived/private-access/step-2-4-2-5-apply.md).
 
-**Derrubado ao fim da sessão** — `control-plane` (14 recursos) e `connectivity` (18 recursos), 0
-falhas, custo/h de volta a zero, confirmado por `terraform state list` (`0, 0, 3, 13`).
+**Derrubado ao fim daquela sessão** — `control-plane` (14 recursos) e `connectivity` (18 recursos), 0
+falhas, custo/h de volta a zero, confirmado por `terraform state list` (`0, 0, 3, 13`). **Na sessão de
+2026-08-28 as duas voltaram a subir e NÃO foram derrubadas.**
 
 **Achado extra no teardown, corrigido na mesma sessão:** o `destroy` do `control-plane` morreu no meio
 na primeira tentativa (TGW attachment/rota destruídos antes de os consumidores da API do Kubernetes
@@ -188,6 +197,17 @@ fixos do NLB (`10.2.32.10`, `10.2.48.10`) devolve o `httpbin`, HTTP 200, com
 listener 80/TCP → target group com o pod do gateway `healthy` (health check HTTP em 15021
 `/healthz/ready`) → Envoy → workload. Falta o `3.2`: lado hub, com certificado wildcard do ACM, target
 group apontando para os dois endereços fixos e listener rule no ALB. Roteiro em `03-ingress.md`.
+
+**Último passo desta sessão:** `terraform plan -detailed-exitcode` na `control-plane` devolveu 0
+(nenhuma diferença entre código e AWS) e a suíte offline da raiz passou 25/25 — ou seja, as três
+correções do `3.1` estão no código, não só no ambiente. Nada ficou pela metade.
+
+**Próximo passo pretendido: `3.2`.** Lado hub, na conta `network`, com provider aliasado a partir do
+state da `control-plane` (fronteira de state segue o ciclo de vida, não a conta): certificado wildcard
+do ACM para `*.<id>.nonprod.<domínio>`, target group de tipo `ip` apontando para `10.2.32.10` e
+`10.2.48.10` (saem de `module.ingress.private_ips`, conhecidos em tempo de plan — foi para isso que os
+endereços foram fixados) e listener rule no ALB casando o host. Roteiro em `03-ingress.md`. **O ALB do
+hub ainda não existe** — conferir antes de assumir que só falta a rule.
 
 **Três coisas que só o AWS real mostrou no `3.1`** (todas já corrigidas e commitadas):
 - **A porta do gateway Istio é 80, não 8080.** O 8080 é do Istio antigo; o chart `gateway` do
@@ -569,6 +589,20 @@ Itens fechados/retirados (tags de LBC
     AWS antes de ignorar.
 21. **Nenhuma prova de que spoke↔spoke não roteia** — *unexpected*, propriedade central do desenho.
     Só existe uma spoke; é o `4.1`/`4.2`.
+22. **A metade do `depends_on` que atua no DESTROY continua não verificada** — *unexpected*: a
+    direção do apply foi provada em 2026-08-28 (61 recursos, attachment antes dos releases), mas a do
+    destroy só é exercida por um teardown real, e o teardown desta sessão não foi feito. **Fazer no
+    próximo, e olhar a ordem no log antes de declarar corrigido.**
+23. **ArgoCD desta célula sobe sem credencial de repositório** — *unexpected*: zero `Application`,
+    nenhum secret de repo, e o `wasp-gitops` é privado. Consequência: o lado GitOps do `3.1` foi
+    instalado por `helm upgrade --install` a partir do checkout local. **"GitOps instala o chart" é
+    desenho, não estado.** Caminho provável: deploy key no Secrets Manager → ESO → secret de repo →
+    app-of-apps (`infrastructure/charts/applications`).
+24. **O `TargetGroupBinding` é instalado com o ARN passado à mão** — *unexpected*: o valor certo está
+    no ConfigMap `platform-bootstrap`, mas nada no lado cluster o lê. Com `name_prefix`, o ARN muda a
+    cada recriação da target group, então um valor colado num values file envelhece em silêncio — o
+    sintoma é binding que sincroniza para sempre sem registrar target. Resolver junto com o wire do
+    ArgoCD (o app-of-apps pode ler o ConfigMap).
 
 ## How to Resume
 
@@ -587,17 +621,37 @@ o `Account`/`Arn` inteiro, nunca `--query`. Erro de profile inexistente ou ARN v
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Custo por hora ao fim desta sessão (2026-08-27): zero** — as duas camadas pagas foram derrubadas
-depois do aceite `2.4`+`2.5`. Não confiar nisso de memória na próxima sessão — confirmar por camada,
-já que a leitura da AWS CLI nesta máquina passa por wrapper:
+**Custo por hora ao fim desta sessão (2026-08-28): ~US$ 0,43/h — as camadas 03 e 04 ficaram DE PÉ.**
+O primeiro trabalho da próxima sessão é decidir entre **derrubar** (se não for continuar hoje) ou
+**seguir para o `3.2`** com elas de pé. Confirmar por camada antes de qualquer coisa, já que a leitura
+da AWS CLI nesta máquina passa por wrapper:
 
 ```bash
 cd wasp-idp/aws/terraform
 for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1; do
   printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
 done
-# esperado: 0, 0, 3, 13
+# esperado se ainda de pé: 61, 18, 3, 13   |   esperado se derrubadas: 0, 0, 3, 13
 k3d cluster list                    # esperado: vazio
+```
+
+**Derrubar (ordem obrigatória, e é a prova que falta do `depends_on` no destroy):**
+
+```bash
+cd wasp-idp/aws/terraform/control-plane && ./scripts/destroy        # PRIMEIRO
+cd ../connectivity/us-east-1 && ./scripts/destroy                   # só depois
+```
+
+Ler o log do primeiro: os quatro consumidores da API (ConfigMap, ESO, ArgoCD, Crossplane) têm de
+sumir **antes** de `aws_route.spoke_to_hub` e das propagações do TGW. Se o `destroy` morrer com
+`dial tcp <ip-privado>:443: i/o timeout`, a aresta ainda está errada — não é falha de credencial.
+Recuperação já conhecida: `terraform state rm` dos objetos Kubernetes presos + reaplicar o `destroy`.
+
+**Continuar com as camadas de pé exige o túnel conectado** (a API do cluster só existe por ele):
+
+```bash
+aws-vpn-client get-connection-status --profile-name hub   # tem de dizer "Connected"
+! aws-vpn-client connect --profile-name hub               # abre navegador; precisa ser o usuário
 ```
 
 ### Subir o ambiente — a sequência está no `aws/terraform/README.md`, não aqui
@@ -857,8 +911,16 @@ porquê, um por linha:
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
 - [x] **`3.1`** — NLB interno + gateway Istio + TargetGroupBinding. **Aceito 2026-08-28**: `curl` pelo
       túnel nos dois endereços fixos devolve o `httpbin`, HTTP 200.
-- [ ] **`3.2`** — lado hub: certificado wildcard do ACM, target group com os dois endereços fixos do
-      NLB e listener rule no ALB.
+- [ ] **`3.2` — lado hub (PRÓXIMO).** Certificado wildcard do ACM `*.<id>.nonprod.<domínio>` validado
+      por DNS na subzona da camada 02; target group de tipo `ip` na conta `network` com os dois
+      endereços fixos (`10.2.32.10`, `10.2.48.10`, de `module.ingress.private_ips` — conhecidos em
+      tempo de plan, foi para isso que foram fixados); listener rule no ALB casando o host. Tudo no
+      **state da `control-plane`**, via provider `aws.network` — fronteira de state segue o ciclo de
+      vida, não a conta. **Conferir primeiro se o ALB do hub existe:** ele não foi criado em nenhuma
+      camada até agora, então `3.2` pode incluir criá-lo. Health check do lado hub vai à porta 80 dos
+      endereços do NLB (não há porta de status ali; a de 15021 é do gateway, dentro da spoke).
+- [ ] **Verificar a metade do `depends_on` que atua no destroy** — no próximo teardown da 04, ler a
+      ordem no log antes de declarar corrigido (Known Broken 22).
 - [ ] **Wire do ArgoCD desta célula ao `wasp-gitops`** — hoje ele sobe sem credencial de repositório
       (zero `Application`, nenhum secret de repo), então o lado GitOps do `3.1` foi instalado por
       `helm upgrade --install` a partir do checkout local. Caminho provável: deploy key no Secrets
@@ -946,6 +1008,13 @@ Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<pa
 [`docs/archived/index.md`](docs/archived/index.md). Resumo do que já está lá, do mais recente ao mais
 antigo:
 
+- **2026-08-28** — `3.1` (ingress da spoke) escrito e **aceito na AWS**: módulo `src/ingress` (NLB
+  interno com endereços fixos por `cidrhost`, target group de tipo `ip` que nasce vazia, security
+  group que só aceita o CIDR do hub), 4ª Pod Identity (o role do Load Balancer Controller; o chart vem
+  por GitOps), duas chaves novas no `platform-bootstrap`, e os charts `aws-load-balancer-controller` +
+  `aws-target-group-binding` no repo de GitOps. Aceite: `curl` pelo túnel nos dois endereços do NLB
+  devolve o `httpbin`, HTTP 200. No caminho, corrigida a inversão do `depends_on` herdada de
+  2026-08-27, que derrubou o primeiro apply com 49 de 61 recursos.
 - **2026-08-27** — `2.4`+`2.5` escritos e **aceitos na AWS**: SG rule para o endpoint privado do EKS,
   endpoint público fechado por default, aceite conjunto PASSOU (`dig` privado de primeira, `kubectl`
   falha por rede sem o túnel). **Fase 2 completa.** Dois applies mortos por timeout de processo,

@@ -93,6 +93,10 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   `cidrhost` e outra também, um valor malformado faz a segunda lançar *"Call to function cidrhost
   failed"* e essa é a mensagem que o usuário lê — não a que explica o problema. Cadeia de validação
   precisa de guarda: `!can(cidrhost(var.x, 0)) || <condição real>`.
+- **Output derivado de mapa chaveado por atributo computado é *unknown* no plan INTEIRO**, valores
+  incluídos, mesmo quando os valores são puro cálculo. `values({for id in var.subnet_ids : id => ...})`
+  não é assertável em `command = plan`; derivar a lista dos próprios inputs (`[for cidr in
+  var.cidrs : cidrhost(cidr, n)]`) devolve o valor ao plan e ao consumidor.
 - **`local.*` do módulo em teste é alcançável na asserção** — não só `output` e recurso. É a saída
   quando o atributo do recurso é *unknown* no plan: `public_access_cidrs` omitido fica "known after
   apply" e nenhuma asserção sobre ele avalia, mas o `local` que decide a omissão é legível.
@@ -263,6 +267,24 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   Consequência: **Terraform pode ser dono do NLB/target group sem quebrar o apply único** — o
   workload entra depois só registrando pods. Ressalva: o CR pode referenciar qualquer target group,
   então em cenário multi-tenant exige RBAC.
+
+- **A porta do pod do gateway Istio é 80, não 8080.** O chart `gateway` do istio-release mapeia o
+  Service 80 → targetPort 80, e o Envoy escuta na porta que o `Gateway` CR declara; 8080 é do Istio
+  antigo. Com 8080 na target group e no security group, o sintoma é "nenhum target saudável" sem nada
+  errado no cluster.
+- **Target group com `name` fixo não sobrevive a uma recriação — usar `name_prefix` +
+  `create_before_destroy`.** Trocar `port` ou `target_type` força replace, e aí não há saída: sem CBD a
+  AWS recusa apagar (`ResourceInUse`, o listener ainda aponta) e com CBD e nome fixo recusa a nova
+  (`already exists`). Os dois foram vistos de verdade. Prefixo aceita no máximo 6 caracteres, então o
+  nome legível vive na tag `Name` e quem consome usa o ARN.
+- **`TargetGroupBinding` com bloco `networking` faz o controller gerenciar security group** — omitir
+  quando as regras já são do Terraform. Além de tirar a regra do diff de código, exigiria actions de
+  SG numa policy que de propósito não as tem, e o sintoma seria `AccessDenied` em reconcile.
+- **As actions de ELB que MUDAM estado aceitam ARN de target group** (`RegisterTargets`,
+  `DeregisterTargets`, `ModifyTargetGroup`, `ModifyTargetGroupAttributes`); só as `Describe` exigem
+  `Resource = "*"`. A policy upstream do LBC usa condition por tag em vez de ARN porque lá o controller
+  cria as target groups que gerencia — quando o Terraform é o dono, o ARN é conhecido e escopar é
+  estritamente mais fechado.
 
 ## Rede
 
