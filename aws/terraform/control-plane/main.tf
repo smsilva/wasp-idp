@@ -351,25 +351,38 @@ module "pod_identity_lbc" {
   service_account_name = "aws-load-balancer-controller"
   policy_json = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ec2:DescribeVpcs",
-        "ec2:DescribeSecurityGroups",
-        "ec2:DescribeInstances",
-        "elasticloadbalancing:DescribeTargetGroups",
-        "elasticloadbalancing:DescribeTargetHealth",
-        "elasticloadbalancing:ModifyTargetGroup",
-        "elasticloadbalancing:ModifyTargetGroupAttributes",
-        "elasticloadbalancing:RegisterTargets",
-        "elasticloadbalancing:DeregisterTargets",
-      ]
-      # Nenhuma destas actions aceita escopo por recurso de forma util aqui: as Describe sao
-      # de leitura de inventario e as de target group sao resolvidas pelo ARN que o
-      # TargetGroupBinding carrega. O isolamento real e o RBAC do cluster mais o fato de a
-      # target group ser criada e nomeada pelo Terraform.
-      Resource = "*"
-    }]
+    Statement = [
+      # Leitura de inventario: estas actions nao aceitam escopo por recurso — Describe de EC2 e
+      # de ELB responde sobre a conta, nao sobre um ARN.
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeInstances",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetHealth",
+        ]
+        Resource = "*"
+      },
+      # As que MUDAM estado aceitam ARN de target group, e aqui da para usar isso porque a
+      # target group e criada pelo Terraform, nesta mesma camada: o ARN e conhecido. A policy
+      # upstream do LBC usa condition por tag em vez de ARN porque lá o controller cria as
+      # target groups que gerencia e nao poderia saber os ARNs de antemao — o nosso caso e
+      # estritamente mais fechado. Consequencia: se um dia o LBC passar a criar target group
+      # (Ingress/Service tipo LoadBalancer, nao TargetGroupBinding), esta policy precisa de
+      # outra statement, e o sintoma sera AccessDenied no log do controller.
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:ModifyTargetGroup",
+          "elasticloadbalancing:ModifyTargetGroupAttributes",
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:DeregisterTargets",
+        ]
+        Resource = module.ingress.target_group_arn
+      },
+    ]
   })
   tags = local.tags
 }
