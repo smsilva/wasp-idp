@@ -602,10 +602,19 @@ Itens fechados/retirados (tags de LBC
     que a exercite — no próximo, ler a ordem no log antes de declarar corrigido.** Recuperação
     conhecida: `terraform state rm` dos objetos Kubernetes presos + reaplicar o `destroy`.
 23. **ArgoCD desta célula sobe sem credencial de repositório** — *unexpected*: zero `Application`,
-    nenhum secret de repo, e o `wasp-gitops` é privado. Consequência: o lado GitOps do `3.1` foi
-    instalado por `helm upgrade --install` a partir do checkout local. **"GitOps instala o chart" é
-    desenho, não estado.** Caminho provável: deploy key no Secrets Manager → ESO → secret de repo →
-    app-of-apps (`infrastructure/charts/applications`).
+    nenhum secret de repo. Consequência: o lado GitOps do `3.1` foi instalado por
+    `helm upgrade --install` a partir do checkout local. **"GitOps instala o chart" é desenho, não
+    estado.** **Correção de 2026-08-28: este item afirmava que o `wasp-gitops` era privado, e ele
+    era PÚBLICO** (`gh repo view`) — logo o ArgoCD o puxaria sem credencial nenhuma, e um sync verde
+    não provaria autenticação. Foi fechado (`private`) durante a validação; risco conferido antes,
+    as composite actions de `actions/` só são referenciadas pelo próprio repo. Caminho **decidido e
+    validado em k3d**, não mais "provável": **GitHub App** (não deploy key — credencial de ~1 h em
+    vez de chave de vida longa) → Secrets Manager → ESO via `extraObjects` do próprio chart do
+    ArgoCD → secret `repo-creds` → app-of-apps. Roteiro, armadilhas e o procedimento de mutação que
+    é a única prova real em
+    [`docs/superpowers/specs/2026-08-28-argocd-github-app.md`](docs/superpowers/specs/2026-08-28-argocd-github-app.md).
+    Falta só a incógnita da célula: qual prefixo de secret a policy do ESO da camada 04 permite, e
+    se lá há `ClusterSecretStore` ou `SecretStore` por namespace.
 24. **O `TargetGroupBinding` é instalado com o ARN passado à mão** — *unexpected*: o valor certo está
     no ConfigMap `platform-bootstrap`, mas nada no lado cluster o lê. Com `name_prefix`, o ARN muda a
     cada recriação da target group, então um valor colado num values file envelhece em silêncio — o
