@@ -55,6 +55,15 @@ data "aws_ec2_transit_gateway" "hub" {
 # sem convite — nao ha aws_ram_resource_share_accepter para rodar aqui.
 #
 # Quem cria o attachment e a conta dona da VPC (cicd) — provider default, nao aliasado.
+#
+# Os seis recursos de rede abaixo (este attachment, o accepter, as duas
+# route_table_association/propagation e a rota) recebem depends_on explicito nos quatro
+# consumidores da API do Kubernetes (o ConfigMap e os tres modulos de helm). Comprovado no
+# primeiro destroy real desta camada (2026-08-27): sem essa aresta, o destroy derrubou
+# aws_route.spoke_to_hub e as propagacoes do TGW ANTES de kubernetes_config_map_v1 e
+# module.crossplane terminarem — cortando a rota ate o endpoint privado no meio do processo
+# (dial tcp ...:443: i/o timeout). Nada na configuracao do provider kubernetes/helm cria essa
+# aresta sozinho, mesma razao pela qual a regra de 443 precisa da aresta explicita no apply.
 resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
   vpc_id             = module.network.vpc_id
   subnet_ids         = module.network.private_subnet_ids
@@ -65,6 +74,13 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
   transit_gateway_default_route_table_propagation = false
 
   tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
+
+  depends_on = [
+    kubernetes_config_map_v1.platform_bootstrap,
+    module.crossplane,
+    module.external_secrets,
+    module.argo_cd,
+  ]
 
   lifecycle {
     # Perpetual diff estrutural de attachment CROSS-CONTA: estes dois atributos nao existem
@@ -99,6 +115,13 @@ resource "aws_ec2_transit_gateway_vpc_attachment_accepter" "this" {
   transit_gateway_default_route_table_propagation = false
 
   tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
+
+  depends_on = [
+    kubernetes_config_map_v1.platform_bootstrap,
+    module.crossplane,
+    module.external_secrets,
+    module.argo_cd,
+  ]
 }
 
 # tgw-rt-<spoke>: pertence a conta dona do TGW (network), mas o ciclo de vida e o desta
@@ -117,7 +140,13 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
 
-  depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
+  depends_on = [
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    kubernetes_config_map_v1.platform_bootstrap,
+    module.crossplane,
+    module.external_secrets,
+    module.argo_cd,
+  ]
 }
 
 # tgw-rt-hub — a route table do proprio hub, ja existe em connectivity/. Lida por tag, nao
@@ -150,7 +179,13 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "spoke_to_hub" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
   transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
 
-  depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
+  depends_on = [
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    kubernetes_config_map_v1.platform_bootstrap,
+    module.crossplane,
+    module.external_secrets,
+    module.argo_cd,
+  ]
 }
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
@@ -158,6 +193,17 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
 
   transit_gateway_attachment_id  = data.aws_ec2_transit_gateway_vpc_attachment.hub.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
+
+  # Referencia so um data source (o attachment do HUB, gerenciado em connectivity/) e a
+  # route table desta spoke — sem aresta propria com o attachment/accepter desta camada, essa
+  # propagacao nao tinha NENHUMA ordem garantida em relacao ao resto do destroy. Foi o que
+  # cortou a rota primeiro no incidente de 2026-08-27 (ver comentario acima do attachment).
+  depends_on = [
+    kubernetes_config_map_v1.platform_bootstrap,
+    module.crossplane,
+    module.external_secrets,
+    module.argo_cd,
+  ]
 }
 
 # Rota de volta na propria VPC desta spoke: uma so, para o supernet inteiro, mesma logica de
@@ -179,7 +225,19 @@ resource "aws_route" "spoke_to_hub" {
 
   # Sem esperar o accepter, o attachment ainda está em pendingAcceptance e a AWS recusa a
   # rota com "TransitGatewayID.NotFound" — mensagem que não diz que a causa é o aceite.
-  depends_on = [aws_ec2_transit_gateway_vpc_attachment.this, aws_ec2_transit_gateway_vpc_attachment_accepter.this]
+  #
+  # Esta é a rota mais provável de ter sido a causa direta do incidente de 2026-08-27: sua
+  # destruição é quase instantânea (ao contrário do attachment, que leva minutos), então sem
+  # esperar os consumidores da API do Kubernetes ela corta o caminho para o endpoint privado
+  # antes de qualquer coisa perceber.
+  depends_on = [
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    kubernetes_config_map_v1.platform_bootstrap,
+    module.crossplane,
+    module.external_secrets,
+    module.argo_cd,
+  ]
 }
 
 module "cluster" {

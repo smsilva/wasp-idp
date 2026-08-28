@@ -149,6 +149,13 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - **Todo `terraform apply`/`destroy` rodado fora dos scripts `up-NN` precisa de `-no-color`.**
   `scripts/lib` já usa; um `apply`/`destroy` improvisado com `| tee arquivo.log` sem essa flag
   salva o log cheio de códigos ANSI, ilegível fora de um terminal que os interpreta.
+- **Nunca rodar um `apply`/`destroy` de vários minutos de forma síncrona — nem com `timeout`, nem
+  sem redirecionar.** Os dois matam o processo no meio (o `timeout` explicitamente; um comando
+  síncrono comum também, se o que o invoca tiver teto de tempo próprio) e deixam recurso órfão fora
+  do state (ver "Endpoint da API do EKS" acima, achado do `2.4`+`2.5`). Sempre
+  `nohup <comando> > "<log>" 2>&1 < /dev/null & disown` (ou os scripts `up-NN`/`destroy`, que já
+  fazem isso). Anunciar o caminho absoluto do log **assim que o comando dispara**, não só quando
+  terminar — é o que permite acompanhar em paralelo sem sondar o processo.
 
 ## Providers `kubernetes` e `helm`
 
@@ -205,6 +212,22 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   endpoint público fechado, é ela que abre o caminho por onde os providers `helm`/`kubernetes` falam
   com o API server, e nada na configuração do provider cria essa aresta. Sem ela, o sintoma é timeout
   no primeiro release — longe da causa.
+- **A mesma aresta faltava na direção do `destroy`, e o sintoma só aparece na hora de derrubar —
+  CORRIGIDO 2026-08-27, não verificado ponta a ponta ainda.** Comprovado no primeiro `destroy` real da
+  camada `control-plane`: o `aws_ec2_transit_gateway_vpc_attachment` da spoke (e a rota
+  `aws_route.spoke_to_hub`, provavelmente a causa direta — sua destruição é quase instantânea, ao
+  contrário do attachment) foram destruídos **antes** de o Terraform terminar de apagar o
+  `kubernetes_config_map_v1` e o `helm_release` do Crossplane — cortando a rota até o endpoint privado
+  no meio do processo. Erro: `dial tcp <ip-privado>:443: i/o timeout`, não credencial. Recuperação do
+  incidente: os dois recursos presos são só objetos da API do Kubernetes sem contraparte AWS própria
+  (o destroy do cluster EKS já os leva junto), então `terraform state rm` dos dois + reaplicar o
+  `destroy` resolveu sem órfão. **Fix aplicado:** os seis recursos de rede que cortam o caminho
+  (attachment, accepter, as duas route_table_association/propagation e a rota) ganharam `depends_on`
+  explícito nos quatro consumidores da API (`kubernetes_config_map_v1.platform_bootstrap`,
+  `module.crossplane`, `module.external_secrets`, `module.argo_cd`) — simétrico ao fix de apply acima,
+  na direção contrária. `terraform validate` + suíte offline (21 testes) passam; **ordenação por
+  referência não é testável offline** (mesma limitação já catalogada em "Testes" abaixo) — só um
+  `destroy` real prova que a aresta funciona.
 
 ## Load balancer: quem é dono do quê
 
