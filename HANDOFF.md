@@ -148,6 +148,10 @@ chaves, incluindo `ingressTargetGroupArn` e `loadBalancerControllerRoleArn`.
 Tempos do apply: EKS 11m09s, node group 2m, addon `aws-ebs-csi-driver` 6m28s,
 `eks-pod-identity-agent` 9s, release do Crossplane 42s, apply completo **~13 min**.
 
+Tempos do destroy: node group ~8 min, cluster EKS ~6 min, NLB 27s, destroy completo **~17 min**. O
+destroy da `connectivity` leva **~9 min**, quase tudo em `aws_ec2_client_vpn_network_association`
+(~4 min cada, em paralelo) e nas rotas do Client VPN (~5 min). Não confundir com trava.
+
 ### Alocação de CIDR do supernet `10.0.0.0/12`
 
 | N | CIDR | Conta | Papel |
