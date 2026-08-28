@@ -12,16 +12,21 @@ show_usage() {
 
   Destroys the connectivity layer (TGW + Client VPN) and keeps the log.
 
-  This layer is destroyed ON PURPOSE at the end of the day — tier T1,
-  ~US\$ 0.15/h. Nothing here has prevent_destroy; the protection is this
-  script saying out loud what is lost before you confirm.
+  This layer is destroyed ON PURPOSE at the end of the day — tier T1, around
+  US\$ 0.22/h idle (two Client VPN subnet associations plus the ALB), before
+  per-connection and LCU charges. Nothing here has prevent_destroy; the
+  protection is this script saying out loud what is lost before you confirm.
 
-  Before destroying, it REFUSES if there is any TGW attachment that does not
-  belong to this state — the hub's OWN attachment (2.3) does belong here and
-  is excluded from the check; only foreign ones (a spoke's) trip it. AWS also
-  refuses to delete a TGW with a live attachment, but its error arrives after
-  the destroy has already removed half the layer — the certificate and the
-  endpoint would be gone and the TGW would stay, billing and unused.
+  Before destroying, it REFUSES if anything that does not belong to this state
+  is still hanging off its resources: a TGW attachment, or a certificate or
+  rule on the shared :443 listener. The hub's OWN attachment (2.3) and the
+  listener's own default certificate DO belong here and are excluded; only
+  foreign ones (a cell's) trip it.
+
+  AWS also refuses to delete a TGW with a live attachment, and an ALB with a
+  listener a cell still uses, but those errors arrive after the destroy has
+  already removed half the layer — the certificate and the endpoint would be
+  gone while the TGW stayed, billing and unused.
 
   Chain order: control-plane BEFORE this one (the spoke attachment lives in
   the control-plane state).
@@ -30,7 +35,8 @@ show_usage() {
 
       -h,  --help              Show this help
       -y,  --yes               Do not ask (passes -auto-approve)
-           --skip-attachments  Skip the attachment check
+           --skip-attachments  Skip the TGW attachment check
+           --skip-listener     Skip the :443 listener certificate/rule check
            --log-directory     Where to write the log (default: ${root_directory}/logs)
 
     Examples:
@@ -44,6 +50,7 @@ EOF
 
 assume_yes="false"
 skip_attachments="false"
+skip_listener="false"
 log_directory="${root_directory}/logs"
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
@@ -59,6 +66,10 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 
     --skip-attachments )
       skip_attachments="true"
+      ;;
+
+    --skip-listener )
+      skip_listener="true"
       ;;
 
     --log-directory )
@@ -90,11 +101,11 @@ cd "${root_directory}"
 
 [ -d .terraform ] || fail "backend not initialized. Run 'terraform init -backend-config=\"bucket=<bucket>\"'."
 
+profile="$(terraform output -raw aws_profile 2> /dev/null)" || profile="network"
+
 transit_gateway_id="$(terraform output -raw transit_gateway_id 2> /dev/null)" || transit_gateway_id=""
 
 if [ "${skip_attachments}" != "true" ] && [ -n "${transit_gateway_id}" ]; then
-  profile="$(terraform output -raw aws_profile 2> /dev/null)" || profile="network"
-
   # The hub's own attachment (2.3) belongs to THIS state — terraform destroy removes it as
   # part of the same run. Only an attachment that is NOT this one is foreign.
   own_attachment_id="$(terraform output -raw transit_gateway_attachment_id 2> /dev/null)" || own_attachment_id=""
@@ -119,6 +130,44 @@ if [ "${skip_attachments}" != "true" ] && [ -n "${transit_gateway_id}" ]; then
   echo "  TGW has no attachment from outside this state" >&2
 fi
 
+# Same class of foreign dependency as the TGW attachment, on a different resource. Each cell
+# hangs its own certificate (SNI) and its own host rule on the SHARED :443 listener, from the
+# control-plane state. Destroying this layer with those in place fails the same way the TGW
+# does — halfway through, after the ALB is already gone.
+listener_arn="$(terraform output -raw alb_listener_arn 2> /dev/null)" || listener_arn=""
+
+if [ "${skip_listener}" != "true" ] && [ -n "${listener_arn}" ]; then
+  # A certificate added by another state shows up with IsDefault=false; the default one is
+  # this layer's own wildcard.
+  foreign_certificates="$(aws elbv2 describe-listener-certificates \
+    --profile "${profile}" \
+    --region us-east-1 \
+    --listener-arn "${listener_arn}" \
+    --query 'Certificates[?IsDefault==`false`].CertificateArn' \
+    --output text 2> /dev/null)" || foreign_certificates=""
+
+  # This layer creates NO rule — the listener has only its fixed-response default action. Any
+  # non-default rule came from a cell.
+  foreign_rules="$(aws elbv2 describe-rules \
+    --profile "${profile}" \
+    --region us-east-1 \
+    --listener-arn "${listener_arn}" \
+    --query 'Rules[?IsDefault==`false`].RuleArn' \
+    --output text 2> /dev/null)" || foreign_rules=""
+
+  foreign_listener_count="$(echo "${foreign_certificates} ${foreign_rules}" | tr '\t ' '\n\n' | grep --count . || true)"
+
+  if [ "${foreign_listener_count}" -gt 0 ]; then
+    echo "" >&2
+    [ -n "${foreign_certificates}" ] && echo "  certificates: ${foreign_certificates}" >&2
+    [ -n "${foreign_rules}" ] && echo "  rules: ${foreign_rules}" >&2
+    echo "" >&2
+    fail "${foreign_listener_count} certificate(s)/rule(s) on listener ${listener_arn} outside this layer. Destroy the layer that owns them first (the cell: control-plane/scripts/destroy) or use --skip-listener knowing the destroy will fail on the ALB."
+  fi
+
+  echo "  :443 listener has no certificate or rule from outside this state" >&2
+fi
+
 # What is lost, said before asking. The point is not to scare: two of these come back
 # different after recreation, and whoever confirms needs to know that.
 cat >&2 <<EOF
@@ -140,6 +189,11 @@ This goes away:
 
   Authorization rules
     the policy of who reaches what. Comes back from terraform.tfvars.
+
+  Public ingress ALB, its :443 listener and the default wildcard certificate
+    the PUBLIC INGRESS OF EVERY CELL goes with it. Its DNS name changes on
+    recreation, so each cell's alias record is rewritten by the next apply of
+    layer 4 — which is why 4 goes down before this one and comes up after.
 
 This does NOT go away: the DNS subzone, the hub VPC, the state bucket.
 
