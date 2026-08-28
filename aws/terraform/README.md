@@ -40,7 +40,7 @@ Um script por camada em `scripts/`, numerado pela ordem. Cada um é idempotente 
 cd aws/terraform
 
 ./scripts/up-all --base-domain <domínio>     # camadas 00 → 02, centavos por mês
-./scripts/up-all --with-connectivity         # inclui a 03 (~US$ 146/mês)
+./scripts/up-all --with-connectivity         # inclui a 03 (~US$ 162/mês)
 ```
 
 **A 04 não sobe por `up-all`, e não é questão de custo:** entre a 03 e a 04 existe um passo que
@@ -71,7 +71,7 @@ recriação. Reexportar sempre.
 | 00 | `up-00-state-backend` | `state-backend/` | — | centavos | permanente |
 | 01 | `up-01-network-foundation` | `network-foundation/<região>/` | 00 | **zero** | permanente |
 | 02 | `up-02-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
-| 03 | `up-03-connectivity` | `connectivity/<região>/` | 00, 01, 02 | ~US$ 146 | T1 |
+| 03 | `up-03-connectivity` | `connectivity/<região>/` | 00, 01, 02 | ~US$ 162 | T1 |
 | — | — | *conectar o túnel do Client VPN* | 03 | +US$ 0,05/h | **pré-requisito da 04, não é Terraform** |
 | 04 | `up-04-control-plane` | `control-plane/` | 00, 01, **03 + túnel conectado** | ~US$ 165 | T2 |
 
@@ -149,7 +149,7 @@ repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state 
 | `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | sim |
 | `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | sim |
 | `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | sim |
-| `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML | sim — túnel conectado e pacote atravessando até a spoke |
+| `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML + ALB público de ingress com o listener `:443` compartilhado | sim para o TGW e a VPN — túnel conectado e pacote atravessando até a spoke; o ALB ainda **não** foi aplicado |
 | `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, NLB interno do ingress, ESO, ArgoCD, Crossplane | sim, **menos com o endpoint da API fechado** — esse é o aceite que falta |
 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
@@ -295,10 +295,14 @@ account id, ARN e endpoint reais.
 
 **Inverso do apply: `control-plane` → `connectivity` → `network-foundation`.**
 
-O `control-plane` antes da `connectivity` **não é convenção, é imposição da AWS**: o attachment da
-spoke vive no state da `control-plane`, e a AWS recusa deletar um TGW com attachment vivo. O
-`connectivity/us-east-1/scripts/destroy` antecipa isso — recusa com exit 1 enquanto houver attachment
-de fora do próprio state e nomeia quem destruir primeiro. Contar **~10 min** no destroy da 03: cada
+O `control-plane` antes da `connectivity` **não é convenção, é imposição da AWS**, e agora por dois
+caminhos independentes. O primeiro é o TGW: o attachment da spoke vive no state da `control-plane`, e
+a AWS recusa deletar um TGW com attachment vivo. O segundo é o ALB: cada célula pendura no listener
+`:443` compartilhado o próprio certificado (por SNI) e a própria rule de host, também a partir do
+state da `control-plane`. O `connectivity/us-east-1/scripts/destroy` antecipa os dois — recusa com
+exit 1 enquanto houver attachment, certificado ou rule de fora do próprio state, e nomeia quem
+destruir primeiro. Ele exclui da checagem o que é dele: o attachment do próprio hub e o certificado
+default do listener. Contar **~10 min** no destroy da 03: cada
 `aws_ec2_client_vpn_network_association` leva 7–10 min, simétrico com a criação. Não é travamento.
 
 Dentro de uma camada a ordem é de graça — é o grafo de dependências do Terraform. O que **não**
@@ -363,10 +367,17 @@ A camada 2 é a que custa: **~US$ 165/mês** — EKS control plane ~73 + NAT ~32
 Números anteriores de ~US$ 105 omitiam os nós. O NAT aqui é deliberado, ao contrário do hub: sem
 TGW não há egress pelo hub, e os nós dependem dele para chegar à API do EKS e aos registries.
 
-A camada 03 custa **~US$ 146/mês** (~US$ 0,20/h), mais US$ 0,05/h por conexão ativa. A cobrança é
-por **associação de target network**, não por endpoint: as duas subnets privadas do hub (uma por AZ)
-dobram essa parcela, e a redundância de AZ foi mantida sabendo disso. Números de ~US$ 110/mês em
-texto mais antigo assumiam uma associação só.
+A camada 03 custa **~US$ 162/mês** (~US$ 0,22/h), mais US$ 0,05/h por conexão ativa e as LCU do
+ALB. São duas parcelas: o Client VPN cobra ~US$ 146/mês por **associação de target network**, não por
+endpoint — as duas subnets privadas do hub (uma por AZ) dobram essa parcela, e a redundância de AZ
+foi mantida sabendo disso; o ALB de ingress soma ~US$ 16/mês. Números de ~US$ 110/mês em texto mais
+antigo assumiam uma associação só e nenhum ALB.
+
+**O ALB de ingress vive aqui, e não numa camada permanente, porque sem TGW ele não alcança spoke
+nenhuma** — é um listener servindo 404. A consequência a saber antes de derrubar: o teardown noturno
+desta camada leva o **ingress público de todas as células** junto, e o DNS name do ALB muda na
+recriação, então os registros alias das células são reescritos pelo apply seguinte da 04. É por isso
+que a 04 desce antes desta e sobe depois.
 
 Por isso a camada 2 não fica de pé entre sessões de trabalho — sobe, valida, desce
 (`control-plane/scripts/destroy`). O state fica no bucket, então subir de novo é o mesmo
