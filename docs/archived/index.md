@@ -54,6 +54,9 @@ próprio, agrupado por tema, para este índice não crescer sem limite como o an
   spoke entra na malha via TGW, ping real, teardown exercitado.
 - **2026-08-27** — [Steps 2.4+2.5 — EKS Private Endpoint](private-access/step-2-4-2-5-eks-private-endpoint.md):
   SG rule para o endpoint privado, endpoint público fechado por default.
+- **2026-08-27** — [Steps 2.4+2.5 — Apply And Acceptance](private-access/step-2-4-2-5-apply.md): aceite
+  conjunto PASSOU, cinco critérios; dois applies mortos por timeout de processo, recuperados sem
+  duplicata; `aws-vpn-client` reinstalado do zero.
 
 ## Provisioning sequence
 

@@ -29,6 +29,7 @@ logs/
 # em tests/fixtures/ É versionada: é sintética e o provider exige >= 1000 caracteres.
 saml-metadata.xml
 !**/tests/fixtures/saml-metadata.xml
+!**/saml-metadata.xml.example
 
 # Andaime de contexto derivado de docs versionadas — nao versionar (segunda fonte de verdade)
 docs/superpowers/context/

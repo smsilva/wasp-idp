@@ -84,8 +84,8 @@ OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workloads`, `
 
 ## Estado aplicado na AWS
 
-Snapshot de 2026-08-26. **Custo recorrente: só centavos.** A última sessão não aplicou nada na AWS — o
-portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por hora.
+Snapshot de 2026-08-27, **fim da sessão do aceite `2.4`+`2.5`**, derrubado ao término. **Custo por hora
+de volta a zero**, verificado por `terraform state list` (0, 0, 3, 13 — bate com o esperado).
 
 | Camada | Conta | State key | Custo/mês | Estado |
 |---|---|---|---|---|
@@ -96,9 +96,9 @@ portão `2.1` é verificação local. O `2.2` é o primeiro passo que cobra por 
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
 | `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **destruída** (state com 0 recursos) |
 
-**Custo por hora hoje: ZERO.** Verificado ao fim do `2.3`: nenhum TGW, Client VPN endpoint, EKS ou
-NAT vivo em nenhuma das contas. Sobra só `dns` (3 recursos) e as duas `network-foundation` (13
-cada, sem NAT).
+**Custo por hora agora: ~US$ 0,43/h** (0,20 da 03 + 0,23 da 04). **Derrubar na ordem inversa antes de
+encerrar a sessão** — comando em How to Resume. Se esta seção ainda disser "DE PÉ" numa sessão futura,
+não presumir que é o T1 de propósito (esse é só a camada 03) — a 04 nunca fica de um dia para o outro.
 
 > **Ordem de teardown, agora exercitada e não só documentada:** `control-plane/scripts/destroy`
 > **antes** de `connectivity/us-east-1/scripts/destroy`. O attachment da spoke vive no state da
@@ -158,45 +158,46 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **`2.4`/`2.5` escritos, nada de pé**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **Fase 2 COMPLETA, Fase 3 é a próxima**)
 
-**Último passo:** `2.4` **reescrito e implementado** junto com o `2.5`, offline, sem tocar AWS. O
-`2.4` não era trabalho de DNS: a private hosted zone do endpoint do EKS é **invisível na conta**
-(plano A impossível) e, com o endpoint público desligado, o **DNS público já resolve para IP
-privado** (plano B desnecessário, e custaria ~US$ 180/mês). Sobrou uma regra de security group —
-`443/tcp` a partir do CIDR da VPC hub — mais o flag do `2.5` fechando o endpoint **por default**.
-Detalhe e citações em **Completed Work**. Antes disso, a sessão de 2026-08-27 escreveu a
-especificação da sequência (Frente C); antes dela, o `2.3` foi aceito com pacote real e derrubado.
+**Fase 2 (acesso privado) fechada 2026-08-27: aceite conjunto `2.4`+`2.5` PASSOU**, os cinco
+critérios (`up-03` aplicado, túnel conectado com SAML, `up-04` aplicado com endpoint já fechado,
+`dig` resolveu `10.2.x.x` de primeira, `kubectl` responde com túnel e falha por rede sem ele).
+Narrativa completa, incidente de recuperação (dois applies mortos por timeout, recuperados sem
+duplicata) e achados em
+[`docs/archived/private-access/step-2-4-2-5-apply.md`](docs/archived/private-access/step-2-4-2-5-apply.md).
 
-**Próximo passo: o aceite conjunto `2.4` + `2.5`, que exige AWS de pé.** Os dois não são
-verificáveis separados — com o endpoint público ligado o DNS devolve IP público e `kubectl` pelo
-túnel não prova nada. Roteiro em `02-private-access.md`, seção "Aceite conjunto": subir 03 → conectar
-túnel → subir 04 com o tfvars regenerado (o cluster nasce já fechado) → `dig` devolve IP de
-`10.2.0.0/16` → `kubectl get nodes` responde → com o túnel derrubado, `kubectl` falha por **rede**,
-não por autenticação. Custo enquanto de pé: ~US$ 0,43/h.
+**Derrubado ao fim da sessão** — `control-plane` (14 recursos) e `connectivity` (18 recursos), 0
+falhas, custo/h de volta a zero, confirmado por `terraform state list` (`0, 0, 3, 13`).
 
-**O apply é o teste de verdade, e há dois riscos declarados nele:** o cluster nasce com o endpoint
-público fechado desde a criação (a ressalva da doc sobre "ligar e desligar uma vez" não deveria se
-aplicar a cluster novo, mas é a primeira vez que se exercita), e a aresta `depends_on` que põe a
-regra de `443` antes dos releases de helm **não é testável offline** — se estiver errada, o sintoma é
-timeout no primeiro release.
+**Achado extra no teardown, corrigido na mesma sessão:** o `destroy` do `control-plane` morreu no meio
+na primeira tentativa (TGW attachment/rota destruídos antes de os consumidores da API do Kubernetes
+terminarem — `dial tcp ...:443: i/o timeout`), recuperado sem duplicata. Causa raiz corrigida em
+`aws/terraform/control-plane/main.tf`: seis recursos de rede ganharam `depends_on` explícito nos
+quatro consumidores da API (`kubernetes_config_map_v1.platform_bootstrap`, `module.crossplane`,
+`module.external_secrets`, `module.argo_cd`). `validate` + 21 testes offline passam; **a aresta em si
+só é provada por um `destroy` real — verificar isso na próxima vez que a camada 04 subir e descer**.
 
-**Nada mais a escrever antes de executar.** Código, testes, plano, sequência do `README.md` e docs de
-recurso estão fechados; a próxima sessão sobe e mede. Comandos do aceite, com os critérios de passa/não
-passa e a prova negativa, em **How to Resume** → "Executar o teste".
-
-**Nada está de pé.** A sequência completa de subida — sete passos, com o túnel conectado **entre** a
-camada 03 e a 04 — está em **How to Resume**. Derrubar na ordem **inversa**, e o guard impõe.
-
-**IDs abaixo são de recursos JÁ DESTRUÍDOS** — servem para reconhecer o padrão, nunca para reusar.
-Todo `tgw-*`, `cvpn-*`, `vpc-*` da spoke e ARN de certificado muda a cada recriação.
+**Próxima frente: Fase 3 (ingress) — `3.1`–`3.2`, ainda não começada.** NLB interno + gateway Istio na
+spoke, depois o lado hub (ALB, certificado, listener rule). Roteiro em `03-ingress.md`. Primeiro passo
+prático: subir `up-all` → `up-03` → conectar túnel → `up-04` (mesma sequência da Fase 2, que agora
+prova o `depends_on` novo de quebra) antes de escrever o Terraform novo da Fase 3.
 
 **O passo de console do `2.2` continua válido e não precisa ser refeito:** aplicação SAML
 `hub-client-vpn` no Identity Center (management account), attribute mappings
 (`Subject`→`${user:email}`/emailAddress, `memberOf`→`${user:groups}`/unspecified), grupo
-`platform-admins` atribuído. O metadata XML segue em
-`aws/terraform/connectivity/us-east-1/saml-metadata.xml` (gitignored) — ele **sobrevive** ao
-destroy da camada.
+`platform-admins` atribuído. **O metadata XML NÃO sobrevive a troca de máquina/sessão** (achado do
+`2.4`+`2.5`, contrariando o que esta seção dizia antes) — se `saml-metadata.xml` estiver ausente, a
+aplicação já existe no Identity Center e só precisa ser rebaixada: **Applications → nome da aplicação
+→ Actions → Edit configuration**, não o fluxo de criação. Roteiro completo em `02-private-access.md`.
+Exemplo de formato versionado em `aws/terraform/connectivity/us-east-1/saml-metadata.xml.example`.
+Ideia registrada para parar de perder esse arquivo entre sessões:
+`docs/superpowers/specs/2026-08-27-saml-metadata-secrets-manager.md` (cachear no Secrets Manager).
+
+**`aws-vpn-client` também não sobrevive a troca de máquina/sessão** (mesmo achado) — conferir sempre
+com `aws-vpn-client --version`, nunca assumir pelo registro de uma sessão anterior. Reinstalar pela
+mesma URL versionada (`.../GTK/6.0.1/awsvpnclient_amd64.deb`, sha256 contra as release notes oficiais)
+se ausente — nunca por `latest` (entrega 5.4.1, sem CLI).
 
 **Custo do T1 ainda por corrigir no plano:** o Client VPN cobra por **associação de subnet**, não
 por endpoint. Com 2 subnets privadas do hub, o real é ~US$ 0,20/h (~US$ 146/mês), não os
@@ -207,17 +208,12 @@ O `~/trash/hub.ovpn` que sobrou de qualquer sessão anterior está **inválido**
 muda a cada recriação da camada 03, então reexportar sempre, nunca reaproveitar. Comandos nos passos
 3–4 da sequência de subida, em **How to Resume**.
 
-**Testar alcance à spoke exige regra temporária de SG.** O SG do cluster EKS nasce só com a regra
-auto-referenciada e a spoke não tem workload — não há alvo natural. E o SG tem de liberar o CIDR da
-**VPC hub**, não o do cliente (o Client VPN faz SNAT):
-
-```bash
-aws ec2 authorize-security-group-ingress --profile cicd --region us-east-1 \
-  --group-id <sg-do-cluster> \
-  --ip-permissions IpProtocol=icmp,FromPort=-1,ToPort=-1,IpRanges='[{CidrIp=10.1.0.0/16}]'
-```
-
-Revogar depois: é drift manual num SG gerenciado pelo EKS.
+**Avaliação registrada, não implementada, sobre a orquestração da subida em si:** se vale trocar o
+padrão bash por Terragrunt (recomendação é não trocar agora) e o alvo declarado pelo usuário de tirar
+agente/humano do loop de provisionamento (pipeline de CI/CD — item já em "Targets" deste arquivo, ainda
+sem desenho). Os obstáculos concretos descobertos nesta sessão (SAML manual, endpoint privado só
+alcançável por VPN de operador, timeout de sessão interativa matando applies longos) estão em
+`docs/superpowers/specs/2026-08-27-terraform-orchestration-tooling.md`.
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Os passos de
 uma fase editam os mesmos dois arquivos de doc (`HANDOFF.md` e o arquivo da fase), então por passo
@@ -492,11 +488,11 @@ Itens fechados/retirados (tags de LBC
 [`2.3`](docs/archived/private-access/step-2-3-spoke-joins-mesh.md), existência de
 `up-03-connectivity`) saíram desta lista — detalhe em `docs/archived/index.md`.
 
-1. **Endpoint da API do EKS público para `0.0.0.0/0`** — fechado por default no `2.5`, mecanismo mais
-   forte que o do `1.2`: não existe mais valor de tfvars que exponha a API ao mundo (abrir é
-   break-glass explícito via `generate-tfvars --enable-public-endpoint`). **Falta o `apply`** que
-   prova o caminho privado inteiro (aceite conjunto `2.4`+`2.5`); até lá, o que existe é código e
-   teste, não comportamento observado.
+1. ~~**Endpoint da API do EKS público para `0.0.0.0/0`**~~ — **RESOLVIDO 2026-08-27.** Fechado por
+   default no `2.5`, e o aceite conjunto `2.4`+`2.5` **provou o caminho privado inteiro** (apply
+   completo com endpoint fechado desde a criação, `dig` resolvendo IP privado, `kubectl` falhando por
+   rede sem o túnel). Detalhe em
+   [`docs/archived/private-access/step-2-4-2-5-apply.md`](docs/archived/private-access/step-2-4-2-5-apply.md).
 2. **Break-glass documentado, controles ausentes** — *unexpected*: MFA de root não verificado, alarme
    de uso de root não existe (falta regra EventBridge), ensaio nunca executado.
 3. **Management account com `AdministratorAccess` em usuário, não grupo** — *unexpected*: migrar para
@@ -554,15 +550,20 @@ Itens fechados/retirados (tags de LBC
 role a partir de `personal`):
 
 ```bash
-for p in personal network cicd; do printf '%-10s ' "${p}"; aws sts get-caller-identity --profile "${p}" --query Arn --output text; done
+for p in personal network cicd; do
+  echo "=== ${p} ==="
+  aws sts get-caller-identity --profile "${p}" --output json
+done
 ```
 
-ARN vazio ⟹ `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az`
-expira **independentemente** — conferir com `az account show`.
+`--query` devolve lixo nesta máquina (wrapper `rtk`, ver `CLAUDE.local.md`) — usar `--output json` e ler
+o `Account`/`Arn` inteiro, nunca `--query`. Erro de profile inexistente ou ARN vazio ⟹
+`! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
+**independentemente** — conferir com `az account show`.
 
-**Custo por hora hoje: ZERO.** Só a subzona de DNS (~US$ 0,50/mês) e o bucket de state (centavos).
-Confirmar por camada, não por memória — a leitura da AWS CLI nesta máquina passa por wrapper, então
-`terraform state list` é o caminho confiável:
+**Custo por hora ao fim desta sessão (2026-08-27): zero** — as duas camadas pagas foram derrubadas
+depois do aceite `2.4`+`2.5`. Não confiar nisso de memória na próxima sessão — confirmar por camada,
+já que a leitura da AWS CLI nesta máquina passa por wrapper:
 
 ```bash
 cd wasp-idp/aws/terraform
@@ -583,47 +584,28 @@ justamente por isso.
 
 O que é de sessão e **não** está no README:
 
-- **Nada está de pé, e o ponto de partida é o zero.** Custo/h atual: zero. Subir tudo para o teste
-  custa ~US$ 0,48/h enquanto ligado (0,20 da 03 + 0,05 da conexão + 0,23 da 04).
-- **O client da VPN já está instalado nesta máquina** (6.0.1, portão `2.1`) — conferir, não
-  reinstalar. `latest` entrega 5.4.1, **sem CLI**: regressão silenciosa de capacidade.
+- **Nada garante que sobrevive entre sessões/máquinas — conferir sempre, não presumir pelo handoff.**
+  Achado do `2.4`+`2.5` (2026-08-27): tanto o `aws-vpn-client` quanto o `saml-metadata.xml` que a
+  sessão anterior registrava como "já instalado"/"sobrevive ao destroy" **não estavam presentes** na
+  sessão seguinte. Conferir `aws-vpn-client --version` e a existência do `saml-metadata.xml` antes de
+  assumir qualquer um dos dois. Reinstalar client: mesma URL versionada (`.../GTK/6.0.1/...`), nunca
+  `latest` (entrega 5.4.1, sem CLI). Reobter metadata: a aplicação `hub-client-vpn` no Identity Center
+  não precisa ser recriada — **Applications → nome → Actions → Edit configuration** para rebaixar.
 - **`~/trash/hub.ovpn` de sessões anteriores está inválido** — a DNS name do endpoint muda a cada
   recriação da 03. Reexportar sempre.
-- **O passo de console do `2.2` não precisa ser refeito** (aplicação SAML, mappings, grupo) e o
-  `saml-metadata.xml` sobrevive ao destroy da camada.
 
-### Executar o teste — o aceite conjunto `2.4` + `2.5`
+### Aceite conjunto `2.4` + `2.5` — **PASSOU** (2026-08-27)
 
-É o trabalho ativo, e é a única coisa que falta na fase 2. Depois de o `up-04` completar:
+Não é mais trabalho ativo. Narrativa completa, comandos exatos usados e o incidente de recuperação em
+[`docs/archived/private-access/step-2-4-2-5-apply.md`](docs/archived/private-access/step-2-4-2-5-apply.md).
+Resumo: `dig` resolveu IP privado de primeira (sem precisar ligar/desligar o endpoint público),
+`kubectl` respondeu com o túnel e falhou por timeout de rede (nunca `Unauthorized`) sem ele.
 
-```bash
-aws eks update-kubeconfig --name control-plane --region us-east-1 --profile cicd
-host="$(aws eks describe-cluster --name control-plane --region us-east-1 --profile cicd \
-  --query 'cluster.endpoint' --output text | sed 's|https://||')"
-dig +short "${host}"     # PASSA se devolver 10.2.x.x — IP privado por DNS público
-kubectl get nodes        # PASSA se responder
-```
-
-**O apply do `up-04` é metade do aceite**, não preparação para ele: se ele completa com o túnel de pé
-e o endpoint público fechado desde a criação do cluster, a plataforma é operável privada. Registrar o
-tempo total (referência: ~13 min quando o endpoint era público).
-
-Fechar com a **prova negativa**, que é o que distingue "funciona" de "funciona pelo motivo certo":
-
-```bash
-aws-vpn-client disconnect --profile-name hub
-kubectl get nodes        # tem de falhar por REDE (timeout / no route), nunca por autenticação
-```
-
-Falha com `Unauthorized`/`credentials` em vez de timeout significa que o tráfego ainda sai por um
-caminho público — investigar antes de declarar o `2.5` aceito.
-
-**Os dois modos de falha esperados, para reconhecer em vez de depurar do zero:**
-
-| Sintoma | Causa provável |
-|---|---|
-| `up-04` trava com timeout no primeiro release de helm | a aresta `depends_on` que põe a regra de `443` antes dos releases (Known Broken 25) — não é credencial |
-| `dig` devolve IP público depois do apply | cluster criado já fechado pode não resolver privado (Known Broken 26). Caminho: ligar o endpoint público, aplicar, desligar, aplicar |
+**Lição operacional para a próxima vez que algo parecido rodar:** nunca deixar um `apply`/`destroy` de
+vários minutos dependurado numa chamada síncrona de ferramenta (agente ou shell interativo) — usar
+`nohup ... > log 2>&1 < /dev/null & disown` (ou os scripts `up-NN`, que já fazem isso sozinhos). Um
+processo morto no meio não impede recuperação (`force-unlock` + `import` + `plan` sem duplicata — a
+receita está no `CLAUDE.md` de `aws/terraform/`), mas custa tempo evitável.
 
 **Derrubar no fim do dia, sempre**, mesmo com o teste inconcluso: ordem inversa, `control-plane`
 antes de `connectivity`.
@@ -746,6 +728,11 @@ porquê, um por linha:
 - **`public_access_cidrs` omitido, nunca vazio, quando o endpoint público está desligado** — o provider
   só faz drift detection do atributo *"when present in a configuration"*, e `[]` brigaria para sempre
   com o `0.0.0.0/0` que a EKS guarda.
+- **O `depends_on` que abre o caminho no `apply` não protege o `destroy` na direção contrária.** O TGW
+  attachment e a rota da spoke podem ser destruídos antes de o Terraform terminar de remover o
+  `kubernetes_config_map_v1`/`helm_release` do Crossplane, cortando a rota até o endpoint no meio do
+  processo (`i/o timeout`, não credencial). Fix: `depends_on` explícito nos seis recursos de rede
+  apontando para os quatro consumidores da API. Só um `destroy` real prova a aresta.
 
 **Rede / VPN**
 
@@ -823,13 +810,20 @@ porquê, um por linha:
       mutações capturadas.**
 - [x] **`2.5`** — `endpoint_public_access = false` **por default**, com a lista de CIDRs omitida (não
       vazia) quando fechado. Abrir é break-glass declarado no tfvars.
-- [ ] **PRÓXIMA AÇÃO — executar o aceite conjunto `2.4` + `2.5` na AWS.** Único item da fase 2 que
-      falta, e o único do plano que exige um apply inteiro com VPN conectada. Subir pela sequência do
-      `aws/terraform/README.md`, medir, e fechar com a **prova negativa** (túnel derrubado ⟹ `kubectl`
-      falha por rede, não por autenticação). Comandos e critérios em **How to Resume**.
-- [ ] Registrar no plano e aqui: tempo do apply com o endpoint fechado (referência ~13 min com ele
-      aberto) e se `dig` devolveu IP privado sem precisar do ligar-desligar do Known Broken 26.
-- [x] Derrubar as duas camadas na ordem inversa — feito, 46 + 18 recursos, 0 falhas, custo/h zero.
+- [x] **Aceite conjunto `2.4` + `2.5` executado na AWS — PASSOU (2026-08-27).** `dig` resolveu IP
+      privado de primeira (sem precisar do ligar-desligar preventivo cogitado no plano); `kubectl`
+      respondeu com o túnel e falhou por timeout de rede sem ele, nunca por autenticação. **Fase 2
+      completa.** Narrativa em
+      [`docs/archived/private-access/step-2-4-2-5-apply.md`](docs/archived/private-access/step-2-4-2-5-apply.md).
+- [x] Derrubar `control-plane` (04) — **achado real no caminho**: o primeiro `destroy` morreu com
+      `dial tcp ...:443: i/o timeout` (TGW attachment/rota destruídos antes do `kubernetes_config_map_v1`
+      e do `helm_release` do Crossplane terminarem). Recuperado com `state rm` dos dois + reaplicar.
+      **Corrigido no código**: os seis recursos de rede que cortam o caminho ganharam `depends_on`
+      explícito nos quatro consumidores da API. `validate` + 21 testes offline passam; a aresta em si
+      só é provada por um `destroy` real — **verificar isso na próxima vez que a camada 04 subir e
+      descer de novo** (não é testável offline, mesma limitação de "ordenação por referência").
+- [x] Derrubar `connectivity` (03) — 18 recursos, 0 falhas. Custo/h de volta a zero, confirmado
+      (`0, 0, 3, 13`).
 - [ ] Os dois critérios pendentes do `1.2` **mudaram de forma com o `2.5`**: "a API recusa de outro IP"
       deixa de fazer sentido (não há endpoint público para recusar ninguém) e "o apply do laptop segue
       funcionando" virou o próprio aceite do `2.5`, agora **com o túnel**. Verificar na forma nova, não
@@ -909,10 +903,15 @@ Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<pa
 [`docs/archived/index.md`](docs/archived/index.md). Resumo do que já está lá, do mais recente ao mais
 antigo:
 
-- **2026-08-27** — `2.4`+`2.5`: SG rule para o endpoint privado do EKS, endpoint público fechado por
-  default (Route 53 privada da EKS é inacessível de propósito — dois recursos viraram `Rejected`);
-  falta o `apply` de aceite. Especificação da sequência de provisionamento + dicionário de 61
-  recursos. Nenhum dos dois tocou AWS.
+- **2026-08-27** — `2.4`+`2.5` escritos e **aceitos na AWS**: SG rule para o endpoint privado do EKS,
+  endpoint público fechado por default, aceite conjunto PASSOU (`dig` privado de primeira, `kubectl`
+  falha por rede sem o túnel). **Fase 2 completa.** Dois applies mortos por timeout de processo,
+  recuperados sem duplicata (`force-unlock`+`import`+`plan`). Especificação da sequência de
+  provisionamento + dicionário de 61 recursos. Duas specs registradas, não implementadas: cachear
+  `saml-metadata.xml` no Secrets Manager
+  (`docs/superpowers/specs/2026-08-27-saml-metadata-secrets-manager.md`) e avaliação de orquestração —
+  Terragrunt (não trocar agora) + alvo de tirar agente/humano do loop via CI/CD
+  (`docs/superpowers/specs/2026-08-27-terraform-orchestration-tooling.md`).
 - **2026-08-26** — `2.3` (spoke entra na malha via TGW, aceito com ping real) + teardown exercitado;
   `2.2` (apply da `connectivity/` + resolução das duas perguntas do aceite + a raiz escrita); `2.1`
   (portão do client VPN); scripts de sequência (`up-*`) + camada 2 de DNS aplicada; `1.3` (raiz

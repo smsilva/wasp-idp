@@ -9,8 +9,8 @@ provisionamento (ver `README.md`).
 | `2.1` | **PORTÃO:** verificar o client da AWS VPN nesta distro | — | zero | **FEITO** — instala, daemon sobe, GUI abre, CLI gerencia perfil SAML |
 | `2.2` | `connectivity/`: TGW + cert do ACM + SAML provider + Client VPN + associação + rota do supernet | T1 | ~US$ 0,15/h | **escrita** (22 testes, 13/14 mutações). Falta o apply: túnel sobe com identidade do Identity Center; IP de `100.64.0.0/22`; target network `associated`; **e o login SAML completa** |
 | `2.3` | Attachment das DUAS pontas (hub e spoke) + RAM + `tgw-rt-<spoke>` + associação/propagações + rotas | T2 | +US$ 0,05/h | **FEITO** — `ping` a um nó da spoke pelo túnel, 3/3, RTT ~140 ms |
-| `2.4` | ~~DNS privado~~ → regra de `443` a partir do CIDR da VPC hub no SG do cluster | T2 | zero | **escrita** (a zona privada do EKS é invisível na conta; o DNS público já resolve para IP privado). Aceite junto com o `2.5` |
-| `2.5` | `endpoint_public_access = false`, e por **default** | — | zero | **`terraform apply` completo com VPN conectada**; de fora, recusa |
+| `2.4` | ~~DNS privado~~ → regra de `443` a partir do CIDR da VPC hub no SG do cluster | T2 | zero | **FEITO** (2026-08-27) — `dig` resolveu `10.2.x.x` de primeira, sem o ligar-desligar preventivo cogitado no plano |
+| `2.5` | `endpoint_public_access = false`, e por **default** | — | zero | **FEITO** (2026-08-27) — apply completo com VPN conectada; túnel derrubado ⟹ `kubectl` falha por timeout de rede, nunca por `Unauthorized` |
 
 ## `2.1` — o portão — **PASSOU** (2026-08-26)
 
@@ -130,6 +130,12 @@ direito antes de começar; a instância é regional.
 
 #### 2. Nomear e baixar o metadata
 
+**Se a aplicação `hub-client-vpn` já existe** (metadata perdido numa troca de máquina, por exemplo —
+o console não a recria, só o arquivo baixado muda), o caminho é outro: **Applications → clicar no
+nome `hub-client-vpn` → Actions → Edit configuration**, e só então a seção **IAM Identity Center
+metadata** do passo 8 abaixo aparece para baixar de novo. Os passos 7 e 9–10 (nomear, ACS URL,
+audience) não se repetem — já estão salvos na aplicação.
+
 7. O campo vem preenchido com `Custom SAML 2.0 application`, que é o default do console. Trocar.
 
    | Campo | Valor |
@@ -157,6 +163,9 @@ direito antes de começar; a instância é regional.
    (gitignored — identifica a instância de Identity Center). O certificado ao lado, em *IAM Identity
    Center certificate*, **não** é necessário: ele já vem embutido no XML. As URLs de *sign-in* e
    *sign-out* logo abaixo também não — o Client VPN as lê do próprio metadata.
+
+   Quem estiver configurando pela primeira vez e quiser ver o formato antes de baixar o real: há um
+   exemplo versionado em `aws/terraform/connectivity/us-east-1/saml-metadata.xml.example`.
 
 #### 3. Os dois valores que o Client VPN exige
 
@@ -409,3 +418,28 @@ público e `kubectl` pelo túnel não prova nada.
 3. `dig +short <endpoint>` devolve IP de `10.2.0.0/16`.
 4. `kubectl get nodes` pelo túnel responde.
 5. Com o túnel **desconectado**, `kubectl` falha por rede — não por autenticação.
+
+### Aceite — **PASSOU** (2026-08-27)
+
+Os cinco critérios, na ordem: `up-03` aplicado (18 recursos); `aws-vpn-client 6.0.1` instalado nesta
+máquina (não estava — ver nota abaixo) e conectado, SAML completou sozinho (sessão SSO do navegador já
+ativa); `up-04` aplicado com o endpoint fechado desde a criação; `dig +short <endpoint>` devolveu
+`10.2.29.144`/`10.2.32.64` — **de primeira, sem precisar do ligar-desligar preventivo cogitado no plano**;
+`kubectl get nodes` respondeu com 2 nós `Ready`; com o túnel desconectado, `kubectl get nodes` travou
+em timeout (20s, sem resposta) — nunca devolveu `Unauthorized`. **Fase 2 completa.**
+
+**Achado não previsto no roteiro:** o `up-04` morreu no meio **duas vezes** por timeout de processo (a
+primeira por engano do operador, a segunda pelo timeout default de 2 min do harness do agente que
+executou o aceite) — as duas vezes a AWS continuou provisionando depois do processo morto (EKS
+cluster, NAT Gateway, node group, addon `aws-ebs-csi-driver`), órfãos fora do state. Recuperado com a
+receita já documentada no `CLAUDE.md` desta pasta: `terraform force-unlock` + `terraform import` de
+cada órfão + `plan` provando **zero duplicata** antes de reaplicar. Nenhum recurso foi recriado; o
+`Apply complete!` final bateu exatamente com o plano de recuperação (4 to add, 1 to change, 0 to
+destroy). Por causa disso, o tempo total do apply não é comparável ao ~13 min de referência (era um
+apply único, este foram dois mais uma recuperação manual no meio) — não registrar como regressão de
+performance.
+
+**Achado extra:** o `aws-vpn-client` 6.0.1 registrado como instalado no `2.1` não sobreviveu à troca de
+máquina/sessão — teve de ser reinstalado do zero (mesma URL versionada, sha256 conferido contra as
+release notes oficiais da AWS). "Instalado nesta máquina" em registros de sessão anterior não é
+garantia entre máquinas/sessões diferentes — conferir sempre, não assumir pelo handoff.

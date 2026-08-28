@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Exemplo de estrutura, NAO metadata real do Identity Center.
+
+  O arquivo de verdade e baixado do console (Identity Center > Applications > hub-client-vpn >
+  IAM Identity Center metadata > aba "Default (IPv4 only)" > Download). A API CreateApplication
+  so cria aplicacao OAuth 2.0 customizada, entao a aplicacao SAML em si e passo manual — ver
+  docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md, secao
+  "O passo de console, clique a clique".
+
+  Depois de baixar, salvar como `saml-metadata.xml` (sem `.example`) neste mesmo diretorio —
+  o nome sem sufixo e gitignored de proposito, porque identifica a instancia de Identity Center
+  de quem roda. Este `.example` fica versionado só para mostrar o formato esperado.
+-->
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
+                  entityID="https://portal.sso.us-east-1.amazonaws.com/saml/assertion/EXAMPLE">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"
+                    WantAuthnRequestsSigned="false">
+    <KeyDescriptor use="signing">
+      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+        <X509Data>
+          <X509Certificate>MIIDBTCCAe2gAwIBAgIFEXAMPLE0MA0GCSqGSIb3DQEBCwUAMEQxFTATBgNVBAoTDEV4YW1wbGUgQ29ycDErMCkGA1UEAxMiRVhBTVBMRSBTQU1MIFNpZ25pbmcgQ2VydGlmaWNhdGU=</X509Certificate>
+        </X509Data>
+      </KeyInfo>
+    </KeyDescriptor>
+    <NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</NameIDFormat>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                         Location="https://portal.sso.us-east-1.amazonaws.com/saml/assertion/EXAMPLE"/>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+                         Location="https://portal.sso.us-east-1.amazonaws.com/saml/assertion/EXAMPLE"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>
