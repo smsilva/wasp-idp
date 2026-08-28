@@ -25,6 +25,30 @@ variables {
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
   public_access_cidrs = ["203.0.113.10/32"]
+
+  # 3.2 tornou base_domain obrigatoria (sem default, falha-fechado). Ela nao tem
+  # relacao com o que este arquivo testa — sem o valor, nenhum run deste arquivo executa.
+  base_domain = "exemplo.com"
+}
+
+# O 3.2 passou a consumir o ARN do listener do hub num campo que o provider VALIDA
+# client-side. Sob mock o valor e sintetico e a validacao recusa, derrubando runs que nada tem
+# a ver com ingress — dai o override ter de existir em TODO arquivo de teste da raiz, nao so no
+# do 3.2. Mesma familia do override de data.aws_vpc.hub.
+override_data {
+  target = data.aws_lb.hub_ingress
+  values = {
+    arn      = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/poc-hub-ingress/0000000000000001"
+    dns_name = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
+    zone_id  = "Z35SXDOTRQ7X7K"
+  }
+}
+
+override_data {
+  target = data.aws_lb_listener.hub_https
+  values = {
+    arn = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
+  }
 }
 
 # Mesmo motivo do private-access.tftest.hcl: sob mock o cidr_block vem sintético e a validação

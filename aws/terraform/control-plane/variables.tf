@@ -113,3 +113,39 @@ variable "access_entries" {
   }))
   default = {}
 }
+
+variable "base_domain" {
+  description = <<-EOT
+    Dominio raiz sob o qual a camada 02 delegou a subzona. Compoe o FQDN do certificado desta
+    celula: *.<name>.<subzone_label>.<base_domain>.
+
+    SEM DEFAULT de proposito, mesma razao da connectivity/: e valor por-conta num repo publico,
+    e a ausencia invalida qualquer terraform.tfvars ja gerado — quem aplicar tem de regenerar
+    (./scripts/generate-tfvars --force) em vez de herdar um valor de outra conta.
+  EOT
+  type        = string
+
+  validation {
+    condition     = length(var.base_domain) > 0 && !endswith(var.base_domain, ".") && length(split(".", var.base_domain)) >= 2
+    error_message = "base_domain deve ser um dominio sem ponto final, com ao menos dois labels, recebido ${var.base_domain}."
+  }
+}
+
+variable "subzone_label" {
+  description = "Label da subzona delegada pela camada 02. `sandbox` NAO e ambiente de teste — o de teste e nonprod."
+  type        = string
+  default     = "nonprod"
+}
+
+variable "hub_alb_name" {
+  description = <<-EOT
+    Nome do ALB de ingress que a camada 03 cria (`<nome do hub>-ingress`). Lido por data
+    source, nao por terraform_remote_state — mesmo padrao da VPC hub e do TGW.
+
+    E um segundo lugar que codifica o nome do hub, ao lado de hub_vpc_name e da tag do TGW
+    (hoje literal no main.tf). Unificar os tres num `hub_name` seria melhor e nao foi feito
+    aqui para nao arrastar mudanca de variavel existente para dentro do 3.2.
+  EOT
+  type        = string
+  default     = "poc-hub-ingress"
+}

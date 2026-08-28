@@ -47,3 +47,26 @@ output "ingress_security_group_id" {
   description = "SG do NLB interno. Origem das regras que o SG do cluster autoriza."
   value       = module.ingress.security_group_id
 }
+
+output "cell_ingress_fqdn" {
+  description = <<-EOT
+    O wildcard desta celula. O aceite do 3.2 e um curl em
+    app.<esta celula>.<subzona> DA INTERNET, sem tunel, com TLS valido.
+  EOT
+  value       = local.cell_wildcard
+}
+
+output "cell_certificate_arn" {
+  description = "Certificado da celula, anexado ao listener :443 compartilhado por SNI. Sai do validation, nao do certificate — e o unico que espera a validacao."
+  value       = aws_acm_certificate_validation.cell.certificate_arn
+}
+
+output "hub_target_group_arn" {
+  description = "Target group do lado HUB, na conta network, apontando para os enderecos fixos do NLB da spoke. Nome gerado por name_prefix, entao o ARN muda a cada recriacao — ler daqui, nunca fixar."
+  value       = aws_lb_target_group.hub_to_cell.arn
+}
+
+output "hub_listener_rule_priority" {
+  description = "Priority da rule desta celula no listener compartilhado. Derivada do nome; colisao entre celulas falha alto no apply, o que e o comportamento desejado."
+  value       = local.listener_rule_priority
+}

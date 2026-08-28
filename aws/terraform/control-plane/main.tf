@@ -8,6 +8,21 @@ locals {
   # Mesmo valor de connectivity/us-east-1 — decisao irreversivel documentada, nao segredo.
   supernet = "10.0.0.0/12"
 
+  # A subzona que a camada 02 delegou, e o wildcard DESTA celula dentro dela. Wildcard cobre um
+  # nivel so (`*.*.` nao existe), e e exatamente por isso que ha um certificado por celula em
+  # vez de um unico na subzona: `*.nonprod.<dominio>` nao casa `app.<celula>.nonprod.<dominio>`.
+  subzone_fqdn  = "${var.subzone_label}.${var.base_domain}"
+  cell_wildcard = "*.${var.name}.${local.subzone_fqdn}"
+
+  # Priority da listener rule: unico por listener, e o listener e COMPARTILHADO entre celulas.
+  # Derivado de algo estavel da celula (o nome), nunca de count.index — que mudaria se a ordem
+  # das celulas mudasse, reescrevendo rules alheias. Faixa valida do ALB: 1..50000.
+  #
+  # Colisao entre duas celulas e possivel (e o preco de derivar em vez de coordenar). Ela falha
+  # ALTO no apply, com erro de priority duplicada — o que e aceitavel; o inaceitavel seria
+  # sobrescrever a rule de outra celula em silencio.
+  listener_rule_priority = 1 + parseint(substr(sha256(var.name), 0, 4), 16) % 50000
+
   tags = { role = "control-plane" }
 }
 
@@ -550,4 +565,179 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
     aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
     aws_route.spoke_to_hub,
   ]
+}
+
+# --------------------------------------------------------------------------------------
+# 3.2 — o lado HUB do ingress desta celula, na conta network
+# --------------------------------------------------------------------------------------
+#
+# Fronteira de state segue o ciclo de vida, nao a conta: os recursos abaixo pertencem a conta
+# network, mas o ciclo de vida deles e o DESTA celula — destruir a celula leva os quatro junto,
+# sem orfao do lado do hub. Dai o provider aliasado, e nao connectivity/.
+#
+# O ALB e o listener :443 NAO nascem aqui: sao permanentes, da camada 03. Um listener por hub,
+# N certificados por SNI, uma rule por celula. Lidos por data source (por nome), nao por
+# terraform_remote_state — mesmo padrao da VPC hub e do TGW.
+
+data "aws_lb" "hub_ingress" {
+  provider = aws.network
+
+  name = var.hub_alb_name
+}
+
+data "aws_lb_listener" "hub_https" {
+  provider = aws.network
+
+  load_balancer_arn = data.aws_lb.hub_ingress.arn
+  port              = 443
+}
+
+data "aws_route53_zone" "subzone" {
+  provider = aws.network
+
+  name         = local.subzone_fqdn
+  private_zone = false
+}
+
+# Certificado publico do ACM, validado por DNS na subzona. Nenhuma chave privada em state nem
+# em disco, e rotacao automatica que o ALB acompanha.
+resource "aws_acm_certificate" "cell" {
+  provider = aws.network
+
+  domain_name       = local.cell_wildcard
+  validation_method = "DNS"
+
+  tags = merge(local.tags, { Name = local.cell_wildcard })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# UM registro, indexado — mesma razao do certificado do Client VPN na camada 03: as chaves de um
+# for_each sobre domain_validation_options viriam de atributo computado. Um dominio, nenhum SAN,
+# um elemento.
+resource "aws_route53_record" "cell_validation" {
+  provider = aws.network
+
+  zone_id = data.aws_route53_zone.subzone.zone_id
+  name    = tolist(aws_acm_certificate.cell.domain_validation_options)[0].resource_record_name
+  type    = tolist(aws_acm_certificate.cell.domain_validation_options)[0].resource_record_type
+  records = [tolist(aws_acm_certificate.cell.domain_validation_options)[0].resource_record_value]
+
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "cell" {
+  provider = aws.network
+
+  certificate_arn         = aws_acm_certificate.cell.arn
+  validation_record_fqdns = [aws_route53_record.cell_validation.fqdn]
+}
+
+# O SNI: e isto que permite N celulas num listener :443 so. O certificate_arn vem do
+# VALIDATION, nao do certificate — so ele espera a validacao terminar. Os dois ARNs sao o mesmo
+# valor, entao nenhum teste offline distingue as duas referencias; o sintoma de errar e
+# certificado PENDING_VALIDATION anexado ao listener.
+resource "aws_lb_listener_certificate" "cell" {
+  provider = aws.network
+
+  listener_arn    = data.aws_lb_listener.hub_https.arn
+  certificate_arn = aws_acm_certificate_validation.cell.certificate_arn
+}
+
+# A target group vive na VPC HUB (e la que esta o ALB) e aponta para IPs da VPC da SPOKE,
+# alcancaveis pelo TGW. Registrar IP fora da VPC do load balancer e suportado para faixas
+# RFC 1918 roteaveis — e o caso.
+#
+# name_prefix, nunca name: trocar porta ou target_type forca replace, e com nome fixo nao ha
+# saida (sem create_before_destroy a AWS recusa apagar porque o listener ainda aponta; com CBD
+# e nome fixo recusa criar a nova, porque ja existe). Preco: 6 caracteres, entao o nome legivel
+# vive na tag Name e quem consome usa o ARN.
+resource "aws_lb_target_group" "hub_to_cell" {
+  provider = aws.network
+
+  name_prefix = "cell-"
+  port        = 80
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = data.aws_vpc.hub.id
+
+  health_check {
+    path     = "/"
+    port     = "traffic-port"
+    protocol = "HTTP"
+
+    # 200-404 e escolha CONSCIENTE e provisoria. O health check chega ao Envoy do gateway com
+    # Host = IP do no do ALB, que nao casa nenhum VirtualService, e o Istio responde 404 — com
+    # o matcher default (200) TODOS os targets ficariam unhealthy sem nada estar errado.
+    #
+    # O preco: aceita como saudavel um gateway realmente quebrado, porque 404 e exatamente o
+    # que um Envoy sem configuracao devolve. Estreitar para 200 exige uma rota de health no
+    # Gateway/VirtualService casando QUALQUER host, que e manifesto de GitOps, nao Terraform.
+    # Nao ha porta de status alcancavel daqui: a 15021 e do gateway dentro da spoke, e o
+    # listener do NLB so escuta 80.
+    matcher = "200-404"
+  }
+
+  tags = merge(local.tags, { Name = "${var.name}-hub-ingress" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Os enderecos FIXOS do NLB da spoke, um por AZ. Conhecidos em tempo de plan porque sao
+# calculados (cidrhost sobre os CIDRs das privadas), nao lidos do recurso — foi para isso que
+# foram fixados, e e o que permite planejar o lado hub sem o NLB existir.
+resource "aws_lb_target_group_attachment" "hub_to_cell" {
+  for_each = toset(module.ingress.private_ips)
+
+  provider = aws.network
+
+  target_group_arn = aws_lb_target_group.hub_to_cell.arn
+  target_id        = each.value
+  port             = 80
+
+  # Obrigatorio para IP FORA da VPC do load balancer: o NLB esta na VPC da spoke, o ALB na VPC
+  # hub. Omitir da erro que nao explica a causa.
+  availability_zone = "all"
+}
+
+resource "aws_lb_listener_rule" "cell" {
+  provider = aws.network
+
+  listener_arn = data.aws_lb_listener.hub_https.arn
+  priority     = local.listener_rule_priority
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.hub_to_cell.arn
+  }
+
+  condition {
+    host_header {
+      values = [local.cell_wildcard]
+    }
+  }
+
+  tags = merge(local.tags, { Name = "${var.name}-hub-ingress" })
+}
+
+# Um registro wildcard por celula, casando o wildcard do certificado: evita um registro por
+# aplicacao. dns_name e zone_id vem do MESMO data source — um alias com a zone_id de outro load
+# balancer e aceito pelo Route53 e nunca resolve.
+resource "aws_route53_record" "cell_wildcard" {
+  provider = aws.network
+
+  zone_id = data.aws_route53_zone.subzone.zone_id
+  name    = "*.${var.name}"
+  type    = "A"
+
+  alias {
+    name                   = data.aws_lb.hub_ingress.dns_name
+    zone_id                = data.aws_lb.hub_ingress.zone_id
+    evaluate_target_health = false
+  }
 }
