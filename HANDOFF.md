@@ -172,16 +172,42 @@ falhas, custo/h de volta a zero, confirmado por `terraform state list` (`0, 0, 3
 
 **Achado extra no teardown, corrigido na mesma sessão:** o `destroy` do `control-plane` morreu no meio
 na primeira tentativa (TGW attachment/rota destruídos antes de os consumidores da API do Kubernetes
-terminarem — `dial tcp ...:443: i/o timeout`), recuperado sem duplicata. Causa raiz corrigida em
-`aws/terraform/control-plane/main.tf`: seis recursos de rede ganharam `depends_on` explícito nos
-quatro consumidores da API (`kubernetes_config_map_v1.platform_bootstrap`, `module.crossplane`,
-`module.external_secrets`, `module.argo_cd`). `validate` + 21 testes offline passam; **a aresta em si
-só é provada por um `destroy` real — verificar isso na próxima vez que a camada 04 subir e descer**.
+terminarem — `dial tcp ...:443: i/o timeout`), recuperado sem duplicata. **A primeira correção estava
+INVERTIDA e derrubou o apply de 2026-08-28** — pôs `depends_on` nos recursos de rede apontando para os
+consumidores da API, o que fez o helm tentar alcançar o API server antes de o attachment existir (49
+de 61 recursos, mesmo erro em direção oposta). `depends_on` é UMA aresta que serve às duas direções: o
+destroy percorre o mesmo grafo ao contrário. Forma correta, aplicada e verificada num apply real:
+`kubernetes_config_map_v1.platform_bootstrap`, `module.external_secrets` e `module.crossplane`
+declaram os seis recursos de rede; `module.argo_cd` herda por transitividade. **A metade do destroy
+continua não verificada — conferir no próximo teardown desta camada.** Detalhe em
+`aws/terraform/CLAUDE.md`.
 
-**Próxima frente: Fase 3 (ingress) — `3.1`–`3.2`, ainda não começada.** NLB interno + gateway Istio na
-spoke, depois o lado hub (ALB, certificado, listener rule). Roteiro em `03-ingress.md`. Primeiro passo
-prático: subir `up-all` → `up-03` → conectar túnel → `up-04` (mesma sequência da Fase 2, que agora
-prova o `depends_on` novo de quebra) antes de escrever o Terraform novo da Fase 3.
+**Fase 3 — `3.1` ACEITO em 2026-08-28; `3.2` é a próxima.** O `curl` pelo túnel nos dois endereços
+fixos do NLB (`10.2.32.10`, `10.2.48.10`) devolve o `httpbin`, HTTP 200, com
+`X-Envoy-External-Address` igual ao IP do NLB. Cadeia verificada: SG do NLB só aceita o CIDR do hub →
+listener 80/TCP → target group com o pod do gateway `healthy` (health check HTTP em 15021
+`/healthz/ready`) → Envoy → workload. Falta o `3.2`: lado hub, com certificado wildcard do ACM, target
+group apontando para os dois endereços fixos e listener rule no ALB. Roteiro em `03-ingress.md`.
+
+**Três coisas que só o AWS real mostrou no `3.1`** (todas já corrigidas e commitadas):
+- **A porta do gateway Istio é 80, não 8080.** O 8080 é do Istio antigo; o chart `gateway` do
+  istio-release mapeia Service 80 → targetPort 80, e o Envoy escuta na porta que o `Gateway` CR
+  declara. Com 8080 o sintoma seria "nenhum target saudável" sem nada errado no cluster.
+- **A target group usa `name_prefix` + `create_before_destroy`, não `name`.** Trocar a porta força
+  recriação, e com nome fixo não há saída: sem CBD a AWS recusa apagar (`ResourceInUse`, o listener
+  ainda aponta); com CBD e nome fixo recusa a nova (`already exists`). Preço do prefixo: 6 caracteres
+  no máximo, então o nome legível vive na tag `Name` e quem consome usa o ARN.
+- **O `TargetGroupBinding` não leva bloco `networking`.** Ele faria o controller gerenciar regras de
+  security group, que já são do Terraform (portas 80 e 15021 a partir do SG do NLB) — e a policy IAM
+  da célula não tem nenhuma action de SG, de propósito.
+
+**O lado GitOps do `3.1` foi instalado por `helm upgrade --install` a partir do checkout local, NÃO
+por GitOps.** O ArgoCD desta célula subiu sem credencial de repositório (zero `Application`, nenhum
+secret de repo), então não consegue puxar o `wasp-gitops`, que é privado. Os charts estão versionados
+em `~/git/wasp-gitops/infrastructure/charts/` (`aws-load-balancer-controller` wrapper do upstream
+3.5.0, `aws-target-group-binding`), branch `feat/aws-ingress-target-group-binding`; os charts do Istio
+subiram de 1.20.1 para 1.30.4 pelo `update-istio-charts` do próprio repo, porque 1.20 é de 2023 e não
+roda no Kubernetes 1.36. **Wire do ArgoCD é trabalho próprio, ainda não feito.**
 
 **O passo de console do `2.2` continua válido e não precisa ser refeito:** aplicação SAML
 `hub-client-vpn` no Identity Center (management account), attribute mappings
@@ -829,7 +855,15 @@ porquê, um por linha:
       funcionando" virou o próprio aceite do `2.5`, agora **com o túnel**. Verificar na forma nova, não
       na antiga. O caminho `1.2` sobrevive só como break-glass.
 - [ ] Auditar asserções do repo que dependem de um único `override_resource` (Known Broken 16).
-- [ ] **`3.1`–`3.2`** — NLB interno + gateway Istio; depois lado hub com cert e listener rule.
+- [x] **`3.1`** — NLB interno + gateway Istio + TargetGroupBinding. **Aceito 2026-08-28**: `curl` pelo
+      túnel nos dois endereços fixos devolve o `httpbin`, HTTP 200.
+- [ ] **`3.2`** — lado hub: certificado wildcard do ACM, target group com os dois endereços fixos do
+      NLB e listener rule no ALB.
+- [ ] **Wire do ArgoCD desta célula ao `wasp-gitops`** — hoje ele sobe sem credencial de repositório
+      (zero `Application`, nenhum secret de repo), então o lado GitOps do `3.1` foi instalado por
+      `helm upgrade --install` a partir do checkout local. Caminho provável: deploy key no Secrets
+      Manager → ESO → secret de repo do ArgoCD → app-of-apps (`infrastructure/charts/applications`).
+      **Enquanto isso não existir, "GitOps instala o chart" é desenho, não estado.**
 - [ ] **`4.1`–`4.2`** — as duas provas negativas. **Antes de executar, reler o desenho delas à luz
       do SNAT** (Open Questions): prova de isolamento por endereço de origem não distingue operador
       de operador quando todos chegam com IP da VPC hub.
@@ -851,6 +885,15 @@ porquê, um por linha:
       diretório de GitOps próprio.
 - [ ] Atualizar a tabela de custo do T1 em `docs/superpowers/plans/.../README.md`: Client VPN cobra
       por associação de subnet, não por endpoint — o real é ~US$ 0,20/h com 2 AZs, não ~0,15/h.
+- [ ] **Encaixar um IPAM Scope da AWS, para que criar uma célula seja pedir o TAMANHO da rede em vez
+      de escolher o CIDR** (pedido do usuário; **trabalho para depois do último item que estamos
+      perseguindo** — não interromper a fase em curso por isso). Hoje o supernet `10.0.0.0/12` é
+      alocado à mão pelo segundo octeto (`vpc_cidr` na raiz, teto de 15 spokes, e "CIDR é a única
+      decisão irreversível da cadeia"). Com pool do IPAM, a raiz passaria a declarar `netmask_length`
+      e a AWS devolveria o bloco livre — some a contabilidade manual e o risco de sobreposição entre
+      regiões. Ao retomar, decidir de quem é o IPAM (é da Organization: mora na `network`, T0
+      permanente, compartilhado por RAM — como o toggle de sharing) e o que acontece com as spokes já
+      alocadas (adoção do bloco existente, não realocação).
 
 ### Frente E — scripts shell em inglês
 
