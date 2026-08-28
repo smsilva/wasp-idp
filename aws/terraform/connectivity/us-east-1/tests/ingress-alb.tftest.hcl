@@ -80,6 +80,18 @@ run "certificado_default_e_o_wildcard_da_subzona" {
     error_message = "validação tem de ser DNS: a zona é nossa e não há chave privada em state"
   }
 
+  # O ACM é mais restrito que a tag comum de EC2: valor de tag tem de casar
+  # `([\p{L}\p{Z}\p{N}_.:/=+\-@]*)`, e `*` está FORA. Copiar o domain_name para a tag Name
+  # (o que era natural, e é o que os outros recursos daqui fazem) derrubou um apply real com
+  # ValidationException apontando `tags.2.member.value` — índice, não nome de tag.
+  assert {
+    condition = alltrue([
+      for value in values(aws_acm_certificate.alb.tags) :
+      can(regex("^[[:alnum:]_.:/=+@ -]*$", value))
+    ])
+    error_message = "valor de tag do ACM fora do padrão aceito pelo serviço (provavelmente um `*` de wildcard)"
+  }
+
   assert {
     condition     = aws_route53_record.alb_validation.zone_id == "ZSUBZONE00000000001"
     error_message = "o registro de validação tem de ir para a subzona, não para a pai"

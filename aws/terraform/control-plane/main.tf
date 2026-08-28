@@ -607,7 +607,11 @@ resource "aws_acm_certificate" "cell" {
   domain_name       = local.cell_wildcard
   validation_method = "DNS"
 
-  tags = merge(local.tags, { Name = local.cell_wildcard })
+  # `*` NAO e caractere valido em valor de tag do ACM — o servico exige
+  # `([\p{L}\p{Z}\p{N}_.:/=+\-@]*)`, mais restrito que a tag comum de EC2, e recusa o apply com
+  # ValidationException apontando um indice de tag (`tags.1.member.value`) em vez do nome. Mesmo
+  # tropeco do certificado default do ALB, na camada 03.
+  tags = merge(local.tags, { Name = "wildcard.${var.name}.${local.subzone_fqdn}" })
 
   lifecycle {
     create_before_destroy = true

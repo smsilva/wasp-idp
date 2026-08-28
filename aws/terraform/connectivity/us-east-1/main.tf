@@ -407,7 +407,12 @@ resource "aws_acm_certificate" "alb" {
   domain_name       = local.alb_default_fqdn
   validation_method = "DNS"
 
-  tags = merge(local.tags, { Name = local.alb_default_fqdn })
+  # `*` NÃO é caractere válido em valor de tag do ACM — o serviço exige
+  # `([\p{L}\p{Z}\p{N}_.:/=+\-@]*)`, mais restrito que a tag comum de EC2, e recusa o apply
+  # com ValidationException apontando um índice de tag em vez do nome. O certificado da VPN
+  # acima passa porque `vpn.` não é wildcard. A validação é server-side, mas o VALOR é
+  # conhecido em tempo de plan — daí a asserção de regressão em tests/ingress-alb.tftest.hcl.
+  tags = merge(local.tags, { Name = "wildcard.${local.subzone_fqdn}" })
 
   lifecycle {
     create_before_destroy = true

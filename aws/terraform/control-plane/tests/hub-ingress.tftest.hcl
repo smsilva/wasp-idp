@@ -81,6 +81,18 @@ run "o_certificado_da_celula_e_wildcard_de_um_nivel_sob_a_subzona" {
     error_message = "validação por DNS: a subzona é nossa e não há chave privada em state"
   }
 
+  # O ACM é mais restrito que a tag comum de EC2: valor de tag tem de casar
+  # `([\p{L}\p{Z}\p{N}_.:/=+\-@]*)`, e `*` está FORA. Copiar o domain_name para a tag Name
+  # derrubou o primeiro apply do 3.2 com ValidationException apontando `tags.1.member.value` —
+  # índice, não nome de tag. Mesma guarda existe na camada 03.
+  assert {
+    condition = alltrue([
+      for value in values(aws_acm_certificate.cell.tags) :
+      can(regex("^[[:alnum:]_.:/=+@ -]*$", value))
+    ])
+    error_message = "valor de tag do ACM fora do padrão aceito pelo serviço (provavelmente um `*` de wildcard)"
+  }
+
   assert {
     condition     = aws_route53_record.cell_validation.zone_id == "ZSUBZONE00000000001"
     error_message = "a validação vai para a SUBZONA (autoritativa pelo nome da célula), não para a pai"
