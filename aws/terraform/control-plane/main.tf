@@ -56,14 +56,24 @@ data "aws_ec2_transit_gateway" "hub" {
 #
 # Quem cria o attachment e a conta dona da VPC (cicd) — provider default, nao aliasado.
 #
-# Os seis recursos de rede abaixo (este attachment, o accepter, as duas
-# route_table_association/propagation e a rota) recebem depends_on explicito nos quatro
-# consumidores da API do Kubernetes (o ConfigMap e os tres modulos de helm). Comprovado no
-# primeiro destroy real desta camada (2026-08-27): sem essa aresta, o destroy derrubou
-# aws_route.spoke_to_hub e as propagacoes do TGW ANTES de kubernetes_config_map_v1 e
-# module.crossplane terminarem — cortando a rota ate o endpoint privado no meio do processo
-# (dial tcp ...:443: i/o timeout). Nada na configuracao do provider kubernetes/helm cria essa
-# aresta sozinho, mesma razao pela qual a regra de 443 precisa da aresta explicita no apply.
+# ORDEM CONTRA O ENDPOINT PRIVADO — uma aresta só, nas duas direções.
+#
+# O caminho de rede desta spoke até o API server (attachment + accepter + associação +
+# propagações + rota) tem de existir ANTES de qualquer recurso dos providers kubernetes/helm,
+# e tem de sobreviver ATÉ o último deles ser destruído. Nada na configuração daqueles
+# providers cria essa aresta sozinho.
+#
+# São a mesma aresta: `depends_on` é uma só relação, e o destroy percorre o grafo ao
+# contrário. Os quatro consumidores da API (o ConfigMap e os três módulos de helm) declaram
+# depends_on nestes recursos de rede — logo o apply cria a rede primeiro e o destroy apaga os
+# consumidores primeiro. Não existe "aresta simétrica na direção contrária" a acrescentar.
+#
+# Foi essa a lição de 2026-08-28: a tentativa de escrever a segunda direção pôs
+# `depends_on` nos consumidores DENTRO dos recursos de rede, invertendo a aresta de apply. O
+# resultado foi um deadlock — o helm tentou alcançar o API server antes de o attachment
+# existir e morreu com `dial tcp <ip-privado>:443: i/o timeout`, o MESMO sintoma do incidente
+# de destroy de 2026-08-27 que a mudança pretendia corrigir. 49 de 61 recursos aplicados, e a
+# rede toda de fora do state.
 resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
   vpc_id             = module.network.vpc_id
   subnet_ids         = module.network.private_subnet_ids
@@ -75,12 +85,6 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
 
   tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
 
-  depends_on = [
-    kubernetes_config_map_v1.platform_bootstrap,
-    module.crossplane,
-    module.external_secrets,
-    module.argo_cd,
-  ]
 
   lifecycle {
     # Perpetual diff estrutural de attachment CROSS-CONTA: estes dois atributos nao existem
@@ -116,12 +120,6 @@ resource "aws_ec2_transit_gateway_vpc_attachment_accepter" "this" {
 
   tags = merge(local.tags, { Name = "${var.name}-tgw-attachment" })
 
-  depends_on = [
-    kubernetes_config_map_v1.platform_bootstrap,
-    module.crossplane,
-    module.external_secrets,
-    module.argo_cd,
-  ]
 }
 
 # tgw-rt-<spoke>: pertence a conta dona do TGW (network), mas o ciclo de vida e o desta
@@ -140,13 +138,7 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
 
-  depends_on = [
-    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
-    kubernetes_config_map_v1.platform_bootstrap,
-    module.crossplane,
-    module.external_secrets,
-    module.argo_cd,
-  ]
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
 
 # tgw-rt-hub — a route table do proprio hub, ja existe em connectivity/. Lida por tag, nao
@@ -179,13 +171,7 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "spoke_to_hub" {
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
   transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
 
-  depends_on = [
-    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
-    kubernetes_config_map_v1.platform_bootstrap,
-    module.crossplane,
-    module.external_secrets,
-    module.argo_cd,
-  ]
+  depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
@@ -198,12 +184,6 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
   # route table desta spoke — sem aresta propria com o attachment/accepter desta camada, essa
   # propagacao nao tinha NENHUMA ordem garantida em relacao ao resto do destroy. Foi o que
   # cortou a rota primeiro no incidente de 2026-08-27 (ver comentario acima do attachment).
-  depends_on = [
-    kubernetes_config_map_v1.platform_bootstrap,
-    module.crossplane,
-    module.external_secrets,
-    module.argo_cd,
-  ]
 }
 
 # Rota de volta na propria VPC desta spoke: uma so, para o supernet inteiro, mesma logica de
@@ -228,15 +208,12 @@ resource "aws_route" "spoke_to_hub" {
   #
   # Esta é a rota mais provável de ter sido a causa direta do incidente de 2026-08-27: sua
   # destruição é quase instantânea (ao contrário do attachment, que leva minutos), então sem
-  # esperar os consumidores da API do Kubernetes ela corta o caminho para o endpoint privado
-  # antes de qualquer coisa perceber.
+  # ordem garantida ela corta o caminho para o endpoint privado antes de qualquer coisa
+  # perceber. A ordem vem do `depends_on` que os consumidores da API declaram NESTA rota —
+  # não do contrário. Ver o comentário do attachment.
   depends_on = [
     aws_ec2_transit_gateway_vpc_attachment.this,
     aws_ec2_transit_gateway_vpc_attachment_accepter.this,
-    kubernetes_config_map_v1.platform_bootstrap,
-    module.crossplane,
-    module.external_secrets,
-    module.argo_cd,
   ]
 }
 
@@ -463,6 +440,15 @@ module "external_secrets" {
     module.nodegroup,
     module.pod_identity_eso,
     aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
+    # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    aws_ec2_transit_gateway_route_table_association.spoke,
+    aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
+    aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
+    aws_route.spoke_to_hub,
   ]
 }
 
@@ -472,6 +458,9 @@ module "argo_cd" {
 
   oidc_enabled = local.install_argocd_oidc
 
+  # O caminho de rede até o endpoint privado chega aqui por TRANSITIVIDADE: external_secrets já
+  # o declara, e `depends_on` é transitivo nas duas direções do grafo. Repetir a lista aqui não
+  # acrescentaria ordem — só mais um lugar para esquecer de atualizar.
   depends_on = [module.external_secrets]
 }
 
@@ -483,6 +472,15 @@ module "crossplane" {
     module.nodegroup,
     module.pod_identity_crossplane,
     aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
+    # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    aws_ec2_transit_gateway_route_table_association.spoke,
+    aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
+    aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
+    aws_route.spoke_to_hub,
   ]
 }
 
@@ -515,5 +513,14 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
   depends_on = [
     module.crossplane,
     aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
+    # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    aws_ec2_transit_gateway_route_table_association.spoke,
+    aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
+    aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
+    aws_route.spoke_to_hub,
   ]
 }
