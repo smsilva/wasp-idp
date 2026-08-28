@@ -84,12 +84,17 @@ variable "listener_port" {
 
 variable "target_port" {
   description = <<-EOT
-    Porta do POD do ingress gateway, nao a do Service. Com target_type = ip quem registra e
-    o LBC, resolvendo o targetPort do Service — declarar 8080 aqui mantem o target group
-    honesto sobre o que sera registrado.
+    Porta do POD do ingress gateway, nao a do Service. Com target_type = ip quem registra e o
+    LBC, resolvendo o targetPort do Service — declarar a porta certa aqui mantem o target group
+    honesto sobre o que sera registrado, e e ela que o security group do cluster libera.
+
+    80, nao 8080: o gateway do Istio escuta na porta que o Gateway CR declara, e o chart
+    `gateway` do istio-release mapeia o Service 80 -> targetPort 80. O 8080 e do Istio antigo;
+    com ele aqui o NLB tem egress para uma porta onde ninguem escuta, e o sintoma e "nenhum
+    target saudavel" sem nada errado no cluster.
   EOT
   type        = number
-  default     = 8080
+  default     = 80
 }
 
 variable "health_check_port" {

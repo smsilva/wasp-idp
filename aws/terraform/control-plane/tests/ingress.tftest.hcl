@@ -80,7 +80,7 @@ run "o_sg_do_cluster_abre_as_portas_do_gateway_para_o_nlb" {
   command = plan
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.gateway_from_nlb.from_port == 8080 && aws_vpc_security_group_ingress_rule.gateway_from_nlb.to_port == 8080
+    condition     = aws_vpc_security_group_ingress_rule.gateway_from_nlb.from_port == 80 && aws_vpc_security_group_ingress_rule.gateway_from_nlb.to_port == 80
     error_message = "a porta do trafego e a do pod do gateway, recebido ${aws_vpc_security_group_ingress_rule.gateway_from_nlb.from_port}-${aws_vpc_security_group_ingress_rule.gateway_from_nlb.to_port}"
   }
 

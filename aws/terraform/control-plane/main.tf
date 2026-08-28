@@ -295,8 +295,8 @@ resource "aws_vpc_security_group_ingress_rule" "gateway_from_nlb" {
 
   referenced_security_group_id = module.ingress.security_group_id
   ip_protocol                  = "tcp"
-  from_port                    = 8080
-  to_port                      = 8080
+  from_port                    = 80
+  to_port                      = 80
 }
 
 # Sem esta, o health check nunca responde e a target group fica unhealthy para sempre — com o

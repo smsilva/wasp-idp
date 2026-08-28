@@ -104,7 +104,17 @@ resource "aws_lb" "ingress" {
 # balancer "completely outside of Kubernetes" e ainda gerenciar os targets pelo Service. E o
 # que permite o apply unico: se o LBC criasse o NLB, o ARN so existiria depois do workload.
 resource "aws_lb_target_group" "gateway" {
-  name        = "${var.name}-ingress-gw"
+  # name_prefix, nao name: trocar port ou target_type forca RECRIACAO, e ai o nome fixo cria um
+  # impasse sem saida boa. Sem create_before_destroy o Terraform tenta apagar a target group
+  # antes de reapontar o listener e a AWS recusa com ResourceInUse; com create_before_destroy e
+  # nome fixo, recusa a nova com "already exists". Com prefixo, a AWS gera o sufixo, a nova
+  # nasce ao lado da velha, o listener passa a apontar para ela e so entao a velha morre.
+  #
+  # O preco e o nome ilegivel: target group aceita no maximo 6 caracteres de prefixo. O nome
+  # legivel vive na tag Name, e quem consome a target group usa o ARN (ConfigMap
+  # platform-bootstrap), nao o nome. Os dois sintomas acima foram vistos de verdade ao trocar a
+  # porta do gateway de 8080 para 80.
+  name_prefix = substr(var.name, 0, 6)
   vpc_id      = var.vpc_id
   target_type = "ip"
   protocol    = "TCP"

@@ -46,9 +46,11 @@ run "registra_por_ip_para_o_lbc_poder_ligar_os_pods" {
     error_message = "o NLB fala TCP; protocolo de target group diferente disso nem casa com o listener"
   }
 
-  # A porta do POD, nao a do Service.
+  # A porta do POD. Coincide com a do Service (80) porque o chart `gateway` do Istio mapeia
+  # 80 -> targetPort 80 — nao porque o teste esteja lendo a do Service. Verificado no cluster:
+  # o Envoy escuta na porta que o Gateway CR declara, e 8080 e do Istio antigo.
   assert {
-    condition     = aws_lb_target_group.gateway.port == 8080
+    condition     = aws_lb_target_group.gateway.port == 80
     error_message = "a porta da target group tem de ser a do pod do gateway, veio ${aws_lb_target_group.gateway.port}"
   }
 
