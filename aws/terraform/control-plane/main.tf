@@ -283,6 +283,97 @@ resource "aws_vpc_security_group_ingress_rule" "api_from_hub" {
   to_port     = 443
 }
 
+# --------------------------------------------------------------------------------------
+# 3.1 — ingress da spoke. NLB interno com enderecos fixos + target group vazia; quem
+# registra os pods do gateway Istio e o TargetGroupBinding do LBC, do lado do GitOps.
+# --------------------------------------------------------------------------------------
+
+module "ingress" {
+  source = "../src/ingress"
+
+  name                 = var.name
+  vpc_id               = module.network.vpc_id
+  private_subnet_ids   = module.network.private_subnet_ids
+  private_subnet_cidrs = module.network.private_subnet_cidrs
+
+  # Quem alcanca o NLB e o hub, e so ele: a decisao de ingress unico diz que nenhuma spoke
+  # expoe acesso a si direto. O CIDR vem do data source da VPC hub, o mesmo que autoriza a
+  # regra de 443 na API — nao ha valor de rede escrito a mao nesta camada.
+  allowed_ingress_cidrs = [data.aws_vpc.hub.cidr_block]
+
+  tags = local.tags
+}
+
+# O caminho NLB -> pods do gateway. Fica no Terraform, e nao no networking.ingress do
+# TargetGroupBinding, por dois motivos: a policy minima do LBC para quem so usa
+# TargetGroupBinding (a que a doc upstream publica) NAO inclui gerencia de security group, e
+# manter a regra aqui a deixa em codigo revisavel em vez de mutacao de SG em runtime.
+#
+# A origem e o SG do NLB, nao um CIDR: com target_type = ip a preservacao de client IP nasce
+# DESLIGADA (doc do ELB: default disabled para target group de tipo IP com protocolo TCP),
+# entao o pacote chega ao pod com origem no no do NLB — que carrega este SG.
+resource "aws_vpc_security_group_ingress_rule" "gateway_from_nlb" {
+  security_group_id = module.cluster.cluster_security_group_id
+  description       = "Ingress gateway traffic from the internal NLB"
+
+  referenced_security_group_id = module.ingress.security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 8080
+  to_port                      = 8080
+}
+
+# Sem esta, o health check nunca responde e a target group fica unhealthy para sempre — com o
+# gateway funcionando. O sintoma (hub reportando a spoke inteira fora) nao aponta para cá.
+resource "aws_vpc_security_group_ingress_rule" "gateway_health_check_from_nlb" {
+  security_group_id = module.cluster.cluster_security_group_id
+  description       = "Ingress gateway status port for the NLB health check"
+
+  referenced_security_group_id = module.ingress.security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 15021
+  to_port                      = 15021
+}
+
+# 4a Pod Identity: o LBC. O CHART nao e desta camada — vem por GitOps, junto do gateway e do
+# TargetGroupBinding (decisions.md §7: o Terraform entrega rede + cluster + ArgoCD +
+# Crossplane "e para ai"). O que so o Terraform pode entregar e o role IAM.
+#
+# A policy e o conjunto MINIMO que a doc do LBC publica para quem usa apenas
+# TargetGroupBinding e nao deixa o controller gerenciar security group. Ingress e Service
+# type=LoadBalancer ficam de fora de proposito: o NLB e do Terraform, e um LBC capaz de criar
+# load balancer proprio reabriria a porta que a decisao de ingress unico fechou.
+module "pod_identity_lbc" {
+  source = "../src/pod-identity"
+
+  name                 = "${var.name}-load-balancer-controller"
+  cluster_name         = module.cluster.cluster_name
+  namespace            = "kube-system"
+  service_account_name = "aws-load-balancer-controller"
+  policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeInstances",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetHealth",
+        "elasticloadbalancing:ModifyTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets",
+      ]
+      # Nenhuma destas actions aceita escopo por recurso de forma util aqui: as Describe sao
+      # de leitura de inventario e as de target group sao resolvidas pelo ARN que o
+      # TargetGroupBinding carrega. O isolamento real e o RBAC do cluster mais o fato de a
+      # target group ser criada e nomeada pelo Terraform.
+      Resource = "*"
+    }]
+  })
+  tags = local.tags
+}
+
 module "nodegroup" {
   source = "../src/nodegroup"
 
@@ -398,6 +489,14 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
     crossplaneRoleArn = module.pod_identity_crossplane.role_arn
     networkAccountId  = var.network_account_id
     targetAccountIds  = join(",", var.target_account_ids)
+
+    # 3.1 — o que o lado GitOps precisa para ligar os pods do gateway ao NLB. E o ARN da
+    # TARGET GROUP, nao o do NLB: e ele que o TargetGroupBinding consome. Passar o do load
+    # balancer daria um binding que reconcilia para sempre sem registrar nada.
+    ingressTargetGroupArn = module.ingress.target_group_arn
+
+    # O role que o chart do LBC anota na service account aws-load-balancer-controller.
+    loadBalancerControllerRoleArn = module.pod_identity_lbc.role_arn
   }
 
   depends_on = [

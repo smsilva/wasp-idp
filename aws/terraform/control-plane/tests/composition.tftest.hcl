@@ -51,11 +51,11 @@ run "nat_gateway_ligado_na_spoke" {
   }
 }
 
-run "tres_pod_identities_uma_por_consumidor" {
+run "quatro_pod_identities_uma_por_consumidor" {
   command = plan
 
   # role_arn so existe depois do apply; role_name deriva de var.name e ja e conhecido no
-  # plan. Verificar o nome prova que os tres modulos foram instanciados e nomeados certo,
+  # plan. Verificar o nome prova que os modulos foram instanciados e nomeados certo,
   # sem exigir um apply contra a AWS.
   assert {
     condition     = module.pod_identity_ebs_csi.role_name == "control-plane-ebs-csi"
@@ -71,14 +71,33 @@ run "tres_pod_identities_uma_por_consumidor" {
     condition     = module.pod_identity_crossplane.role_name == "control-plane-crossplane"
     error_message = "Pod Identity do Crossplane: recebido ${module.pod_identity_crossplane.role_name}"
   }
+
+  # 3.1: o CHART do LBC vem por GitOps, mas o role e desta camada. Sem ele o
+  # TargetGroupBinding sobe e nunca registra target, com AccessDenied so no log do controller.
+  assert {
+    condition     = module.pod_identity_lbc.role_name == "control-plane-load-balancer-controller"
+    error_message = "Pod Identity do LBC: recebido ${module.pod_identity_lbc.role_name}"
+  }
 }
 
-run "configmap_de_bootstrap_tem_as_sete_chaves" {
+run "configmap_de_bootstrap_carrega_o_contrato_inteiro" {
   command = plan
 
+  # A contagem sozinha nao diria QUAL chave falta; as duas assercoes juntas pegam tanto a
+  # chave removida por engano quanto a acrescentada sem passar por aqui.
   assert {
-    condition     = length(keys(kubernetes_config_map_v1.platform_bootstrap.data)) == 7
-    error_message = "o platform-bootstrap e o contrato com o GitOps: esperadas 7 chaves, recebidas ${length(keys(kubernetes_config_map_v1.platform_bootstrap.data))}"
+    condition = toset(keys(kubernetes_config_map_v1.platform_bootstrap.data)) == toset([
+      "region",
+      "clusterName",
+      "hubVpcId",
+      "spokeSubnetIds",
+      "crossplaneRoleArn",
+      "networkAccountId",
+      "targetAccountIds",
+      "ingressTargetGroupArn",
+      "loadBalancerControllerRoleArn",
+    ])
+    error_message = "o platform-bootstrap e o contrato com o GitOps; chaves recebidas: ${jsonencode(sort(keys(kubernetes_config_map_v1.platform_bootstrap.data)))}"
   }
 
   assert {
