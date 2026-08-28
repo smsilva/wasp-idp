@@ -150,10 +150,12 @@ repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state 
 | `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | sim |
 | `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | sim |
 | `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML | sim — túnel conectado e pacote atravessando até a spoke |
-| `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, ESO, ArgoCD, Crossplane | sim, **menos com o endpoint da API fechado** — esse é o aceite que falta |
+| `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, NLB interno do ingress, ESO, ArgoCD, Crossplane | sim, **menos com o endpoint da API fechado** — esse é o aceite que falta |
 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
-`t3.medium`, três Pod Identities e os três charts. Prova o que estava em aberto no desenho — os
+`t3.medium`, três Pod Identities e os três charts. Com o `3.1` são 61 recursos — entram o NLB
+interno com endereços fixos, sua target group e a quarta Pod Identity (a do Load Balancer
+Controller, cujo *chart* vem por GitOps; desta camada sai só o role). Prova o que estava em aberto no desenho — os
 providers `kubernetes` e `helm` configurados a partir de outputs do módulo do cluster resolvem
 na hora do apply. **Não** inventar apply em duas fases.
 

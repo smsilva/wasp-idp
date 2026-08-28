@@ -10,8 +10,9 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Layer 4 — Control Plane: spoke VPC, EKS, node group, three Pod Identities,
-  ESO, ArgoCD and Crossplane, in a single terraform apply. ~13 min.
+  Layer 4 — Control Plane: spoke VPC, EKS, node group, four Pod Identities,
+  the internal ingress NLB, ESO, ArgoCD and Crossplane, in a single
+  terraform apply. ~13 min.
 
   COST ~US\$ 165/month while up (EKS ~73 + NAT ~32 + 2x t3.medium ~60).
   Tier T2: bring it up, validate, tear it down. Do NOT leave it up between
