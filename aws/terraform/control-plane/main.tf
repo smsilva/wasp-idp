@@ -1,9 +1,10 @@
 locals {
-  install_external_secrets = true
-  install_argocd           = true
-  install_crossplane       = true
-  install_argocd_oidc      = false # exige o client secret ja no Secrets Manager
-  install_app_of_apps      = false # entregue por GitOps, fora do Terraform
+  install_load_balancer_controller = true
+  install_external_secrets         = true
+  install_argocd                   = true
+  install_crossplane               = true
+  install_argocd_oidc              = false # exige o client secret ja no Secrets Manager
+  install_app_of_apps              = false # entregue por GitOps, fora do Terraform
 
   # Mesmo valor de connectivity/us-east-1 — decisao irreversivel documentada, nao segredo.
   supernet = "10.0.0.0/12"
@@ -458,6 +459,38 @@ module "pod_identity_crossplane" {
     }]
   })
   tags = local.tags
+}
+
+# Primeiro chart da célula, e o único que o restante do ingress não pode dispensar: é ele que
+# registra o CRD TargetGroupBinding e mantém os pods do gateway registrados na target group
+# que `module.ingress` criou. Até 2026-08-28 este release era instalado à mão, por `helm`, a
+# partir de um checkout local — a célula subia, mas não se reproduzia.
+#
+# A lista de depends_on é a mesma dos outros consumidores da API (ver o comentário em
+# module.crossplane): a Pod Identity antes do release, a regra de 443 antes de qualquer
+# conversa com o API server, e o caminho de rede até o endpoint privado nas duas direções.
+module "aws_load_balancer_controller" {
+  source = "../src/helm/modules/aws-load-balancer-controller"
+  count  = local.install_load_balancer_controller ? 1 : 0
+
+  cluster_name = module.cluster.cluster_name
+  region       = var.region
+  vpc_id       = module.network.vpc_id
+
+  depends_on = [
+    module.nodegroup,
+    module.pod_identity_lbc,
+    aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    module.network,
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    aws_ec2_transit_gateway_route_table_association.spoke,
+    aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
+    aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
+    aws_route.spoke_to_hub,
+    aws_route.spoke_to_hub_public,
+  ]
 }
 
 # A association de Pod Identity vem ANTES do release: se o pod subir sem ela, falha em

@@ -155,7 +155,7 @@ repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state 
 A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
 `t3.medium`, três Pod Identities e os três charts. Com o `3.1` são 61 recursos — entram o NLB
 interno com endereços fixos, sua target group e a quarta Pod Identity (a do Load Balancer
-Controller, cujo *chart* vem por GitOps; desta camada sai só o role). Prova o que estava em aberto no desenho — os
+Controller). Desde 2026-08-29 o *chart* do controller também sai daqui — antes era instalado à mão, por `helm`, a partir de um checkout local. Prova o que estava em aberto no desenho — os
 providers `kubernetes` e `helm` configurados a partir de outputs do módulo do cluster resolvem
 na hora do apply. **Não** inventar apply em duas fases.
 
@@ -236,7 +236,12 @@ Quando o TGW entrar, este raciocínio precisa ser revisitado.
 | `src/cluster` | XR `Cluster` (L1b) | EKS `authentication_mode = "API"` (sem `aws-auth` ConfigMap), role do cluster, role compartilhada dos nós, access entries e os dois addons de base |
 | `src/nodegroup` | idem | Node groups por mapa. `ignore_changes` no `desired_size` para não brigar com autoscaler futuro |
 | `src/pod-identity` | trust de Pod Identity das Compositions | Molde dos três consumidores. O trust precisa de `sts:AssumeRole` **e** `sts:TagSession` — só o primeiro falha |
-| `src/helm/modules/{external-secrets,argo-cd,crossplane}` | XR `ClusterBootstrap` | Um chart por módulo, versão fixada |
+| `src/helm/modules/{aws-load-balancer-controller,external-secrets,argo-cd,crossplane}` | XR `ClusterBootstrap` | Um chart por módulo, versão fixada |
+
+O módulo do Load Balancer Controller nasce com escopo estreito de propósito: sem IngressClass e
+sem o service mutator webhook, ele reconcilia `TargetGroupBinding` e nada mais. O NLB e a target
+group são do Terraform (`src/ingress`), e um controller capaz de materializar load balancer
+próprio reabriria a porta que o ADR 0004 fechou ao decidir ingress único pelo hub.
 
 Sobre `src/pod-identity` e `src/cluster`: o trust e o `assume_role_policy` usam `jsonencode()`,
 não `data "aws_iam_policy_document"`. Com `mock_provider`, o data source devolve string sintética
@@ -329,14 +334,18 @@ Sem credencial, sem chamada à AWS — `mock_provider` + `command = plan`:
 
 ```bash
 for module in src/network src/state-backend src/cluster src/nodegroup src/pod-identity \
+              src/ingress \
+              src/helm/modules/aws-load-balancer-controller \
               src/helm/modules/external-secrets src/helm/modules/argo-cd \
               src/helm/modules/crossplane \
-              network-foundation/us-east-1 network-foundation/us-west-2 control-plane; do
+              network-foundation/us-east-1 network-foundation/us-west-2 \
+              control-plane dns connectivity/us-east-1; do
   (cd "${module}" && terraform init -backend=false && terraform test)
 done
 ```
 
-Hoje: 45 testes em 11 diretórios, 0 falhas.
+Hoje: 156 testes em 15 diretórios, 0 falhas. A volta inteira passa de 2 min — rodar em background
+ou por diretório, senão o teto de tempo de uma chamada corta no meio.
 
 Cada raiz de região testa que seu CIDR **cai dentro do supernet**. Essa validação vivia na
 variável `hub_vpc_cidr` da raiz única; com os valores inline ela viraria um buraco silencioso,

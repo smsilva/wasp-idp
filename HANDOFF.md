@@ -145,13 +145,18 @@ muda a cada recriação da 03) — reexportar sempre.
 `.ovpn` → conectar → `generate-tfvars --force` → `up-04` → provar), com custo e dependência por
 camada, vive em `aws/terraform/README.md`. **Ler de lá, não daqui.**
 
-**Verificar a célula ponta a ponta** (Terraform + lado cluster, hoje por helm do checkout local —
-débito rastreado na issue de GitOps):
+**Verificar a célula ponta a ponta** (Terraform + lado cluster). A migração dos charts para o
+Terraform está em curso na branch `feat/terraform-cluster-addons`; o que já migrou sai do `up-04`
+e não deve ser instalado à mão:
+
+| Chart | Onde vive hoje |
+|---|---|
+| `aws-load-balancer-controller` | **Terraform** (`src/helm/modules/aws-load-balancer-controller`) |
+| `istio-base`, `istio-discovery`, `istio-gateway` (ClusterIP, NÃO LoadBalancer) | helm do checkout local, a migrar |
+| `httpbin`, `aws-target-group-binding` | helm do checkout local, a migrar |
 
 ```bash
-cd ~/git/wasp-gitops/infrastructure/charts   # branch feat/aws-ingress-target-group-binding
-# ordem de wave: namespaces, aws-load-balancer-controller, istio-base, istio-discovery,
-# istio-gateway (ClusterIP, NÃO LoadBalancer), httpbin, aws-target-group-binding
+cd ~/git/wasp-gitops/infrastructure/charts   # o que ainda não migrou, na ordem acima
 ```
 
 `targetGroupARN`/`vpcId` vêm do ConfigMap `platform-bootstrap` (`crossplane-system`) e do
@@ -160,11 +165,12 @@ na ordem em que quebra: `terraform output cell_ingress_fqdn` → `dig` → certi
 os dois target groups (spoke e hub) `healthy` → `curl` público sem `-k`. **O host é `services.`,
 não `app.`**
 
-**Regressão offline** (147 testes, 14 diretórios, ~3-4 min, rodar em background):
+**Regressão offline** (156 testes, 15 diretórios, ~3-4 min, rodar em background):
 
 ```bash
 cd aws/terraform
 for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup src/ingress \
+         src/helm/modules/aws-load-balancer-controller \
          src/helm/modules/external-secrets src/helm/modules/argo-cd src/helm/modules/crossplane \
          network-foundation/us-east-1 network-foundation/us-west-2 control-plane dns \
          connectivity/us-east-1; do
