@@ -1,0 +1,5 @@
+apiVersion: v2
+name: istio-gateway-cr
+description: O Gateway CR que abre a porta de entrada da célula no Envoy do ingress gateway
+type: application
+version: 0.1.0

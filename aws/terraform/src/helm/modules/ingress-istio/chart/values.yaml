@@ -1,0 +1,8 @@
+# Rótulo `istio:` dos pods do gateway. NÃO é o nome do release do gateway: o chart tira o
+# prefixo `istio-`, então `istio-ingress` vira `ingress`.
+selector: ""
+
+# Hosts que este Gateway aceita. Normalmente o wildcard da célula.
+hosts: []
+
+port: 80

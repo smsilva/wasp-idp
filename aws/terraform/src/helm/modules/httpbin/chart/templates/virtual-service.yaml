@@ -1,0 +1,25 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  hosts:
+    - {{ required "host é obrigatório" .Values.host | quote }}
+
+  # Forma `<namespace>/<nome>`: este VirtualService vive no namespace do workload, e o Gateway
+  # no do ingress. O nome curto resolveria aqui, onde o Gateway não está — e a rota
+  # simplesmente não existiria, sem erro nenhum.
+  gateways:
+    - {{ required "gateway é obrigatório" .Values.gateway | quote }}
+
+  http:
+    - name: all
+      match:
+        - uri:
+            prefix: {{ .Values.routePrefix | quote }}
+      route:
+        - destination:
+            host: {{ printf "%s.%s.svc.cluster.local" .Release.Name .Release.Namespace | quote }}
+            port:
+              number: {{ .Values.servicePort }}

@@ -1,0 +1,25 @@
+{{- if not .Values.hosts }}
+{{- fail "hosts é obrigatório: um Gateway sem host não casa requisição nenhuma" }}
+{{- end }}
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  # Casa o rótulo `istio:` dos pods do gateway. Errar aqui não quebra nada visível — o Gateway
+  # simplesmente não seleciona pod nenhum, e o sintoma é 503 num cluster onde tudo parece
+  # saudável. É por isso que o valor vem do módulo, derivado do nome do release.
+  selector:
+    istio: {{ required "selector é obrigatório" .Values.selector }}
+
+  servers:
+    # HTTP puro, sem TLS: quem termina TLS é o ALB do hub, com o certificado wildcard do ACM.
+    # Do ALB para cá o tráfego atravessa o TGW e o NLB interno como TCP, dentro da malha
+    # privada — o ALB nem valida certificado de backend (ADR 0008).
+    - port:
+        number: {{ .Values.port }}
+        name: http
+        protocol: HTTP
+      hosts:
+        {{- toYaml .Values.hosts | nindent 8 }}

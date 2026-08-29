@@ -50,10 +50,18 @@ output "ingress_security_group_id" {
 
 output "cell_ingress_fqdn" {
   description = <<-EOT
-    O wildcard desta celula. O aceite do 3.2 e um curl em
-    app.<esta celula>.<subzona> DA INTERNET, sem tunel, com TLS valido.
+    O wildcard desta celula — o que o certificado do ACM cobre e o que o Gateway do Istio
+    aceita. Nao e um nome resolvivel: para o teste de aceite, use cell_services_url.
   EOT
   value       = local.cell_wildcard
+}
+
+output "cell_services_url" {
+  description = <<-EOT
+    O aceite da celula inteira: um curl NESTA url, da internet, sem tunel e sem -k, tem de
+    devolver 200. A cadeia que ele prova e ALB do hub -> TGW -> NLB interno -> Envoy -> pod.
+  EOT
+  value       = local.install_httpbin ? one(module.httpbin[*].url) : null
 }
 
 output "cell_certificate_arn" {

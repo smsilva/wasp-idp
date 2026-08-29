@@ -153,3 +153,40 @@ run "o_configmap_declara_a_chave_da_target_group" {
     error_message = "o chart do LBC vem por GitOps, mas o role e desta camada — sem a chave o Helm nao tem o que anotar"
   }
 }
+
+# 3.3 — as três pontas do nome da célula têm de concordar, e cada uma vive num lugar diferente:
+# o certificado do ACM e a listener rule do ALB (conta network), e o `Gateway` CR do Istio
+# (dentro do cluster). Divergir não quebra o apply: quebra o `curl` do aceite, com 404 do
+# fixed-response do listener — que se lê como rota faltando no cluster.
+run "o_host_de_entrada_cai_dentro_do_wildcard_da_celula" {
+  command = plan
+
+  assert {
+    condition     = output.cell_ingress_fqdn == "*.control-plane.nonprod.exemplo.com"
+    error_message = "o wildcard da celula: recebido ${output.cell_ingress_fqdn}"
+  }
+
+  # `services.`, nunca `app.` — qualquer outro nome sob o wildcard cai no fixed-response 404.
+  assert {
+    condition     = output.cell_services_url == "https://services.control-plane.nonprod.exemplo.com/"
+    error_message = "a url de aceite: recebida ${output.cell_services_url}"
+  }
+
+  # E o `Gateway` CR do Istio tem de declarar o MESMO wildcard: o ALB aceita a conexão por
+  # casar o certificado, mas quem decide se há rota é o Envoy, e ele só roteia host que o
+  # Gateway declara.
+  assert {
+    condition     = toset(one(module.ingress_istio[*].gateway_hosts)) == toset([output.cell_ingress_fqdn])
+    error_message = "os hosts do Gateway do Istio têm de ser o wildcard desta celula"
+  }
+
+  # E a listener rule do ALB tem de casar exatamente esse wildcard, senão a requisição nem
+  # chega ao Envoy.
+  assert {
+    # `condition` e `host_header` são blocos repetíveis, logo SETs — `[0]` não compila
+    # (documentado no CLAUDE.md desta pasta). Para bloco que existe uma vez só, o acesso é
+    # `one(...)`.
+    condition     = toset(one(one(aws_lb_listener_rule.cell.condition).host_header).values) == toset([output.cell_ingress_fqdn])
+    error_message = "a listener rule do hub tem de casar o wildcard desta celula"
+  }
+}

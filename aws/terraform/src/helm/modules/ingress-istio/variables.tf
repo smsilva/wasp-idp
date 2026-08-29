@@ -39,3 +39,23 @@ variable "gateway_extra_values" {
   type        = string
   default     = ""
 }
+
+variable "gateway_hosts" {
+  description = <<-EOT
+    Hosts que o `Gateway` CR aceita — normalmente o wildcard da célula
+    (`*.<célula>.<subzona>`). Sem default: um Gateway sem host não casa requisição nenhuma, e o
+    sintoma seria 404 do Envoy em tudo, indistinguível de rota faltando.
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.gateway_hosts) > 0
+    error_message = "gateway_hosts precisa de pelo menos um host."
+  }
+}
+
+variable "gateway_cr_name" {
+  description = "Nome do `Gateway` CR. É por ele que os VirtualServices se referem à porta de entrada."
+  type        = string
+  default     = "inbound"
+}

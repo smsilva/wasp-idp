@@ -8,6 +8,9 @@ locals {
   # outputs do ingress_istio devolveria null antes disso, com erro que não explica a causa.
   install_target_group_binding = local.install_load_balancer_controller && local.install_ingress_istio
 
+  # O workload de prova depende da rota, que é do Gateway CR do ingress_istio.
+  install_httpbin = local.install_ingress_istio
+
   install_argocd      = true
   install_crossplane  = true
   install_argocd_oidc = false # exige o client secret ja no Secrets Manager
@@ -21,6 +24,11 @@ locals {
   # vez de um unico na subzona: `*.nonprod.<dominio>` nao casa `app.<celula>.nonprod.<dominio>`.
   subzone_fqdn  = "${var.subzone_label}.${var.base_domain}"
   cell_wildcard = "*.${var.name}.${local.subzone_fqdn}"
+
+  # O host de entrada DESTA celula, dentro do wildcard acima. `services.`, nunca `app.`:
+  # qualquer outro nome sob o wildcard cai no fixed-response 404 do listener do ALB, e o
+  # sintoma e indistinguivel de rota faltando no cluster.
+  cell_services_fqdn = "services.${var.name}.${local.subzone_fqdn}"
 
   # Priority da listener rule: unico por listener, e o listener e COMPARTILHADO entre celulas.
   # Derivado de algo estavel da celula (o nome), nunca de count.index — que mudaria se a ordem
@@ -513,6 +521,11 @@ module "ingress_istio" {
   source = "../src/helm/modules/ingress-istio"
   count  = local.install_ingress_istio ? 1 : 0
 
+  # O mesmo wildcard do certificado do ACM e do registro Route 53 desta célula. As três pontas
+  # têm de concordar: o ALB só aceita a conexão para um nome coberto pelo certificado, e o
+  # Envoy só roteia um host que o Gateway declara. Derivar do mesmo local é o que garante isso.
+  gateway_hosts = [local.cell_wildcard]
+
   depends_on = [
     module.nodegroup,
     aws_vpc_security_group_ingress_rule.api_from_hub,
@@ -557,6 +570,26 @@ module "target_group_binding" {
   depends_on = [
     module.aws_load_balancer_controller,
     module.ingress_istio,
+  ]
+}
+
+# Workload de prova. É o que dá ao `curl` público algo para responder — sem ele o Envoy sobe
+# sem rota e devolve 404 em tudo, o que se lê como falha de ingress.
+#
+# O host é `services.`, não `app.`: qualquer outro nome sob o wildcard cai no `fixed-response`
+# 404 do listener do ALB, e o sintoma é indistinguível de rota faltando no cluster.
+module "httpbin" {
+  source = "../src/helm/modules/httpbin"
+  count  = local.install_httpbin ? 1 : 0
+
+  host        = local.cell_services_fqdn
+  gateway_ref = one(module.ingress_istio[*].gateway_ref)
+
+  # Do Gateway CR (que é do ingress_istio) porque é ele que a rota referencia; do binding
+  # porque sem targets registrados a prova não fecha, e é ele quem os registra.
+  depends_on = [
+    module.ingress_istio,
+    module.target_group_binding,
   ]
 }
 

@@ -91,3 +91,30 @@ resource "helm_release" "gateway" {
   # istiod tem `wait = true` e esta aresta existe.
   depends_on = [helm_release.istiod]
 }
+
+# A porta de entrada da célula no Envoy. Separado do release do gateway porque são coisas de
+# naturezas diferentes: aquele entrega o processo, este declara o que ele aceita.
+#
+# Chart local pelo mesmo motivo do target-group-binding: `kubernetes_manifest` faria dry-run
+# server-side no plan, e o CRD `networking.istio.io` só é registrado pelo `base`, neste mesmo
+# apply.
+resource "helm_release" "gateway_cr" {
+  name             = var.gateway_cr_name
+  chart            = "${path.module}/chart"
+  namespace        = kubernetes_namespace_v1.gateway.metadata[0].name
+  create_namespace = false
+
+  wait    = true
+  timeout = 300
+
+  values = [
+    yamlencode({
+      selector = local.gateway_selector
+      hosts    = var.gateway_hosts
+    }),
+  ]
+
+  # O CRD vem do `base`; os pods que este Gateway seleciona vêm do `gateway`. Depender do
+  # segundo cobre os dois, e põe o CR na ordem certa também no destroy.
+  depends_on = [helm_release.gateway]
+}

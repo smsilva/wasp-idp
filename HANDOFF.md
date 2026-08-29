@@ -145,26 +145,29 @@ muda a cada recriação da 03) — reexportar sempre.
 `.ovpn` → conectar → `generate-tfvars --force` → `up-04` → provar), com custo e dependência por
 camada, vive em `aws/terraform/README.md`. **Ler de lá, não daqui.**
 
-**Verificar a célula ponta a ponta** (Terraform + lado cluster). A migração dos charts para o
-Terraform está em curso na branch `feat/terraform-cluster-addons`; o que já migrou sai do `up-04`
-e não deve ser instalado à mão:
+**Verificar a célula ponta a ponta.** Desde 2026-08-29 (branch `feat/terraform-cluster-addons`)
+**nenhum `helm` manual é necessário** — o `up-04` entrega a célula inteira, e o checkout de
+`wasp-gitops` deixou de estar no caminho:
 
-| Chart | Onde vive hoje |
+| Chart | Onde vive |
 |---|---|
-| `aws-load-balancer-controller` | **Terraform** (`src/helm/modules/aws-load-balancer-controller`) |
-| `istio-base`, `istiod`, `gateway` (ClusterIP, NÃO LoadBalancer) | **Terraform** (`src/helm/modules/ingress-istio`), Istio 1.30.4 upstream |
-| `aws-target-group-binding` | **Terraform** (`src/helm/modules/target-group-binding`), chart local |
-| `httpbin` + os CRs `Gateway`/`VirtualService` | helm do checkout local, a migrar |
+| `aws-load-balancer-controller` | `src/helm/modules/aws-load-balancer-controller` |
+| `base`, `istiod`, `gateway` (ClusterIP) + o `Gateway` CR | `src/helm/modules/ingress-istio`, Istio 1.30.4 upstream |
+| `TargetGroupBinding` | `src/helm/modules/target-group-binding`, chart local |
+| `httpbin` + `VirtualService` | `src/helm/modules/httpbin`, chart local, `go-httpbin` 2.21.0 |
+
+**Ainda não exercitado na AWS** — os quatro módulos passam offline e o apply real é o aceite que
+falta. Ordem em que quebra, e o que cada ponto significa:
 
 ```bash
-cd ~/git/wasp-gitops/infrastructure/charts   # o que ainda não migrou, na ordem acima
+terraform -chdir=aws/terraform/control-plane output cell_services_url   # https://services.<célula>.<subzona>/
 ```
 
-`targetGroupARN`/`vpcId` vêm do ConfigMap `platform-bootstrap` (`crossplane-system`) e do
-`terraform state` da 04 — nunca de um values file colado (o ARN muda a cada recriação). Verificar
-na ordem em que quebra: `terraform output cell_ingress_fqdn` → `dig` → certificado no listener →
-os dois target groups (spoke e hub) `healthy` → `curl` público sem `-k`. **O host é `services.`,
-não `app.`**
+`dig` no host → certificado no listener → os dois target groups (spoke e hub) `healthy` → `curl`
+público sem `-k`.
+
+**O host é `services.`, não `app.`** — qualquer outro nome sob o wildcard cai no `fixed-response`
+404 do listener do ALB, e o sintoma é indistinguível de rota faltando no cluster.
 
 **Regressão offline** (~3-4 min, rodar em background):
 

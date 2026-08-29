@@ -1,6 +1,10 @@
 mock_provider "helm" {}
 mock_provider "kubernetes" {}
 
+variables {
+  gateway_hosts = ["*.poc-eks.nonprod.example.com"]
+}
+
 run "as_tres_releases_usam_o_mesmo_repositorio_e_a_mesma_versao" {
   command = plan
 
@@ -212,5 +216,65 @@ run "sem_extra_values_nao_ha_documento_vazio" {
   assert {
     condition     = length(helm_release.gateway.values) == 1
     error_message = "sem extra_values o gateway deve ter só o values base"
+  }
+}
+
+run "o_gateway_cr_abre_a_porta_da_celula" {
+  command = plan
+
+  assert {
+    condition     = helm_release.gateway_cr.repository == null
+    error_message = "o chart do Gateway CR é local — não existe chart upstream para um CR só"
+  }
+
+  # Mesmo par que o `Gateway` CR precisa casar: o rótulo dos pods, não o nome do release. Vem
+  # do local derivado, então move junto se o nome do release mudar.
+  assert {
+    condition     = yamldecode(helm_release.gateway_cr.values[0]).selector == "ingress"
+    error_message = "o selector do Gateway tem de ser o rótulo `istio:` dos pods, recebido ${yamldecode(helm_release.gateway_cr.values[0]).selector}"
+  }
+
+  assert {
+    condition     = toset(yamldecode(helm_release.gateway_cr.values[0]).hosts) == toset(["*.poc-eks.nonprod.example.com"])
+    error_message = "os hosts do Gateway têm de chegar pela variável"
+  }
+
+  # O CR vive junto dos pods que seleciona. Num namespace diferente, o `Gateway` não os acha.
+  assert {
+    condition     = helm_release.gateway_cr.namespace == "istio-ingress"
+    error_message = "o Gateway CR tem de nascer no namespace do gateway"
+  }
+}
+
+run "e_acompanha_o_wildcard_de_outra_celula" {
+  command = plan
+
+  variables {
+    gateway_hosts        = ["*.outra.prod.example.net", "outra.prod.example.net"]
+    gateway_release_name = "istio-borda"
+  }
+
+  # Dois valores, e de TAMANHOS diferentes: uma lista fixa no código não satisfaria os dois
+  # runs. E o selector move junto com o nome do release, provando que sai do mesmo local.
+  assert {
+    condition     = toset(yamldecode(helm_release.gateway_cr.values[0]).hosts) == toset(["*.outra.prod.example.net", "outra.prod.example.net"])
+    error_message = "o módulo tem de servir qualquer célula sem alteração"
+  }
+
+  assert {
+    condition     = yamldecode(helm_release.gateway_cr.values[0]).selector == "borda"
+    error_message = "o selector do Gateway tem de acompanhar o nome do release do gateway"
+  }
+}
+
+run "a_referencia_do_gateway_e_qualificada_por_namespace" {
+  command = plan
+
+  # Um VirtualService de outro namespace (httpbin, por exemplo) precisa da forma
+  # `<namespace>/<nome>`. O nome curto resolveria no namespace do próprio VirtualService, onde
+  # o Gateway não está — e a rota simplesmente não existiria, sem erro nenhum.
+  assert {
+    condition     = output.gateway_ref == "istio-ingress/inbound"
+    error_message = "gateway_ref: esperado istio-ingress/inbound, recebido ${output.gateway_ref}"
   }
 }
