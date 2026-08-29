@@ -1,7 +1,14 @@
 variable "name" {
-  description = "Nome do release e do CR TargetGroupBinding."
+  description = <<-EOT
+    Nome do release Helm e do CR TargetGroupBinding. NAO pode ser `istio-ingress`: esse é o
+    nome do release do gateway (gateway_release_name do ingress-istio), e Helm identifica release
+    por (namespace, name) — dois releases com o mesmo nome no mesmo namespace falham com
+    "cannot re-use a name that is still in use". O namespace também bate (gateway_namespace),
+    então a colisão é garantida se o nome for igual. O Service referenciado continua sendo o
+    do gateway (serviceRef.name), este nome aqui identifica SÓ a ligação.
+  EOT
   type        = string
-  default     = "istio-ingress"
+  default     = "target-group-binding"
 }
 
 variable "namespace" {

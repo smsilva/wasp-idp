@@ -138,6 +138,15 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   valor distingue as duas referências — a mutação passa verde. Comprovado com
   `aws_acm_certificate_validation` vs `aws_acm_certificate`. Escrever isso no teste em vez de
   esconder atrás de asserção que passaria de qualquer jeito.
+- **`mock_provider "helm"` NÃO simula a key de releases: colisão de nome entre dois releases passa
+  verde offline e só explode no apply real** com `cannot re-use a name that is still in use`. Helm
+  identifica release por `(namespace, name)`, e o mock só devolve os atributos escritos no `values` —
+  não existe "cluster" para acumular releases. Comprovado com `target_group_binding` e o gateway do
+  `ingress_istio`: os dois nasciam como release `istio-ingress` no namespace `istio-ingress`, todos os
+  6 testes verdes, e o apply morreu no exato ponto. O único guard offline é asserção explícita de que
+  o nome do release difere dos releases vizinhos (`serviceRef.name` do gateway carrega o mesmo nome).
+  Ao acrescentar um chart local num namespace que outro módulo já usa, conferir a colisão de nome no
+  próprio default da variável, não confiar no teste.
 
 ## Scripts de subida
 

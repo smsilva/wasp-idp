@@ -102,6 +102,26 @@ run "o_cr_vive_no_namespace_do_gateway" {
   }
 }
 
+run "o_nome_do_release_nao_colide_com_o_do_gateway" {
+  command = plan
+
+  # Neste desenho `gateway_service_name == gateway_release_name` (o chart do gateway nomeia o
+  # Service pelo release). Logo, serviceRef.name aponta para um Service que TEM o mesmo nome do
+  # release `istio-ingress` do gateway — e o Helm identifica release por (namespace, name). Se
+  # este release herdasse esse nome no mesmo namespace, o apply real falharia com "cannot
+  # re-use a name that is still in use", erro que o mock_provider "helm" NÃO reproduz (não
+  # simula a key de releases do cluster). A asserção de aqui é o único guard offline.
+  assert {
+    condition     = helm_release.this.name != yamldecode(helm_release.this.values[0]).serviceRef.name
+    error_message = "o nome do release nao pode igualar serviceRef.name: é o nome do release do gateway, e haveria colisao de release no mesmo namespace"
+  }
+
+  assert {
+    condition     = helm_release.this.name != "istio-ingress"
+    error_message = "o nome do release nao pode ser istio-ingress: colide com o release do gateway no mesmo namespace"
+  }
+}
+
 run "o_controller_nao_gerencia_security_group" {
   command = plan
 
