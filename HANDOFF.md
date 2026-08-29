@@ -153,7 +153,8 @@ e não deve ser instalado à mão:
 |---|---|
 | `aws-load-balancer-controller` | **Terraform** (`src/helm/modules/aws-load-balancer-controller`) |
 | `istio-base`, `istiod`, `gateway` (ClusterIP, NÃO LoadBalancer) | **Terraform** (`src/helm/modules/ingress-istio`), Istio 1.30.4 upstream |
-| `httpbin`, `aws-target-group-binding` | helm do checkout local, a migrar |
+| `aws-target-group-binding` | **Terraform** (`src/helm/modules/target-group-binding`), chart local |
+| `httpbin` + os CRs `Gateway`/`VirtualService` | helm do checkout local, a migrar |
 
 ```bash
 cd ~/git/wasp-gitops/infrastructure/charts   # o que ainda não migrou, na ordem acima

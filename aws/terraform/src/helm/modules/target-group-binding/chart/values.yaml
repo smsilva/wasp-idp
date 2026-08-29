@@ -1,0 +1,8 @@
+# Todos obrigatórios: o chart falha o render se algum faltar, em vez de aplicar um CR pela metade.
+targetGroupARN: ""
+vpcID: ""
+targetType: ip
+
+serviceRef:
+  name: ""
+  port: 80

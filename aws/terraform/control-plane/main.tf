@@ -2,10 +2,16 @@ locals {
   install_load_balancer_controller = true
   install_ingress_istio            = true
   install_external_secrets         = true
-  install_argocd                   = true
-  install_crossplane               = true
-  install_argocd_oidc              = false # exige o client secret ja no Secrets Manager
-  install_app_of_apps              = false # entregue por GitOps, fora do Terraform
+
+  # Derivado, nunca escrito à mão: o binding precisa do CRD que o LBC registra E do Service que
+  # o Istio cria. Ligá-lo com um dos dois desligados falharia no apply — e o `one()` que lê os
+  # outputs do ingress_istio devolveria null antes disso, com erro que não explica a causa.
+  install_target_group_binding = local.install_load_balancer_controller && local.install_ingress_istio
+
+  install_argocd      = true
+  install_crossplane  = true
+  install_argocd_oidc = false # exige o client secret ja no Secrets Manager
+  install_app_of_apps = false # entregue por GitOps, fora do Terraform
 
   # Mesmo valor de connectivity/us-east-1 — decisao irreversivel documentada, nao segredo.
   supernet = "10.0.0.0/12"
@@ -519,6 +525,38 @@ module "ingress_istio" {
     aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
     aws_route.spoke_to_hub,
     aws_route.spoke_to_hub_public,
+  ]
+}
+
+# A costura entre as duas metades da célula: o NLB e a target group são do Terraform, o Service
+# do gateway é do chart do Istio, e este CR manda o Load Balancer Controller manter os IPs dos
+# pods daquele Service registrados naquela target group.
+#
+# É o único recurso desta camada que depende dos DOIS releases anteriores por motivos
+# diferentes: do LBC porque é ele que registra o CRD `TargetGroupBinding` (daí o `wait` de lá
+# não ser hábito copiado), e do Istio porque `serviceRef` aponta para um Service que precisa
+# existir.
+#
+# O ARN chega por referência, nunca colado: a target group usa `name_prefix` +
+# `create_before_destroy`, então trocar a porta ou o target_type a RECRIA com outro ARN. Um
+# values file colado à mão fica velho no primeiro replace, e o sintoma é uma target group vazia
+# com tudo aparentemente saudável.
+module "target_group_binding" {
+  source = "../src/helm/modules/target-group-binding"
+  count  = local.install_target_group_binding ? 1 : 0
+
+  namespace        = one(module.ingress_istio[*].gateway_namespace)
+  service_name     = one(module.ingress_istio[*].gateway_service_name)
+  target_group_arn = module.ingress.target_group_arn
+  vpc_id           = module.network.vpc_id
+
+  # A aresta de rede até o endpoint privado chega por TRANSITIVIDADE, e aqui isso é seguro: este
+  # módulo só existe quando `install_ingress_istio` é true (ver o local derivado acima), e é
+  # `module.ingress_istio` que a declara. Não é o caso dos módulos atrás de um `count`
+  # independente, onde repetir a lista é o que impede a aresta de sumir.
+  depends_on = [
+    module.aws_load_balancer_controller,
+    module.ingress_istio,
   ]
 }
 

@@ -1,0 +1,19 @@
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetGroupARN: {{ required "targetGroupARN é obrigatório" .Values.targetGroupARN | quote }}
+  targetType: {{ required "targetType é obrigatório" .Values.targetType }}
+  vpcID: {{ required "vpcID é obrigatório" .Values.vpcID | quote }}
+
+  serviceRef:
+    name: {{ required "serviceRef.name é obrigatório" .Values.serviceRef.name }}
+    port: {{ required "serviceRef.port é obrigatório" .Values.serviceRef.port }}
+
+  # O bloco `networking` fica FORA de propósito. Com ele, o controller passa a gerenciar as
+  # regras de security group dos targets — regras que o Terraform já escreve (as duas
+  # `aws_vpc_security_group_ingress_rule` do gateway na camada control-plane) e que a policy
+  # mínima da Pod Identity nem permite mexer. O sintoma de incluí-lo seria AccessDenied em
+  # reconcile, com as regras certas já no lugar.

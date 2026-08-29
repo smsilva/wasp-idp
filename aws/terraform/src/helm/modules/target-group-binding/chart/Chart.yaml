@@ -1,0 +1,5 @@
+apiVersion: v2
+name: target-group-binding
+description: TargetGroupBinding que liga os pods do ingress gateway à target group do NLB
+type: application
+version: 0.1.0
