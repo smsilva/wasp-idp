@@ -290,6 +290,19 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   `gateway` do istio-release rotula os pods pelo nome do Release), **NÃO** `istio: ingress`
   (padrão do chart AKS de referência). Selector errado → Gateway não casa pod → 503.
 - Kinds istio no cluster são `networking.istio.io/v1` (não `v1alpha3`).
+- **O chart `gateway` do istio-release TIRA o prefixo `istio-` ao montar o label `istio:`** — release
+  `istio-gateway` produz `istio: gateway`, que é o que o `Gateway` CR dos charts de `wasp-gitops`
+  seleciona. Renderizar (`helm template`) e ler os labels antes de instalar: selector que não casa dá
+  503 sem nada errado aparente. O Service nasce `ClusterIP` porta 80 → targetPort 80, que é a porta que
+  a target group do Terraform declara.
+- **Antes de instalar os charts de GitOps num cluster, conferir se já existe Istio** — `helm list -A`
+  mais CRDs `istio.io` e `elbv2.k8s.aws` em zero. Sobrepor um Istio existente é caro e silencioso.
+- **O repositório de GitOps (`wasp-gitops`) é do próprio usuário e pode ser alterado para os testes.**
+  Ativar chart por chart, conferindo a versão contra o upstream a cada ativação, e apontar
+  `targetRevision` da `Application` para uma **branch**, não `HEAD`.
+- **O host de entrada de uma célula é `services.<id>.<domínio>`**, definido pelo `VirtualService` do
+  chart `istio-gateway` (`services.{{ id }}.{{ domain }}`). Qualquer outro host sob o wildcard recebe o
+  `fixed-response` 404 do listener do ALB e parece falha de ingress.
 
 ## Gotcha: external-dns não vê Gateway/VirtualService istio
 

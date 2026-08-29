@@ -153,6 +153,10 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   no terminal deixa quem está acompanhando sem nenhum sinal de que algo está de fato em execução
   — indistinguível de travado. `scripts/lib` já grava log com timestamp; o que falta em applies
   soltos (fora dos scripts `up-NN`) é garantir que a saída também aparece ao vivo no terminal.
+- **`terraform_plan_and_apply` não aplica plano que muda SÓ output.** A contagem é
+  `grep --count '^  # '`, que conta recursos; um plan com apenas `Changes to Outputs` vira "nothing to
+  change" e o output nunca chega ao state. Ao acrescentar output que algum script vá consumir, forçar
+  um apply que o materialize — é a mesma mordida do guard que lia `terraform output` vazio, abaixo.
 - **Guard de script que lê `terraform output` só funciona depois de o output existir no STATE.**
   O `transit_gateway_attachment_id` foi escrito no `outputs.tf` e o `destroy` da camada 03 passou a
   consumi-lo — mas como nenhum `apply` tinha rodado desde então, `terraform output -raw` devolvia
@@ -263,6 +267,11 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 
 ## Load balancer: quem é dono do quê
 
+- **Valor de tag do ACM é mais restrito que tag comum de EC2: `*` é RECUSADO.** O serviço exige
+  `([\p{L}\p{Z}\p{N}_.:/=+\-@]*)` e falha com `ValidationException` citando `tags.N.member.value` — um
+  índice, não o nome da tag. Copiar `domain_name` para a tag `Name` é o reflexo natural e quebra em
+  todo certificado wildcard. A validação é server-side, mas o valor é conhecido em tempo de plan:
+  assertar o conjunto de valores de tag contra esse regex pega antes do apply.
 - **Health check de ALB não permite sobrescrever o `Host`.** As únicas alavancas são protocolo,
   porta, path, timeouts, thresholds e `matcher` (confirmado na doc do ELB). Quando o destino roteia
   POR host — Istio, por exemplo — a doc manda garantir que o health check case qualquer host, ou usar
@@ -314,6 +323,16 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 
 ## Rede
 
+- **Alcance da malha é propriedade da CAMADA, não de uma subnet dela: a rota para o supernet existe em
+  TODAS as route tables da VPC, ou a reachability é sorteada a cada apply.** Comprovado duas vezes no
+  mesmo dia, em pontas opostas: o EKS distribui as ENIs do endpoint privado entre as quatro subnets que
+  recebe (`control_plane_subnet_ids`) e pode pô-las nas públicas; o ALB de ingress do hub vive nas
+  públicas por definição. Com a rota só na privada, o pacote chega pelo TGW e o retorno segue o IGW.
+  **O sintoma é `dial tcp <ip-privado>:443: i/o timeout` — idêntico ao de `depends_on` errado, e por
+  isso empurra o diagnóstico para o lugar errado.** Antes de culpar ordenação, conferir em qual subnet
+  o recurso realmente nasceu e o que a route table daquela subnet tem. Do lado do hub o sintoma é
+  target `unhealthy`/`Request timed out` com o target group DA SPOKE `healthy`, o que se lê como
+  problema de security group.
 - **TGW nasce com `default_route_table_association` e `default_route_table_propagation` LIGADOS.**
   Desligar os dois é o que torna isolamento por tenant possível — com eles ligados todo attachment
   aprende todo mundo.
