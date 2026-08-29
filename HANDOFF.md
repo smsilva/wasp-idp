@@ -84,18 +84,21 @@ OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workloads`, `
 
 ## Estado aplicado na AWS
 
-Snapshot de 2026-08-28, **fim da sessão que escreveu o `3.2` inteiro; nada aplicado, tudo derrubado**.
-Nenhum cluster k3d de pé (o laboratório do ArgoCD foi removido no fim da sessão). Custo por hora de
-volta a zero, confirmado camada a camada (`0, 0, 3, 13, 13`) e nenhum cluster k3d de pé.
+Snapshot de 2026-08-28, **fim da sessão que APLICOU o `3.2` e o aceitou na AWS; tudo derrubado ao
+final**. Nenhum cluster k3d de pé. Custo por hora de volta a zero.
 
 | Camada | Conta | State key | Custo/mês | Estado |
 |---|---|---|---|---|
 | `state-backend` | `network` | `state-backend/` | centavos | aplicada |
 | `network-foundation/us-east-1` | `network` | `network-foundation/us-east-1/` | **zero** | aplicada |
 | `network-foundation/us-west-2` | `network` | `network-foundation/us-west-2/` | **zero** | aplicada |
-| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **destruída** (24 recursos, state em 0) |
+| `control-plane` | `cicd` | `control-plane/` | ~US$ 165 (~US$ 0,23/h) quando de pé | **destruída** (69 recursos, state em 0) |
 | `dns` | `network` + Azure | `dns/` | ~US$ 0,50 | **aplicada** — subzona `nonprod.` + RAM sharing da Organization |
-| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,20/h (~US$ 146/mês) quando de pé | **destruída** (state em 0) |
+| `connectivity/us-east-1` | `network` | `connectivity/us-east-1/` | ~US$ 0,22/h quando de pé | **destruída** (state em 0) |
+
+**A camada 04 chegou a 69 recursos** (era 61 antes do `3.2`): o lado hub do ingress somou certificado
+da célula, validação, registro alias, target group, listener rule e certificado do listener, mais a
+rota pública nova. A 03 chegou a **29** (era 18 antes do ALB).
 
 **Custo por hora agora: zero.** Quando as duas subirem de novo são ~US$ 0,45/h — a 03 subiu de
 ~US$ 0,20/h para **~US$ 0,22/h** porque agora entrega também o ALB de ingress (~US$ 16/mês + LCU),
@@ -171,11 +174,68 @@ Fora do supernet, já reservados pelo plano ativo: `100.64.0.0/22` (client CIDR 
 
 ## In Progress
 
-### Frente D — acesso privado + ingress centralizado (ATIVA, **`3.2` COMPLETO NO CÓDIGO, aceite na AWS é o próximo**)
+### Frente D — acesso privado + ingress centralizado (ATIVA, **FASE 3 COMPLETA: `3.2` ACEITO na AWS**)
 
-**Estado em 2026-08-28, fim da sessão: o `3.2` está escrito inteiro nas três raízes e nunca foi
-aplicado.** Regressão offline **146 testes / 14 diretórios / 0 falhas**. O que falta é exclusivamente
-o que exige AWS de verdade — ver **How to Resume**, passo "Aceite do `3.2`".
+**Estado em 2026-08-28, segunda sessão do dia: o `3.2` foi aplicado e ACEITO.** `curl` público em
+`https://services.control-plane.nonprod.<domínio>/httpbin/get` devolveu **HTTP 200**, TLS válido **sem
+`-k`**, `origin` no IP público desta máquina e `X-Envoy-External-Address: 10.2.32.10` — a cadeia
+inteira provada de ponta a ponta: ALB no hub → TGW → NLB interno da spoke → Envoy → httpbin. Os cinco
+critérios passaram, e o 4º passou **de verdade**, não pela largueza do matcher.
+
+**A próxima fronteira é a fase 4 (provas negativas), não mais o ingress.**
+
+#### Os três bugs que só o apply real mostrou, todos corrigidos e commitados
+
+Nenhum deles era testável antes de aplicar; dois são da mesma família e o terceiro é a razão pela qual
+os applies anteriores passavam **por sorte**.
+
+1. **O ACM recusa `*` em valor de tag** (`fix(ingress)`, commit `87710af`). O serviço exige
+   `([\p{L}\p{Z}\p{N}_.:/=+\-@]*)`, mais restrito que a tag comum de EC2, e o erro aponta
+   `tags.N.member.value` — um ÍNDICE, não o nome da tag. Os dois certificados wildcard copiavam o
+   `domain_name` para o `Name`, que é o que todos os outros recursos daquelas camadas fazem — e nenhum
+   dos outros é wildcard. Derrubou a 03 e, depois de corrigido só lá, a 04 pelo mesmo motivo. O
+   certificado do Client VPN sempre passou porque `vpn.` não é wildcard. **A validação é server-side,
+   mas o valor é conhecido em tempo de plan** — daí a asserção de regressão nas duas suítes, sobre
+   todos os valores de tag do certificado.
+2. **O alcance da spoke era SORTEADO a cada apply** (`fix(control-plane)`, commit `8731fae`). O
+   cluster recebe `control_plane_subnet_ids` — as **quatro** subnets — e a AWS escolhe livremente onde
+   põe as ENIs do endpoint privado. A rota do supernet para o TGW existia só na route table
+   **privada**. Nesta subida as ENIs caíram nas duas **públicas** (`10.2.9.250`, `10.2.31.21`), o
+   retorno para o hub seguiu o IGW, e os dois `helm_release` morreram com
+   `dial tcp 10.2.9.250:443: i/o timeout` — **o mesmo sintoma dos dois incidentes de `depends_on`, com
+   causa completamente diferente**. `2.4`/`2.5` e `3.1` passaram porque as ENIs calharam nas privadas.
+   Corrigido com `aws_route.spoke_to_hub_public` (output novo `public_route_table_id` em
+   `src/network`), incluído no `depends_on` dos três consumidores da API.
+3. **O ALB do hub vive na subnet PÚBLICA, e a rota do hub só cobria a privada** (`fix(connectivity)`,
+   commit `bfdc1da`). A rota privada foi posta para o Client VPN, cujas ENIs estão nas privadas. Sem a
+   rota pública, o health check do ALB até os endereços fixos do NLB da célula não tem caminho de ida.
+   **O sintoma engana:** os dois targets do hub ficam `unhealthy`/`Request timed out` enquanto o target
+   group DA SPOKE está `healthy` com o pod do gateway registrado — o que se lê como problema de
+   security group, e as regras estavam todas certas.
+
+**A regra que sai dos itens 2 e 3, e vale para qualquer camada futura:** *alcance da malha é
+propriedade da CAMADA, não de uma subnet dela.* Enquanto qualquer recurso puder nascer em qualquer
+subnet da VPC, a rota para o supernet existe em TODAS as route tables daquela VPC, ou a reachability é
+sorteada. Os dois testes usam dois `override_resource`/`override_data` com IDs diferentes — com um só,
+uma implementação que mandasse as duas rotas para a mesma tabela passaria verde.
+
+#### Lado cluster: 7 charts, instalados por helm do checkout local
+
+O cluster estava **limpo** (zero CRD de Istio, zero de `elbv2.k8s.aws`) — conferido antes de instalar
+qualquer coisa, e é a checagem a repetir sempre: sobrepor um Istio existente é a forma barata de
+perder uma tarde. Instalados, na ordem de wave: `namespaces` (só `httpbin` e `istio-ingress`, ambos com
+injection), `aws-load-balancer-controller`, `istio-base`, `istio-discovery`, `istio-gateway`, `httpbin`,
+`aws-target-group-binding`. **Fora de propósito:** `nginx`, `metrics-server`, `nri-bundle`,
+`istio-example`, `crossplane-*`, `argocd-notifications-config` e o app-of-apps.
+
+Versões conferidas contra o upstream no dia: LBC **3.5.0** e Istio **1.30.4** são as últimas
+publicadas, vendorizadas como `.tgz` dentro dos wrappers. Nada a subir.
+
+**O host do aceite é `services.<célula>.nonprod.<domínio>`, não `app.`** — quem define é o
+`VirtualService` do chart `istio-gateway` (`services.{{ id }}.{{ domain }}`), e o wildcard da célula o
+cobre. Encadeamento que casa sem ajuste: Service `istio-gateway` ClusterIP porta 80 → targetPort 80,
+igual à target group do Terraform; selector do `Gateway` é `istio: gateway` e o chart upstream **tira**
+o prefixo `istio-` do label, então bate com release chamado `istio-gateway`.
 
 **O `3.2` era maior do que o plano dizia.** Ele supunha que só faltava uma listener rule; o ALB do hub
 **não existia em nenhuma camada**. Saiu em 12 peças: 1 output na `network-foundation` (nas duas
@@ -664,15 +724,15 @@ Itens fechados/retirados (tags de LBC
     AWS antes de ignorar.
 21. **Nenhuma prova de que spoke↔spoke não roteia** — *unexpected*, propriedade central do desenho.
     Só existe uma spoke; é o `4.1`/`4.2`.
-22. **A metade do `depends_on` que atua no DESTROY continua não verificada** — *unexpected*, e já
-    falhou DUAS vezes. A direção do apply está provada (61 recursos, attachment antes dos releases).
-    No teardown de 2026-08-28, já com a aresta desinvertida, o destroy morreu de novo no mesmo ponto:
-    `module.network.aws_route_table_association.private[*]` foi apagada antes do ConfigMap, e
-    desassociar a route table das subnets privadas corta o caminho até as ENIs do endpoint tão bem
-    quanto apagar a rota. **Correção aplicada depois do incidente**: os consumidores passaram a
-    depender de `module.network` inteiro, não de uma lista de recursos do TGW. **Ainda sem teardown
-    que a exercite — no próximo, ler a ordem no log antes de declarar corrigido.** Recuperação
-    conhecida: `terraform state rm` dos objetos Kubernetes presos + reaplicar o `destroy`.
+22. ~~**A metade do `depends_on` que atua no DESTROY continua não verificada**~~ — **RESOLVIDO
+    2026-08-28**, depois de falhar duas vezes em direções opostas. O teardown desta sessão exercitou a
+    aresta e a ordem no log é inequívoca: ConfigMap, depois `crossplane`/`argo-cd`/`external-secrets`,
+    **e só então** `module.network.aws_route_table_association.*`, as duas `aws_route.spoke_to_hub*`, a
+    associação e o attachment do TGW. **69 recursos destruídos, 0 erros, nenhum `i/o timeout`**, state
+    em 0. O que fechou foi depender de `module.network` INTEIRO em vez de enumerar recursos do TGW — a
+    associação de route table não tem aresta com a rota, e desassociar corta o caminho tão bem quanto
+    apagar. Recuperação, se um dia voltar: `terraform state rm` dos objetos Kubernetes presos +
+    reaplicar o `destroy`.
 23. **ArgoCD desta célula sobe sem credencial de repositório** — *unexpected*: zero `Application`,
     nenhum secret de repo. Consequência: o lado GitOps do `3.1` foi instalado por
     `helm upgrade --install` a partir do checkout local. **"GitOps instala o chart" é desenho, não
@@ -707,9 +767,25 @@ Itens fechados/retirados (tags de LBC
     `global.environment.cluster.ingress.type` (default `nginx`). Num cluster sem nginx o Ingress nasce,
     nunca ganha `status.loadBalancer`, e a `Application` fica em `Progressing` para sempre — falso
     negativo que se lê como falha de credencial.
-28. **O `3.2` inteiro nunca foi aplicado** — *intentional*: escrito e verificado offline (146 testes),
-    aceite pendente. Em particular a ordenação `validation` → `listener_certificate` e a rota de host
-    no `Gateway`/`VirtualService` só aparecem no apply.
+28. ~~**O `3.2` inteiro nunca foi aplicado**~~ — **RESOLVIDO 2026-08-28.** Aplicado e aceito; a
+    ordenação `validation` → `listener_certificate` funcionou de primeira (certificado ativo no
+    listener, TLS válido sem `-k`). O que o apply revelou foram outras três coisas, itens 29–31.
+29. **Reachability dependia de onde a AWS resolveu pôr as ENIs** — *unexpected*, e é o achado mais
+    sério do dia: a rota para o supernet existia só nas route tables **privadas**, mas tanto o cluster
+    (que recebe as 4 subnets) quanto o ALB do hub (que vive nas públicas) podem estar do outro lado.
+    Corrigido nas duas camadas (`8731fae`, `bfdc1da`). **Regra geral: rota para a malha existe em TODAS
+    as route tables da VPC, ou o alcance é sorteado a cada apply.** Auditar qualquer camada nova sob
+    essa lente — e desconfiar de `i/o timeout` atribuído a `depends_on` sem antes conferir a tabela de
+    rotas da subnet onde o recurso realmente nasceu.
+30. **Valor de tag do ACM é mais restrito que tag de EC2** — *unexpected*: `*` é recusado, o erro cita
+    índice em vez de nome, e nada offline pegava. Corrigido com asserção de regressão nas duas suítes
+    (`87710af`). Vale para qualquer certificado wildcard futuro.
+31. **`terraform_plan_and_apply` ignora plano que só muda OUTPUT** — *unexpected*: a contagem é
+    `grep --count '^  # '`, que conta recursos, então um plan com apenas `Changes to Outputs` é
+    reportado como "nothing to change" e o output nunca chega ao state. Visto na camada 01 com
+    `hub_public_subnet_ids`. Inócuo naquele caso (a 03 descobre as subnets por tag), mas a mesma
+    mecânica já mordeu antes — o guard do `destroy` da 03 lendo `terraform output` vazio. Se um script
+    passar a depender de output novo, forçar um apply que o materialize.
 
 ## How to Resume
 
@@ -728,7 +804,8 @@ o `Account`/`Arn` inteiro, nunca `--query`. Erro de profile inexistente ou ARN v
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Custo por hora ao fim desta sessão (2026-08-28): zero — 03 e 04 derrubadas, nenhum cluster k3d.** Confirmar por camada
+**Custo por hora ao fim desta sessão (2026-08-28): zero — 03 e 04 derrubadas (69 e 29 recursos, 0
+erros), nenhum cluster k3d.** Confirmar por camada
 antes de qualquer coisa, já que a leitura da AWS CLI nesta máquina passa por wrapper:
 
 ```bash
@@ -736,7 +813,7 @@ cd wasp-idp/aws/terraform
 for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1; do
   printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
 done
-# esperado agora: 0, 0, 3, 13   |   de pé seria: 61, 18, 3, 13
+# esperado agora: 0, 0, 3, 13   |   de pé seria: 69, 29, 3, 13
 k3d cluster list                    # esperado: vazio
 ```
 
@@ -759,34 +836,41 @@ aws-vpn-client get-connection-status --profile-name hub   # tem de dizer "Connec
 ! aws-vpn-client connect --profile-name hub               # abre navegador; precisa ser o usuário
 ```
 
-### Aceite do `3.2` — a única coisa que falta, e a ordem importa
+### Reproduzir a célula inteira, incluindo o lado cluster (o aceite do `3.2` já PASSOU)
+
+A parte Terraform está no `aws/terraform/README.md`. O que **não** está lá, e é o que faltou para o
+`curl` fechar em 200, é o lado cluster — hoje ainda por helm do checkout local, com o cluster
+**conferidamente limpo** antes (`helm list -A`, mais CRDs `istio.io` e `elbv2.k8s.aws` em zero):
 
 ```bash
-cd wasp-idp/aws/terraform
-./scripts/up-03-connectivity --yes            # agora entrega TAMBÉM o ALB (~US$ 0,22/h)
-# exportar e importar o .ovpn, CONECTAR o túnel (passos 3-4 do README)
-cd control-plane && ./scripts/generate-tfvars --force   # OBRIGATÓRIO: base_domain sem default
-./scripts/apply --yes
+cd ~/git/wasp-gitops/infrastructure/charts   # branch feat/aws-ingress-target-group-binding
+# na ordem de wave, com id/domain da célula:
+#   namespaces (só httpbin + istio-ingress, ambos istio:true)
+#   aws-load-balancer-controller  (kube-system; clusterName, region, vpcId da SPOKE)
+#   istio-base, istio-discovery   (istio-system)
+#   istio-gateway                 (istio-ingress; ClusterIP, NÃO LoadBalancer)
+#   httpbin                       (httpbin)
+#   aws-target-group-binding      (istio-ingress; targetGroupARN + vpcId)
 ```
 
-`generate-tfvars` agora **recusa** se o ALB do hub não existir e **descobre** `base_domain` pela hosted
-zone `nonprod.*` na conta `network`. Se ele reclamar de domínio, a camada 02 é que não está aplicada.
+`targetGroupARN` e `vpcId` vêm do ConfigMap `platform-bootstrap` em `crossplane-system`
+(`ingressTargetGroupArn`) e do `terraform state` da 04 — **nunca de um values file colado**, porque o
+ARN muda a cada recriação (Known Broken 24).
 
 Verificar na ordem em que quebra:
 
 1. `terraform output cell_ingress_fqdn` — o wildcard da célula.
-2. `dig +short app.<célula>.nonprod.<domínio>` devolve IPs públicos do ALB.
+2. `dig +short services.<célula>.nonprod.<domínio>` devolve IPs públicos do ALB.
 3. `aws elbv2 describe-listener-certificates` mostra o certificado da célula no listener.
-4. Os dois endereços do NLB `healthy` na target group do hub. **Saudável aqui não significa
-   funcionando** — o matcher aceita 404.
-5. `curl https://app.<célula>.nonprod.<domínio>/httpbin/get` **da internet, sem túnel**, sem `-k`.
+4. **Os dois** target groups: o da spoke com o pod do gateway `healthy`, e o do hub com
+   `10.2.32.10`/`10.2.48.10` `healthy`. Se o de baixo estiver verde e o de cima vermelho, o problema é
+   ROTA no hub, não security group.
+5. `curl https://services.<célula>.nonprod.<domínio>/httpbin/get` **da internet, sem túnel**, sem `-k`.
 
-**O passo 5 vai dar 404 até existir rota para esse host no `Gateway`/`VirtualService`** — isso é
-manifesto no repositório de GitOps, e hoje entra por `helm upgrade --install` do checkout local. Se o
-`curl` der 404 com TLS válido, o hub está certo e falta o lado cluster; se der erro de TLS, o problema
-é o certificado (provavelmente `PENDING_VALIDATION`, ordenação errada). O `3.1` segue verificável em
-paralelo pelo túnel, com `curl` direto em `10.2.32.10`/`10.2.48.10` — é o que separa "quebrou no hub"
-de "quebrou na spoke".
+**O host é `services.`, não `app.`** — quem manda é o `VirtualService` do chart `istio-gateway`
+(`services.{{ id }}.{{ domain }}`). Um `curl` em `app.` recebe o `fixed-response` 404 do listener e
+parece falha de ingress. Resposta certa traz `X-Envoy-External-Address` no IP do NLB, que é o que prova
+que o caminho foi pela internet e não pelo túnel.
 
 ### Subir o ambiente — a sequência está no `aws/terraform/README.md`, não aqui
 
@@ -860,7 +944,9 @@ reais.
 `public_access_cidrs` **sem default**, então qualquer `plan` falha pedindo a variável até rodar
 `./scripts/generate-tfvars --force`. É a falha-fechado funcionando, não regressão.
 
-Regressão offline (**146 testes, 14 diretórios**, 0 falhas). Números anteriores de 86/13 estavam
+Regressão offline (**147 testes, 14 diretórios**, 0 falhas — conferido em 2026-08-28). O `terraform
+test` conta RUNS, não asserções: o aceite do `3.2` acrescentou um run novo e várias asserções dentro de
+runs que já existiam, daí 146 → 147. Números anteriores de 86/13 estavam
 velhos E a lista omitia `src/ingress`, que entrou com o `3.1` — leva 3-4 min, rodar em background:
 
 ```bash
@@ -1058,8 +1144,23 @@ porquê, um por linha:
 - [x] **`3.2` escrito inteiro** — 12 peças em três raízes, 146 testes offline, 0 falhas. ALB na
       `connectivity/` (decisão de fronteira fechada), `matcher = "200-404"` consciente, `base_domain`
       sem default com descoberta no `generate-tfvars`.
-- [ ] **Aceite do `3.2` na AWS (PRÓXIMO)** — sequência em How to Resume. É a única coisa que falta na
-      fase 3.
+- [x] **Aceite do `3.2` na AWS — PASSOU (2026-08-28).** Os cinco critérios, com `curl` público em
+      `services.control-plane.nonprod.<domínio>/httpbin/get` devolvendo 200 e TLS válido sem `-k`.
+      **Fase 3 completa.** Três bugs corrigidos no caminho (tag do ACM, rota pública da spoke, rota
+      pública do hub) — detalhe na Frente D e em Known Broken 29–31.
+- [ ] **Levar o lado cluster para GitOps de verdade** — os 7 charts entraram por
+      `helm upgrade --install` do checkout local (`~/git/wasp-gitops`, branch
+      `feat/aws-ingress-target-group-binding`). É o mesmo débito do `3.1`, agora com uma célula que já
+      provou funcionar. Ao fazer o wire, apontar `targetRevision` do `values-aws.yaml` para uma
+      **branch**, não `HEAD` — pedido explícito do usuário nesta sessão; o repo de GitOps é dele e pode
+      ser mexido livremente para os testes.
+- [ ] **Ativar chart por chart, conferindo versão contra o upstream a cada ativação** (pedido do
+      usuário). Hoje só os 7 do mínimo estão de pé; `nginx`, `metrics-server`, `nri-bundle` e
+      `istio-example` seguem fora de propósito. LBC `3.5.0` e Istio `1.30.4` estavam na última versão
+      publicada em 2026-08-28.
+- [ ] **Conferir SEMPRE se já há Istio no cluster antes de instalar os charts** (pedido do usuário).
+      Nesta sessão o cluster era novo e a checagem (`helm list -A`, CRDs `istio.io` e `elbv2.k8s.aws`)
+      deu zero — mas num cluster que já rodou, sobrepor o Istio existente é caro e silencioso.
 - [ ] **Estreitar o `matcher` da target group do hub para `200`** quando existir rota de health no
       `Gateway`/`VirtualService` casando qualquer host. Hoje `200-404` aceita como saudável um Envoy
       sem configuração.
@@ -1069,8 +1170,9 @@ porquê, um por linha:
 - [ ] **Unificar o nome do hub**, hoje em três lugares na camada 04: `hub_vpc_name`, `hub_alb_name` e a
       tag do TGW literal no `main.tf`. Não feito no `3.2` para não arrastar mudança de variável
       existente.
-- [ ] **Verificar a metade do `depends_on` que atua no destroy** — no próximo teardown da 04, ler a
-      ordem no log antes de declarar corrigido (Known Broken 22).
+- [x] **Verificada a metade do `depends_on` que atua no destroy (2026-08-28)** — ordem lida no log de
+      um teardown real: os quatro consumidores da API saem antes de qualquer coisa de rede, 69 recursos,
+      0 erros. Known Broken 22 fechado.
 - [ ] **Wire do ArgoCD desta célula ao `wasp-gitops`** — hoje ele sobe sem credencial de repositório
       (zero `Application`, nenhum secret de repo), então o lado GitOps do `3.1` foi instalado por
       `helm upgrade --install` a partir do checkout local. Caminho provável: deploy key no Secrets
@@ -1158,6 +1260,13 @@ Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<pa
 [`docs/archived/index.md`](docs/archived/index.md). Resumo do que já está lá, do mais recente ao mais
 antigo:
 
+- **2026-08-28 (terceira sessão)** — **`3.2` APLICADO e ACEITO na AWS; fase 3 completa.** Sequência
+  inteira 00→04 rodada do zero, túnel conectado, 7 charts do lado cluster instalados por helm do
+  checkout local, `curl` público devolvendo 200 com TLS válido. Três bugs que só o apply real mostra,
+  todos corrigidos com asserção de regressão e mutação provada: valor de tag do ACM recusa `*`; e a
+  rota para a malha existia só nas route tables privadas, tanto na spoke (ENIs do endpoint podem cair
+  nas públicas) quanto no hub (o ALB vive nas públicas) — o alcance era sorteado a cada apply. No
+  teardown, **Known Broken 22 finalmente provado**: 69 recursos, ordem correta, 0 erros.
 - **2026-08-28 (segunda sessão)** — `3.2` escrito inteiro (12 peças em três raízes, ALB do hub
   incluído, que o plano supunha existir) + GitHub App do ArgoCD validada ponta a ponta num k3d
   descartável. **Nada aplicado na AWS.** Dois achados que mudaram premissas: o repositório de GitOps
