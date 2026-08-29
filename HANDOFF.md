@@ -62,14 +62,6 @@ nível T1 que fica de pé de propósito durante o dia** — não presumir resíd
 
 ## Em progresso agora
 
-**Frente ativa: `private-access-ingress`.** Fase 3 (ingress) completa — `3.2` aplicado e aceito na
-AWS em 2026-08-28 (`curl` público em `https://services.control-plane.nonprod.<domínio>/httpbin/get`
-devolveu HTTP 200, TLS válido, cadeia ALB→TGW→NLB→Envoy→httpbin provada de ponta a ponta).
-
-**Próxima fronteira: Fase 4 (provas negativas de isolamento)**, issue #9 — reler o desenho à luz do
-SNAT do Client VPN antes de executar (Open Questions). Alternativa pronta, se a preferência for
-consolidar em vez de avançar: wire do ArgoCD (issue #7), mecanismo já validado em k3d.
-
 **Backlog completo e priorização: GitHub Project.**
 
 ```bash
@@ -100,7 +92,17 @@ corrente: `feat/private-access-phase-3`.
 
 ## How to Resume
 
-**Primeiro comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
+**Primeiro comando — ler a issue escolhida, com o corpo já enriquecido:**
+
+```bash
+gh issue view 7 -R smsilva/wasp-idp
+```
+
+Antes de escrever qualquer Terraform para ela, checar em `CLAUDE.local.md` se a GitHub App já tem
+`.pem`/App ID/Installation ID promovidos ao Secrets Manager da conta `cicd` — se não, isso é o
+passo zero.
+
+**Segundo comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
 assumem role a partir de `personal`):
 
 ```bash
@@ -209,3 +211,5 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
+
+> Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
