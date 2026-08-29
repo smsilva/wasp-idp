@@ -2,6 +2,8 @@
 
 Backstage Internal Developer Portal (IDP) proof-of-concept. The Backstage app lives in `idp/` as a Yarn 4 workspaces monorepo. Supporting scripts are in `scripts/`.
 
+This `docs/idp/` folder is scoped to the Backstage tool itself. AWS infrastructure documentation (hub-and-spoke reference architecture, ADRs, known-broken, open questions, lessons learned) lives in `aws/docs/` and `docs/adr/`, not here — the two initiatives are separate.
+
 ## Branches
 
 | Branch | Purpose |
