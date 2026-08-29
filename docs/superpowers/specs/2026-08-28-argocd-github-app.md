@@ -52,6 +52,8 @@ Os três valores — `App ID`, `Installation ID`, `.pem` — são o que o ArgoCD
 
 Na célula AWS ele não vive em disco: vai para o **Secrets Manager** e chega ao cluster por **ESO** — ver abaixo.
 
+**Antes de escrever qualquer Terraform, confirmar o estado real, não presumir:** a App já foi criada no GitHub (identificadores e caminho local do `.pem` em `CLAUDE.local.md`, gitignored). O que não está confirmado neste documento é se o `.pem`/`App ID`/`Installation ID` **já foram promovidos ao Secrets Manager da conta `cicd`** (região `us-east-1`) ou se isso ainda é um passo manual pendente (`aws secretsmanager create-secret`/`put-secret-value`). Checar `CLAUDE.local.md` primeiro; se o secret não existir na conta, criá-lo é o passo zero desta entrega, antes do `ExternalSecret`.
+
 ## Como a credencial chega ao ArgoCD
 
 O ArgoCD lê credencial de um `Secret` no namespace dele, rotulado com um de **dois** tipos — e a escolha entre eles importa:
@@ -84,7 +86,7 @@ Dois caminhos de entrega, e a diferença entre eles é o ponto do exercício loc
 
 **No k3d de laboratório:** `kubectl create secret generic` com `--from-file=githubAppPrivateKey=<pem>`. Nunca colar a chave na linha de comando — ela iria para o histórico do shell. Rápido, descartável, não exige AWS.
 
-**Na célula (camada 04): pelo `extraObjects` do próprio chart do ArgoCD**, como um `ExternalSecret` que o ESO materializa a partir do Secrets Manager. O módulo `src/helm/modules/argo-cd` já aceita `var.extra_values` como segundo documento de values, e já usa exatamente esse padrão para o `clientSecret` do OIDC (`creationPolicy: Merge` contra o `argocd-secret`).
+**Na célula (camada 04): pelo `extraObjects` do próprio chart do ArgoCD**, como um `ExternalSecret` que o ESO materializa a partir do Secrets Manager. O módulo `src/helm/modules/argo-cd` já aceita `var.extra_values` como segundo documento de values (`main.tf:41`), mecanismo genérico e testado. **O que NÃO existe ainda, apesar do comentário no código sugerir o contrário:** o `clientSecret` do OIDC é só um placeholder (`$oidc.<nome>.clientSecret`, `main.tf:9`) com um comentário dizendo que "o ESO o mescla com `creationPolicy: Merge`" — mas `install_argocd_oidc = false` na célula real, e não existe nenhum `ExternalSecret` de OIDC escrito em lugar nenhum do repo. Este será o **primeiro** `extraObjects`/`ExternalSecret` de fato escrito e testado neste módulo, não a cópia de um exemplo que já funciona.
 
 **Isto resolve a pergunta de ownership**: não existe `Secret` criado fora do release brigando com ele — o `ExternalSecret` é entregue **pelo próprio release**, e o ESO é o dono do `Secret` resultante (`creationPolicy: Owner`, porque é um secret novo, não uma mesclagem). Forma, com o escape que Helm exige para os templates do ESO:
 
@@ -126,7 +128,9 @@ extraObjects:
 
 **Guardar o `.pem` em base64 no Secrets Manager e fazer `b64dec` no template** é o truque que a trilha Azure já usa, e existe por um motivo: PEM é multilinha, e multilinha sobrevive mal a passar por JSON de secret e por template. Base64 é uma linha só.
 
-Falta verificar uma coisa antes de escrever isso na célula: **qual prefixo de secret a policy da Role Pod Identity do ESO desta célula permite** (a do rastro k3d era `poc-eks/*`; a da camada 04 pode ser outro), e se existe `ClusterSecretStore` já nomeado ali ou se é `SecretStore` por namespace.
+**Conferido em `aws/terraform/control-plane/main.tf` (`module.pod_identity_eso`): a policy já é `Resource = "*"` em `secretsmanager:GetSecretValue`/`DescribeSecret` — não há prefixo restringindo nada hoje.** Não é preciso "descobrir" prefixo; a decisão em aberto é se vale apertar a policy para um prefixo específico (hardening) antes ou depois deste wire — não bloqueia a entrega.
+
+**`ClusterSecretStore`/`SecretStore` não existe em lugar nenhum do repo** — nem na célula real, nem no lab k3d de referência (confirmado por busca no repo; os logs de `destroy` da camada 04 mostram literalmente o aviso padrão do ESO "you will need to set up a SecretStore"). Criar o `ClusterSecretStore` é parte do trabalho desta entrega, não uma verificação de algo pré-existente.
 
 ## O que muda no `wasp-gitops`
 
