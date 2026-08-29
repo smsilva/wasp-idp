@@ -43,9 +43,9 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   inteiro (associação de zona privada, com Resolver inbound endpoint de plano B) caiu em duas frases
   de uma página do EKS: o plano A era impossível e o plano B desnecessário. Custo de não conferir:
   ~US$ 180/mês de recurso que não precisava existir.
-- **A regressão offline completa (13 diretórios) passa de 2 min** — rodar em background ou por
-  diretório, senão o teto de tempo de uma chamada corta no meio. E usar `-no-color`: os códigos ANSI
-  quebram qualquer `grep` na linha `Success!`/`Failure!`.
+- **A regressão offline completa passa de 2 min** — rodar em background ou por diretório, senão o
+  teto de tempo de uma chamada corta no meio. E usar `-no-color`: os códigos ANSI quebram qualquer
+  `grep` na linha `Success!`/`Failure!`.
 
 - `terraform test` com `mock_provider` + `command = plan` roda **sem credencial e sem tocar a
   AWS**. É o ciclo red-green padrão aqui; usar antes de qualquer `apply`.
@@ -244,7 +244,7 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
       apontando para os quatro consumidores da API — attachment esperando o Crossplane, rota esperando
       o ConfigMap. O apply seguinte morreu com **49 de 61 recursos** e a rede toda fora do state: os
       dois `helm_release` tentaram alcançar o API server antes de o attachment existir. `validate` e as
-      21 asserções offline passavam nas duas versões.
+      asserções offline passavam nas duas versões.
     - **2026-08-28, no destroy, de novo:** com a aresta já desinvertida e os SEIS recursos do TGW
       declarados, o destroy ainda morreu no mesmo ponto. Causa: `module.network.aws_route_table_
       association.private[*]` foi destruída ANTES do `kubernetes_config_map_v1` — e **desassociar a

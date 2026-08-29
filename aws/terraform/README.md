@@ -28,6 +28,10 @@ Atualizar junto com a mudança, no mesmo trabalho — não depois:
 sessão e vive em `HANDOFF.md` — repetir aqui garante duas fontes e uma delas errada. Armadilhas de
 código e de comportamento de provider vão para `CLAUDE.md`, não para este arquivo.
 
+**Contagem de testes também não entra** — em nenhum arquivo versionado. O número muda a cada módulo
+novo, envelhece sozinho e não informa decisão nenhuma: o que importa é `0 falhas`, e quem quer o
+total roda o loop.
+
 Ao fechar um passo de plano que muda a sequência, a checagem é uma pergunta só: **alguém que só leia
 este README consegue subir o ambiente hoje?**
 
@@ -344,8 +348,8 @@ for module in src/network src/state-backend src/cluster src/nodegroup src/pod-id
 done
 ```
 
-Hoje: 156 testes em 15 diretórios, 0 falhas. A volta inteira passa de 2 min — rodar em background
-ou por diretório, senão o teto de tempo de uma chamada corta no meio.
+A volta inteira passa de 2 min — rodar em background ou por diretório, senão o teto de tempo de
+uma chamada corta no meio.
 
 Cada raiz de região testa que seu CIDR **cai dentro do supernet**. Essa validação vivia na
 variável `hub_vpc_cidr` da raiz única; com os valores inline ela viraria um buraco silencioso,

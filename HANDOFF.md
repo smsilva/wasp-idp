@@ -165,7 +165,7 @@ na ordem em que quebra: `terraform output cell_ingress_fqdn` → `dig` → certi
 os dois target groups (spoke e hub) `healthy` → `curl` público sem `-k`. **O host é `services.`,
 não `app.`**
 
-**Regressão offline** (156 testes, 15 diretórios, ~3-4 min, rodar em background):
+**Regressão offline** (~3-4 min, rodar em background):
 
 ```bash
 cd aws/terraform
