@@ -240,12 +240,15 @@ Quando o TGW entrar, este raciocínio precisa ser revisitado.
 | `src/cluster` | XR `Cluster` (L1b) | EKS `authentication_mode = "API"` (sem `aws-auth` ConfigMap), role do cluster, role compartilhada dos nós, access entries e os dois addons de base |
 | `src/nodegroup` | idem | Node groups por mapa. `ignore_changes` no `desired_size` para não brigar com autoscaler futuro |
 | `src/pod-identity` | trust de Pod Identity das Compositions | Molde dos três consumidores. O trust precisa de `sts:AssumeRole` **e** `sts:TagSession` — só o primeiro falha |
-| `src/helm/modules/{aws-load-balancer-controller,external-secrets,argo-cd,crossplane}` | XR `ClusterBootstrap` | Um chart por módulo, versão fixada |
+| `src/helm/modules/{aws-load-balancer-controller,ingress-istio,external-secrets,argo-cd,crossplane}` | XR `ClusterBootstrap` | Um chart por módulo, versão fixada. `ingress-istio` é a exceção: três releases (`base`, `istiod`, `gateway`) que compartilham uma versão só |
 
 O módulo do Load Balancer Controller nasce com escopo estreito de propósito: sem IngressClass e
 sem o service mutator webhook, ele reconcilia `TargetGroupBinding` e nada mais. O NLB e a target
 group são do Terraform (`src/ingress`), e um controller capaz de materializar load balancer
 próprio reabriria a porta que o ADR 0004 fechou ao decidir ingress único pelo hub.
+
+Pelo mesmo motivo o Service do gateway em `ingress-istio` é **ClusterIP**: quem materializa o load
+balancer é `src/ingress`, e a ligação pods → target group será o `TargetGroupBinding`.
 
 Sobre `src/pod-identity` e `src/cluster`: o trust e o `assume_role_policy` usam `jsonencode()`,
 não `data "aws_iam_policy_document"`. Com `mock_provider`, o data source devolve string sintética
@@ -340,6 +343,7 @@ Sem credencial, sem chamada à AWS — `mock_provider` + `command = plan`:
 for module in src/network src/state-backend src/cluster src/nodegroup src/pod-identity \
               src/ingress \
               src/helm/modules/aws-load-balancer-controller \
+              src/helm/modules/ingress-istio \
               src/helm/modules/external-secrets src/helm/modules/argo-cd \
               src/helm/modules/crossplane \
               network-foundation/us-east-1 network-foundation/us-west-2 \

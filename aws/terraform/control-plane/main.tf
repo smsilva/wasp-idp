@@ -1,5 +1,6 @@
 locals {
   install_load_balancer_controller = true
+  install_ingress_istio            = true
   install_external_secrets         = true
   install_argocd                   = true
   install_crossplane               = true
@@ -480,6 +481,34 @@ module "aws_load_balancer_controller" {
   depends_on = [
     module.nodegroup,
     module.pod_identity_lbc,
+    aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    module.network,
+    aws_ec2_transit_gateway_vpc_attachment.this,
+    aws_ec2_transit_gateway_vpc_attachment_accepter.this,
+    aws_ec2_transit_gateway_route_table_association.spoke,
+    aws_ec2_transit_gateway_route_table_propagation.spoke_to_hub,
+    aws_ec2_transit_gateway_route_table_propagation.hub_to_spoke,
+    aws_route.spoke_to_hub,
+    aws_route.spoke_to_hub_public,
+  ]
+}
+
+# Plano de dados do ingress: base + istiod + gateway, os três na mesma versão. O Service do
+# gateway nasce ClusterIP — quem materializa o load balancer é `module.ingress`, e a ligação
+# pods → target group será o TargetGroupBinding.
+#
+# Não depende do LBC: o gateway é um Deployment e um Service comuns, e sobe sem nada da AWS.
+# Quem vai precisar do CRD que o LBC registra é o passo seguinte, não este.
+#
+# A aresta de rede vem explícita pelo mesmo motivo do LBC — herdar de `module.external_secrets`
+# por transitividade a perderia se aquele módulo fosse desligado pelo `count`.
+module "ingress_istio" {
+  source = "../src/helm/modules/ingress-istio"
+  count  = local.install_ingress_istio ? 1 : 0
+
+  depends_on = [
+    module.nodegroup,
     aws_vpc_security_group_ingress_rule.api_from_hub,
 
     module.network,

@@ -152,7 +152,7 @@ e não deve ser instalado à mão:
 | Chart | Onde vive hoje |
 |---|---|
 | `aws-load-balancer-controller` | **Terraform** (`src/helm/modules/aws-load-balancer-controller`) |
-| `istio-base`, `istio-discovery`, `istio-gateway` (ClusterIP, NÃO LoadBalancer) | helm do checkout local, a migrar |
+| `istio-base`, `istiod`, `gateway` (ClusterIP, NÃO LoadBalancer) | **Terraform** (`src/helm/modules/ingress-istio`), Istio 1.30.4 upstream |
 | `httpbin`, `aws-target-group-binding` | helm do checkout local, a migrar |
 
 ```bash

@@ -51,6 +51,19 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   AWS**. É o ciclo red-green padrão aqui; usar antes de qualquer `apply`.
 - **`terraform init -backend=false` num diretório só com `tests/` falha** com `unknown provider`.
   Criar o `versions.tf` primeiro; o teste continua vermelho pelo motivo certo.
+- **`init -backend=false` numa RAIZ já inicializada contra o S3 ainda exige credencial válida.**
+  A flag não desfaz o backend gravado em `.terraform/terraform.tfstate`, e com o SSO expirado o
+  comando morre em `No valid credential sources found` — mesmo sem nada precisar da AWS. No loop de
+  regressão o sintoma é pior que um erro: a linha da raiz sai **vazia**, e vazio se lê como "sem
+  testes", não como falha. Nas raízes o `init` só é necessário quando os módulos mudaram; para rodar
+  a regressão com o SSO caído, chamar `terraform test` direto. Se o `init` for mesmo necessário,
+  mover `.terraform/terraform.tfstate` de lado, rodar, e devolver depois.
+- **Módulo novo herda a constraint de provider da raiz que o consome, não a do registry.** Um
+  `kubernetes = ">= 2.30.0, < 3.0.0"` num módulo consumido por uma raiz em `>= 3.0.0` faz o `init`
+  da RAIZ falhar com `no available releases match the given constraints` — e o `terraform test` da
+  raiz continua verde nesse meio-tempo, rodando contra o `.terraform/modules` antigo, sem o módulo
+  novo. Conferir `.terraform/modules/modules.json` depois de acrescentar módulo: se ele não está
+  listado, os testes da raiz não o exercitaram.
 - **Assertion nova sobre propriedade que importa exige teste de mutação:** quebrar a
   implementação de propósito e confirmar que o teste falha. Duas assertions desta base eram
   vazias até isso ser feito — uma comparava dois valores desconhecidos, outra usava
