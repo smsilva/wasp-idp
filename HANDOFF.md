@@ -184,6 +184,16 @@ critérios passaram, e o 4º passou **de verdade**, não pela largueza do matche
 
 **A próxima fronteira é a fase 4 (provas negativas), não mais o ingress.**
 
+**Último passo desta sessão:** teardown completo na ordem obrigatória (04 antes de 03), com a ordem do
+destroy lida no log — é a prova que faltava do `depends_on` (Known Broken 22, agora fechado). Nada
+ficou de pé; custo por hora em zero.
+
+**Próximo passo pretendido:** `4.1`/`4.2`, as duas provas negativas — **relendo antes o desenho delas à
+luz do SNAT** (Open Questions), porque prova de isolamento por endereço de origem não distingue
+operador de operador quando todos chegam com IP da VPC hub. Alternativa igualmente pronta, se a
+preferência for consolidar em vez de avançar: o wire do ArgoCD (Frente F), cujo mecanismo já está
+validado e cuja única incógnita é o prefixo de secret que a policy do ESO da camada 04 permite.
+
 #### Os três bugs que só o apply real mostrou, todos corrigidos e commitados
 
 Nenhum deles era testável antes de aplicar; dois são da mesma família e o terceiro é a razão pela qual
@@ -625,6 +635,14 @@ Narrativa completa em
   isolamento baseada em "origem X não alcança spoke Y" **não distingue operador de operador** por
   endereço — a distinção vive na authorization rule por grupo, do lado do endpoint. Verificar se o
   `4.1` como escrito ainda prova o que pretende, ou se precisa de outro vetor. **Não analisado.**
+- **O cluster deveria receber só as subnets PRIVADAS, em vez de as quatro?** O `control_plane_subnet_
+  ids` de `src/network` entrega públicas + privadas, espelhando o desenho de referência do Crossplane —
+  desenho de quando o endpoint era público. Com o endpoint privado, ENI de control plane em subnet
+  pública não serve a nada, e foi ela que causou o incidente de 2026-08-28. **Resolvido por rota** (o
+  supernet passou a existir nas duas tabelas), que é aditivo e não recria o cluster; estreitar para
+  privadas seria mais correto conceitualmente, mas muda a semântica de um output de módulo compartilhado
+  e pode forçar replace do `aws_eks_cluster`. **Não decidido** — decidir antes de a próxima célula
+  nascer, não depois.
 - **Fase 3 (ingress) não foi revisitada à luz do SNAT.** O caminho ALB→NLB→gateway não passa pelo
   Client VPN, então provavelmente não muda nada — mas o `X-Forwarded-For`/`numTrustedProxies` já
   era ponto de atenção ali, e vale conferir junto.
