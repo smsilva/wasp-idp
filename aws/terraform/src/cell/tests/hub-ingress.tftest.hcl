@@ -21,20 +21,20 @@ variables {
   region              = "us-east-1"
   aws_profile         = "cicd"
   network_profile     = "network"
-  hub_vpc_name        = "poc-hub-vpc"
   vpc_cidr            = "10.2.0.0/16"
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
   public_access_cidrs = ["203.0.113.10/32"]
   base_domain         = "exemplo.com"
-}
 
-override_data {
-  target = data.aws_vpc.hub
-  values = {
-    id         = "vpc-hub000000000001"
-    cidr_block = "10.1.0.0/16"
-  }
+  hub_vpc_id                         = "vpc-hub000000000001"
+  hub_vpc_cidr_block                 = "10.1.0.0/16"
+  transit_gateway_id                 = "tgw-00000000000000001"
+  hub_transit_gateway_route_table_id = "tgw-rtb-00000000000000001"
+  hub_transit_gateway_attachment_id  = "tgw-attach-00000000000000001"
+  hub_alb_listener_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
+  hub_alb_dns_name                   = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
+  hub_alb_zone_id                    = "Z35SXDOTRQ7X7K"
 }
 
 # As AZs vêm de data.aws_availability_zones (indexado por module.network); sob mock o valor é
@@ -50,22 +50,6 @@ override_data {
   target = data.aws_route53_zone.subzone
   values = {
     zone_id = "ZSUBZONE00000000001"
-  }
-}
-
-override_data {
-  target = data.aws_lb.hub_ingress
-  values = {
-    arn     = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/poc-hub-ingress/0000000000000001"
-    dns_name = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
-    zone_id  = "Z35SXDOTRQ7X7K"
-  }
-}
-
-override_data {
-  target = data.aws_lb_listener.hub_https
-  values = {
-    arn = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
   }
 }
 

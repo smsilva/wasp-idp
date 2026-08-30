@@ -3,6 +3,22 @@ output "cluster_name" {
   value       = module.cluster.cluster_name
 }
 
+# --------------------------------------------------------------------------------------
+# Com o cluster dentro deste modulo, os providers kubernetes e helm da raiz nao alcancam
+# mais um submodulo aninhado — os dois valores tem de atravessar como output, senao a raiz
+# nao compila os providers.
+# --------------------------------------------------------------------------------------
+
+output "cluster_endpoint" {
+  description = "Endpoint da API do EKS. A raiz configura os providers kubernetes e helm com ele."
+  value       = module.cluster.cluster_endpoint
+}
+
+output "cluster_ca_data" {
+  description = "CA do cluster, base64. Par obrigatorio do endpoint na configuracao dos providers."
+  value       = module.cluster.cluster_ca_data
+}
+
 output "region" {
   description = "Regiao da celula."
   value       = var.region

@@ -19,7 +19,6 @@ variables {
   region              = "us-east-1"
   aws_profile         = "cicd"
   network_profile     = "network"
-  hub_vpc_name        = "poc-hub-vpc"
   vpc_cidr            = "10.2.0.0/16"
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
@@ -28,43 +27,23 @@ variables {
   # 3.2 tornou base_domain obrigatoria (sem default, falha-fechado). Ela nao tem
   # relacao com o que este arquivo testa — sem o valor, nenhum run deste arquivo executa.
   base_domain = "exemplo.com"
+
+  # O hub, por referencia — ver o comentario no variables.tf do modulo. hub_vpc_cidr_block tem
+  # um segundo papel aqui: e o CIDR hub que vira allowed_ingress_cidrs do NLB.
+  hub_vpc_id                         = "vpc-hub000000000001"
+  hub_vpc_cidr_block                 = "10.1.0.0/16"
+  transit_gateway_id                 = "tgw-00000000000000001"
+  hub_transit_gateway_route_table_id = "tgw-rtb-00000000000000001"
+  hub_transit_gateway_attachment_id  = "tgw-attach-00000000000000001"
+  hub_alb_listener_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
+  hub_alb_dns_name                   = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
+  hub_alb_zone_id                    = "Z35SXDOTRQ7X7K"
 }
 
-# O 3.2 passou a consumir o ARN do listener do hub num campo que o provider VALIDA
-# client-side. Sob mock o valor e sintetico e a validacao recusa, derrubando runs que nada tem
-# a ver com ingress — dai o override ter de existir em TODO arquivo de teste da raiz, nao so no
-# do 3.2. Mesma familia do override de data.aws_vpc.hub.
-override_data {
-  target = data.aws_lb.hub_ingress
-  values = {
-    arn      = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/poc-hub-ingress/0000000000000001"
-    dns_name = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
-    zone_id  = "Z35SXDOTRQ7X7K"
-  }
-}
-
-override_data {
-  target = data.aws_lb_listener.hub_https
-  values = {
-    arn = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
-  }
-}
-
-# Mesmo motivo do private-access.tftest.hcl: sob mock o cidr_block vem sintético e a validação
-# client-side do provider recusa o valor na regra de 443. Aqui o override tem um segundo papel
-# — é o CIDR hub que vira allowed_ingress_cidrs do NLB.
 override_data {
   target = data.aws_availability_zones.this
   values = {
     names = ["us-east-1a", "us-east-1b"]
-  }
-}
-
-override_data {
-  target = data.aws_vpc.hub
-  values = {
-    id         = "vpc-hub000000000001"
-    cidr_block = "10.1.0.0/16"
   }
 }
 

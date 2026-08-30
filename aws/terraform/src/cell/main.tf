@@ -53,21 +53,8 @@ data "aws_availability_zones" "this" {
   state = "available"
 }
 
-# A VPC hub e lida pela API da AWS, nao pelo state da camada 1. A camada 2 depende do
-# recurso existir, nao do arquivo de state — se a camada 1 mudar de backend ou de chave,
-# isto continua valendo. Custo: exige um provider aliasado e credencial de leitura na
-# conta network.
-data "aws_vpc" "hub" {
-  provider = aws.network
-
-  filter {
-    name   = "tag:Name"
-    values = [var.hub_vpc_name]
-  }
-}
-
 module "network" {
-  source = "../src/network"
+  source = "../network"
 
   name               = var.name
   vpc_cidr           = var.vpc_cidr
@@ -80,16 +67,6 @@ module "network" {
 # 2.3 — attachment desta spoke no TGW da conta network. Sem isto o tunel do Client VPN
 # alcanca a VPC hub e para ai.
 # --------------------------------------------------------------------------------------
-
-# O TGW pertence a conta network; lido por tag, mesmo padrao de data.aws_vpc.hub acima.
-data "aws_ec2_transit_gateway" "hub" {
-  provider = aws.network
-
-  filter {
-    name   = "tag:Name"
-    values = ["poc-hub-tgw"]
-  }
-}
 
 # O compartilhamento (RAM) e criado do lado do hub, em connectivity/, e so funciona com
 # "sharing with AWS Organizations" ligado na Organization (raiz dns/, aplicado uma vez —
@@ -119,7 +96,7 @@ data "aws_ec2_transit_gateway" "hub" {
 resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
   vpc_id             = module.network.vpc_id
   subnet_ids         = module.network.private_subnet_ids
-  transit_gateway_id = data.aws_ec2_transit_gateway.hub.id
+  transit_gateway_id = var.transit_gateway_id
 
   # Mesma disciplina de connectivity/: nada por default, associacao e propagacao explicitas.
   transit_gateway_default_route_table_association = false
@@ -169,7 +146,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment_accepter" "this" {
 resource "aws_ec2_transit_gateway_route_table" "spoke" {
   provider = aws.network
 
-  transit_gateway_id = data.aws_ec2_transit_gateway.hub.id
+  transit_gateway_id = var.transit_gateway_id
 
   tags = merge(local.tags, { Name = "${var.name}-tgw-rt-spoke" })
 }
@@ -183,27 +160,6 @@ resource "aws_ec2_transit_gateway_route_table_association" "spoke" {
   depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
 
-# tgw-rt-hub — a route table do proprio hub, ja existe em connectivity/. Lida por tag, nao
-# por terraform_remote_state, mesmo padrao do resto desta camada.
-data "aws_ec2_transit_gateway_route_table" "hub" {
-  provider = aws.network
-
-  filter {
-    name   = "tag:Name"
-    values = ["poc-hub-tgw-rt-hub"]
-  }
-}
-
-# O attachment do proprio hub, tambem ja existe em connectivity/.
-data "aws_ec2_transit_gateway_vpc_attachment" "hub" {
-  provider = aws.network
-
-  filter {
-    name   = "tag:Name"
-    values = ["poc-hub-tgw-attachment"]
-  }
-}
-
 # As duas propagacoes sao o que fecha o circuito de ida e volta: sem a primeira o hub nao
 # aprende a rota para esta spoke; sem a segunda esta spoke nao aprende a rota de volta para
 # o hub (e, atras dela, para o cliente VPN).
@@ -211,7 +167,7 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "spoke_to_hub" {
   provider = aws.network
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.this.id
-  transit_gateway_route_table_id = data.aws_ec2_transit_gateway_route_table.hub.id
+  transit_gateway_route_table_id = var.hub_transit_gateway_route_table_id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment_accepter.this]
 }
@@ -219,7 +175,7 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "spoke_to_hub" {
 resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
   provider = aws.network
 
-  transit_gateway_attachment_id  = data.aws_ec2_transit_gateway_vpc_attachment.hub.id
+  transit_gateway_attachment_id  = var.hub_transit_gateway_attachment_id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spoke.id
 
   # Referencia so um data source (o attachment do HUB, gerenciado em connectivity/) e a
@@ -243,7 +199,7 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "hub_to_spoke" {
 resource "aws_route" "spoke_to_hub" {
   route_table_id         = module.network.private_route_table_id
   destination_cidr_block = local.supernet
-  transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
+  transit_gateway_id     = var.transit_gateway_id
 
   # Sem esperar o accepter, o attachment ainda está em pendingAcceptance e a AWS recusa a
   # rota com "TransitGatewayID.NotFound" — mensagem que não diz que a causa é o aceite.
@@ -271,7 +227,7 @@ resource "aws_route" "spoke_to_hub" {
 resource "aws_route" "spoke_to_hub_public" {
   route_table_id         = module.network.public_route_table_id
   destination_cidr_block = local.supernet
-  transit_gateway_id     = data.aws_ec2_transit_gateway.hub.id
+  transit_gateway_id     = var.transit_gateway_id
 
   depends_on = [
     aws_ec2_transit_gateway_vpc_attachment.this,
@@ -280,7 +236,7 @@ resource "aws_route" "spoke_to_hub_public" {
 }
 
 module "cluster" {
-  source = "../src/cluster"
+  source = "../cluster"
 
   name                   = var.name
   kubernetes_version     = var.kubernetes_version
@@ -316,7 +272,7 @@ resource "aws_vpc_security_group_ingress_rule" "api_from_hub" {
   security_group_id = module.cluster.cluster_security_group_id
   description       = "Kubernetes API from the hub VPC (Client VPN SNATs to the hub CIDR)"
 
-  cidr_ipv4   = data.aws_vpc.hub.cidr_block
+  cidr_ipv4   = var.hub_vpc_cidr_block
   ip_protocol = "tcp"
   from_port   = 443
   to_port     = 443
@@ -328,7 +284,7 @@ resource "aws_vpc_security_group_ingress_rule" "api_from_hub" {
 # --------------------------------------------------------------------------------------
 
 module "ingress" {
-  source = "../src/ingress"
+  source = "../ingress"
 
   name                 = var.name
   vpc_id               = module.network.vpc_id
@@ -338,7 +294,7 @@ module "ingress" {
   # Quem alcanca o NLB e o hub, e so ele: a decisao de ingress unico diz que nenhuma spoke
   # expoe acesso a si direto. O CIDR vem do data source da VPC hub, o mesmo que autoriza a
   # regra de 443 na API — nao ha valor de rede escrito a mao nesta camada.
-  allowed_ingress_cidrs = [data.aws_vpc.hub.cidr_block]
+  allowed_ingress_cidrs = [var.hub_vpc_cidr_block]
 
   tags = local.tags
 }
@@ -382,7 +338,7 @@ resource "aws_vpc_security_group_ingress_rule" "gateway_health_check_from_nlb" {
 # type=LoadBalancer ficam de fora de proposito: o NLB e do Terraform, e um LBC capaz de criar
 # load balancer proprio reabriria a porta que a decisao de ingress unico fechou.
 module "pod_identity_lbc" {
-  source = "../src/pod-identity"
+  source = "../pod-identity"
 
   name                 = "${var.name}-load-balancer-controller"
   cluster_name         = module.cluster.cluster_name
@@ -427,7 +383,7 @@ module "pod_identity_lbc" {
 }
 
 module "nodegroup" {
-  source = "../src/nodegroup"
+  source = "../nodegroup"
 
   cluster_name  = module.cluster.cluster_name
   node_role_arn = module.cluster.node_role_arn
@@ -436,7 +392,7 @@ module "nodegroup" {
 }
 
 module "pod_identity_ebs_csi" {
-  source = "../src/pod-identity"
+  source = "../pod-identity"
 
   name                 = "${var.name}-ebs-csi"
   cluster_name         = module.cluster.cluster_name
@@ -447,7 +403,7 @@ module "pod_identity_ebs_csi" {
 }
 
 module "pod_identity_eso" {
-  source = "../src/pod-identity"
+  source = "../pod-identity"
 
   name                 = "${var.name}-external-secrets"
   cluster_name         = module.cluster.cluster_name
@@ -470,7 +426,7 @@ module "pod_identity_eso" {
 # Esta e a razao de ser da camada: o Crossplane deixa de depender da access key de longa
 # duracao do crossplane-poc e passa a assumir os roles das contas alvo por Pod Identity.
 module "pod_identity_crossplane" {
-  source = "../src/pod-identity"
+  source = "../pod-identity"
 
   name                 = "${var.name}-crossplane"
   cluster_name         = module.cluster.cluster_name
@@ -496,7 +452,7 @@ module "pod_identity_crossplane" {
 # module.crossplane): a Pod Identity antes do release, a regra de 443 antes de qualquer
 # conversa com o API server, e o caminho de rede até o endpoint privado nas duas direções.
 module "aws_load_balancer_controller" {
-  source = "../src/helm/modules/aws-load-balancer-controller"
+  source = "../helm/modules/aws-load-balancer-controller"
   count  = local.install_load_balancer_controller ? 1 : 0
 
   cluster_name = module.cluster.cluster_name
@@ -529,7 +485,7 @@ module "aws_load_balancer_controller" {
 # A aresta de rede vem explícita pelo mesmo motivo do LBC — herdar de `module.external_secrets`
 # por transitividade a perderia se aquele módulo fosse desligado pelo `count`.
 module "ingress_istio" {
-  source = "../src/helm/modules/ingress-istio"
+  source = "../helm/modules/ingress-istio"
   count  = local.install_ingress_istio ? 1 : 0
 
   # O mesmo wildcard do certificado do ACM e do registro Route 53 desta célula. As três pontas
@@ -566,7 +522,7 @@ module "ingress_istio" {
 # values file colado à mão fica velho no primeiro replace, e o sintoma é uma target group vazia
 # com tudo aparentemente saudável.
 module "target_group_binding" {
-  source = "../src/helm/modules/target-group-binding"
+  source = "../helm/modules/target-group-binding"
   count  = local.install_target_group_binding ? 1 : 0
 
   namespace        = one(module.ingress_istio[*].gateway_namespace)
@@ -590,7 +546,7 @@ module "target_group_binding" {
 # O host é `services.`, não `app.`: qualquer outro nome sob o wildcard cai no `fixed-response`
 # 404 do listener do ALB, e o sintoma é indistinguível de rota faltando no cluster.
 module "httpbin" {
-  source = "../src/helm/modules/httpbin"
+  source = "../helm/modules/httpbin"
   count  = local.install_httpbin ? 1 : 0
 
   host        = local.cell_services_fqdn
@@ -612,7 +568,7 @@ module "httpbin" {
 # a conexao. O sintoma seria timeout no primeiro release, longe da causa. A aresta e
 # explicita porque nada na configuracao do provider a cria.
 module "external_secrets" {
-  source = "../src/helm/modules/external-secrets"
+  source = "../helm/modules/external-secrets"
   count  = local.install_external_secrets ? 1 : 0
 
   depends_on = [
@@ -642,7 +598,7 @@ module "external_secrets" {
 }
 
 module "argo_cd" {
-  source = "../src/helm/modules/argo-cd"
+  source = "../helm/modules/argo-cd"
   count  = local.install_argocd ? 1 : 0
 
   oidc_enabled = local.install_argocd_oidc
@@ -654,7 +610,7 @@ module "argo_cd" {
 }
 
 module "crossplane" {
-  source = "../src/helm/modules/crossplane"
+  source = "../helm/modules/crossplane"
   count  = local.install_crossplane ? 1 : 0
 
   depends_on = [
@@ -694,7 +650,7 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
   data = {
     region            = var.region
     clusterName       = module.cluster.cluster_name
-    hubVpcId          = data.aws_vpc.hub.id
+    hubVpcId          = var.hub_vpc_id
     spokeSubnetIds    = join(",", module.network.private_subnet_ids)
     crossplaneRoleArn = module.pod_identity_crossplane.role_arn
     networkAccountId  = var.network_account_id
@@ -743,21 +699,9 @@ resource "kubernetes_config_map_v1" "platform_bootstrap" {
 # sem orfao do lado do hub. Dai o provider aliasado, e nao connectivity/.
 #
 # O ALB e o listener :443 NAO nascem aqui: sao permanentes, da camada 03. Um listener por hub,
-# N certificados por SNI, uma rule por celula. Lidos por data source (por nome), nao por
-# terraform_remote_state — mesmo padrao da VPC hub e do TGW.
-
-data "aws_lb" "hub_ingress" {
-  provider = aws.network
-
-  name = var.hub_alb_name
-}
-
-data "aws_lb_listener" "hub_https" {
-  provider = aws.network
-
-  load_balancer_arn = data.aws_lb.hub_ingress.arn
-  port              = 443
-}
+# N certificados por SNI, uma rule por celula. Chegam por referencia (var.hub_alb_listener_arn),
+# mesmo padrao da VPC hub e do TGW: o consumidor declara a dependencia como aresta do grafo,
+# nao redescobre por data source o que a raiz ja resolveu via output de src/hub.
 
 data "aws_route53_zone" "subzone" {
   provider = aws.network
@@ -814,7 +758,7 @@ resource "aws_acm_certificate_validation" "cell" {
 resource "aws_lb_listener_certificate" "cell" {
   provider = aws.network
 
-  listener_arn    = data.aws_lb_listener.hub_https.arn
+  listener_arn    = var.hub_alb_listener_arn
   certificate_arn = aws_acm_certificate_validation.cell.certificate_arn
 }
 
@@ -833,7 +777,7 @@ resource "aws_lb_target_group" "hub_to_cell" {
   port        = 80
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = data.aws_vpc.hub.id
+  vpc_id      = var.hub_vpc_id
 
   health_check {
     path     = "/"
@@ -879,7 +823,7 @@ resource "aws_lb_target_group_attachment" "hub_to_cell" {
 resource "aws_lb_listener_rule" "cell" {
   provider = aws.network
 
-  listener_arn = data.aws_lb_listener.hub_https.arn
+  listener_arn = var.hub_alb_listener_arn
   priority     = local.listener_rule_priority
 
   action {
@@ -907,8 +851,8 @@ resource "aws_route53_record" "cell_wildcard" {
   type    = "A"
 
   alias {
-    name                   = data.aws_lb.hub_ingress.dns_name
-    zone_id                = data.aws_lb.hub_ingress.zone_id
+    name                   = var.hub_alb_dns_name
+    zone_id                = var.hub_alb_zone_id
     evaluate_target_health = false
   }
 }

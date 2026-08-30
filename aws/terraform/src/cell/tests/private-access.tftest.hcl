@@ -28,7 +28,6 @@ variables {
   region              = "us-east-1"
   aws_profile         = "cicd"
   network_profile     = "network"
-  hub_vpc_name        = "poc-hub-vpc"
   vpc_cidr            = "10.2.0.0/16"
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
@@ -37,58 +36,18 @@ variables {
   # 3.2 tornou base_domain obrigatoria (sem default, falha-fechado). Ela nao tem
   # relacao com o que este arquivo testa — sem o valor, nenhum run deste arquivo executa.
   base_domain = "exemplo.com"
-}
 
-# O 3.2 passou a consumir o ARN do listener do hub num campo que o provider VALIDA
-# client-side. Sob mock o valor e sintetico e a validacao recusa, derrubando runs que nada tem
-# a ver com ingress — dai o override ter de existir em TODO arquivo de teste da raiz, nao so no
-# do 3.2. Mesma familia do override de data.aws_vpc.hub.
-override_data {
-  target = data.aws_lb.hub_ingress
-  values = {
-    arn      = "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/poc-hub-ingress/0000000000000001"
-    dns_name = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
-    zone_id  = "Z35SXDOTRQ7X7K"
-  }
-}
-
-override_data {
-  target = data.aws_lb_listener.hub_https
-  values = {
-    arn = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
-  }
-}
-
-override_data {
-  target = data.aws_ec2_transit_gateway.hub
-  values = {
-    id = "tgw-hub00000000001"
-  }
-}
-
-override_data {
-  target = data.aws_ec2_transit_gateway_route_table.hub
-  values = {
-    id = "tgw-rtb-hub00000001"
-  }
-}
-
-override_data {
-  target = data.aws_ec2_transit_gateway_vpc_attachment.hub
-  values = {
-    id = "tgw-attach-hub00001"
-  }
-}
-
-# Sob mock, o cidr_block deste data source vem sintético — e além de tornar a asserção
-# tautológica, um valor sintético não passa pela validação de CIDR do provider no
-# aws_vpc_security_group_ingress_rule. O override é obrigatório aqui, não conveniência.
-override_data {
-  target = data.aws_vpc.hub
-  values = {
-    id         = "vpc-hub000000000001"
-    cidr_block = "10.1.0.0/16"
-  }
+  # O hub, por referencia — ver o comentario no variables.tf do modulo. hub_vpc_cidr_block
+  # precisa ser CIDR real: alimenta a validacao client-side do provider na regra de 443 de
+  # aws_vpc_security_group_ingress_rule.api_from_hub.
+  hub_vpc_id                         = "vpc-hub000000000001"
+  hub_vpc_cidr_block                 = "10.1.0.0/16"
+  transit_gateway_id                 = "tgw-hub00000000001"
+  hub_transit_gateway_route_table_id = "tgw-rtb-hub00000001"
+  hub_transit_gateway_attachment_id  = "tgw-attach-hub00001"
+  hub_alb_listener_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
+  hub_alb_dns_name                   = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
+  hub_alb_zone_id                    = "Z35SXDOTRQ7X7K"
 }
 
 # As AZs vêm de data.aws_availability_zones (indexado por module.network); sob mock o valor é
@@ -189,19 +148,17 @@ run "a_api_aceita_443_do_cidr_da_vpc_hub" {
   }
 }
 
-# Um override_resource/override_data prova o VALOR; dois provam a LIGAÇÃO. Com um só, um
+# Um override de VALOR prova o valor; dois provam a LIGAÇÃO. Com um só, um
 # `cidr_ipv4 = "10.1.0.0/16"` cravado no código passaria verde — foi exatamente o que
 # aconteceu no 1.3 com os name servers. Segundo run, hub em outro /16: nenhuma constante
-# satisfaz os dois.
+# satisfaz os dois. O que era `override_data` de `data.aws_vpc.hub` vira variavel do run —
+# mesma prova, agora contra a interface fechada.
 run "e_acompanha_um_hub_em_outro_cidr" {
   command = plan
 
-  override_data {
-    target = data.aws_vpc.hub
-    values = {
-      id         = "vpc-hub000000000002"
-      cidr_block = "10.7.0.0/16"
-    }
+  variables {
+    hub_vpc_id         = "vpc-hub000000000002"
+    hub_vpc_cidr_block = "10.7.0.0/16"
   }
 
   assert {

@@ -1,7 +1,10 @@
 variable "name" {
-  description = "Nome da celula. Prefixo de todos os recursos."
+  description = <<-EOT
+    Nome da celula. Prefixo de todos os recursos, incluindo cinco roles de IAM e dois records do
+    Route 53 — os dois namespaces GLOBAIS da conta. Tem de ser unico na Organization inteira, nao
+    so na regiao, por isso a raiz o compoe com a regiao e nao ha default aqui.
+  EOT
   type        = string
-  default     = "control-plane"
 }
 
 variable "region" {
@@ -20,12 +23,6 @@ variable "network_profile" {
   description = "Profile local com acesso de leitura a conta network, dona da VPC hub."
   type        = string
   default     = "network"
-}
-
-variable "hub_vpc_name" {
-  description = "Valor da tag Name da VPC hub criada pela camada 1. O modulo src/network sufixa -vpc no name do root, que em us-east-1 e poc-hub."
-  type        = string
-  default     = "poc-hub-vpc"
 }
 
 variable "vpc_cidr" {
@@ -148,15 +145,61 @@ variable "subzone_label" {
   default     = "nonprod"
 }
 
-variable "hub_alb_name" {
-  description = <<-EOT
-    Nome do ALB de ingress que a camada 03 cria (`<nome do hub>-ingress`). Lido por data
-    source, nao por terraform_remote_state — mesmo padrao da VPC hub e do TGW.
+# --------------------------------------------------------------------------------------
+# O hub, por referencia. Cada uma destas substitui um data source que a camada 04 usava para
+# redescobrir por tag ou nome o que a camada 03 tinha acabado de criar. A diferenca nao e de
+# estilo: com a referencia, a ordem de apply e de destroy passa a ser aresta do grafo, e os
+# dois incidentes de `dial tcp <ip-privado>:443: i/o timeout` (2026-08-27 e 2026-08-28) eram
+# arestas que faltavam por as duas pontas nao estarem no mesmo grafo.
+# --------------------------------------------------------------------------------------
 
-    E um segundo lugar que codifica o nome do hub, ao lado de hub_vpc_name e da tag do TGW
-    (hoje literal no main.tf). Unificar os tres num `hub_name` seria melhor e nao foi feito
-    aqui para nao arrastar mudanca de variavel existente para dentro do 3.2.
+variable "hub_vpc_id" {
+  description = "VPC hub. Era data.aws_vpc.hub, filtrada por tag:Name."
+  type        = string
+}
+
+variable "hub_vpc_cidr_block" {
+  description = <<-EOT
+    CIDR da VPC hub. E a origem que o security group do cluster autoriza em 443: o Client VPN faz
+    SNAT, entao o trafego do tunel chega a celula com origem AQUI, nao no client CIDR. Comprovado
+    com pacote no 2.3 — liberar o client CIDR nao passa, liberar a VPC hub passa.
   EOT
   type        = string
-  default     = "poc-hub-ingress"
+}
+
+variable "transit_gateway_id" {
+  description = "TGW do hub. Era data.aws_ec2_transit_gateway.hub, filtrado por tag:Name = poc-hub-tgw."
+  type        = string
+}
+
+variable "hub_transit_gateway_route_table_id" {
+  description = "Route table do HUB — onde o attachment desta celula e propagado para o hub aprender a rota de volta. Era data.aws_ec2_transit_gateway_route_table.hub."
+  type        = string
+}
+
+variable "hub_transit_gateway_attachment_id" {
+  description = <<-EOT
+    Attachment da propria VPC hub — o que esta celula propaga para a route table DELA, para
+    aprender a rota ate o hub e, atras dele, ate o cliente VPN. Era
+    data.aws_ec2_transit_gateway_vpc_attachment.hub.
+
+    NAO confundir com o attachment desta celula: as duas propagacoes (spoke_to_hub e hub_to_spoke)
+    nao podem ser trocadas entre si, e ha teste de mutacao especifico cobrindo isso.
+  EOT
+  type        = string
+}
+
+variable "hub_alb_listener_arn" {
+  description = "Listener :443 compartilhado do ALB do hub. Era data.aws_lb_listener.hub_https, achado a partir de data.aws_lb.hub_ingress por nome."
+  type        = string
+}
+
+variable "hub_alb_dns_name" {
+  description = "Alvo do registro A alias desta celula. MUDA a cada recriacao do ALB — por isso vem por referencia, nunca fixado."
+  type        = string
+}
+
+variable "hub_alb_zone_id" {
+  description = "Zone id canonica do ALB, par obrigatorio do dns_name num registro alias."
+  type        = string
 }
