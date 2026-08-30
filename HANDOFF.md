@@ -63,8 +63,13 @@ propósito (ADR 0014, fase 2 da frente `regional-root-hub-and-cell-modules`) e d
 resíduo, é a camada 01+03 tendo virado `src/hub`, consumido por `regions/us-east-1/` (`module.hub`),
 já aplicado dali. Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
 (`aws-vpn-client get-connection-status --profile-name hub-us-east-1`, o profile leva a região no
-nome porque a `us-west-2` terá o próprio). `control-plane/` continua de pé como raiz antiga — vira
-`module.cell` na fase 3, ainda não iniciada. As duas raízes velhas somem do disco só na fase 4.
+nome porque a `us-west-2` terá o próprio). `control-plane/` continua de pé como raiz antiga (código
+morto, sem apply próprio) — vira `module.cell` na fase 3, que já fechou: `regions/us-east-1/` compôs
+`module.hub` + `module.cell`, um apply real da célula (78 recursos) foi feito e destruído de volta
+(`terraform destroy -target=module.cell`), com o hub (43 recursos) de pé. Rodada de fix da revisão
+final da fase 3 em andamento nesta sessão. As duas raízes velhas (`connectivity/`,
+`network-foundation/`, `control-plane/`) só somem do disco na fase 4; `up-01`/`up-03`/`up-04` agora
+recusam rodar (guard `fail`, aponta para `up-02-region`).
 
 Custo por camada, ordem de subida/derrubada e as armadilhas dos scripts: `aws/terraform/README.md`
 (fonte da verdade — não duplicar números aqui, e ainda não reflete a raiz regional nova). Regra
@@ -88,10 +93,13 @@ corrente: `feat/regional-root-hub-cell`, executando a fase 2 de uma frente difer
 
 **Plano de execução da fase corrente:**
 `docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
-(`README.md` + `01`–`05`). Ler o `README.md` mais `02-hub-module.md` (fase corrente), não o plano
-inteiro. Task 1 e 2 fechadas e commitadas; Task 3 (destruir 01/03, aplicar a raiz nova, conectar o
-túnel) fechada nesta sessão — falta só marcar o aceite da fase 2 e seguir para a fase 3
-(`03-cell-module.md`).
+(`README.md` + `01`–`05`). Fase 2 (`02-hub-module.md`) e fase 3 (`03-cell-module.md`) fechadas —
+`module.cell` compõe com `module.hub` na raiz regional, apply e destroy reais provados. A revisão
+final de branch (opus, `ef000ad..6de2552`) achou 7 Important + minors; rodada de fix em andamento
+direto nesta sessão (sem subagent — ver ledger `.superpowers/sdd/03-cell-module/progress.md`
+enquanto ele existir). Falta: fix de AZ cross-conta (finding #1) e FQDN do ALB sem região
+(finding #2), sonda `us-west-2` (aceite da fase 3), depois seguir para a fase 4 (remoção das raízes
+antigas, renomeio `up-02-dns`→`up-01-dns`).
 
 A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
 — ver `docs/archived/index.md`.
