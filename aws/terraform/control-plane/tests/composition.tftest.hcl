@@ -16,8 +16,8 @@ variables {
   vpc_cidr           = "10.2.0.0/16"
   target_account_ids = ["000000000000"]
   network_account_id = "111111111111"
-  # RFC 5737, bloco de documentacao. Na vida real vem do generate-tfvars, que descobre o IP
-  # publico da maquina que vai rodar o apply.
+  # RFC 5737, bloco de documentacao. Na vida real e o CIDR de break-glass declarado a mao em
+  # variables/values.tfvars quando o endpoint publico e aberto.
   public_access_cidrs = ["203.0.113.10/32"]
 
   # 3.2 tornou base_domain obrigatoria (sem default, falha-fechado). Ela nao tem

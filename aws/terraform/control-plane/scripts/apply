@@ -82,8 +82,8 @@ command -v terraform > /dev/null 2>&1 || fail "missing binary: terraform"
 
 cd "${root_directory}"
 
-[ -f terraform.tfvars ] || fail "terraform.tfvars is missing. Generate it with scripts/generate-tfvars."
-[ -d .terraform ] || fail "backend not initialized. Run 'terraform init -backend-config=\"bucket=<bucket>\"' (generate-tfvars prints the bucket)."
+[ -f values.auto.tfvars ] || fail "values.auto.tfvars is missing (symlink to ../variables/values.tfvars). Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
+[ -d .terraform ] || fail "backend not initialized. Run 'terraform init -backend-config=\"bucket=<bucket>\"'."
 
 mkdir -p "${log_directory}"
 

@@ -18,10 +18,10 @@ show_usage() {
   Tier T2: bring it up, validate, tear it down. Do NOT leave it up between
   sessions.
 
-  Discovery is delegated to the root's own script (control-plane/scripts/
-  generate-tfvars), which validates the hub VPC tag, CIDR collisions and the
-  region against the SCP, and also discovers this machine's public IP for the
-  API endpoint's public_access_cidrs.
+  The identity values come from variables/values.tfvars (see
+  variables/README.md); the availability zones come from a data source, and
+  the structural values (region, CIDR, Kubernetes version) are variable
+  defaults. There is no discovery step.
 
   DEPENDS ON layer 1 (reads the hub VPC by tag:Name in the network account).
   Once layer 3 (connectivity) is applied, the TGW attachment belongs in THIS
@@ -33,15 +33,12 @@ show_usage() {
       -y,  --yes             Do not ask before applying
            --state-bucket    Bucket name (default: tfstate-<organization-id>)
            --org-profile     Profile that reads Organizations (default: personal)
-      -f,  --force-tfvars    Regenerate terraform.tfvars even if it exists
-                              (needed when changing networks: the /32 changes)
 
 EOF
 }
 
 assume_yes="false"
 org_profile="personal"
-force_tfvars="false"
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
   case $1 in
@@ -64,10 +61,6 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       org_profile="${1}"
       ;;
 
-    -f | --force-tfvars )
-      force_tfvars="true"
-      ;;
-
     * )
       echo "Invalid option: ${1}" >&2
       show_usage
@@ -86,12 +79,12 @@ root="${terraform_directory}/control-plane"
 
 step "Layer 4 — Control Plane (EKS)"
 
-if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
-  log "generating terraform.tfvars"
-  "${root}/scripts/generate-tfvars" --force
-else
-  log "terraform.tfvars already exists (use --force-tfvars to regenerate — the endpoint /32 changes with the network)"
-fi
+values_file="${terraform_directory}/variables/values.tfvars"
+
+# Guard, not generation: without the file the plan would fail on base_domain anyway. What this
+# block buys is the message — Terraform's error names the missing variable, not where to declare it.
+[ -f "${values_file}" ] \
+  || fail "missing ${values_file}. Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
 
