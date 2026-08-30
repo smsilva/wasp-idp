@@ -52,37 +52,24 @@ Não presumir o que está de pé pelo handoff — conferir sempre:
 
 ```bash
 cd aws/terraform
-for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1 regions/us-east-1; do
+for m in state-backend dns regions/us-east-1 regions/us-west-2; do
   printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
 done
 k3d cluster list
 ```
 
-**2026-08-30:** `connectivity/us-east-1` e `network-foundation/us-east-1` foram destruídas de
-propósito (ADR 0014, fase 2 da frente `regional-root-hub-and-cell-modules`) e devem dar `0` — não é
-resíduo, é a camada 01+03 tendo virado `src/hub`, consumido por `regions/us-east-1/` (`module.hub`),
-já aplicado dali. Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
-(`aws-vpn-client get-connection-status --profile-name hub-us-east-1`, o profile leva a região no
-nome porque a `us-west-2` terá o próprio). `control-plane/` continua de pé como raiz antiga (código
-morto, sem apply próprio) — vira `module.cell` na fase 3, que já fechou: `regions/us-east-1/` compôs
-`module.hub` + `module.cell`, um apply real da célula (78 recursos) foi feito e destruído de volta
-(`terraform destroy -target=module.cell`), com o hub (43 recursos) de pé.
+**2026-08-30 (fase 4):** as raízes antigas (`network-foundation/`, `connectivity/`, `control-plane/`)
+e os scripts `up-01`/`up-03`/`up-04` foram apagados do disco e do bucket de state — o conteúdo vive
+em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2/` existe: hub aplicado
+(42 recursos, `10.3.0.0/16`), célula não (por custo) — o `plan` da composição inteira (hub+célula) é
+verde, provando o invariante da frente. `regions/us-east-1/` segue com o hub de pé (43 recursos);
+célula aplicada e destruída de volta em sessão anterior, prova já feita. Scripts renumerados:
+`up-00-state-backend`, `up-01-dns`, `up-02-region`. `aws/terraform/README.md` já reflete a sequência
+nova — é a fonte de verdade para custo/ordem, não duplicar números aqui.
 
-A rodada de fix da revisão final da fase 3 (7 Important + minors) fechou nesta sessão, direto no
-controller — o dispatch original (subagent dedicado) morreu por rate limit sem nenhum progresso.
-Um `terraform plan` real (`-target=module.hub`, sem apply) confirmou: a regionalização do FQDN do
-certificado default do ALB (`*.us-east-1.nonprod.<domínio>`) propõe trocar o certificado, a
-validação DNS-01 e o listener (`3 to add, 1 to change, 3 to destroy`) — **plano salvo mas não
-aplicado**, decisão do usuário sobre quando trocar o cert live; o fix de conta da AZ não propôs
-nenhuma mudança (o risco era latente, nunca se manifestou). As três raízes velhas
-(`connectivity/`, `network-foundation/`, `control-plane/`) só somem do disco na fase 4;
-`up-01`/`up-03`/`up-04` recusam rodar (guard `fail`, aponta para `up-02-region`).
-
-Custo por camada, ordem de subida/derrubada e as armadilhas dos scripts: `aws/terraform/README.md`
-(fonte da verdade — não duplicar números aqui, e ainda não reflete a raiz regional nova). Regra
-fixa: **a camada `connectivity/` (03) é um nível T1 que fica de pé de propósito durante o dia** —
-regra que migrou para `regions/<r>/` → `module.hub` (T1) com a fase 2
-([ADR 0009](docs/adr/0009-hub-alb-lives-in-connectivity-layer.md)).
+Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
+(`aws-vpn-client get-connection-status --profile-name hub-<região>` — o profile leva a região no
+nome porque cada região tem o próprio endpoint).
 
 ## Em progresso agora
 
@@ -102,20 +89,15 @@ corrente: `feat/regional-root-hub-cell`, executando a frente `regional-root-hub-
 **Plano de execução da fase corrente:**
 `docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
 (`README.md` + `01`–`05`). Fases 1-3 fechadas — `module.cell` compõe com `module.hub` na raiz
-regional, apply e destroy reais provados, 8 dos 9 itens do aceite da fase 3 marcados (o pendente
-é a sonda `us-west-2`, dispensada por custo — a prova offline equivalente já existe em
-`src/hub/tests/regional-naming.tftest.hcl`). Rodada de fix da revisão final de branch
-(`ef000ad..6de2552`, 7 Important + minors) também fechada. Ledger da fase 3
-`.superpowers/sdd/03-cell-module/progress.md` ainda não foi limpo (workspace SDD, gitignored) —
-apagar quando não precisar mais dele.
+regional, apply e destroy reais provados. Fase 4 (`04-cleanup-and-docs.md`) em andamento: raízes
+antigas apagadas (Task 1), `regions/us-west-2/` criada com o hub aplicado (Task 2), scripts
+renumerados (Task 3), `README.md` reescrito (Task 4 Step 1). Falta: regressão offline completa
++ clone limpo (Step 4-5), fechar #36/#21 (Step 6).
 
-**Próximo passo: fase 4** (`04-cleanup-and-docs.md`, ainda não iniciada) — apagar
-`network-foundation/`, `connectivity/`, `control-plane/` e os scripts `up-01`/`up-03`/`up-04`
-(states já confirmados vazios nas três), mover `connectivity/us-east-1/saml-metadata.xml.example`
-→ `variables/`, criar `regions/us-west-2/`, reescrever `aws/terraform/README.md` para a sequência
-nova de verdade (hoje só tem um banner apontando pra lá, o corpo ainda descreve a sequência
-antiga), renumerar `up-02-dns` → `up-01-dns`. Só depois disso o critério de aceite da #37 ("árvore
-final aplica do zero seguindo só o README") fica satisfeito.
+Peer session ativa neste mesmo working directory (`ListAgents`) fez um commit
+(`8707aef feat(docs): update README...`) fora do fluxo normal desta sessão — conteúdo idêntico ao
+que esta sessão já ia escrever, sem conflito, mas vale investigar a origem antes de confiar nisso
+de novo.
 
 A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
 — ver `docs/archived/index.md`.
@@ -159,17 +141,17 @@ e ler o `Account`/`Arn` inteiro. Erro de profile inexistente ou ARN vazio ⟹
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Derrubar (ordem obrigatória):**
+**Derrubar (rotina, todo dia):**
 
 ```bash
-cd aws/terraform/control-plane && ./scripts/destroy        # PRIMEIRO
-cd ../connectivity/us-east-1 && ./scripts/destroy           # só depois
+cd aws/terraform/scripts && ./down-cell --region us-east-1 --yes
 ```
 
-O TGW attachment da spoke vive no state da control-plane; a AWS recusa deletar TGW com attachment
-vivo. Se o `destroy` morrer com `dial tcp <ip-privado>:443: i/o timeout`, a aresta está errada, não
-é falha de credencial — recuperação: `terraform state rm` dos objetos Kubernetes presos + reaplicar
-o `destroy`.
+`down-cell` destrói só `module.cell` (`-target`), mantendo o hub de pé. Derrubar a região inteira
+(hub incluso) é `terraform destroy` sem `-target` na raiz `regions/<região>/` — não é rotina, sem
+script próprio de propósito. Se o destroy morrer com `dial tcp <ip-privado>:443: i/o timeout`, a
+aresta de `depends_on` está errada, não é falha de credencial — recuperação: `terraform state rm`
+dos objetos Kubernetes presos + reaplicar o `destroy`.
 
 **Continuar com as camadas de pé exige o túnel conectado** (a API do cluster só existe por ele):
 
@@ -184,11 +166,12 @@ sempre, nunca presumidos. `~/trash/hub.ovpn` de sessões anteriores está sempre
 muda a cada recriação da 03) — reexportar sempre.
 
 **Subir o ambiente** — a sequência completa (preencher `variables/values.tfvars` → `up-all` →
-`up-03` → exportar/importar `.ovpn` → conectar → `up-04` → provar; sem passo de geração de tfvars),
-com custo e dependência por camada, vive em `aws/terraform/README.md`. **Ler de lá, não daqui.**
+exportar/importar `.ovpn` → conectar → `up-all --with-cell` → provar; sem passo de geração de
+tfvars), com custo e dependência por camada, vive em `aws/terraform/README.md`. **Ler de lá, não
+daqui.**
 
 **Verificar a célula ponta a ponta.** Desde 2026-08-29 (branch `feat/terraform-cluster-addons`)
-**nenhum `helm` manual é necessário** — o `up-04` entrega a célula inteira, e o checkout de
+**nenhum `helm` manual é necessário** — `up-02-region --with-cell` entrega a célula inteira, e o checkout de
 `wasp-gitops` deixou de estar no caminho:
 
 | Chart | Onde vive |
@@ -202,7 +185,7 @@ com custo e dependência por camada, vive em `aws/terraform/README.md`. **Ler de
 falta. Ordem em que quebra, e o que cada ponto significa:
 
 ```bash
-terraform -chdir=aws/terraform/control-plane output cell_services_url   # https://services.<célula>.<subzona>/
+terraform -chdir=aws/terraform/regions/us-east-1 output cell_services_url   # https://services.<célula>.<subzona>/
 ```
 
 `dig` no host → certificado no listener → os dois target groups (spoke e hub) `healthy` → `curl`
@@ -216,10 +199,10 @@ público sem `-k`.
 ```bash
 cd aws/terraform
 for m in src/network src/state-backend src/pod-identity src/cluster src/nodegroup src/ingress \
+         src/hub src/cell \
          src/helm/modules/aws-load-balancer-controller \
          src/helm/modules/external-secrets src/helm/modules/argo-cd src/helm/modules/crossplane \
-         network-foundation/us-east-1 network-foundation/us-west-2 control-plane dns \
-         connectivity/us-east-1; do
+         regions/us-east-1 regions/us-west-2 dns; do
   (cd "${m}" && terraform init -backend=false >/dev/null && terraform test)
 done
 ```
@@ -229,7 +212,7 @@ done
 ```bash
 aws-vpn-client --version                              # 6.0.1 — ausente ⟹ alguém instalou por `latest`
 systemctl is-active aws-client-vpn-daemon.service
-terraform -chdir=aws/terraform/control-plane init -backend-config="bucket=tfstate-o-e4r8ndteju"
+terraform -chdir=aws/terraform/regions/us-east-1 init -backend-config="bucket=tfstate-o-e4r8ndteju"
 ```
 
 `terraform apply`/`destroy` rodam por `! <comando>` — o classifier de auto-mode bloqueia para o
