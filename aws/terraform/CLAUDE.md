@@ -479,3 +479,10 @@ o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem e
   aparece no `Create*`, parecendo bug de código.
 - CIDR é a **única decisão irreversível da cadeia**. Supernet `10.0.0.0/12`, um `/16` por VPC,
   teto de 15, e região multiplica.
+- **`data "aws_availability_zones"` sem `provider` explícito resolve sempre no provider DEFAULT
+  da raiz que o declara — não na conta do módulo que consome o output.** Numa raiz com duas
+  contas (`regions/<r>/`: `module.hub` aplica em `network`, `module.cell` em `cicd`), um único
+  data source alimentando os dois herda AZs resolvidas só numa das contas. AZ names são alias
+  por-conta sobre AZ IDs físicos — a mesma label pode ser uma zona física diferente em cada
+  conta. Fix: um `data "aws_availability_zones"` por CONTA (`provider = aws.network` para o que
+  alimenta o módulo que aplica lá), nunca compartilhado entre módulos de contas diferentes.

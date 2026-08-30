@@ -66,10 +66,17 @@ já aplicado dali. Túnel do Client VPN conecta com o `.ovpn` exportado do endpo
 nome porque a `us-west-2` terá o próprio). `control-plane/` continua de pé como raiz antiga (código
 morto, sem apply próprio) — vira `module.cell` na fase 3, que já fechou: `regions/us-east-1/` compôs
 `module.hub` + `module.cell`, um apply real da célula (78 recursos) foi feito e destruído de volta
-(`terraform destroy -target=module.cell`), com o hub (43 recursos) de pé. Rodada de fix da revisão
-final da fase 3 em andamento nesta sessão. As duas raízes velhas (`connectivity/`,
-`network-foundation/`, `control-plane/`) só somem do disco na fase 4; `up-01`/`up-03`/`up-04` agora
-recusam rodar (guard `fail`, aponta para `up-02-region`).
+(`terraform destroy -target=module.cell`), com o hub (43 recursos) de pé.
+
+A rodada de fix da revisão final da fase 3 (7 Important + minors) fechou nesta sessão, direto no
+controller — o dispatch original (subagent dedicado) morreu por rate limit sem nenhum progresso.
+Um `terraform plan` real (`-target=module.hub`, sem apply) confirmou: a regionalização do FQDN do
+certificado default do ALB (`*.us-east-1.nonprod.<domínio>`) propõe trocar o certificado, a
+validação DNS-01 e o listener (`3 to add, 1 to change, 3 to destroy`) — **plano salvo mas não
+aplicado**, decisão do usuário sobre quando trocar o cert live; o fix de conta da AZ não propôs
+nenhuma mudança (o risco era latente, nunca se manifestou). As três raízes velhas
+(`connectivity/`, `network-foundation/`, `control-plane/`) só somem do disco na fase 4;
+`up-01`/`up-03`/`up-04` recusam rodar (guard `fail`, aponta para `up-02-region`).
 
 Custo por camada, ordem de subida/derrubada e as armadilhas dos scripts: `aws/terraform/README.md`
 (fonte da verdade — não duplicar números aqui, e ainda não reflete a raiz regional nova). Regra
@@ -89,17 +96,26 @@ gh issue list -R smsilva/wasp-idp --label private-access-ingress --state open
 Board: https://github.com/users/smsilva/projects/6
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Branch
-corrente: `feat/regional-root-hub-cell`, executando a fase 2 de uma frente diferente (issue #37).
+corrente: `feat/regional-root-hub-cell`, executando a frente `regional-root-hub-and-cell-modules`
+(issue #37; #36 fechada em 2026-08-30 — a fase 1 sozinha já satisfazia o critério dela).
 
 **Plano de execução da fase corrente:**
 `docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
-(`README.md` + `01`–`05`). Fase 2 (`02-hub-module.md`) e fase 3 (`03-cell-module.md`) fechadas —
-`module.cell` compõe com `module.hub` na raiz regional, apply e destroy reais provados. A revisão
-final de branch (opus, `ef000ad..6de2552`) achou 7 Important + minors; rodada de fix em andamento
-direto nesta sessão (sem subagent — ver ledger `.superpowers/sdd/03-cell-module/progress.md`
-enquanto ele existir). Falta: fix de AZ cross-conta (finding #1) e FQDN do ALB sem região
-(finding #2), sonda `us-west-2` (aceite da fase 3), depois seguir para a fase 4 (remoção das raízes
-antigas, renomeio `up-02-dns`→`up-01-dns`).
+(`README.md` + `01`–`05`). Fases 1-3 fechadas — `module.cell` compõe com `module.hub` na raiz
+regional, apply e destroy reais provados, 8 dos 9 itens do aceite da fase 3 marcados (o pendente
+é a sonda `us-west-2`, dispensada por custo — a prova offline equivalente já existe em
+`src/hub/tests/regional-naming.tftest.hcl`). Rodada de fix da revisão final de branch
+(`ef000ad..6de2552`, 7 Important + minors) também fechada. Ledger da fase 3
+`.superpowers/sdd/03-cell-module/progress.md` ainda não foi limpo (workspace SDD, gitignored) —
+apagar quando não precisar mais dele.
+
+**Próximo passo: fase 4** (`04-cleanup-and-docs.md`, ainda não iniciada) — apagar
+`network-foundation/`, `connectivity/`, `control-plane/` e os scripts `up-01`/`up-03`/`up-04`
+(states já confirmados vazios nas três), mover `connectivity/us-east-1/saml-metadata.xml.example`
+→ `variables/`, criar `regions/us-west-2/`, reescrever `aws/terraform/README.md` para a sequência
+nova de verdade (hoje só tem um banner apontando pra lá, o corpo ainda descreve a sequência
+antiga), renumerar `up-02-dns` → `up-01-dns`. Só depois disso o critério de aceite da #37 ("árvore
+final aplica do zero seguindo só o README") fica satisfeito.
 
 A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
 — ver `docs/archived/index.md`.
