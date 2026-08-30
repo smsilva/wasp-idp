@@ -28,8 +28,8 @@ show_usage() {
   DEPENDS ON:
 
     layer 0  the state bucket
-    layer 1  (still named up-02-dns until phase 4) the delegated subzone,
-             read by the certificate that validates by DNS in it
+    layer 1  up-01-dns, the delegated subzone, read by the certificate that
+             validates by DNS in it
     the file variables/values.tfvars, with the identity values — see
     variables/README.md.
 
