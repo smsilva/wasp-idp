@@ -19,6 +19,11 @@ variable "region" {
 variable "vpc_cidr" {
   description = "CIDR da VPC hub. Um /16 dentro do supernet 10.0.0.0/12 — N=0 e reservado a Organization."
   type        = string
+
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0)) && startswith(var.vpc_cidr, "10.") && can(tonumber(split(".", var.vpc_cidr)[1])) && tonumber(split(".", var.vpc_cidr)[1]) >= 0 && tonumber(split(".", var.vpc_cidr)[1]) <= 15
+    error_message = "o CIDR deve ser um /16 dentro do supernet 10.0.0.0/12 (10.0 a 10.15), recebido ${var.vpc_cidr}."
+  }
 }
 
 variable "availability_zones" {
