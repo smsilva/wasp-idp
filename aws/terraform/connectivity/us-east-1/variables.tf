@@ -4,8 +4,8 @@
 # ../../../docs/network/, não segredo (mesmo critério de network-foundation/).
 #
 # Variável — domínio, id do grupo do Identity Center, caminho do metadata SAML: identificam
-# a conta e as pessoas de quem roda, e o repo é público. Vão por terraform.tfvars, gitignored,
-# gerado por scripts/up-03-connectivity.
+# a conta e as pessoas de quem roda, e o repo é público. Vêm de `variables/values.tfvars`
+# (gitignored), carregado por `values.auto.tfvars` — declarados à mão, nunca descobertos.
 
 variable "base_domain" {
   description = <<-EOT
@@ -97,8 +97,9 @@ variable "spoke_account_ids" {
     attachment (`CreateTransitGatewayVpcAttachment` de outra conta exige o TGW compartilhado
     primeiro). Uma por spoke — hoje só `cicd` (control-plane).
 
-    Sem default: identifica contas desta Organization, e o repo é público. O
-    `generate-tfvars` descobre.
+    Sem default: identifica contas desta Organization, e o repo é público. Declarada em
+    `variables/values.tfvars`; resolva o nome para id uma vez com
+    `aws organizations list-accounts --profile personal --output json`.
   EOT
   type        = list(string)
 
