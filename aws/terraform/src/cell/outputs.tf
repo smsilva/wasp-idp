@@ -94,3 +94,29 @@ output "hub_listener_rule_priority" {
   description = "Priority da rule desta celula no listener compartilhado. Derivada do nome; colisao entre celulas falha alto no apply, o que e o comportamento desejado."
   value       = local.listener_rule_priority
 }
+
+output "transit_gateway_id_in_use" {
+  description = "O TGW que esta celula anexou. Existe para a raiz assertar que ele veio do hub, nao de valor fixo."
+  value       = var.transit_gateway_id
+}
+
+output "api_authorized_cidr" {
+  description = "Origem autorizada em 443 no SG do cluster. Existe pela mesma razao do output acima."
+  value       = var.hub_vpc_cidr_block
+}
+
+output "helm_release_names" {
+  description = "Par namespace/nome de cada release desta celula. Existe so para o guard offline de colisao — o mock_provider do helm nao mantem estado de releases."
+  value = compact([
+    local.install_load_balancer_controller ? "kube-system/aws-load-balancer-controller" : "",
+    local.install_ingress_istio ? "istio-system/istio-base" : "",
+    local.install_ingress_istio ? "istio-system/istiod" : "",
+    local.install_ingress_istio ? "istio-ingress/istio-ingress" : "",
+    local.install_ingress_istio ? "istio-ingress/inbound" : "",
+    local.install_target_group_binding ? "istio-ingress/target-group-binding" : "",
+    local.install_httpbin ? "httpbin/httpbin" : "",
+    local.install_external_secrets ? "external-secrets/external-secrets" : "",
+    local.install_argocd ? "argocd/argo-cd" : "",
+    local.install_crossplane ? "crossplane-system/crossplane" : "",
+  ])
+}

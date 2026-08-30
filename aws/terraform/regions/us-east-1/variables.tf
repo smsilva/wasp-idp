@@ -54,3 +54,13 @@ variable "saml_metadata_path" {
   type        = string
   default     = "saml-metadata.xml"
 }
+
+variable "network_account_id" {
+  description = "Conta que hospeda a VPC hub. Declarada em variables/values.tfvars."
+  type        = string
+}
+
+variable "target_account_ids" {
+  description = "Contas onde o Crossplane cria recursos, via assume role. Declaradas em variables/values.tfvars."
+  type        = list(string)
+}

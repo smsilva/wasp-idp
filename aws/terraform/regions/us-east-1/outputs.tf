@@ -76,3 +76,15 @@ output "authorized_group_ids" {
   description = "Grupos com authorization rule no Client VPN."
   value       = module.hub.authorized_group_ids
 }
+
+output "cell_services_url" {
+  description = <<-EOT
+    O aceite da regiao inteira: um curl NESTA url, da internet, sem tunel e sem -k, tem de devolver
+    200. A cadeia que ele prova e ALB do hub -> TGW -> NLB interno -> Envoy -> pod.
+  EOT
+  value       = module.cell.cell_services_url
+}
+
+output "kubeconfig_command" {
+  value = module.cell.kubeconfig_command
+}
