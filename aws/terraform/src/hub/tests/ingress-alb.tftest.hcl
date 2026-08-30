@@ -10,29 +10,26 @@ mock_provider "aws" {}
 variables {
   base_domain        = "exemplo.com"
   operator_group_ids = ["11111111-2222-3333-4444-555555555555"]
+  region             = "us-east-1"
+  vpc_cidr           = "10.1.0.0/16"
+  availability_zones = ["a", "b"]
   saml_metadata_path = "tests/fixtures/saml-metadata.xml"
   spoke_account_ids  = ["222222222222"]
 }
 
-override_data {
-  target = data.aws_vpc.hub
-  values = {
-    id         = "vpc-hub000000000001"
-    cidr_block = "10.1.0.0/16"
-  }
-}
+# Os data sources que a connectivity/ usava para achar a VPC hub e suas subnets por tag
+# morreram: dentro do modulo a VPC e do proprio grafo, e module.network expoe tudo como output.
+# O que era override_data de descoberta agora e override_module do submodulo.
+override_module {
+  target = module.network
 
-override_data {
-  target = data.aws_subnets.hub_private
-  values = {
-    ids = ["subnet-priv0000000a", "subnet-priv0000000b"]
-  }
-}
-
-override_data {
-  target = data.aws_subnets.hub_public
-  values = {
-    ids = ["subnet-pub00000000a", "subnet-pub00000000b"]
+  outputs = {
+    vpc_id                 = "vpc-hub000000000001"
+  vpc_cidr               = "10.1.0.0/16"
+  private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
+  public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
+  private_route_table_id = "rtb-hubprivate00001"
+    public_route_table_id  = "rtb-hubpublic000001"
   }
 }
 
@@ -40,20 +37,6 @@ override_data {
   target = data.aws_route53_zone.subzone
   values = {
     zone_id = "ZSUBZONE00000000001"
-  }
-}
-
-override_data {
-  target = data.aws_route_table.hub_private
-  values = {
-    id = "rtb-hubprivate00001"
-  }
-}
-
-override_data {
-  target = data.aws_route_table.hub_public
-  values = {
-    id = "rtb-hubpublic000001"
   }
 }
 
@@ -191,10 +174,16 @@ run "o_alb_e_publico_e_nasce_nas_subnets_publicas" {
 run "as_subnets_do_alb_acompanham_a_descoberta" {
   command = plan
 
-  override_data {
-    target = data.aws_subnets.hub_public
-    values = {
-      ids = ["subnet-pub00000002a", "subnet-pub00000002b", "subnet-pub00000002c"]
+  override_module {
+    target = module.network
+
+    outputs = {
+      vpc_id                 = "vpc-hub000000000001"
+      vpc_cidr               = "10.1.0.0/16"
+      private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
+      public_subnet_ids      = ["subnet-pub00000002a", "subnet-pub00000002b", "subnet-pub00000002c"]
+      private_route_table_id = "rtb-hubprivate00001"
+      public_route_table_id  = "rtb-hubpublic000001"
     }
   }
 

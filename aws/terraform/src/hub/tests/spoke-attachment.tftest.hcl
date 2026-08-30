@@ -7,21 +7,25 @@ mock_provider "aws" {}
 variables {
   base_domain        = "exemplo.com"
   operator_group_ids = ["11111111-2222-3333-4444-555555555555"]
+  region             = "us-east-1"
+  vpc_cidr           = "10.1.0.0/16"
+  availability_zones = ["a", "b"]
   saml_metadata_path = "tests/fixtures/saml-metadata.xml"
   spoke_account_ids  = ["222222222222", "333333333333"]
 }
 
-override_data {
-  target = data.aws_vpc.hub
-  values = {
-    id = "vpc-hub000000000001"
-  }
-}
+# O que era descoberto por tag (VPC hub, subnets, route tables) agora e produzido pelo
+# submodulo network — override_data de data source vira override_module.
+override_module {
+  target = module.network
 
-override_data {
-  target = data.aws_subnets.hub_private
-  values = {
-    ids = ["subnet-priv0000000a", "subnet-priv0000000b"]
+  outputs = {
+    vpc_id                 = "vpc-hub000000000001"
+  vpc_cidr               = "10.1.0.0/16"
+  private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
+  public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
+  private_route_table_id = "rtb-hubprivate00001"
+    public_route_table_id  = "rtb-hubpublic000001"
   }
 }
 
@@ -29,20 +33,6 @@ override_data {
   target = data.aws_route53_zone.subzone
   values = {
     zone_id = "ZSUBZONE00000000001"
-  }
-}
-
-override_data {
-  target = data.aws_route_table.hub_private
-  values = {
-    id = "rtb-hubprivate00001"
-  }
-}
-
-override_data {
-  target = data.aws_route_table.hub_public
-  values = {
-    id = "rtb-hubpublic000001"
   }
 }
 
@@ -225,10 +215,16 @@ run "a_rota_do_hub_para_o_tgw_e_do_supernet_inteiro" {
 run "e_acompanha_outra_route_table_privada" {
   command = plan
 
-  override_data {
-    target = data.aws_route_table.hub_private
-    values = {
-      id = "rtb-outra00000000002"
+  override_module {
+    target = module.network
+
+    outputs = {
+      vpc_id                 = "vpc-hub000000000001"
+      vpc_cidr               = "10.1.0.0/16"
+      private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
+      public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
+      private_route_table_id = "rtb-outra00000000002"
+      public_route_table_id  = "rtb-hubpublic000001"
     }
   }
 

@@ -7,23 +7,26 @@ mock_provider "aws" {}
 variables {
   base_domain        = "exemplo.com"
   operator_group_ids = ["11111111-2222-3333-4444-555555555555"]
+  region             = "us-east-1"
+  vpc_cidr           = "10.1.0.0/16"
+  availability_zones = ["a", "b"]
   saml_metadata_path = "tests/fixtures/saml-metadata.xml"
   spoke_account_ids  = ["222222222222"]
 }
 
 # Data sources de provider devolvem valor sintético sob mock — asserção sobre eles passaria
-# sem verificar nada. Estes overrides fazem as ligações serem reais no plan.
-override_data {
-  target = data.aws_vpc.hub
-  values = {
-    id = "vpc-hub000000000001"
-  }
-}
+# sem verificar nada. Estes overrides fazem as ligações serem reais no plan. O que era
+# descoberto por tag agora é produzido pelo submodulo network, então vira override_module.
+override_module {
+  target = module.network
 
-override_data {
-  target = data.aws_subnets.hub_private
-  values = {
-    ids = ["subnet-priv0000000a", "subnet-priv0000000b"]
+  outputs = {
+    vpc_id                 = "vpc-hub000000000001"
+  vpc_cidr               = "10.1.0.0/16"
+  private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
+  public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
+  private_route_table_id = "rtb-hubprivate00001"
+    public_route_table_id  = "rtb-hubpublic000001"
   }
 }
 
@@ -31,20 +34,6 @@ override_data {
   target = data.aws_route53_zone.subzone
   values = {
     zone_id = "ZSUBZONE00000000001"
-  }
-}
-
-override_data {
-  target = data.aws_route_table.hub_private
-  values = {
-    id = "rtb-hubprivate00001"
-  }
-}
-
-override_data {
-  target = data.aws_route_table.hub_public
-  values = {
-    id = "rtb-hubpublic000001"
   }
 }
 
@@ -132,8 +121,8 @@ run "o_certificado_e_emitido_sob_a_subzona_delegada" {
   command = plan
 
   assert {
-    condition     = aws_acm_certificate.vpn.domain_name == "vpn.nonprod.exemplo.com"
-    error_message = "o certificado deveria ser emitido para vpn.<subzona>, recebido ${aws_acm_certificate.vpn.domain_name}"
+    condition     = aws_acm_certificate.vpn.domain_name == "vpn.us-east-1.nonprod.exemplo.com"
+    error_message = "o certificado deveria ser emitido para vpn.<regiao>.<subzona>, recebido ${aws_acm_certificate.vpn.domain_name}"
   }
 
   # Negativa que importa: emitir para a subzona ou para o apex daria um certificado que
@@ -338,10 +327,16 @@ run "associa_uma_subnet_privada_do_hub_por_az" {
 run "e_acompanha_outro_conjunto_de_subnets" {
   command = plan
 
-  override_data {
-    target = data.aws_subnets.hub_private
-    values = {
-      ids = ["subnet-outra00001", "subnet-outra00002", "subnet-outra00003"]
+  override_module {
+    target = module.network
+
+    outputs = {
+      vpc_id                 = "vpc-hub000000000001"
+      vpc_cidr               = "10.1.0.0/16"
+      private_subnet_ids     = ["subnet-outra00001", "subnet-outra00002", "subnet-outra00003"]
+      public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
+      private_route_table_id = "rtb-hubprivate00001"
+      public_route_table_id  = "rtb-hubpublic000001"
     }
   }
 
