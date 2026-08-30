@@ -103,7 +103,7 @@ module "cell" {
     helm        = helm
   }
 
-  name     = "control-plane"
+  name     = "control-plane-${local.region}"
   region   = local.region
   vpc_cidr = local.cell_vpc_cidr
 
