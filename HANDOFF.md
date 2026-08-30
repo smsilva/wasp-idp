@@ -6,8 +6,11 @@ Exercitar a PoC AWS EKS-via-Crossplane (arquitetura de referência hub-and-spoke
 pessoal do Silvio, genérica, antes de qualquer ambiente corporativo. `aws/` foi genericizada a
 partir de um exemplo interno (placeholders `<...>` para valores por-conta/segredos; valores
 genéricos concretos como `platform.example.com`/`poc-eks` onde o token é YAML/Crossplane
-executável). Valores reais ficam em `CLAUDE.local.md` (gitignored); consolidação em
-`variables/values.yaml` gitignored planejada, ver [ADR 0013](docs/adr/0013-consolidate-local-values-yaml.md).
+executável). Valores reais ficam em `CLAUDE.local.md` (gitignored); os valores de identidade das camadas
+Terraform vivem em `aws/terraform/variables/values.tfvars` gitignored, carregado por cada raiz via
+symlink `values.auto.tfvars` (ver `aws/terraform/variables/README.md` e o
+[ADR 0014](docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md), que escolheu o
+formato tfvars no lugar do `values.yaml` previsto no [ADR 0013](docs/adr/0013-consolidate-local-values-yaml.md)).
 
 Decisões de arquitetura que orientam esta frente (sequência de provisionamento, escopo fino do
 Terraform, alocação de CIDR, ingress centralizado, etc.) vivem em [`docs/adr/`](docs/adr/README.md)
@@ -141,9 +144,9 @@ aws-vpn-client get-connection-status --profile-name hub   # tem de dizer "Connec
 sempre, nunca presumidos. `~/trash/hub.ovpn` de sessões anteriores está sempre inválido (DNS name
 muda a cada recriação da 03) — reexportar sempre.
 
-**Subir o ambiente** — a sequência completa (7 passos: `up-all` → `up-03` → exportar/importar
-`.ovpn` → conectar → `generate-tfvars --force` → `up-04` → provar), com custo e dependência por
-camada, vive em `aws/terraform/README.md`. **Ler de lá, não daqui.**
+**Subir o ambiente** — a sequência completa (preencher `variables/values.tfvars` → `up-all` →
+`up-03` → exportar/importar `.ovpn` → conectar → `up-04` → provar; sem passo de geração de tfvars),
+com custo e dependência por camada, vive em `aws/terraform/README.md`. **Ler de lá, não daqui.**
 
 **Verificar a célula ponta a ponta.** Desde 2026-08-29 (branch `feat/terraform-cluster-addons`)
 **nenhum `helm` manual é necessário** — o `up-04` entrega a célula inteira, e o checkout de

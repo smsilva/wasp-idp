@@ -153,6 +153,12 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - **A sequência das camadas é executável, não só documentada:** `scripts/up-NN-<camada>` na ordem de
   dependência, mais `up-all`. Ordem, custos e dependências no `README.md`. Mexer numa camada nova
   significa acrescentar um `up-NN`, não instruções soltas.
+- **Valor de identidade é DECLARADO, nunca descoberto.** Os dois `generate-tfvars` consultavam a AWS
+  e escreviam um tfvars gitignored; quando uma camada ganhava variável obrigatória nova, o arquivo já
+  existente deixava de satisfazer a config e o apply morria **depois** do plan com `No value for
+  required variable` — erro que não aponta para o passo de geração. Hoje o valor vem de
+  `variables/values.tfvars`, mantido à mão, e o que é produto de outro recurso vem de data source ou
+  output de módulo. Ver [ADR 0014](../../docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md).
 - **O `README.md` desta pasta é a sequência que alguém sem contexto vai copiar — atualizar no MESMO
   trabalho que muda a sequência, nunca depois.** Ele tem a seção "Manter este arquivo verdadeiro" com
   a tabela de o-que-mudou → onde-atualizar. Linha desatualizada ali não é doc velha: é comando que
@@ -380,8 +386,9 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   é a do supernet; as duas convivem por prefixo mais longo.
 - **Aplicação SAML do Identity Center NÃO é Terraform.** *"The `CreateApplication` API only supports
   custom OAuth 2.0 applications. Creation of 3rd party SAML or OAuth 2.0 applications require setup to
-  be done through the associated app service or AWS console."* O metadata XML entra por arquivo, e o
-  `generate-tfvars` da camada 03 imprime o roteiro de console quando ele falta.
+  be done through the associated app service or AWS console."* O metadata XML entra por arquivo
+  (`variables/saml-metadata.xml`, uma aplicação para todas as regiões); o `up-03` para com instrução
+  se ele faltar, apontando o roteiro de console.
 - **O TGW nunca ficava anexado à própria VPC hub.** `connectivity/` criava o TGW e `tgw-rt-hub`,
   mas nenhum attachment ligava a VPC hub a eles — órfãos até o `2.3`. Sem esse attachment, o
   tráfego que chega pelo túnel numa subnet privada do hub não tem como sair para o TGW rumo a
