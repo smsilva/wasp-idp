@@ -139,10 +139,25 @@ qualquer apply, e descoberta do bucket a partir do id da Organization.
 
 ### Descida
 
-`down-cell --region <região>` destrói só `module.cell` (`-target`), mantendo o hub de pé — é o
-teardown de rotina, todo dia. Derrubar o hub inteiro (região completa) é `terraform destroy` na
-raiz `regions/<região>/`, sem `-target` — não é rotina, e não tem script próprio de propósito: a
+```bash
+cd aws/terraform/scripts
+./down-cell --region <região> --yes          # rotina, todo dia — mantém o hub de pé
+```
+
+`down-cell` destrói só `module.cell` (`-target`); é o teardown de rotina. Derrubar a região inteira
+(hub incluso — TGW, Client VPN, ALB) não é rotina, e não tem script próprio de propósito: a
 assimetria é intencional.
+
+```bash
+cd aws/terraform/regions/<região>
+terraform init -backend-config="bucket=<state-bucket-name>"   # se a raiz não estiver inicializada
+nohup terraform destroy -no-color -auto-approve > /tmp/destroy-<região>.log 2>&1 < /dev/null &
+disown
+```
+
+Antes de derrubar uma região que hospeda célula, conferir que o Crossplane não tem XR vivo (ver
+"Ordem de teardown" abaixo). Derrubar o hub muda o DNS name do ALB e do Client VPN — invalida o
+`.ovpn` exportado e reescreve os registros alias das células no apply seguinte.
 
 ## Raízes
 
