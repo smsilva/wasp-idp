@@ -205,7 +205,7 @@ output "authorized_group_ids" {
 }
 ```
 
-- [ ] **Step 1: criar o esqueleto do módulo e provar que o `init` funciona**
+- [x] **Step 1: criar o esqueleto do módulo e provar que o `init` funciona**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform
@@ -224,7 +224,7 @@ cd src/hub && terraform init -backend=false
 Esperado: `Terraform has been successfully initialized!`. Um `unknown provider` aqui significa
 `versions.tf` incompleto — o erro clássico de inicializar diretório que ainda só tem testes.
 
-- [ ] **Step 2: mover os recursos, trocando data source por referência interna**
+- [x] **Step 2: mover os recursos, trocando data source por referência interna**
 
 De `connectivity/us-east-1/main.tf`, mover para `src/hub/main.tf` os 26 blocos de `resource`
 (TGW, RAM, attachment do hub, ACM do VPN, SAML provider, Client VPN e suas rotas/rules, SG do ALB,
@@ -262,7 +262,7 @@ module "network" {
 Se `src/network` não expõe os ids das route tables, acrescentar os outputs lá — é o que substitui
 `data.aws_route_table.hub_private`/`hub_public`.
 
-- [ ] **Step 2b: regionalizar os dois nomes globais (invariante)**
+- [x] **Step 2b: regionalizar os dois nomes globais (invariante)**
 
 Tudo que o `var.name` prefixa é regional — VPC, subnet, TGW, security group — **menos dois**, que
 vivem em namespace global e por isso colidiriam entre regiões da mesma Organization:
@@ -299,7 +299,7 @@ três de uma vez.
 que o `.ovpn` nunca se reaproveita entre applies da 03; aqui o motivo é outro e vale a linha no
 `HANDOFF.md` do Step 5.
 
-- [ ] **Step 3: mover os testes e apontá-los para o módulo**
+- [x] **Step 3: mover os testes e apontá-los para o módulo**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform
@@ -315,7 +315,7 @@ Em cada arquivo movido: os `override_data` dos quatro data sources que morreram 
 com os mesmos valores — o que era descoberto agora é produzido pelo submódulo. As asserções sobre
 `data.aws_vpc.hub.cidr_block` passam a ler `module.network.vpc_cidr_block`.
 
-- [ ] **Step 4: rodar a suíte do módulo**
+- [x] **Step 4: rodar a suíte do módulo**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/src/hub
@@ -326,7 +326,7 @@ Esperado: `Success!` com a mesma contagem de runs que a `connectivity/` tinha. R
 cobertura perdida, não simplificação — se um teste não faz mais sentido no módulo, escrever por que
 no arquivo em vez de apagar em silêncio.
 
-- [ ] **Step 4b: teste de duas execuções provando que a região entra nos nomes (invariante)**
+- [x] **Step 4b: teste de duas execuções provando que a região entra nos nomes (invariante)**
 
 A única forma de provar offline que o nome vem da região, e não de um literal, é rodar a **mesma**
 asserção com duas regiões e ver os dois valores diferentes. Um run só passa igual se alguém escrever
@@ -386,7 +386,7 @@ run "names_carry_us_west_2" {
 rodar de novo. O run `names_carry_us_west_2` **tem que** falhar. Se passar, o teste está lendo a
 variável de entrada em vez do valor derivado e não prova nada. Desfazer a mutação.
 
-- [ ] **Step 5: commit**
+- [x] **Step 5: commit**
 
 ```bash
 cd /home/silvios/git/wasp-idp
@@ -414,7 +414,7 @@ Refs #36"
 - Consumes: `src/hub` da Task 1 e o `values.tfvars` da fase 1.
 - Produces: a raiz onde `module.cell` entra na fase 3, e o par de providers que os dois módulos usam.
 
-- [ ] **Step 1: escrever os providers, que são a decisão estrutural da raiz**
+- [x] **Step 1: escrever os providers, que são a decisão estrutural da raiz**
 
 `aws/terraform/regions/us-east-1/main.tf`, no topo:
 
@@ -485,7 +485,7 @@ module "hub" {
 }
 ```
 
-- [ ] **Step 2: `variables.tf` da raiz — só identidade e profiles**
+- [x] **Step 2: `variables.tf` da raiz — só identidade e profiles**
 
 ```hcl
 variable "base_domain" {
@@ -549,7 +549,7 @@ variable "saml_metadata_path" {
 `network_account_id` e `target_account_ids` entram na fase 3, junto com `module.cell`. Até lá o
 `values.tfvars` os traz e a raiz os ignora com warning — esperado, é o preço do arquivo único.
 
-- [ ] **Step 3: `versions.tf` com o backend e a key própria**
+- [x] **Step 3: `versions.tf` com o backend e a key própria**
 
 Copiar de `connectivity/us-east-1/versions.tf`, trocando só a `key`:
 
@@ -568,7 +568,7 @@ terraform {
 `profile` DENTRO do bloco `backend` — o backend é inicializado antes de o provider ser configurado e
 não herda `profile` do bloco `provider`.
 
-- [ ] **Step 4: o symlink do tfvars e o do metadata SAML**
+- [x] **Step 4: o symlink do tfvars e o do metadata SAML**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1
@@ -582,7 +582,7 @@ região** — a fase 1, Step 4b já moveu o metadata para lá exatamente por ist
 `connectivity/us-east-1/` funcionaria hoje e quebraria na fase 4, que apaga a pasta; e obrigaria a
 `us-west-2` a depender do diretório da `us-east-1`, que é a violação que o invariante nomeia.
 
-- [ ] **Step 5: o teste de composição da raiz**
+- [x] **Step 5: o teste de composição da raiz**
 
 `aws/terraform/regions/us-east-1/tests/composition.tftest.hcl` — nesta fase ele cobre só o que a raiz
 decide (as AZs e os CIDRs); a ligação hub→célula entra na fase 3:
@@ -633,7 +633,7 @@ run "hub_and_cell_cidrs_do_not_overlap" {
 }
 ```
 
-- [ ] **Step 6: rodar e commitar**
+- [x] **Step 6: rodar e commitar**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1
@@ -667,7 +667,7 @@ Refs #36"
 O ADR 0014 decide não migrar state: a `connectivity/` está com zero recursos e a
 `network-foundation/` tem 13 sem dado e sem custo por hora. O corte é destruir e reaplicar.
 
-- [ ] **Step 1: confirmar o ponto de partida antes de destruir nada**
+- [x] **Step 1: confirmar o ponto de partida antes de destruir nada**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform
@@ -680,7 +680,7 @@ Esperado: `0`, `0` ou mais (a 03 pode estar de pé desde a fase 1), `13`. **Uma 
 `network-foundation` significa credencial caída, não camada vazia** — conferir com
 `aws sts get-caller-identity --profile network --output json` antes de concluir qualquer coisa.
 
-- [ ] **Step 2: derrubar a 03, se estiver de pé, e depois a 01**
+- [x] **Step 2: derrubar a 03, se estiver de pé, e depois a 01**
 
 Pelo usuário, nesta ordem (o TGW não deleta com attachment vivo):
 
@@ -691,7 +691,7 @@ Pelo usuário, nesta ordem (o TGW não deleta com attachment vivo):
 
 Anunciar `/tmp/destroy-01.log` assim que disparar, não só quando terminar.
 
-- [ ] **Step 3: aplicar a raiz nova**
+- [x] **Step 3: aplicar a raiz nova**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1
@@ -708,7 +708,7 @@ Depois, pelo usuário:
 ! cd aws/terraform/regions/us-east-1 && nohup terraform apply -no-color /tmp/region-us-east-1.tfplan > /tmp/apply-region.log 2>&1 < /dev/null & disown
 ```
 
-- [ ] **Step 4: provar que o hub serve, não só que aplicou**
+- [x] **Step 4: provar que o hub serve, não só que aplicou**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1
@@ -718,20 +718,24 @@ aws ec2 export-client-vpn-client-configuration \
   --profile network --region us-east-1 --output text > /tmp/hub.ovpn
 ```
 
-E, pelo usuário, `! aws-vpn-client import-profile --profile-name hub --config-path /tmp/hub.ovpn` e
-`! aws-vpn-client connect --profile-name hub`, até
-`aws-vpn-client get-connection-status --profile-name hub` dizer `Connected`.
+E, pelo usuário, `! aws-vpn-client import-profile --profile-name hub-us-east-1 --config-path /tmp/hub.ovpn` e
+`! aws-vpn-client connect --profile-name hub-us-east-1`, até
+`aws-vpn-client get-connection-status --profile-name hub-us-east-1` dizer `Connected`.
+
+O profile leva a região no nome pelo mesmo motivo do SAML provider e do FQDN da VPN: é um recurso
+que existiria em duplicidade quando a `us-west-2` tiver o próprio hub — só que aqui a "colisão" é
+o cliente local recusar dois profiles com o mesmo nome, não `EntityAlreadyExists`.
 
 O `.ovpn` de sessões anteriores está sempre inválido — o DNS name muda a cada recriação do endpoint.
 Reexportar sempre.
 
-- [ ] **Step 5: registrar o estado no `HANDOFF.md`**
+- [x] **Step 5: registrar o estado no `HANDOFF.md`**
 
 Uma linha no "Estado atual": a região `us-east-1` passou a ser uma raiz só, com o hub aplicado e a
 célula ainda fora. O comando de conferência do `HANDOFF.md` lista as raízes antigas — atualizar a
 lista, senão a próxima sessão lê `0` em `connectivity/` e conclui a coisa errada.
 
-- [ ] **Step 6: commit**
+- [x] **Step 6: commit**
 
 ```bash
 cd /home/silvios/git/wasp-idp
@@ -745,17 +749,17 @@ Refs #36"
 
 ## Aceite da fase 2
 
-- [ ] `src/hub` passa `terraform test` com a mesma cobertura que a `connectivity/` tinha, e nenhum
+- [x] `src/hub` passa `terraform test` com a mesma cobertura que a `connectivity/` tinha, e nenhum
       `data.aws_vpc.hub` / `data.aws_subnets.*` / `data.aws_route_table.*` sobrevive nele.
-- [ ] `regions/us-east-1/` planeja e aplica com `terraform plan` puro — sem `-var-file`, sem passo de
+- [x] `regions/us-east-1/` planeja e aplica com `terraform plan` puro — sem `-var-file`, sem passo de
       geração.
-- [ ] O hub está de pé aplicado da raiz nova, com TGW, ALB e Client VPN, e **sem NAT Gateway**.
-- [ ] O túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente.
-- [ ] `.terraform/modules/modules.json` da raiz lista `hub` e `hub.network` — módulo ausente ali
+- [x] O hub está de pé aplicado da raiz nova, com TGW, ALB e Client VPN, e **sem NAT Gateway**.
+- [x] O túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente.
+- [x] `.terraform/modules/modules.json` da raiz lista `hub` e `hub.network` — módulo ausente ali
       significa teste da raiz rodando contra árvore velha.
-- [ ] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src/hub` não devolve nada fora de fixture
+- [x] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src/hub` não devolve nada fora de fixture
       de teste. Região literal em `src/hub` é a segunda região quebrada antes de existir.
-- [ ] **(invariante)** `src/hub/tests/regional-naming.tftest.hcl` passa nos dois runs, e a mutação
+- [x] **(invariante)** `src/hub/tests/regional-naming.tftest.hcl` passa nos dois runs, e a mutação
       (nome regional trocado por literal) faz o run da `us-west-2` falhar.
-- [ ] **(invariante)** `regions/us-east-1/saml-metadata.xml` e `values.auto.tfvars` apontam ambos
+- [x] **(invariante)** `regions/us-east-1/saml-metadata.xml` e `values.auto.tfvars` apontam ambos
       para `../../variables/` — `readlink` em cada um não contém `regions/` nem `connectivity/`.

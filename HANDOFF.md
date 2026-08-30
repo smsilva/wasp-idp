@@ -52,15 +52,24 @@ Não presumir o que está de pé pelo handoff — conferir sempre:
 
 ```bash
 cd aws/terraform
-for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1; do
+for m in control-plane connectivity/us-east-1 dns network-foundation/us-east-1 regions/us-east-1; do
   printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
 done
 k3d cluster list
 ```
 
+**2026-08-30:** `connectivity/us-east-1` e `network-foundation/us-east-1` foram destruídas de
+propósito (ADR 0014, fase 2 da frente `regional-root-hub-and-cell-modules`) e devem dar `0` — não é
+resíduo, é a camada 01+03 tendo virado `src/hub`, consumido por `regions/us-east-1/` (`module.hub`),
+já aplicado dali. Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
+(`aws-vpn-client get-connection-status --profile-name hub-us-east-1`, o profile leva a região no
+nome porque a `us-west-2` terá o próprio). `control-plane/` continua de pé como raiz antiga — vira
+`module.cell` na fase 3, ainda não iniciada. As duas raízes velhas somem do disco só na fase 4.
+
 Custo por camada, ordem de subida/derrubada e as armadilhas dos scripts: `aws/terraform/README.md`
-(fonte da verdade — não duplicar números aqui). Regra fixa: **a camada `connectivity/` (03) é um
-nível T1 que fica de pé de propósito durante o dia** — não presumir resíduo e destruir sem checar
+(fonte da verdade — não duplicar números aqui, e ainda não reflete a raiz regional nova). Regra
+fixa: **a camada `connectivity/` (03) é um nível T1 que fica de pé de propósito durante o dia** —
+regra que migrou para `regions/<r>/` → `module.hub` (T1) com a fase 2
 ([ADR 0009](docs/adr/0009-hub-alb-lives-in-connectivity-layer.md)).
 
 ## Em progresso agora
@@ -75,11 +84,17 @@ gh issue list -R smsilva/wasp-idp --label private-access-ingress --state open
 Board: https://github.com/users/smsilva/projects/6
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Branch
-corrente: `feat/private-access-phase-3`.
+corrente: `feat/regional-root-hub-cell`, executando a fase 2 de uma frente diferente (issue #37).
 
 **Plano de execução da fase corrente:**
-`docs/superpowers/plans/2026-08-26-private-access-and-ingress/` — um arquivo por fase (`README.md`
-+ `01`–`04`). Ler o `README.md` mais a fase corrente, não o plano inteiro.
+`docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
+(`README.md` + `01`–`05`). Ler o `README.md` mais `02-hub-module.md` (fase corrente), não o plano
+inteiro. Task 1 e 2 fechadas e commitadas; Task 3 (destruir 01/03, aplicar a raiz nova, conectar o
+túnel) fechada nesta sessão — falta só marcar o aceite da fase 2 e seguir para a fase 3
+(`03-cell-module.md`).
+
+A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
+— ver `docs/archived/index.md`.
 
 ## Referências (ler sob demanda, não de uma vez)
 

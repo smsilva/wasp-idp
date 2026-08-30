@@ -582,7 +582,7 @@ Refs #36"
 ```bash
 cd /home/silvios/git/wasp-idp
 for p in personal network cicd; do echo "=== ${p} ==="; aws sts get-caller-identity --profile "${p}" --output json; done
-aws-vpn-client get-connection-status --profile-name hub
+aws-vpn-client get-connection-status --profile-name hub-us-east-1
 ```
 
 O status tem de dizer `Connected`. Sem túnel o apply **não completa** — não é hardening quebrado, é o
