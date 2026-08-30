@@ -25,38 +25,37 @@ show_usage() {
 
     layer 1  the hub VPC, read by tag (the endpoint is created in it)
     layer 2  the delegated subzone (the certificate validates by DNS in it)
+    the file variables/values.tfvars, with the identity values — see
+    variables/README.md.
 
     And on a CONSOLE step: the SAML application in Identity Center. The
     CreateApplication API only creates custom OAuth 2.0 applications, so SAML
-    is not Terraform. generate-tfvars prints the walkthrough if the metadata
-    is missing.
+    is not Terraform. Save the downloaded metadata as
+    variables/saml-metadata.xml — ONE application serves every region, since
+    the Client VPN ACS URL is http://127.0.0.1:35001 everywhere. The
+    walkthrough is in
+    docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md,
+    section "O passo de console, clique a clique".
 
     Options:
 
       -h,  --help           Show this help
       -y,  --yes            Do not ask before applying
-      -g,  --group          Identity Center group. Repeatable.
-                             Default: platform-admins
-      -l,  --label          Subzone label (default: nonprod)
            --state-bucket   Bucket name (default: tfstate-<organization-id>)
            --org-profile    Profile that reads Organizations and Identity
                              Center (default: personal)
-      -f,  --force-tfvars   Regenerate terraform.tfvars even if it exists
 
     Examples:
 
       ${this_script_name}
 
-      ${this_script_name} --yes --group platform-admins --group cliente-a
+      ${this_script_name} --yes
 
 EOF
 }
 
 assume_yes="false"
 org_profile="personal"
-label="nonprod"
-force_tfvars="false"
-groups=()
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
   case $1 in
@@ -69,16 +68,6 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       assume_yes="true"
       ;;
 
-    -g | --group )
-      shift
-      groups+=("${1}")
-      ;;
-
-    -l | --label )
-      shift
-      label="${1}"
-      ;;
-
     --state-bucket )
       shift
       STATE_BUCKET="${1}"
@@ -87,10 +76,6 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     --org-profile )
       shift
       org_profile="${1}"
-      ;;
-
-    -f | --force-tfvars )
-      force_tfvars="true"
       ;;
 
     * )
@@ -111,18 +96,12 @@ root="${terraform_directory}/connectivity/us-east-1"
 
 step "Layer 3 — connectivity (TGW + Client VPN, ~US\$ 0.15/h)"
 
-if [ ! -f "${root}/terraform.tfvars" ] || [ "${force_tfvars}" == "true" ]; then
-  log "generating terraform.tfvars"
+values_file="${terraform_directory}/variables/values.tfvars"
 
-  generate_options=(--force --label "${label}" --org-profile "${org_profile}")
-  for group in "${groups[@]}"; do
-    generate_options+=(--group "${group}")
-  done
-
-  "${root}/scripts/generate-tfvars" "${generate_options[@]}"
-else
-  log "terraform.tfvars already exists (use --force-tfvars to regenerate — authorized groups change in 4.1)"
-fi
+# Guard, not generation: without the file the plan would fail on base_domain anyway. What this
+# block buys is the message — Terraform's error names the missing variable, not where to declare it.
+[ -f "${values_file}" ] \
+  || fail "missing ${values_file}. Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
 

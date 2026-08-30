@@ -14,7 +14,10 @@ Fato + porquê, um por linha. Narrativa completa de cada achado, quando existe, 
 - `Network` de referência tem as 4 subnets hardcoded em `172.16.{1,2,3,4}.0/24` — não herdar.
 - Race de Pod Identity do EBS CSI não existe no Terraform — o grafo já ordena addon depois da
   association.
-- Nunca fixar versão de Kubernetes/chart/addon em documento de plano — `generate-tfvars` descobre.
+- Nunca fixar versão de Kubernetes/chart/addon em documento de plano. A `kubernetes_version` é
+  default de variável, fixada no código e revisada a olho contra a doc do EKS ao subir — não mais
+  descoberta (o `describe-cluster-versions` do antigo `generate-tfvars` fazia a versão do cluster
+  mudar sozinha entre dois applies da mesma árvore).
 - `curl | tr` engole a falha do `curl` (exit code é o do `tr`) — sem pipe, `--fail`, e validar
   também o formato da resposta (portal cativo devolve HTML com 200).
 - **Reachability dependia de onde a AWS resolveu pôr as ENIs do endpoint privado.** A rota para o

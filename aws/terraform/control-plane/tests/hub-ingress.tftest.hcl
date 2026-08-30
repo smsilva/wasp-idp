@@ -23,7 +23,6 @@ variables {
   network_profile     = "network"
   hub_vpc_name        = "poc-hub-vpc"
   vpc_cidr            = "10.2.0.0/16"
-  availability_zones  = ["us-east-1a", "us-east-1b"]
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
   public_access_cidrs = ["203.0.113.10/32"]
@@ -35,6 +34,15 @@ override_data {
   values = {
     id         = "vpc-hub000000000001"
     cidr_block = "10.1.0.0/16"
+  }
+}
+
+# As AZs vêm de data.aws_availability_zones (indexado por module.network); sob mock o valor é
+# sintético e o plan morre — override em todo arquivo de teste da raiz, não só no novo.
+override_data {
+  target = data.aws_availability_zones.this
+  values = {
+    names = ["us-east-1a", "us-east-1b"]
   }
 }
 

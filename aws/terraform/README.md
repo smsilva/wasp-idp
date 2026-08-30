@@ -71,6 +71,7 @@ recriação. Reexportar sempre.
 | # | Script | Raiz | Depende de | Custo/mês | Nível |
 |---|---|---|---|---|---|
 | — | — | *aprovar região na SCP* | — | zero | **pré-requisito, não é Terraform** |
+| — | — | *preencher `variables/values.tfvars`* | — | zero | **pré-requisito de toda raiz, não é Terraform** |
 | — | — | *aplicação SAML no Identity Center* | — | zero | **pré-requisito da 03, é console** |
 | 00 | `up-00-state-backend` | `state-backend/` | — | centavos | permanente |
 | 01 | `up-01-network-foundation` | `network-foundation/<região>/` | 00 | **zero** | permanente |
@@ -85,10 +86,10 @@ certificado do endpoint da VPN valida por DNS na subzona que a 02 delega; 03 ant
 caminho até a API do cluster **é** o túnel. Níveis de permanência em
 `docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md`.
 
-**Desbloqueio de emergência, se o túnel não estiver disponível:**
-`control-plane/scripts/generate-tfvars --enable-public-endpoint --force` abre o endpoint público
-só para o IP desta máquina e escreve `endpoint_public_access = true` no `tfvars`. É break-glass
-declarado em arquivo, não default.
+**Desbloqueio de emergência, se o túnel não estiver disponível:** descomentar
+`endpoint_public_access = true` e `public_access_cidrs = ["<ip>/32"]` em `variables/values.tfvars`
+abre o endpoint público só para o CIDR declarado à mão. É break-glass declarado em arquivo, não
+default — não há descoberta do IP desta máquina.
 
 **Nem a 03 nem a 04 entram no `up-all` por default.** As três primeiras somam centavos; as duas
 últimas somam ~US$ 275/mês. Incluir exige `--with-connectivity` / `--with-control-plane`, de
@@ -163,15 +164,17 @@ Controller). Desde 2026-08-29 o *chart* do controller também sai daqui — ante
 providers `kubernetes` e `helm` configurados a partir de outputs do módulo do cluster resolvem
 na hora do apply. **Não** inventar apply em duas fases.
 
-### `dns/` é a única raiz sem região na state key, e a única com valores em `tfvars`
+### `dns/` é a única raiz sem região na state key
 
 Hosted zone pública é recurso **global**: não cabe em `network-foundation/<região>/`. E não pode
 morar em `connectivity/`, que é destruído toda noite — a zona recriada nasce com **name servers
 novos**, e mesmo com a delegação automatizada a propagação do NS não é instantânea.
 
-Ela também é a única raiz que lê valores de `terraform.tfvars` em vez de tê-los inline. Nas outras,
-o que está inline (região, CIDR, AZs) é **decisão de desenho documentada**; aqui, domínio, resource
-group e subscription são **identidade de quem roda**, e o repo é público.
+Todos os valores de **identidade** — domínio, ids de conta, UUIDs de grupo, e o resource group e a
+subscription do Azure que só o `dns/` usa — vivem num único `variables/values.tfvars` gitignored,
+carregado por cada raiz via symlink `values.auto.tfvars` (ver `variables/README.md` e o
+[ADR 0014](../../docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md)). O que está
+inline nas raízes (região, CIDR, AZs) é **decisão de desenho documentada**, não identidade.
 
 `manage_delegation = false` desliga o lado Azure: numa raiz com dois providers de cloud, a ausência
 de credencial do segundo faz o `plan` falhar mesmo para mudança que só toca o primeiro. Desligado, a
@@ -185,8 +188,8 @@ cross-conta de TGW falha com `OperationNotPermittedException`.
 
 A VPC hub entra por `data "aws_vpc"` filtrando `tag:Name` num provider `aws` aliasado com o
 profile `network` — não por `terraform_remote_state`. O acoplamento é ao recurso, não ao arquivo
-de state da camada 1. O filtro tem de devolver exatamente um id, senão quebra no plan;
-`control-plane/scripts/generate-tfvars` confere isso antes de gerar arquivo.
+de state da camada 1. O filtro tem de devolver exatamente um id, senão quebra no plan — é o próprio
+data source quem denuncia hub ausente ou tag ambígua, sem passo de descoberta antes.
 
 ### Por que o bucket de state tem raiz própria
 
@@ -297,18 +300,18 @@ O `bucket` do backend fica fora do `versions.tf` porque é valor real; entra por
 `-backend-config`. O `profile` **está** no bloco de backend de propósito: o backend é
 inicializado antes de o provider ser configurado, então não herda `profile` do bloco `provider`.
 
-A camada 2 tem três scripts em `control-plane/scripts/`, nesta ordem:
+A camada 2 tem dois scripts em `control-plane/scripts/`, nesta ordem:
 
 ```bash
 cd control-plane
-./scripts/generate-tfvars                              # descobre e valida; só leitura
-terraform init -backend-config="bucket=<state-bucket>"  # o bucket sai do script acima
+terraform init -backend-config="bucket=<state-bucket>"  # o bucket sai de discover_state_bucket
 ./scripts/apply                                        # plan, confirma, aplica, guarda o log
 ```
 
-O `generate-tfvars` falha **antes** de gerar arquivo se a tag da VPC hub não for univoca, se o
-CIDR pedido já estiver em uso na conta, se a região não passar na SCP ou se o bucket não existir
-— erros que de outro modo apareceriam no meio do apply, com recursos já criados atrás.
+Não há passo de geração antes: os valores de identidade vêm de `variables/values.tfvars`
+(carregado por `values.auto.tfvars`), as AZs de `data.aws_availability_zones`, e o resto é default
+de variável. A tag da VPC hub ambígua, a região negada por SCP e a colisão de CIDR falham no plan
+pelos próprios data sources e pelo apply — não há mais um guard que as antecipe fora do Terraform.
 
 O `apply` lê o exit code por `PIPESTATUS[0]`: o `tee` sempre retorna 0, e sem isso um apply que
 falhou passaria por sucesso. Os logs vão para `control-plane/logs/`, gitignored — a saída carrega
@@ -409,6 +412,6 @@ recriação, então os registros alias das células são reescritos pelo apply s
 que a 04 desce antes desta e sobe depois.
 
 Por isso a camada 2 não fica de pé entre sessões de trabalho — sobe, valida, desce
-(`control-plane/scripts/destroy`). O state fica no bucket, então subir de novo é o mesmo
-`generate-tfvars` + `apply`. A 03 é a exceção declarada: fica de pé durante o dia de trabalho e é
-derrubada à noite, não ao fim de cada tarefa.
+(`control-plane/scripts/destroy`). O state fica no bucket, então subir de novo é só `init` +
+`apply` — os valores vêm de `variables/values.tfvars`, sem passo de geração. A 03 é a exceção
+declarada: fica de pé durante o dia de trabalho e é derrubada à noite, não ao fim de cada tarefa.

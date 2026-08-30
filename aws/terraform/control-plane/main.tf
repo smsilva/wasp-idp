@@ -39,7 +39,18 @@ locals {
   # sobrescrever a rule de outra celula em silencio.
   listener_rule_priority = 1 + parseint(substr(sha256(var.name), 0, 4), 16) % 50000
 
+  # As duas primeiras AZs da regiao, derivadas do data source em vez de escritas no tfvars. Duas:
+  # o desenho da celula assume um par (o NLB interno fixa um IP privado por AZ, e o nodegroup
+  # distribui entre elas).
+  availability_zones = slice(data.aws_availability_zones.this.names, 0, 2)
+
   tags = { role = "control-plane" }
+}
+
+# As AZs da regiao, em vez de uma lista escrita no tfvars. Substitui o describe-availability-zones
+# do generate-tfvars.
+data "aws_availability_zones" "this" {
+  state = "available"
 }
 
 # A VPC hub e lida pela API da AWS, nao pelo state da camada 1. A camada 2 depende do
@@ -60,7 +71,7 @@ module "network" {
 
   name               = var.name
   vpc_cidr           = var.vpc_cidr
-  availability_zones = var.availability_zones
+  availability_zones = local.availability_zones
   enable_nat_gateway = var.enable_nat_gateway
   tags               = local.tags
 }

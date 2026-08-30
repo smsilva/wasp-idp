@@ -22,6 +22,10 @@ crash.log
 crash.*.log
 terraform.tfvars
 !terraform.tfvars.example
+# Valores locais de identidade: um arquivo, carregado por cada raiz via symlink values.auto.tfvars.
+# O .example É versionado — é o inventário de o que precisa ser preenchido.
+aws/terraform/variables/values.tfvars
+**/values.auto.tfvars
 # Logs de apply/destroy: carregam account id, ARN e endpoint reais
 logs/
 # Metadata da aplicação SAML do Identity Center: identifica a instância de quem roda.

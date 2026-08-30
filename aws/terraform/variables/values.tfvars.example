@@ -1,0 +1,52 @@
+# Inventário dos valores de IDENTIDADE das camadas Terraform — os que identificam esta conta,
+# esta Organization e estas pessoas. Copie para values.tfvars (gitignored) e preencha.
+#
+#   cp values.tfvars.example values.tfvars
+#
+# O que NÃO entra aqui: região, CIDR, nome do hub, versão do Kubernetes, profiles. Isso é decisão
+# de desenho documentada em aws/docs/network/ e vive inline na raiz ou como default de variável —
+# ver a tabela "Onde cada valor de hoje vai parar" no plano
+# docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/README.md.
+#
+# Cada raiz carrega este arquivo por um symlink values.auto.tfvars. Chave que uma raiz não declara
+# vira warning "Value for undeclared variable" — é esperado, não erro: o arquivo é único e as
+# raízes são várias.
+
+# Domínio raiz sob o qual a camada dns/ delegou a subzona. SEM valor default em nenhuma raiz de
+# propósito: a ausência faz o plan falhar por validação explícita, em vez de herdar o domínio de
+# outra conta.
+base_domain = "exemplo.com"
+
+# Subscription e resource group da zona pai no Azure DNS, sob a qual a camada dns/ delega a
+# subzona. Identidade da conta Azure de quem roda. Só a raiz dns/ os declara; com
+# manage_delegation = false (default true) a raiz não toca o Azure e estes ficam sem uso.
+azure_subscription_id    = "00000000-0000-0000-0000-000000000000"
+azure_dns_resource_group = "exemplo-resource-group"
+
+# IDs de grupo do Identity Center que recebem authorization rule no Client VPN. UUID, NÃO nome: o
+# Client VPN casa a rule contra o `memberOf` da assertion, e o Identity Center manda UUID. Nome ali
+# produz túnel que sobe e não alcança nada. Resolva uma vez com:
+#
+#   aws sso-admin list-instances --profile personal --output json
+#   aws identitystore list-groups --identity-store-id <id> --profile personal \
+#     --query 'Groups[].[DisplayName,GroupId]' --output table
+operator_group_ids = ["00000000-0000-0000-0000-000000000000"]
+
+# Contas às quais o TGW é compartilhado via RAM, para que cada uma crie o próprio attachment.
+# Uma por célula — hoje só a conta cicd. Resolva com:
+#
+#   aws organizations list-accounts --profile personal --output json
+spoke_account_ids = ["000000000000"]
+
+# Conta que hospeda a VPC hub (a conta network).
+network_account_id = "000000000000"
+
+# Contas onde o Crossplane cria recursos, via assume role.
+target_account_ids = ["000000000000"]
+
+# BREAK-GLASS — descomente para abrir o endpoint público da API do EKS e declarar quem o alcança.
+# Ausente, o endpoint fica fechado e o caminho é o túnel do Client VPN -> TGW -> ENI do endpoint.
+# O CIDR é declarado à MÃO: não há descoberta do "/32 desta máquina".
+#
+# endpoint_public_access = true
+# public_access_cidrs    = ["203.0.113.10/32"]
