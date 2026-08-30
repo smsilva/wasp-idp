@@ -44,7 +44,7 @@ mais" ou "fica de pé mais tempo".
 | — | Organization, contas, OUs, SCP, Identity Center | T0 | não — `aws/docs/accounts/scripts/` |
 | — | *aprovar a região na SCP* | — | não |
 | 00 | `up-00-state-backend` | T0 | sim |
-| 02 | `up-02-dns` (renumeração para `01` pendente) | T0 | sim |
+| 01 | `up-01-dns` | T0 | sim |
 | — | *aplicação SAML no Identity Center* → `variables/saml-metadata.xml` | — | não, é console |
 | 02 | `up-02-region` → `module.hub` | **T1** | sim |
 | — | *conectar o túnel do Client VPN* | — | não |
@@ -96,7 +96,7 @@ recriação. Reexportar sempre.
 | — | — | *preencher `variables/values.tfvars`* | — | zero | **pré-requisito de toda raiz, não é Terraform** |
 | — | — | *aplicação SAML no Identity Center* | — | zero | **pré-requisito da célula, é console** |
 | 00 | `up-00-state-backend` | `state-backend/` | — | centavos | T0 |
-| 02 | `up-02-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
+| 01 | `up-01-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
 | 02 | `up-02-region` (hub) | `regions/<região>/` | 00, dns | ~US$ 110 | T1 |
 | — | — | *conectar o túnel do Client VPN* | hub | +US$ 0,05/h | **pré-requisito da célula, não é Terraform** |
 | 02 | `up-02-region --with-cell` | `regions/<região>/` | hub + túnel conectado | ~US$ 165 a mais | T2 |
@@ -128,7 +128,7 @@ para a Organization inteira — não há como liberar região só numa conta por
 | Armadilha | Onde | O que o script faz |
 |---|---|---|
 | Bucket de state inexistente | `up-00` | **Para** e imprime o bootstrap manual (state local → apply → `init -migrate-state`). A raiz guarda o próprio state no bucket que gerencia; automatizar às cegas um passo de uma vez só esconde o problema |
-| Zona pai já tem NS para o label | `up-02-dns` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
+| Zona pai já tem NS para o label | `up-01-dns` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
 | Sem tty (pipe, CI, harness de agente) | qualquer script com `--yes` opcional | O `read` volta vazio na hora e o cancelamento pareceria decisão de quem rodou. O script **salva o plano, diz onde está e sai com erro**, apontando o `--yes` |
 
 ### O encanamento comum fica em `scripts/lib`
