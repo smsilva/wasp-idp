@@ -1,37 +1,26 @@
 # Terraform — bootstrap da plataforma AWS
 
-> **A sequência ativa mudou (ADR 0014).** `up-01-network-foundation`, `up-03-connectivity` e
-> `up-04-control-plane` documentados abaixo são a raiz ANTIGA (`network-foundation/`,
-> `connectivity/`, `control-plane/`) — os três recusam rodar (ver guard no topo de cada script).
-> A raiz viva é `regions/<região>/`, subida por `up-02-region` (hub, com `--with-cell` para
-> também subir a célula) — `scripts/up-02-region --help` documenta as flags. `up-00-state-backend`
-> e `up-02-dns` continuam valendo como estão. Este README ainda não foi reescrito para a nova
-> sequência (rastreado no ledger da fase 3); até lá, tratar as seções abaixo como histórico do
-> desenho anterior, não como comando a copiar.
-
 Substitui o bootstrap por k3d + Crossplane. Desenho em
-`docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`; planos em
-`docs/superpowers/plans/2026-08-25-terraform-network-foundation.md` (camada 1) e
-`docs/superpowers/plans/2026-08-25-terraform-control-plane.md` (camada 2).
+`docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`; decisão da raiz
+regional em [ADR 0014](../../docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md).
 
 ## Manter este arquivo verdadeiro
 
 **Este README é a sequência executável.** Quem chega sem contexto segue o que está aqui e espera que
 funcione; uma linha desatualizada aqui não é doc velha, é comando que falha no meio, às vezes com
-recurso já criado atrás. Duas divergências desse tipo já aconteceram: a 03 ficou marcada como "não
-aplicada" depois de aplicada e aceita, e o `up-all --with-control-plane` continuou documentado
-depois de o passo do túnel virar obrigatório.
+recurso já criado atrás. Já aconteceu duas vezes antes da raiz regional existir, e a razão não muda
+com o desenho novo.
 
 Atualizar junto com a mudança, no mesmo trabalho — não depois:
 
 | Mudou isto | Atualizar aqui |
 |---|---|
-| Camada nova (`up-NN`) | bloco de comandos, tabela da sequência, `## Raízes`, `## Ordem de teardown` |
+| Script novo ou renomeado (`up-NN`) | bloco de comandos, tabela da sequência, `## Raízes`, `## Ordem de teardown` |
 | Pré-requisito novo que **não é Terraform** (console, túnel, SCP) | linha `—` própria na tabela da sequência, com o que ele custa e de quem depende |
 | Passo que muda o que um `apply` **exige** para completar | o bloco de comandos, e não só a prosa: quem lê copia o bloco |
 | Guarda nova num script | `### Armadilhas que os scripts pegam antes de tocar em nada` |
-| Custo por hora de uma camada | tabela da sequência **e** `## Custo` (as duas divergem calado) |
-| Raiz aplicada de verdade pela primeira vez | coluna `Exercitada` em `## Raízes` |
+| Custo por hora de um módulo | tabela da sequência **e** `## Custo` (as duas divergem calado) |
+| Região nova aplicada de verdade | coluna `Exercitada` em `## Raízes`, tabela de CIDR |
 
 **O que NÃO entra aqui:** o que está de pé agora, IDs de recurso, valores da conta. Isso é estado de
 sessão e vive em `HANDOFF.md` — repetir aqui garante duas fontes e uma delas errada. Armadilhas de
@@ -44,69 +33,85 @@ total roda o loop.
 Ao fechar um passo de plano que muda a sequência, a checagem é uma pergunta só: **alguém que só leia
 este README consegue subir o ambiente hoje?**
 
+## Os dois eixos: ordem e permanência
+
+**Ordem** é o prefixo numérico dos scripts (`00`, `01`/`02`...) — o que roda antes do quê. **Permanência**
+é T0/T1/T2 — custo e ciclo de vida. São eixos independentes: não confundir "roda depois" com "custa
+mais" ou "fica de pé mais tempo".
+
+| Ordem | Camada | Permanência | Terraform? |
+|---|---|---|---|
+| — | Organization, contas, OUs, SCP, Identity Center | T0 | não — `aws/docs/accounts/scripts/` |
+| — | *aprovar a região na SCP* | — | não |
+| 00 | `up-00-state-backend` | T0 | sim |
+| 02 | `up-02-dns` (renumeração para `01` pendente) | T0 | sim |
+| — | *aplicação SAML no Identity Center* → `variables/saml-metadata.xml` | — | não, é console |
+| 02 | `up-02-region` → `module.hub` | **T1** | sim |
+| — | *conectar o túnel do Client VPN* | — | não |
+| 02 | `up-02-region --with-cell` → `module.cell` | **T2** | sim |
+| — | providers e Compositions do Crossplane | T2 | não — GitOps |
+
+`module.hub` e `module.cell` dividem o mesmo passo `02` (mesma raiz, `regions/<região>/`) e têm
+permanências diferentes: o hub é o repouso da região (fica de pé), a célula sobe/valida/desce. A
+fundação da Organization não ganha um `up-00` próprio — `up-NN` significa "raiz Terraform,
+idempotente, roda sozinha", e a fundação roda uma vez na vida (e-mail de root único, app SAML por
+console). Ela entra como bloco acima do `up-*`, na ordem que `aws/docs/accounts/` já estabelece.
+
+A aplicação SAML é **uma para toda a Organization**, não uma por região — o ACS URL do Client VPN é
+`http://127.0.0.1:35001` em qualquer endpoint. É o que permite a uma região nova ter Client VPN sem
+um segundo passo de console, e o motivo de o metadata morar em `variables/`.
+
 ## Sequência de provisionamento
 
-Um script por camada em `scripts/`, numerado pela ordem. Cada um é idempotente e roda sozinho;
-`up-all` roda a sequência parando na primeira falha.
+Um script por camada em `scripts/`, mais `up-all`, que roda a sequência parando na primeira falha, e
+`down-cell`, o teardown noturno da célula.
 
 ```bash
 cd aws/terraform
 
-./scripts/up-all --base-domain <domínio>     # camadas 00 → 02, centavos por mês
-./scripts/up-all --with-connectivity         # inclui a 03 (~US$ 162/mês)
+./scripts/up-all --base-domain <domínio>       # 00 + dns, centavos/mês
+./scripts/up-all --base-domain <domínio> --with-cell   # inclui a célula (~US$ 165/mês)
 ```
 
-**A 04 não sobe por `up-all`, e não é questão de custo:** entre a 03 e a 04 existe um passo que
-nenhum script faz por você — **conectar o túnel**. Desde o `2.5` o endpoint público da API do EKS
-nasce fechado, e quem fala com o API server durante o apply são os providers `helm`/`kubernetes`, a
-partir da máquina que roda o `terraform apply`. Sem túnel, o apply da 04 morre no primeiro recurso
-`kubernetes`.
+`up-all` sempre aplica o hub (é o repouso da região, ~US$ 110/mês); a célula só entra com
+`--with-cell`, e exige o túnel do Client VPN conectado primeiro — os providers `helm`/`kubernetes`
+falam com o API server a partir desta máquina durante o apply.
 
 ```bash
-# entre a 03 e a 04, obrigatoriamente
-endpoint="$(cd connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
+# depois do hub, antes de --with-cell
+endpoint="$(cd regions/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
 aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
   --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
 aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
 aws-vpn-client connect --profile-name hub
 aws-vpn-client get-connection-status --profile-name hub    # Connected antes de seguir
-
-./scripts/up-04-control-plane --yes          # ~US$ 165/mês
 ```
 
-O `.ovpn` **nunca** se reaproveita entre applies da 03: a DNS name do endpoint muda a cada
+O `.ovpn` **nunca** se reaproveita entre applies do hub: a DNS name do endpoint muda a cada
 recriação. Reexportar sempre.
 
 | # | Script | Raiz | Depende de | Custo/mês | Nível |
 |---|---|---|---|---|---|
 | — | — | *aprovar região na SCP* | — | zero | **pré-requisito, não é Terraform** |
 | — | — | *preencher `variables/values.tfvars`* | — | zero | **pré-requisito de toda raiz, não é Terraform** |
-| — | — | *aplicação SAML no Identity Center* | — | zero | **pré-requisito da 03, é console** |
-| 00 | `up-00-state-backend` | `state-backend/` | — | centavos | permanente |
-| 01 | `up-01-network-foundation` | `network-foundation/<região>/` | 00 | **zero** | permanente |
+| — | — | *aplicação SAML no Identity Center* | — | zero | **pré-requisito da célula, é console** |
+| 00 | `up-00-state-backend` | `state-backend/` | — | centavos | T0 |
 | 02 | `up-02-dns` | `dns/` | 00 | ~US$ 0,50 | T0 |
-| 03 | `up-03-connectivity` | `connectivity/<região>/` | 00, 01, 02 | ~US$ 162 | T1 |
-| — | — | *conectar o túnel do Client VPN* | 03 | +US$ 0,05/h | **pré-requisito da 04, não é Terraform** |
-| 04 | `up-04-control-plane` | `control-plane/` | 00, 01, **03 + túnel conectado** | ~US$ 165 | T2 |
+| 02 | `up-02-region` (hub) | `regions/<região>/` | 00, dns | ~US$ 110 | T1 |
+| — | — | *conectar o túnel do Client VPN* | hub | +US$ 0,05/h | **pré-requisito da célula, não é Terraform** |
+| 02 | `up-02-region --with-cell` | `regions/<região>/` | hub + túnel conectado | ~US$ 165 a mais | T2 |
 
-**A ordem não é preferência.** 00 antes de tudo porque nenhuma outra raiz inicializa o backend sem
-o bucket; 01 antes de 04 porque a 04 lê a VPC hub por `tag:Name`; 02 antes de 03 porque o
-certificado do endpoint da VPN valida por DNS na subzona que a 02 delega; 03 antes de 04 porque o
-caminho até a API do cluster **é** o túnel. Níveis de permanência em
-`docs/superpowers/plans/2026-08-26-private-access-and-ingress/README.md`.
+**A ordem não é preferência.** `00` antes de tudo porque nenhuma outra raiz inicializa o backend sem
+o bucket; `dns` antes do hub porque o certificado do endpoint da VPN valida por DNS na subzona que
+ele delega; o hub antes da célula porque o caminho até a API do cluster **é** o túnel do Client VPN.
 
 **Desbloqueio de emergência, se o túnel não estiver disponível:** descomentar
 `endpoint_public_access = true` e `public_access_cidrs = ["<ip>/32"]` em `variables/values.tfvars`
 abre o endpoint público só para o CIDR declarado à mão. É break-glass declarado em arquivo, não
 default — não há descoberta do IP desta máquina.
 
-**Nem a 03 nem a 04 entram no `up-all` por default.** As três primeiras somam centavos; as duas
-últimas somam ~US$ 275/mês. Incluir exige `--with-connectivity` / `--with-control-plane`, de
-propósito.
-
-**A 03 é o primeiro nível que fica de pé de propósito e é derrubado à noite** — T1. Não presumir
-resíduo e destruir; e não esquecer ligada. `connectivity/us-east-1/scripts/destroy` diz em voz alta
-o que se perde antes de confirmar.
+**A célula não entra no `up-all` por default e é derrubada toda noite** (`down-cell`) — T2. Não
+presumir resíduo e destruir; e não esquecer ligada entre sessões de trabalho.
 
 ### Aprovar a região vem antes, e não é Terraform
 
@@ -116,40 +121,28 @@ aws/docs/accounts/scripts/apply-baseline-service-control-policy --regions us-eas
 
 Sem isso, um `apply` fora das regiões aprovadas falha no primeiro `Create*` com
 `explicit deny in a service control policy`, e o erro **parece bug de código**. `--regions` vale
-para a Organization inteira — não há como liberar região só numa conta por essa via. O `up-01` faz
-um `describe-vpcs` barato para antecipar o deny para antes de qualquer escrita.
+para a Organization inteira — não há como liberar região só numa conta por essa via.
 
 ### Armadilhas que os scripts pegam antes de tocar em nada
 
 | Armadilha | Onde | O que o script faz |
 |---|---|---|
 | Bucket de state inexistente | `up-00` | **Para** e imprime o bootstrap manual (state local → apply → `init -migrate-state`). A raiz guarda o próprio state no bucket que gerencia; automatizar às cegas um passo de uma vez só esconde o problema |
-| Região negada pela SCP | `up-01`, `up-03` | `describe-vpcs` antes do primeiro `Create*` |
-| Zona pai já tem NS para o label | `up-02` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
-| Subzona ausente ou ambígua | `up-03` | **Recusa.** Sem a camada 02 o certificado não tem onde validar; com duas subzonas `<label>.*` não se sabe para qual emitir |
-| Hub sem subnet privada | `up-03` | **Recusa.** Sem associação o endpoint fica em `pending-associate` para sempre — sobe, cobra e não conecta |
-| Metadata SAML ausente | `up-03` | **Para e imprime o roteiro de console.** É o passo mais fácil de esquecer justamente por não ser Terraform |
-| Metadata SAML curto demais | `up-03` | **Recusa** abaixo de 1000 caracteres: o provider exige isso, e arquivo curto quase sempre é página de erro salva por engano |
-| Nome de grupo no lugar do id | `up-03` | Traduz nome → UUID pelo Identity Center, e a variável do Terraform recusa o que não for UUID. Nome ali dá túnel que sobe e não alcança nada, com erro que não diz por quê |
-| Attachment de fora do state no TGW | `destroy` da 03 | **Recusa.** A AWS também recusa deletar TGW com attachment vivo, mas o erro dela chega depois de o destroy ter apagado o endpoint e o certificado |
+| Zona pai já tem NS para o label | `up-02-dns` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
+| Sem tty (pipe, CI, harness de agente) | qualquer script com `--yes` opcional | O `read` volta vazio na hora e o cancelamento pareceria decisão de quem rodou. O script **salva o plano, diz onde está e sai com erro**, apontando o `--yes` |
 
 ### O encanamento comum fica em `scripts/lib`
 
 Sourced, não executado. Log com timestamp em `<raiz>/logs/` (gitignored — a saída carrega account
 id, ARN e endpoint reais), `PIPESTATUS[0]` para o `tee` não mascarar falha, confirmação antes de
-qualquer apply, e descoberta do bucket a partir do id da Organization. Um script por camada **não**
-significa cinco cópias disso — é assim que essas coisas divergem.
-
-Sem tty (pipe, CI, harness de agente) o `read` volta vazio na hora e o cancelamento pareceria
-decisão de quem rodou. Nesse caso o script **salva o plano, diz onde está e sai com erro**,
-apontando o `--yes`.
+qualquer apply, e descoberta do bucket a partir do id da Organization.
 
 ### Descida
 
-Não há `down-*`. Derrubar é por raiz, de propósito — a assimetria é intencional: subir a sequência
-inteira é rotina, derrubar nunca é. A `control-plane` tem `scripts/destroy` com guardas próprios
-(Crossplane sem recurso vivo, contexto kubectl correto). `dns` e `state-backend` têm
-`prevent_destroy` no que importa.
+`down-cell --region <região>` destrói só `module.cell` (`-target`), mantendo o hub de pé — é o
+teardown de rotina, todo dia. Derrubar o hub inteiro (região completa) é `terraform destroy` na
+raiz `regions/<região>/`, sem `-target` — não é rotina, e não tem script próprio de propósito: a
+assimetria é intencional.
 
 ## Raízes
 
@@ -157,27 +150,18 @@ inteira é rotina, derrubar nunca é. A `control-plane` tem `scripts/destroy` co
 verificado — não se está de pé agora.** O que está de pé neste momento é pergunta de sessão, não de
 repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state list` por raiz.
 
-| Raiz | Conta | State key | Entrega | Exercitada |
+| Raiz | Contas | State key | Entrega | Exercitada |
 |---|---|---|---|---|
 | `state-backend/` | `network` | `state-backend/` | O bucket de state, uma vez, sem região | sim |
-| `network-foundation/us-east-1/` | `network` | `network-foundation/us-east-1/` | VPC hub `10.1.0.0/16` | sim |
-| `network-foundation/us-west-2/` | `network` | `network-foundation/us-west-2/` | VPC hub `10.3.0.0/16` | sim |
 | `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | sim |
-| `connectivity/us-east-1/` | `network` | `connectivity/us-east-1/` | TGW isolado por default + cert do ACM + Client VPN com SAML + ALB público de ingress com o listener `:443` compartilhado | sim para o TGW e a VPN — túnel conectado e pacote atravessando até a spoke; o ALB ainda **não** foi aplicado |
-| `control-plane/` | `cicd` | `control-plane/` | VPC spoke `10.2.0.0/16`, EKS, NLB interno do ingress, ESO, ArgoCD, Crossplane | sim, **menos com o endpoint da API fechado** — esse é o aceite que falta |
-
-A camada 2 aplicou 39 recursos num único `terraform apply`, sem `-target`: EKS 1.36, dois nós
-`t3.medium`, três Pod Identities e os três charts. Com o `3.1` são 61 recursos — entram o NLB
-interno com endereços fixos, sua target group e a quarta Pod Identity (a do Load Balancer
-Controller). Desde 2026-08-29 o *chart* do controller também sai daqui — antes era instalado à mão, por `helm`, a partir de um checkout local. Prova o que estava em aberto no desenho — os
-providers `kubernetes` e `helm` configurados a partir de outputs do módulo do cluster resolvem
-na hora do apply. **Não** inventar apply em duas fases.
+| `regions/us-east-1/` | `network` (hub) + `cicd` (célula) | `regions/us-east-1/` | `module.hub` (VPC `10.1.0.0/16`, TGW, Client VPN, ALB público) + `module.cell` (VPC `10.2.0.0/16`, EKS, node group, Pod Identities, ESO, ArgoCD, Crossplane) | sim — apply e destroy reais dos dois módulos provados |
+| `regions/us-west-2/` | `network` (hub) + `cicd` (célula) | `regions/us-west-2/` | `module.hub` (VPC `10.3.0.0/16`) + `module.cell` (VPC `10.4.0.0/16`) | sim para o `plan` da composição inteira (invariante); aplicado só o hub, por custo |
 
 ### `dns/` é a única raiz sem região na state key
 
-Hosted zone pública é recurso **global**: não cabe em `network-foundation/<região>/`. E não pode
-morar em `connectivity/`, que é destruído toda noite — a zona recriada nasce com **name servers
-novos**, e mesmo com a delegação automatizada a propagação do NS não é instantânea.
+Hosted zone pública é recurso **global**: não cabe em `regions/<região>/`. E não pode morar junto do
+hub — o hub de uma região pode ser recriado (CIDR errado, migração), e a zona recriada nasce com
+**name servers novos**; mesmo com a delegação automatizada a propagação do NS não é instantânea.
 
 Todos os valores de **identidade** — domínio, ids de conta, UUIDs de grupo, e o resource group e a
 subscription do Azure que só o `dns/` usa — vivem num único `variables/values.tfvars` gitignored,
@@ -192,56 +176,51 @@ subzona existe no Route 53 e ninguém a resolve — é modo de trabalho, não es
 **`dns/` também liga o RAM sharing com a Organization** (`aws_ram_sharing_with_organization`, via
 provider aliasado `aws.management`, profile `personal`). Não tem relação com DNS — é configuração
 permanente da Organization inteira, e mora aqui porque `dns/` é a raiz T0 (permanente, custo quase
-zero), não porque o TGW da `connectivity/` (T1) devesse possuí-la. Sem ela, qualquer attachment
-cross-conta de TGW falha com `OperationNotPermittedException`.
-
-A VPC hub entra por `data "aws_vpc"` filtrando `tag:Name` num provider `aws` aliasado com o
-profile `network` — não por `terraform_remote_state`. O acoplamento é ao recurso, não ao arquivo
-de state da camada 1. O filtro tem de devolver exatamente um id, senão quebra no plan — é o próprio
-data source quem denuncia hub ausente ou tag ambígua, sem passo de descoberta antes.
+zero). Sem ela, qualquer attachment cross-conta de TGW falha com `OperationNotPermittedException`.
 
 ### Por que o bucket de state tem raiz própria
 
-Ele guarda o state de **todas** as camadas e regiões. Enquanto vivia junto da
-`network-foundation` de `us-east-1`, um `terraform destroy` daquele hub levaria junto o mapa de
-toda a infraestrutura. Numa raiz própria, nenhum destroy de região o alcança — o bucket não está
-no state de nenhuma delas. Fix estrutural, não guarda por convenção.
-
-Somam-se duas proteções: `prevent_destroy = true` no recurso, e `force_destroy = false` (default)
-— a AWS recusa deletar bucket não-vazio, e ele nunca estará vazio.
+Ele guarda o state de **todas** as camadas e regiões. Numa raiz própria, nenhum destroy de região o
+alcança — o bucket não está no state de nenhuma delas. `prevent_destroy = true` no recurso e
+`force_destroy = false` (default) somam duas proteções: a AWS recusa deletar bucket não-vazio, e ele
+nunca estará vazio.
 
 ### Uma raiz por região, não uma raiz com `-reconfigure`
 
-Cada região tem diretório e state key próprios. A alternativa — uma raiz só, alternando backend
-com `terraform init -reconfigure` — tem um footgun permanente: esquecer de trocar o backend antes
-do apply mistura as regiões, e nada no Terraform pega isso. Os valores de região, CIDR e AZs
-ficam **inline** em cada `main.tf`: são decisões de desenho documentadas
-(`aws/docs/network/01-cidr-addressing.md`), não segredo.
-
-Isolamento verificado: `terraform plan -destroy` em `us-west-2` mostra 13 recursos, zero menção
-ao bucket ou ao CIDR de `us-east-1`.
+Cada região tem diretório e state key próprios (`regions/<região>/`). A alternativa — uma raiz só,
+alternando backend com `terraform init -reconfigure` — tem um footgun permanente: esquecer de trocar
+o backend antes do apply mistura as regiões, e nada no Terraform pega isso. Os valores de região,
+CIDR e AZs ficam **inline** em cada `main.tf` (locals) — são decisões de desenho documentadas
+(`aws/docs/network/01-cidr-addressing.md`), não segredo. `module.cell` **fica** no `main.tf` de toda
+região, idêntico entre elas — a diferença entre aplicar só o hub ou hub+célula é operacional
+(flag do script), nunca estrutural.
 
 ### Alocação de CIDR
 
-Supernet `10.0.0.0/12`, um `/16` por VPC. N=0 reservado à Organization, N=1 e N=3 em uso, N=2
-para o `control-plane`. **Teto de 15, e região multiplica** — ver
-`aws/docs/network/01-cidr-addressing.md`. É a única decisão irreversível da cadeia.
+Supernet `10.0.0.0/12`, um `/16` por VPC. N=0 reservado à Organization.
+
+| Bloco | Região | Módulo |
+|---|---|---|
+| `10.1.0.0/16` | us-east-1 | `module.hub` |
+| `10.2.0.0/16` | us-east-1 | `module.cell` |
+| `10.3.0.0/16` | us-west-2 | `module.hub` |
+| `10.4.0.0/16` | us-west-2 | `module.cell` |
+
+**Teto de 15, e região multiplica** — ver `aws/docs/network/01-cidr-addressing.md`. É a única
+decisão irreversível da cadeia.
 
 **A VPC spoke nunca pode ser separada do state do cluster.** No teardown, o egress
 *pod → subnet privada → NAT → IGW → API do ELB* precisa sobreviver até o último nó sair; o grafo
-de dependências do Terraform garante isso somente dentro de um mesmo state. Separar
-`rede | cluster` reintroduz o bug do NLB órfão sem o mecanismo que o compensava na Composition
-de referência (as ~40 `ClusterUsage`).
-
-O corte `hub | spoke+cluster` é seguro **hoje** porque não há TGW: os nós não roteiam pelo hub.
-Quando o TGW entrar, este raciocínio precisa ser revisitado.
+de dependências do Terraform garante isso somente dentro de um mesmo state — é por isso que
+`module.hub` e `module.cell` vivem na mesma raiz, ligados por referência (output → input), não por
+`terraform_remote_state`.
 
 ## Pré-requisitos
 
 - `aws sso login --profile personal` ativo.
 - Profiles locais `network` e `cicd` assumindo `OrganizationAccountAccessRole`.
-- `terraform.tfvars` preenchido em cada raiz (gitignored; valores em `CLAUDE.local.md`).
-- Para a camada 2: a conta `cicd` na OU `Deployments`. **Já existe** — criada em 2026-08-25.
+- `variables/values.tfvars` preenchido (gitignored — ver `variables/README.md`).
+- A conta `cicd`, dona da célula, na OU `Deployments`.
 
 ## Submódulos
 
@@ -249,9 +228,12 @@ Quando o TGW entrar, este raciocínio precisa ser revisitado.
 |---|---|---|
 | `src/network` | XR `Network` (L1a) | 16 recursos com NAT ligado. Subnets derivadas do CIDR com `cidrsubnet()`, não fixas — por isso serve qualquer região sem alteração |
 | `src/state-backend` | — | Bucket de state endurecido, com `prevent_destroy` |
+| `src/hub` | conectividade regional | VPC hub, TGW, Client VPN (SAML), ALB público de ingress com listener `:443` compartilhado. Composto por toda `regions/<região>/` |
+| `src/cell` | XR `Cluster` + `ClusterBootstrap` | VPC spoke, EKS, node group, Pod Identities, ESO, ArgoCD, Crossplane — descartável por `terraform destroy -target=module.cell` |
 | `src/cluster` | XR `Cluster` (L1b) | EKS `authentication_mode = "API"` (sem `aws-auth` ConfigMap), role do cluster, role compartilhada dos nós, access entries e os dois addons de base |
 | `src/nodegroup` | idem | Node groups por mapa. `ignore_changes` no `desired_size` para não brigar com autoscaler futuro |
 | `src/pod-identity` | trust de Pod Identity das Compositions | Molde dos três consumidores. O trust precisa de `sts:AssumeRole` **e** `sts:TagSession` — só o primeiro falha |
+| `src/ingress` | NLB interno + target group | Endereços de IP privados fixos por AZ, ligados ao ALB do hub via `TargetGroupBinding` |
 | `src/helm/modules/{aws-load-balancer-controller,ingress-istio,target-group-binding,httpbin,external-secrets,argo-cd,crossplane}` | XR `ClusterBootstrap` | Um chart por módulo, versão fixada. `ingress-istio` é maior: `base` + `istiod` + `gateway` numa versão só, mais o `Gateway` CR da célula |
 
 O módulo do Load Balancer Controller nasce com escopo estreito de propósito: sem IngressClass e
@@ -288,90 +270,67 @@ cd ../docs/accounts/scripts
 AWS_PROFILE=personal ./apply-baseline-service-control-policy --regions us-east-1,<nova-região>
 ```
 
-Isso vale para a **Organization inteira**, não só para a conta `network`. Depois, copiar um
-diretório de região existente e ajustar região e CIDR (N livre do supernet):
+Isso vale para a **Organization inteira**, não só para a conta `network`. Depois, copiar a raiz de
+uma região existente e trocar o que é regional:
 
 ```bash
-cp -r network-foundation/us-west-2 network-foundation/<nova-região>
-# editar main.tf (region, CIDR, AZs) e versions.tf (key do backend)
-cd network-foundation/<nova-região>
+cd ../regions
+cp --recursive us-east-1 <nova-região>
+rm --recursive --force <nova-região>/.terraform <nova-região>/logs \
+  <nova-região>/values.auto.tfvars <nova-região>/saml-metadata.xml
+ln --symbolic ../../variables/values.tfvars <nova-região>/values.auto.tfvars
+ln --symbolic ../../variables/saml-metadata.xml <nova-região>/saml-metadata.xml
+```
+
+Editar em `<nova-região>/main.tf` (`locals`): `region`, `hub_vpc_cidr` e `cell_vpc_cidr` (dois `/16`
+livres — conferir a tabela de alocação acima **antes** de escrever). E em `<nova-região>/versions.tf`
+a `key` do backend (`regions/<nova-região>/terraform.tfstate`) — a `region` do bloco `backend "s3"`
+**não muda**: é onde vive o bucket de state (`us-east-1`), não a região da infraestrutura.
+
+`module.cell` **fica** no `main.tf` — não é opcional remover. **Um `terraform plan` verde da
+composição inteira (hub + célula) é o aceite de uma região nova**, mesmo que só o hub seja aplicado:
+ele prova que nenhum nome global colide (IAM roles, SAML provider) e nenhum caminho de arquivo aponta
+para a região errada.
+
+```bash
+cd <nova-região>
 terraform init -backend-config="bucket=<state-bucket-name>"
-terraform plan -out=hub.tfplan
-terraform apply hub.tfplan
+terraform plan -out=/tmp/<nova-região>.tfplan
+terraform apply "/tmp/<nova-região>.tfplan"   # só o hub, por custo — module.cell fica pendente
 ```
 
-Nenhuma linha de `src/network` muda — foi feito reutilizável e há teste provando que a
-aritmética de CIDR acompanha o valor recebido.
-
-## Ordem de apply
-
-O `bucket` do backend fica fora do `versions.tf` porque é valor real; entra por
-`-backend-config`. O `profile` **está** no bloco de backend de propósito: o backend é
-inicializado antes de o provider ser configurado, então não herda `profile` do bloco `provider`.
-
-A camada 2 tem dois scripts em `control-plane/scripts/`, nesta ordem:
-
-```bash
-cd control-plane
-terraform init -backend-config="bucket=<state-bucket>"  # o bucket sai de discover_state_bucket
-./scripts/apply                                        # plan, confirma, aplica, guarda o log
-```
-
-Não há passo de geração antes: os valores de identidade vêm de `variables/values.tfvars`
-(carregado por `values.auto.tfvars`), as AZs de `data.aws_availability_zones`, e o resto é default
-de variável. A tag da VPC hub ambígua, a região negada por SCP e a colisão de CIDR falham no plan
-pelos próprios data sources e pelo apply — não há mais um guard que as antecipe fora do Terraform.
-
-O `apply` lê o exit code por `PIPESTATUS[0]`: o `tee` sempre retorna 0, e sem isso um apply que
-falhou passaria por sucesso. Os logs vão para `control-plane/logs/`, gitignored — a saída carrega
-account id, ARN e endpoint reais.
+Nenhuma linha de `src/hub`, `src/cell` ou `src/network` muda — os dois módulos foram feitos
+reutilizáveis, com teste provando que a aritmética de CIDR acompanha o valor recebido.
 
 ## Ordem de teardown
 
-**Inverso do apply: `control-plane` → `connectivity` → `network-foundation`.**
-
-O `control-plane` antes da `connectivity` **não é convenção, é imposição da AWS**, e agora por dois
-caminhos independentes. O primeiro é o TGW: o attachment da spoke vive no state da `control-plane`, e
-a AWS recusa deletar um TGW com attachment vivo. O segundo é o ALB: cada célula pendura no listener
-`:443` compartilhado o próprio certificado (por SNI) e a própria rule de host, também a partir do
-state da `control-plane`. O `connectivity/us-east-1/scripts/destroy` antecipa os dois — recusa com
-exit 1 enquanto houver attachment, certificado ou rule de fora do próprio state, e nomeia quem
-destruir primeiro. Ele exclui da checagem o que é dele: o attachment do próprio hub e o certificado
-default do listener. Contar **~10 min** no destroy da 03: cada
-`aws_ec2_client_vpn_network_association` leva 7–10 min, simétrico com a criação. Não é travamento.
-
-Dentro de uma camada a ordem é de graça — é o grafo de dependências do Terraform. O que **não**
-é de graça: XRs que o Crossplane tenha criado dentro do cluster depois do bootstrap. Eles não
-estão no state, e destruir o cluster primeiro deixa recurso AWS órfão sem controlador. Antes de
-destruir a `control-plane`:
+Dentro de uma raiz a ordem é de graça — é o grafo de dependências do Terraform, e `module.cell`
+depende de `module.hub` por referência (output → input), nunca o contrário. O que **não** é de
+graça: XRs que o Crossplane tenha criado dentro do cluster depois do bootstrap. Eles não estão no
+state do Terraform, e destruir o cluster primeiro deixa recurso AWS órfão sem controlador. Antes de
+um `destroy` que alcance a célula:
 
 ```bash
 kubectl get managed     # tem de vir vazio
 kubectl get composite   # idem
 ```
 
-Se não vier vazio, deletar os XRs e esperar a reconciliação terminar **antes** do
-`terraform destroy`.
-
-`control-plane/scripts/destroy` faz essa checagem antes de chamar o Terraform. Ele também
-confere que o contexto corrente do `kubectl` casa com o cluster do state: o contexto pode estar
-apontando para o k3d `control-plane`, e um `get managed` vazio no cluster errado é pior que
-nenhuma checagem.
+Se não vier vazio, deletar os XRs e esperar a reconciliação terminar **antes** do `terraform
+destroy`/`down-cell`.
 
 ## Testes
 
 Sem credencial, sem chamada à AWS — `mock_provider` + `command = plan`:
 
 ```bash
-for module in src/network src/state-backend src/cluster src/nodegroup src/pod-identity \
-              src/ingress \
+for module in src/network src/state-backend src/pod-identity src/cluster src/nodegroup src/ingress \
+              src/hub src/cell \
               src/helm/modules/aws-load-balancer-controller \
               src/helm/modules/ingress-istio \
               src/helm/modules/target-group-binding src/helm/modules/httpbin \
               src/helm/modules/external-secrets src/helm/modules/argo-cd \
               src/helm/modules/crossplane \
-              network-foundation/us-east-1 network-foundation/us-west-2 \
-              control-plane dns connectivity/us-east-1; do
+              regions/us-east-1 regions/us-west-2 dns; do
   (cd "${module}" && terraform init -backend=false && terraform test)
 done
 ```
@@ -379,9 +338,8 @@ done
 A volta inteira passa de 2 min — rodar em background ou por diretório, senão o teto de tempo de
 uma chamada corta no meio.
 
-Cada raiz de região testa que seu CIDR **cai dentro do supernet**. Essa validação vivia na
-variável `hub_vpc_cidr` da raiz única; com os valores inline ela viraria um buraco silencioso,
-e um typo no CIDR é irreversível depois de aplicado.
+Cada raiz de região testa que seus dois CIDRs **caem dentro do supernet** e **não se sobrepõem entre
+si**. Um typo no CIDR é irreversível depois de aplicado.
 
 ### Duas limitações do framework que já custaram tempo
 
@@ -394,33 +352,18 @@ e um typo no CIDR é irreversível depois de aplicado.
    `alltrue([])` é `true` e um `for` sem checar tamanho passaria com zero regras.
 
 Assertion nova sobre propriedade que importa merece **teste de mutação**: quebre a
-implementação de propósito e confirme que o teste falha. Duas das assertions atuais eram vazias
-até isso ser feito.
+implementação de propósito e confirme que o teste falha.
 
 ## Custo
 
-A camada 1 tem **custo recorrente zero**: VPC, subnets, IGW, route tables e bucket vazio não
-cobram por hora, e o NAT está desligado (sem TGW, nada roteia pelo hub — ligá-lo custaria
-~US$ 32/mês servindo zero tráfego). O bucket cobra armazenamento e requisições, na casa de
-centavos.
+O hub (`module.hub`) custa **~US$ 110/mês**: TGW isolado por default (~zero até algo anexar) + Client
+VPN (~US$ 146/mês por **duas** associações de target network, uma por AZ) + ALB de ingress
+(~US$ 16/mês). VPC, subnets, IGW, route tables e bucket vazio não cobram por hora; NAT do hub fica
+desligado de propósito — sem TGW anexado nada roteia por ele.
 
-A camada 2 é a que custa: **~US$ 165/mês** — EKS control plane ~73 + NAT ~32 + 2×`t3.medium` ~60.
-Números anteriores de ~US$ 105 omitiam os nós. O NAT aqui é deliberado, ao contrário do hub: sem
-TGW não há egress pelo hub, e os nós dependem dele para chegar à API do EKS e aos registries.
+A célula (`module.cell`) custa **~US$ 165/mês** a mais: EKS control plane ~73 + NAT ~32 (aqui
+deliberado — os nós dependem dele para chegar à API do EKS e aos registries) + 2×`t3.medium` ~60.
 
-A camada 03 custa **~US$ 162/mês** (~US$ 0,22/h), mais US$ 0,05/h por conexão ativa e as LCU do
-ALB. São duas parcelas: o Client VPN cobra ~US$ 146/mês por **associação de target network**, não por
-endpoint — as duas subnets privadas do hub (uma por AZ) dobram essa parcela, e a redundância de AZ
-foi mantida sabendo disso; o ALB de ingress soma ~US$ 16/mês. Números de ~US$ 110/mês em texto mais
-antigo assumiam uma associação só e nenhum ALB.
-
-**O ALB de ingress vive aqui, e não numa camada permanente, porque sem TGW ele não alcança spoke
-nenhuma** — é um listener servindo 404. A consequência a saber antes de derrubar: o teardown noturno
-desta camada leva o **ingress público de todas as células** junto, e o DNS name do ALB muda na
-recriação, então os registros alias das células são reescritos pelo apply seguinte da 04. É por isso
-que a 04 desce antes desta e sobe depois.
-
-Por isso a camada 2 não fica de pé entre sessões de trabalho — sobe, valida, desce
-(`control-plane/scripts/destroy`). O state fica no bucket, então subir de novo é só `init` +
-`apply` — os valores vêm de `variables/values.tfvars`, sem passo de geração. A 03 é a exceção
-declarada: fica de pé durante o dia de trabalho e é derrubada à noite, não ao fim de cada tarefa.
+Por isso a célula não fica de pé entre sessões de trabalho — sobe, valida, desce (`down-cell`). O
+hub fica: é o repouso da região, e derrubá-lo e recriá-lo troca o DNS name do ALB e do Client VPN,
+invalidando o `.ovpn` exportado e os registros alias das células.
