@@ -21,7 +21,6 @@ variables {
   network_profile     = "network"
   hub_vpc_name        = "poc-hub-vpc"
   vpc_cidr            = "10.2.0.0/16"
-  availability_zones  = ["us-east-1a", "us-east-1b"]
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
   public_access_cidrs = ["203.0.113.10/32"]
@@ -55,6 +54,13 @@ override_data {
 # client-side do provider recusa o valor na regra de 443. Aqui o override tem um segundo papel
 # — é o CIDR hub que vira allowed_ingress_cidrs do NLB.
 override_data {
+  target = data.aws_availability_zones.this
+  values = {
+    names = ["us-east-1a", "us-east-1b"]
+  }
+}
+
+override_data {
   target = data.aws_vpc.hub
   values = {
     id         = "vpc-hub000000000001"
@@ -77,8 +83,8 @@ run "os_enderecos_do_nlb_saem_das_subnets_da_spoke" {
 
   # Um endereço por AZ — é isso que a target group do hub (3.2) vai apontar.
   assert {
-    condition     = length(module.ingress.private_ips) == length(var.availability_zones)
-    error_message = "um endereco por AZ, recebido ${length(module.ingress.private_ips)} para ${length(var.availability_zones)} AZs"
+    condition     = length(module.ingress.private_ips) == length(module.network.availability_zones)
+    error_message = "um endereco por AZ, recebido ${length(module.ingress.private_ips)} para ${length(module.network.availability_zones)} AZs"
   }
 }
 

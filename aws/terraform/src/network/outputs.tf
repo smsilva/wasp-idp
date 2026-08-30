@@ -7,6 +7,11 @@ output "vpc_cidr" {
   value = aws_vpc.this.cidr_block
 }
 
+output "availability_zones" {
+  description = "AZs em que as subnets deste modulo nasceram. Existe para a raiz assertar de onde a lista veio."
+  value       = var.availability_zones
+}
+
 output "public_subnet_ids" {
   value = aws_subnet.public[*].id
 }

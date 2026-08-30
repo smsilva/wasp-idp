@@ -7,11 +7,13 @@ variable "name" {
 variable "region" {
   description = "Regiao AWS da celula."
   type        = string
+  default     = "us-east-1"
 }
 
 variable "aws_profile" {
   description = "Profile local com acesso a conta cicd."
   type        = string
+  default     = "cicd"
 }
 
 variable "network_profile" {
@@ -27,18 +29,21 @@ variable "hub_vpc_name" {
 }
 
 variable "vpc_cidr" {
-  description = "CIDR da VPC spoke. Um /16 dentro do supernet 10.0.0.0/12."
+  description = <<-EOT
+    CIDR da VPC spoke. Um /16 dentro do supernet 10.0.0.0/12.
+
+    Tem DEFAULT desde a fase 1: a alocacao esta documentada em
+    aws/docs/network/01-cidr-addressing.md, o que a torna decisao de desenho, nao identidade —
+    mesmo criterio que ja punha o CIDR do hub inline na network-foundation. Continua sendo a
+    unica decisao IRREVERSIVEL da cadeia: mudar aqui recria a VPC inteira.
+  EOT
   type        = string
+  default     = "10.2.0.0/16"
 
   validation {
     condition     = can(cidrhost(var.vpc_cidr, 0)) && startswith(var.vpc_cidr, "10.") && can(tonumber(split(".", var.vpc_cidr)[1])) && tonumber(split(".", var.vpc_cidr)[1]) >= 0 && tonumber(split(".", var.vpc_cidr)[1]) <= 15
     error_message = "o CIDR deve ser um /16 dentro do supernet 10.0.0.0/12 (10.0 a 10.15), recebido ${var.vpc_cidr}."
   }
-}
-
-variable "availability_zones" {
-  description = "Duas zonas de disponibilidade da regiao."
-  type        = list(string)
 }
 
 variable "enable_nat_gateway" {
@@ -48,7 +53,13 @@ variable "enable_nat_gateway" {
 }
 
 variable "kubernetes_version" {
-  description = "Versao do Kubernetes. O terraform.tfvars gerado por scripts/generate-tfvars sobrescreve com a versao default do EKS descoberta na hora."
+  description = <<-EOT
+    Versao do Kubernetes do control plane do EKS.
+
+    Fixada aqui e revisada a olho, nao descoberta: `describe-cluster-versions` devolvia a default
+    do EKS na hora, o que fazia a versao do cluster mudar sozinha entre dois applies da mesma
+    arvore. Conferir contra a doc do EKS ao subir.
+  EOT
   type        = string
   default     = "1.36"
 }
@@ -88,8 +99,8 @@ variable "public_access_cidrs" {
 
     O default vazio aqui NAO reabre o Known Broken 3: a lista vazia so e alcancavel com o
     endpoint publico desligado. Com ele ligado, quem recusa vazio e o modulo src/cluster,
-    onde mora a semantica da AWS ("vazio significa o mundo"). scripts/generate-tfvars
-    descobre o IP publico corrente quando a descoberta e pedida.
+    onde mora a semantica da AWS ("vazio significa o mundo"). O CIDR de break-glass e declarado
+    a mao em variables/values.tfvars; nao ha descoberta do IP publico corrente.
   EOT
   type        = list(string)
   default     = []
@@ -120,8 +131,8 @@ variable "base_domain" {
     celula: *.<name>.<subzone_label>.<base_domain>.
 
     SEM DEFAULT de proposito, mesma razao da connectivity/: e valor por-conta num repo publico,
-    e a ausencia invalida qualquer terraform.tfvars ja gerado — quem aplicar tem de regenerar
-    (./scripts/generate-tfvars --force) em vez de herdar um valor de outra conta.
+    e a ausencia faz o plan falhar por validacao explicita, em vez de herdar um valor de outra
+    conta. Declarado em variables/values.tfvars (gitignored), carregado por values.auto.tfvars.
   EOT
   type        = string
 

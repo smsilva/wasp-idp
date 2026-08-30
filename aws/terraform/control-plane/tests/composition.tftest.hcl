@@ -14,7 +14,6 @@ variables {
   network_profile    = "network"
   hub_vpc_name       = "poc-hub-vpc"
   vpc_cidr           = "10.2.0.0/16"
-  availability_zones = ["us-east-1a", "us-east-1b"]
   target_account_ids = ["000000000000"]
   network_account_id = "111111111111"
   # RFC 5737, bloco de documentacao. Na vida real vem do generate-tfvars, que descobre o IP
@@ -57,12 +56,57 @@ override_data {
   }
 }
 
+# As AZs agora vêm de data.aws_availability_zones, indexado por module.network para nomear
+# subnets. Sob mock o valor é sintético e o plan morre — override de arquivo cobre os runs que
+# não são sobre AZ; os dois runs específicos abaixo trazem o próprio override.
+override_data {
+  target = data.aws_availability_zones.this
+  values = {
+    names = ["us-east-1a", "us-east-1b"]
+  }
+}
+
 run "spoke_usa_o_segundo_octeto_reservado" {
   command = plan
 
   assert {
     condition     = module.network.vpc_cidr == "10.2.0.0/16"
     error_message = "a spoke da conta cicd e o N=2 do supernet, recebido ${module.network.vpc_cidr}"
+  }
+}
+
+# As AZs deixaram de ser input: vêm de data.aws_availability_zones, que é o mecanismo que
+# substitui o `describe-availability-zones` do generate-tfvars. Dois runs com listas de tamanhos
+# e valores diferentes — um só passaria mesmo se a raiz tivesse a lista fixa no código.
+run "availability_zones_come_from_the_data_source" {
+  command = plan
+
+  override_data {
+    target = data.aws_availability_zones.this
+    values = {
+      names = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    }
+  }
+
+  assert {
+    condition     = toset(module.network.availability_zones) == toset(["us-east-1a", "us-east-1b"])
+    error_message = "a raiz deve usar as DUAS primeiras AZs que o data source devolve"
+  }
+}
+
+run "availability_zones_follow_a_different_region" {
+  command = plan
+
+  override_data {
+    target = data.aws_availability_zones.this
+    values = {
+      names = ["us-west-2a", "us-west-2b", "us-west-2c", "us-west-2d"]
+    }
+  }
+
+  assert {
+    condition     = toset(module.network.availability_zones) == toset(["us-west-2a", "us-west-2b"])
+    error_message = "a lista tem de vir do data source, nao estar fixa no codigo"
   }
 }
 
