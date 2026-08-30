@@ -1,5 +1,14 @@
 # Terraform — bootstrap da plataforma AWS
 
+> **A sequência ativa mudou (ADR 0014).** `up-01-network-foundation`, `up-03-connectivity` e
+> `up-04-control-plane` documentados abaixo são a raiz ANTIGA (`network-foundation/`,
+> `connectivity/`, `control-plane/`) — os três recusam rodar (ver guard no topo de cada script).
+> A raiz viva é `regions/<região>/`, subida por `up-02-region` (hub, com `--with-cell` para
+> também subir a célula) — `scripts/up-02-region --help` documenta as flags. `up-00-state-backend`
+> e `up-02-dns` continuam valendo como estão. Este README ainda não foi reescrito para a nova
+> sequência (rastreado no ledger da fase 3); até lá, tratar as seções abaixo como histórico do
+> desenho anterior, não como comando a copiar.
+
 Substitui o bootstrap por k3d + Crossplane. Desenho em
 `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md`; planos em
 `docs/superpowers/plans/2026-08-25-terraform-network-foundation.md` (camada 1) e

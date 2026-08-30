@@ -7,6 +7,8 @@ PATH="${this_script_directory}:${PATH}"
 
 source "${this_script_directory}/lib"
 
+fail "network-foundation/ is the OLD root, replaced by regions/<region>/ (ADR 0014). Use scripts/up-02-region instead — this script is kept only as design history until phase 4 deletes the old roots."
+
 show_usage() {
   cat <<EOF
 
