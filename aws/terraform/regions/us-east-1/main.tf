@@ -37,11 +37,21 @@ locals {
   cell_vpc_cidr = "10.2.0.0/16"
 
   # Duas AZs: o Client VPN associa uma target network por AZ e o NLB interno da celula fixa um IP
-  # privado por AZ.
-  availability_zones = slice(data.aws_availability_zones.this.names, 0, 2)
+  # privado por AZ. UM data source por CONTA, nunca compartilhado: AZ names sao alias por-conta
+  # sobre AZ IDs fisicos (ex.: "us-east-1a" pode ser um AZ ID diferente em cada conta), e o hub
+  # aplica na conta network enquanto a celula aplica na cicd (provider default). Resolver os dois
+  # no mesmo data source (sem provider explicito, portanto sempre na conta default) fazia o hub
+  # herdar AZs resolvidas na conta ERRADA.
+  hub_availability_zones  = slice(data.aws_availability_zones.network.names, 0, 2)
+  cell_availability_zones = slice(data.aws_availability_zones.cell.names, 0, 2)
 }
 
-data "aws_availability_zones" "this" {
+data "aws_availability_zones" "network" {
+  provider = aws.network
+  state    = "available"
+}
+
+data "aws_availability_zones" "cell" {
   state = "available"
 }
 
@@ -55,7 +65,7 @@ module "hub" {
   name               = "poc-hub"
   region             = local.region
   vpc_cidr           = local.hub_vpc_cidr
-  availability_zones = local.availability_zones
+  availability_zones = local.hub_availability_zones
 
   base_domain        = var.base_domain
   subzone_label      = var.subzone_label
@@ -103,10 +113,11 @@ module "cell" {
     helm        = helm
   }
 
-  name        = "control-plane-${local.region}"
-  region      = local.region
-  vpc_cidr    = local.cell_vpc_cidr
-  aws_profile = var.aws_profile
+  name               = "control-plane-${local.region}"
+  region             = local.region
+  vpc_cidr           = local.cell_vpc_cidr
+  availability_zones = local.cell_availability_zones
+  aws_profile        = var.aws_profile
 
   base_domain        = var.base_domain
   subzone_label      = var.subzone_label

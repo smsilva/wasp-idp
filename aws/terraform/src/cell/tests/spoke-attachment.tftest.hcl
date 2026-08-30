@@ -15,6 +15,7 @@ variables {
   region              = "us-east-1"
   aws_profile         = "cicd"
   vpc_cidr            = "10.2.0.0/16"
+  availability_zones  = ["us-east-1a", "us-east-1b"]
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
   public_access_cidrs = ["203.0.113.10/32"]
@@ -33,15 +34,6 @@ variables {
   hub_alb_listener_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
   hub_alb_dns_name                   = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
   hub_alb_zone_id                    = "Z35SXDOTRQ7X7K"
-}
-
-# As AZs vêm de data.aws_availability_zones (indexado por module.network); sob mock o valor é
-# sintético e o plan morre — override em todo arquivo de teste da raiz.
-override_data {
-  target = data.aws_availability_zones.this
-  values = {
-    names = ["us-east-1a", "us-east-1b"]
-  }
 }
 
 # --------------------------------------------------------------------------------------

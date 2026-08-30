@@ -18,6 +18,21 @@ variable "aws_profile" {
   default     = "cicd"
 }
 
+variable "availability_zones" {
+  description = <<-EOT
+    AZs da regiao. Duas: o NLB interno fixa um IP privado por AZ, e o nodegroup distribui entre
+    elas.
+
+    Recebida da raiz (mesmo data source que alimenta module.hub), nao calculada aqui. Um
+    data source proprio dentro deste modulo resolveria no provider DEFAULT da raiz (conta
+    cicd) — que pode nao ser a conta onde este modulo aplica (network, para module.hub; aqui,
+    cicd mesmo, mas o padrao precisa ser o mesmo dos dois lados). AZ names sao alias por-conta
+    sobre AZ IDs fisicos; um data source na conta errada pode produzir uma AZ fisicamente
+    diferente da que o hub usa.
+  EOT
+  type        = list(string)
+}
+
 variable "vpc_cidr" {
   description = <<-EOT
     CIDR da VPC spoke. Um /16 dentro do supernet 10.0.0.0/12.

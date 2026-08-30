@@ -30,32 +30,35 @@ run "hub_gets_the_first_two_availability_zones" {
   command = plan
 
   override_data {
-    target = data.aws_availability_zones.this
+    target = data.aws_availability_zones.network
     values = {
       names = ["us-east-1a", "us-east-1b", "us-east-1c"]
     }
   }
 
-  # module.cell tem seu PROPRIO data.aws_availability_zones.this — endereco distinto do da
-  # raiz. Sem overrida-lo tambem, o plan inteiro falha aqui (o mock nao devolve nenhuma AZ e o
-  # slice(0, 2) do modulo estoura), mesmo este run nao assertando nada sobre a celula.
+  # data.aws_availability_zones.cell alimenta module.cell (var.availability_zones), num data
+  # source SEPARADO do que alimenta o hub — achado da revisao final: os dois resolviam antes num
+  # unico data source sem provider explicito, que sempre roda na conta default (cicd), fazendo o
+  # hub herdar AZs resolvidas na conta ERRADA (aplica na network). Sem overridar tambem este, o
+  # mock nao devolve nenhuma AZ e o slice(0, 2) do modulo estoura, mesmo este run nao assertando
+  # nada sobre a celula.
   override_data {
-    target = module.cell.data.aws_availability_zones.this
+    target = data.aws_availability_zones.cell
     values = {
       names = ["us-east-1a", "us-east-1b"]
     }
   }
 
   assert {
-    condition     = length(local.availability_zones) == 2
-    error_message = "o hub tem de receber DUAS AZs, recebido ${length(local.availability_zones)}"
+    condition     = length(local.hub_availability_zones) == 2
+    error_message = "o hub tem de receber DUAS AZs, recebido ${length(local.hub_availability_zones)}"
   }
 
   # Nao basta a contagem: as duas tem de ser as PRIMEIRAS da lista. Um slice (2, 4) passaria na
   # contagem e escolheria AZs erradas sem ninguem perceber no plan.
   assert {
-    condition     = toset(local.availability_zones) == toset(["us-east-1a", "us-east-1b"])
-    error_message = "as AZs tem de ser as duas primeiras da regiao, recebido ${jsonencode(local.availability_zones)}"
+    condition     = toset(local.hub_availability_zones) == toset(["us-east-1a", "us-east-1b"])
+    error_message = "as AZs tem de ser as duas primeiras da regiao, recebido ${jsonencode(local.hub_availability_zones)}"
   }
 }
 
@@ -63,14 +66,14 @@ run "hub_and_cell_cidrs_do_not_overlap" {
   command = plan
 
   override_data {
-    target = data.aws_availability_zones.this
+    target = data.aws_availability_zones.network
     values = {
       names = ["us-east-1a", "us-east-1b"]
     }
   }
 
   override_data {
-    target = module.cell.data.aws_availability_zones.this
+    target = data.aws_availability_zones.cell
     values = {
       names = ["us-east-1a", "us-east-1b"]
     }
@@ -91,12 +94,12 @@ run "cell_reads_the_transit_gateway_from_the_hub" {
   command = plan
 
   override_data {
-    target = data.aws_availability_zones.this
+    target = data.aws_availability_zones.network
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
   override_data {
-    target = module.cell.data.aws_availability_zones.this
+    target = data.aws_availability_zones.cell
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
@@ -131,12 +134,12 @@ run "cell_follows_a_different_hub" {
   command = plan
 
   override_data {
-    target = data.aws_availability_zones.this
+    target = data.aws_availability_zones.network
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
   override_data {
-    target = module.cell.data.aws_availability_zones.this
+    target = data.aws_availability_zones.cell
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
@@ -185,12 +188,12 @@ run "cell_name_carries_the_region" {
   command = plan
 
   override_data {
-    target = data.aws_availability_zones.this
+    target = data.aws_availability_zones.network
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
   override_data {
-    target = module.cell.data.aws_availability_zones.this
+    target = data.aws_availability_zones.cell
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
@@ -204,12 +207,12 @@ run "helm_release_names_do_not_collide" {
   command = plan
 
   override_data {
-    target = data.aws_availability_zones.this
+    target = data.aws_availability_zones.network
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 
   override_data {
-    target = module.cell.data.aws_availability_zones.this
+    target = data.aws_availability_zones.cell
     values = { names = ["us-east-1a", "us-east-1b"] }
   }
 

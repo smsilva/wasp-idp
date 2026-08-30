@@ -19,6 +19,7 @@ variables {
   region              = "us-east-1"
   aws_profile         = "cicd"
   vpc_cidr            = "10.2.0.0/16"
+  availability_zones  = ["us-east-1a", "us-east-1b"]
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"
   public_access_cidrs = ["203.0.113.10/32"]
@@ -37,13 +38,6 @@ variables {
   hub_alb_listener_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
   hub_alb_dns_name                   = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
   hub_alb_zone_id                    = "Z35SXDOTRQ7X7K"
-}
-
-override_data {
-  target = data.aws_availability_zones.this
-  values = {
-    names = ["us-east-1a", "us-east-1b"]
-  }
 }
 
 # O endereço do NLB nasce de var.vpc_cidr, atravessa o módulo network (que fatia as subnets) e
