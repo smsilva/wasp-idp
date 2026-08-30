@@ -16,7 +16,7 @@ locals {
   install_argocd_oidc = false # exige o client secret ja no Secrets Manager
   install_app_of_apps = false # entregue por GitOps, fora do Terraform
 
-  # Mesmo valor de connectivity/us-east-1 — decisao irreversivel documentada, nao segredo.
+  # Mesmo valor do hub, em qualquer regiao — decisao irreversivel documentada, nao segredo.
   supernet = "10.0.0.0/12"
 
   # A subzona que a camada 02 delegou, e o wildcard DESTA celula dentro dela. Wildcard cobre um

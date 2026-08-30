@@ -10,7 +10,6 @@ variable "name" {
 variable "region" {
   description = "Regiao AWS da celula."
   type        = string
-  default     = "us-east-1"
 }
 
 variable "aws_profile" {
