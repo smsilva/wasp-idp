@@ -286,9 +286,13 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   bootstrap`, `module.external_secrets`, `module.crossplane`) declaram `module.network` **mais** os
   seis do TGW, ao lado da regra de 443; `module.argo_cd` herda por transitividade via
   `external_secrets` — repetir a lista lá não acrescentaria ordem, só mais um lugar para esquecer de
-  atualizar. **A direção do apply está provada** (61 recursos, attachment `available`/`associated`, 24
-  pods `Running` com o endpoint público fechado); **a do destroy ainda não** — a correção do
-  `module.network` entrou depois do teardown que a revelou. Conferir no próximo.
+  atualizar. **As duas direções estão provadas.** O apply: 61 recursos, attachment `available`/
+  `associated`, 24 pods `Running` com o endpoint público fechado. O destroy: **2026-08-30**, já com a
+  célula dentro de `regions/us-east-1/` (`module.cell`, fase 3 do ADR 0014), `terraform destroy
+  -target=module.cell` derrubou os 78 recursos da célula sem `dial tcp <ip-privado>:443: i/o timeout`
+  — `module.hub` ficou de pé (43 recursos) e `module.cell` chegou a zero, confirmado por
+  `terraform state list`. A ordenação por `depends_on` no `module.network` (não enumerar recursos)
+  se sustentou depois do `git mv` de `control-plane/` para `src/cell/`.
   **Regra que sai daqui:** ordenação por referência não é testável offline, então mudança de
   `depends_on` só se dá por boa depois de um apply E um destroy reais — e a direção se confere lendo
   quem declara o quê, não o comentário que diz o que o autor pretendia.
