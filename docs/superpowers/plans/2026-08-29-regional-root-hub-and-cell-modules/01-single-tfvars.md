@@ -629,41 +629,44 @@ Na seção "Scripts de subida", acrescentar:
   output de módulo. Ver [ADR 0014](../../docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md).
 ```
 
-- [ ] **Step 4: subir a camada 03 de verdade, de árvore limpa**
+- [ ] **Step 4: o aceite desta fase é `plan`, não `apply` — decisão de 2026-08-30**
 
-O aceite da fase é um apply real sem passo de geração. Pré-requisitos: SSO válido nos três profiles
-e `saml-metadata.xml` no lugar.
+**O plano original mandava aplicar a camada 03 aqui.** Foi decidido pular esse apply: a fase 2, Task 3
+destrói 01 e 03 poucas horas depois para subir da raiz regional, e o apply da 03 nesta fase seria um
+ciclo completo de TGW + Client VPN + exportar `.ovpn` + conectar túnel desfeito em seguida. **O apply
+real acontece uma vez só, na fase 2.**
+
+O que se perde: a #36 deixa de ser verificável na AWS isoladamente. O que a substitui é o `plan` puro
+nas três raízes, que exercita **todas** as variáveis do `values.tfvars` — inclusive `base_domain`,
+que é onde a #36 nasceu. `No value for required variable` aparece no `plan`, não no `apply`.
+
+Pré-requisitos, mesmo sem apply: SSO válido nos três profiles (o `plan` das raízes lê data sources
+reais) e `saml-metadata.xml` no lugar.
 
 ```bash
 cd /home/silvios/git/wasp-idp
-for p in personal network cicd; do echo "=== ${p} ==="; aws sts get-caller-identity --profile "${p}" --output json; done
-ls -la aws/terraform/connectivity/us-east-1/saml-metadata.xml
+for p in personal network cicd; do printf '%-10s ' "${p}"; aws sts get-caller-identity --profile "${p}" --output text > "/tmp/sts-${p}.txt" 2>&1 && head -c 60 "/tmp/sts-${p}.txt"; echo; done
+ls -la aws/terraform/variables/saml-metadata.xml
 ```
 
-Depois, **pelo usuário** (o classifier de auto-mode bloqueia apply para o agente):
-
-```
-! aws/terraform/scripts/up-03-connectivity --yes
-```
-
-Esperado: `init` → `plan` → `apply` sem nenhuma linha de descoberta, e o endpoint do Client VPN no
-output final. `No value for required variable` aqui significa chave faltando no `values.tfvars` —
-o erro certo, no lugar certo, que é o que esta fase entrega.
-
-- [ ] **Step 5: conectar o túnel e provar que a camada serve**
+O `aws` desta máquina passa por um wrapper que quebra parsing de JSON — daí o redirect para arquivo
+em vez de pipe para `jq`.
 
 ```bash
-aws-vpn-client --version                                  # 6.0.1 esperado
-aws ec2 export-client-vpn-client-configuration \
-  --client-vpn-endpoint-id "$(cd aws/terraform/connectivity/us-east-1 && terraform output -raw client_vpn_endpoint_id)" \
-  --profile network --region us-east-1 --output text > /tmp/hub.ovpn
+cd /home/silvios/git/wasp-idp/aws/terraform
+for r in dns connectivity/us-east-1 control-plane; do
+  echo "=== ${r}"
+  (cd "${r}" && terraform init -no-color >/dev/null && terraform plan -no-color 2>&1 | tail -5)
+done
 ```
 
-E, pelo usuário: `! aws-vpn-client import-profile --profile-name hub --config-path /tmp/hub.ovpn`
-seguido de `! aws-vpn-client connect --profile-name hub`, até
-`aws-vpn-client get-connection-status --profile-name hub` dizer `Connected`.
+Esperado nas três: um plano que resolve, **sem nenhuma linha de descoberta antes dele** e sem
+`-var-file`. `No value for required variable` significa chave faltando no `values.tfvars` — o erro
+certo, no lugar certo, que é o que esta fase entrega.
 
-- [ ] **Step 6: commit**
+**Não aplicar nada nesta fase.** Se o `plan` da 03 estiver verde, a fase 1 está fechada.
+
+- [ ] **Step 5: commit**
 
 ```bash
 cd /home/silvios/git/wasp-idp
@@ -684,8 +687,9 @@ Refs #36"
       Terraform.
 - [ ] A regressão offline segue verde nas raízes tocadas, com `data.aws_availability_zones`
       exercitado sob `mock_provider` por dois runs de valores e tamanhos diferentes.
-- [ ] Um apply real da camada 03 entrega o endpoint do Client VPN sem passo de geração anterior, e o
-      túnel conecta.
+- [ ] `terraform plan` verde nas três raízes (`dns`, `connectivity/us-east-1`, `control-plane`), sem
+      passo de geração e sem `-var-file`. **Não há apply nesta fase** — decisão de 2026-08-30: a fase
+      2 destrói 01/03 logo depois, e o apply real acontece uma vez só, lá. Ver Task 5, Step 4.
 - [ ] `aws/terraform/README.md` e `HANDOFF.md` descrevem a sequência que de fato existe.
 - [ ] **(invariante)** `saml-metadata.xml` mora em `aws/terraform/variables/`, e
       `readlink connectivity/us-east-1/saml-metadata.xml` aponta para lá — não o contrário. Arquivo

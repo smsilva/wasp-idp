@@ -107,14 +107,17 @@ Um arquivo por fase — ler só a do trabalho corrente.
 
 | Fase | Arquivo | Entrega | Aceite |
 |---|---|---|---|
-| 1 | [`01-single-tfvars.md`](01-single-tfvars.md) | `variables/values.tfvars` único; `generate-tfvars` removidos; valores estruturais viram default/inline | `terraform plan` nas raízes atuais sem passo de geração; apply real de 03 |
+| 1 | [`01-single-tfvars.md`](01-single-tfvars.md) | `variables/values.tfvars` único; `generate-tfvars` removidos; valores estruturais viram default/inline | `terraform plan` verde nas três raízes atuais, sem passo de geração — **sem apply** |
 | 2 | [`02-hub-module.md`](02-hub-module.md) | `src/hub` (ex 01+03) e a raiz `regions/us-east-1/` com só `module.hub` | hub de pé aplicado da raiz nova; túnel do Client VPN conecta |
 | 3 | [`03-cell-module.md`](03-cell-module.md) | `src/cell` (ex 04) ligado por output do hub; nenhum data source cross-camada | `curl` público em `cell_services_url` devolve 200; `destroy -target=module.cell` preserva o hub |
 | 4 | [`04-cleanup-and-docs.md`](04-cleanup-and-docs.md) | raízes antigas e state keys apagadas, `regions/us-west-2/`, docs e scripts `up-*` renumerados | **`plan` verde da composição inteira na `us-west-2`**; árvore limpa aplica do zero seguindo só o `README.md` |
 | 5 | [`05-spoke-enablement.md`](05-spoke-enablement.md) | a role `crossplane-<alvo>` nas contas-alvo; `docs/bootstrap/` reescrito para Pod Identity | um Composition cria recurso real numa conta-alvo e fica `READY=True` |
 
-**A fase 1 entrega o critério de aceite da issue #36 sozinha** e é aplicável na AWS antes de qualquer
-extração de módulo — é o walk skeleton desta frente. As fases 2 e 3 não têm valor parcial: o aceite
+**A fase 1 entrega o critério de aceite da issue #36 sozinha.** Era para ser aplicável na AWS
+isoladamente — o walk skeleton desta frente —, mas em 2026-08-30 se decidiu **pular o apply da 03
+nela**: a fase 2 destrói 01 e 03 poucas horas depois, e o apply real acontece uma vez só, da raiz
+regional. O aceite da fase 1 passa a ser `plan` puro nas três raízes, que exercita todas as variáveis
+do `values.tfvars` — incluindo `base_domain`, onde a #36 nasceu. As fases 2 e 3 não têm valor parcial: o aceite
 da frente é a célula ponta a ponta.
 
 **A fase 5 é independente das outras quatro** e pode correr em paralelo à 2 e à 3: ela não toca em
