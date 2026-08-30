@@ -1,0 +1,138 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+source "${this_script_directory}/lib"
+
+show_usage() {
+  cat <<EOF
+
+  The nightly teardown of the cell. Destroys module.cell (spoke VPC, EKS,
+  node group, Pod Identities, ESO, ArgoCD, Crossplane — the ~US\$ 165/month
+  part) with -target=module.cell. The hub STAYS UP: TGW, Client VPN, the
+  public ingress ALB.
+
+  Terraform prints a warning saying -target is not for routine use — this
+  script uses it here on purpose, and this help text says why: the region's
+  desired state INCLUDES the cell, so a plain 'terraform plan' after this run
+  will propose creating it again. That is not drift, it is the same
+  deliberate deviation up-02-region takes by default (hub only).
+
+    Options:
+
+      -h,  --help           Show this help
+      -y,  --yes            Do not ask before destroying
+      -r,  --region         Region root under regions/ (default: us-east-1)
+           --state-bucket   Bucket name (default: tfstate-<organization-id>)
+           --org-profile    Profile that reads Organizations (default: personal)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --yes
+
+EOF
+}
+
+assume_yes="false"
+org_profile="personal"
+region="us-east-1"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    --state-bucket )
+      shift
+      STATE_BUCKET="${1}"
+      ;;
+
+    --org-profile )
+      shift
+      org_profile="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+require_tools terraform
+
+root="${terraform_directory}/regions/${region}"
+[ -d "${root}" ] || fail "missing root: ${root}"
+
+step "down-cell — region ${region}"
+
+state_bucket="$(discover_state_bucket "${org_profile}")"
+terraform_init "${root}" "${state_bucket}"
+
+cells="$( (cd "${root}" && terraform state list) | grep --count '^module\.cell\.' || true)"
+
+if [ "${cells}" -eq 0 ]; then
+  log "no cell resources in the state of ${region} — nothing to tear down"
+  exit 0
+fi
+
+cat >&2 <<EOF
+
+About to destroy ${cells} resource(s) of module.cell in ${region}.
+
+The hub STAYS UP (TGW, Client VPN, ALB): that is the point of -target here, and
+also why terraform prints a warning saying -target is not for routine use. The
+region's desired state includes the cell, so a plain 'terraform plan' after this
+will propose creating it again. That is not drift.
+
+EOF
+
+if [ "${assume_yes}" != "true" ]; then
+  if [ ! -t 0 ]; then
+    fail "no terminal to confirm on. Use --yes if this is deliberate."
+  fi
+
+  read -r -p "Destroy module.cell in ${region}? [yes/N] " answer
+  [ "${answer}" == "yes" ] || fail "cancelled."
+fi
+
+log_directory="${root}/logs"
+mkdir --parents "${log_directory}"
+
+timestamp="$(date +%Y%m%d-%H%M%S)"
+log_file="${log_directory}/destroy-cell-${timestamp}.log"
+
+destroy_options=(-target=module.cell)
+if [ "${assume_yes}" == "true" ]; then
+  destroy_options+=(-auto-approve)
+fi
+
+log "destroying (log: ${log_file})"
+(cd "${root}" && terraform destroy -no-color "${destroy_options[@]}") 2>&1 | tee "${log_file}"
+# tee always returns 0; PIPESTATUS holds the terraform exit code.
+destroy_status="${PIPESTATUS[0]}"
+
+[ "${destroy_status}" -eq 0 ] \
+  || fail "the cell destroy failed (exit ${destroy_status}). The hub is unaffected, but the cell may be partially destroyed — check 'terraform state list'. Log: ${log_file}"
+
+log "module.cell destroyed. the hub is still up."

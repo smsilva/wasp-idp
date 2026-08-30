@@ -14,43 +14,45 @@ show_usage() {
 
   The order is NOT a preference — each step depends on the previous one:
 
-    00  state-backend        no other root can initialize its backend without it
-    01  network-foundation   hub VPC; layer 04 reads that VPC by tag
-    02  dns                  independent of the others, but a prerequisite for
-                             certificates and ingress further along
-    03  connectivity         TGW + Client VPN; depends on 01 and 02, and on a
-                             console step (the SAML application)
-    04  control-plane        depends on 01
+    00  state-backend   no other root can initialize its backend without it
+    01  dns             independent of the others, but a prerequisite for the
+                         certificate that validates by DNS in the region root.
+                         Script is still named up-02-dns; the rename to
+                         up-01-dns is deferred to phase 4
+    02  region          hub (VPC, TGW, Client VPN, public ingress ALB) always;
+                         the cell (EKS + workloads) only with --with-cell
 
-  COST: layers 00, 01 and 02 add up to cents. Layer 03 costs ~US\$ 110/month and
-  layer 04 ~US\$ 165/month while up. That is why NEITHER is included by default
-  — pass --with-connectivity and --with-control-plane deliberately.
+  COST: layers 00 and 01 (dns) add up to cents. The hub inside layer 02 costs
+  ~US\$ 110/month (TGW + Client VPN) and is applied by default — that is this
+  PoC's resting state. The cell adds ~US\$ 165/month on top and is NOT
+  included by default — pass --with-cell deliberately, and connect the
+  Client VPN tunnel first.
 
-  By default it runs through layer 02, which is this PoC's cheap resting state.
+  By default it runs through the hub, which is this PoC's cheap resting
+  state.
 
     Options:
 
-      -h,  --help                Show this help
-      -y,  --yes                 Do not ask before each apply
-      -d,  --base-domain         Passed through to 02 on the first run
-           --with-connectivity   Include layer 03 (~US\$ 110/month)
-           --with-control-plane  Include layer 04 (~US\$ 165/month)
-           --state-bucket        Passed through to all
-           --org-profile         Passed through to all (default: personal)
+      -h,  --help            Show this help
+      -y,  --yes             Do not ask before each apply
+      -d,  --base-domain     Passed through to the dns layer on the first run
+           --with-cell       Also apply the cell (~US\$ 165/month; needs the
+                              Client VPN tunnel connected)
+           --state-bucket    Passed through to all
+           --org-profile     Passed through to all (default: personal)
 
     Examples:
 
       ${this_script_name} --base-domain exemplo.com
 
-      ${this_script_name} --yes --with-connectivity --with-control-plane
+      ${this_script_name} --yes --with-cell
 
 EOF
 }
 
 assume_yes="false"
 base_domain=""
-with_connectivity="false"
-with_control_plane="false"
+with_cell="false"
 passthrough=()
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
@@ -69,12 +71,8 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       base_domain="${1}"
       ;;
 
-    --with-connectivity )
-      with_connectivity="true"
-      ;;
-
-    --with-control-plane )
-      with_control_plane="true"
+    --with-cell )
+      with_cell="true"
       ;;
 
     --state-bucket )
@@ -104,27 +102,19 @@ if [ "${assume_yes}" == "true" ]; then
 fi
 
 up-00-state-backend "${common[@]}"
-up-01-network-foundation "${common[@]}"
 
+# Still named up-02-dns — the rename to up-01-dns is phase 4's job, together with removing the
+# old network-foundation/connectivity/control-plane roots.
 dns_options=("${common[@]}")
 if [ -n "${base_domain}" ]; then
   dns_options+=(--base-domain "${base_domain}")
 fi
 up-02-dns "${dns_options[@]}"
 
-if [ "${with_connectivity}" == "true" ]; then
-  up-03-connectivity "${common[@]}"
-else
-  step "Layer 3 — connectivity: skipped (~US\$ 110/month)"
-  log "include it with --with-connectivity when that is the intent"
-  log "and tear it down at the end of the day: connectivity/us-east-1/scripts/destroy"
+region_options=("${common[@]}")
+if [ "${with_cell}" == "true" ]; then
+  region_options+=(--with-cell)
 fi
-
-if [ "${with_control_plane}" == "true" ]; then
-  up-04-control-plane "${common[@]}"
-else
-  step "Layer 4 — control-plane: skipped (~US\$ 165/month)"
-  log "include it with --with-control-plane when that is the intent"
-fi
+up-02-region "${region_options[@]}"
 
 step "Done"

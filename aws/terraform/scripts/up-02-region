@@ -1,0 +1,140 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+source "${this_script_directory}/lib"
+
+show_usage() {
+  cat <<EOF
+
+  Layer 2 — the regional root. Composes module.hub (VPC, TGW, Client VPN, the
+  public ingress ALB) and module.cell (spoke VPC, EKS, node group, Pod
+  Identities, ESO, ArgoCD and Crossplane) in a single terraform apply.
+
+  DEFAULT applies the hub only, with -target=module.hub — the region's
+  resting state. The desired state of this root INCLUDES the cell; applying
+  only the hub is a deliberate, declared deviation, not the steady state.
+
+  Pass --with-cell to also apply the cell. That path needs the Client VPN
+  tunnel connected FIRST: the helm and kubernetes providers talk to the API
+  server from this machine, the same requirement the old layer 4 had. The
+  cell costs ~US\$ 165/month on top of the hub's own ~US\$ 110/month (TGW +
+  Client VPN) — do NOT leave it up between sessions. Tear it down nightly
+  with down-cell, which keeps the hub up.
+
+  DEPENDS ON:
+
+    layer 0  the state bucket
+    layer 1  (still named up-02-dns until phase 4) the delegated subzone,
+             read by the certificate that validates by DNS in it
+    the file variables/values.tfvars, with the identity values — see
+    variables/README.md.
+
+    And, for --with-cell, on a CONSOLE step: the SAML application in Identity
+    Center. The CreateApplication API only creates custom OAuth 2.0
+    applications, so SAML is not Terraform. Save the downloaded metadata as
+    variables/saml-metadata.xml — ONE application serves every region, since
+    the Client VPN ACS URL is http://127.0.0.1:35001 everywhere.
+
+    Options:
+
+      -h,  --help           Show this help
+      -y,  --yes            Do not ask before applying
+      -r,  --region         Region root under regions/ (default: us-east-1)
+           --with-cell      Also apply module.cell (~US\$ 165/month; needs
+                             the Client VPN tunnel connected)
+           --state-bucket   Bucket name (default: tfstate-<organization-id>)
+           --org-profile    Profile that reads Organizations and Identity
+                             Center (default: personal)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --yes --with-cell
+
+EOF
+}
+
+assume_yes="false"
+org_profile="personal"
+region="us-east-1"
+with_cell="false"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    --with-cell )
+      with_cell="true"
+      ;;
+
+    --state-bucket )
+      shift
+      STATE_BUCKET="${1}"
+      ;;
+
+    --org-profile )
+      shift
+      org_profile="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+require_tools aws jq terraform
+
+root="${terraform_directory}/regions/${region}"
+[ -d "${root}" ] || fail "missing root: ${root}"
+
+step "Layer 2 — region ${region} (hub$([ "${with_cell}" == "true" ] && echo " + cell"))"
+
+values_file="${terraform_directory}/variables/values.tfvars"
+
+# Guard, not generation: without the file the plan would fail on base_domain anyway. What this
+# block buys is the message — Terraform's error names the missing variable, not where to declare it.
+[ -f "${values_file}" ] \
+  || fail "missing ${values_file}. Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
+
+state_bucket="$(discover_state_bucket "${org_profile}")"
+terraform_init "${root}" "${state_bucket}"
+
+# The cell costs ~US$ 165/month and needs the Client VPN tunnel connected: the helm and
+# kubernetes providers talk to the API server from this machine. Without --with-cell only the
+# hub is applied, which is the region's resting state.
+if [ "${with_cell}" == "true" ]; then
+  terraform_plan_and_apply "${root}" "region-${region}" "${assume_yes}"
+else
+  step "Cell: skipped (~US\$ 165/month)"
+  log "include it with --with-cell when that is the intent, and connect the tunnel first"
+
+  apply_options=()
+  if [ "${assume_yes}" == "true" ]; then
+    apply_options+=(-auto-approve)
+  fi
+
+  (cd "${root}" && terraform apply -no-color -target=module.hub -input=false "${apply_options[@]}")
+fi
