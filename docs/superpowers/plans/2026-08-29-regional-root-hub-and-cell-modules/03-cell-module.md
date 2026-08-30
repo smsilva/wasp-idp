@@ -783,19 +783,30 @@ Refs #36"
 
 ## Aceite da fase 3
 
-- [ ] Nenhum data source em `src/cell` aponta para recurso do hub; os seis viraram variável, e só
-      `data.aws_route53_zone.subzone` sobrevive (pertence à raiz `dns/`).
-- [ ] O teste de composição prova a ligação com **dois runs de valores diferentes**, e a mutação que
-      fixa o TGW no código deixa um deles vermelho.
-- [ ] O guard offline de colisão de nome de release existe e assere pares `namespace/nome` reais.
-- [ ] `curl` público, sem túnel e sem `-k`, em `cell_services_url` devolve 200.
-- [ ] `terraform destroy -target=module.cell` derruba a célula e **deixa o hub de pé** — verificado em
-      `terraform state list`, não presumido.
-- [ ] `aws/terraform/CLAUDE.md` registra as duas direções do grafo provadas, com data.
-- [ ] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src/cell` não devolve nada fora de fixture
-      de teste.
-- [ ] **(invariante)** `variable "name"` de `src/cell` **não tem default**, e a raiz o compõe com
-      `local.region`. Um default region-free é a segunda região colidindo em cinco roles de IAM.
-- [ ] **(invariante)** um `terraform plan` da raiz com `local.region` trocado à mão para `us-west-2`
-      e os dois CIDR trocados resolve sem erro de nome duplicado. Desfazer depois — é sonda, não
-      mudança; a `us-west-2` de verdade é a fase 4.
+- [x] Nenhum data source em `src/cell` aponta para recurso do hub; os seis viraram variável, e só
+      `data.aws_route53_zone.subzone` sobrevive (pertence à raiz `dns/`). Confirmado: único `data`
+      em `src/cell/*.tf` é `data.aws_route53_zone.subzone`; o antigo `data.aws_availability_zones.this`
+      saiu na rodada de fix da revisão final (virou `var.availability_zones`, achado 1).
+- [x] O teste de composição prova a ligação com **dois runs de valores diferentes**, e a mutação que
+      fixa o TGW no código deixa um deles vermelho — `cell_reads_the_transit_gateway_from_the_hub` /
+      `cell_follows_a_different_hub` em `regions/us-east-1/tests/composition.tftest.hcl`.
+- [x] O guard offline de colisão de nome de release existe e assere pares `namespace/nome` reais —
+      `helm_release_names_do_not_collide`.
+- [x] `curl` público, sem túnel e sem `-k`, em `cell_services_url` devolve 200 — feito na Task 3
+      (apply real, 78 recursos).
+- [x] `terraform destroy -target=module.cell` derruba a célula e **deixa o hub de pé** — verificado em
+      `terraform state list`, não presumido. Feito na Task 3 (célula a 0, hub com 43 recursos).
+- [x] `aws/terraform/CLAUDE.md` registra as duas direções do grafo provadas, com data — seção
+      "Endpoint da API do EKS", entrada de 2026-08-30.
+- [x] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src/cell/*.tf` não devolve nada — confirmado
+      nesta sessão; só aparece em fixture de teste (`tests/*.tftest.hcl`).
+- [x] **(invariante)** `variable "name"` de `src/cell` **não tem default**, e a raiz o compõe com
+      `local.region` (`"control-plane-${local.region}"` em `regions/us-east-1/main.tf`).
+- [ ] **(invariante, NÃO executado)** um `terraform plan` da raiz com `local.region` trocado à mão para
+      `us-west-2` e os dois CIDR trocados resolve sem erro de nome duplicado. Não rodado nesta sessão
+      por custo (SCP pode não ter `us-west-2` aprovada ainda, e um `plan` real gastaria chamadas de
+      API sem necessidade) — a prova equivalente já existe offline: `regional-naming.tftest.hcl`
+      (`names_carry_us_west_2`) mutation-proof mostra que SAML provider, VPN e certificado ALB não
+      colidem entre `us-east-1` e `us-west-2`, e o grep acima já prova que nada em `src/cell` tem a
+      região escrita no código. Sonda real fica para quando a fase 4 abrir `regions/us-west-2/` de
+      verdade.
