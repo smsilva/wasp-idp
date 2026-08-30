@@ -16,9 +16,7 @@ show_usage() {
 
     00  state-backend   no other root can initialize its backend without it
     01  dns             independent of the others, but a prerequisite for the
-                         certificate that validates by DNS in the region root.
-                         Script is still named up-02-dns; the rename to
-                         up-01-dns is deferred to phase 4
+                         certificate that validates by DNS in the region root
     02  region          hub (VPC, TGW, Client VPN, public ingress ALB) always;
                          the cell (EKS + workloads) only with --with-cell
 
@@ -103,13 +101,11 @@ fi
 
 up-00-state-backend "${common[@]}"
 
-# Still named up-02-dns — the rename to up-01-dns is phase 4's job, together with removing the
-# old network-foundation/connectivity/control-plane roots.
 dns_options=("${common[@]}")
 if [ -n "${base_domain}" ]; then
   dns_options+=(--base-domain "${base_domain}")
 fi
-up-02-dns "${dns_options[@]}"
+up-01-dns "${dns_options[@]}"
 
 region_options=("${common[@]}")
 if [ "${with_cell}" == "true" ]; then
