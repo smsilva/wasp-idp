@@ -13,10 +13,14 @@ locals {
   subzone_fqdn = "${var.subzone_label}.${var.base_domain}"
 
   # Certificado DEFAULT do listener :443. Wildcard cobre um nivel so, entao este casa
-  # `app.nonprod.<dominio>` e NAO casa `app.<id>.nonprod.<dominio>` — o certificado de cada celula
-  # entra por SNI a partir do state da propria celula. Existe para o listener nascer valido e
-  # responder 404 a host desconhecido, nao para servir trafego.
-  alb_default_fqdn = "*.${local.subzone_fqdn}"
+  # `app.<regiao>.nonprod.<dominio>` e NAO casa `app.<id>.nonprod.<dominio>` — o certificado de
+  # cada celula entra por SNI a partir do state da propria celula. Existe para o listener nascer
+  # valido e responder 404 a host desconhecido, nao para servir trafego.
+  #
+  # Regionalizado pelo mesmo motivo do vpn_fqdn abaixo: sem a regiao, dois hubs da MESMA
+  # Organization disputam o MESMO record de validacao DNS-01 (allow_overwrite = true no
+  # aws_route53_record.alb_validation), e o segundo apply sobrescreve o primeiro em silencio.
+  alb_default_fqdn = "*.${var.region}.${local.subzone_fqdn}"
 
   # IAM e Route 53 nao sao regionais. Dois hubs em duas regioes da MESMA Organization disputam
   # estes dois nomes: o SAML provider falha com EntityAlreadyExists (barulhento, tudo bem) e o

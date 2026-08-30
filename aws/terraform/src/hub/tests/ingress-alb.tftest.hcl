@@ -57,12 +57,14 @@ override_resource {
 run "certificado_default_e_o_wildcard_da_subzona" {
   command = plan
 
-  # Wildcard cobre UM nível só: *.nonprod.exemplo.com casa app.nonprod.exemplo.com, e NÃO
-  # casa app.<id>.nonprod.exemplo.com. É por isso que ele serve de certificado DEFAULT do
-  # listener, e os certificados por célula entram por SNI a partir do state da célula.
+  # Wildcard cobre UM nível só: *.us-east-1.nonprod.exemplo.com casa app.us-east-1.nonprod.exemplo.com,
+  # e NÃO casa app.<id>.nonprod.exemplo.com. É por isso que ele serve de certificado DEFAULT do
+  # listener, e os certificados por célula entram por SNI a partir do state da célula. A região
+  # entra no nome pelo mesmo motivo do FQDN da VPN: sem ela, dois hubs disputam o mesmo record de
+  # validação DNS-01 (regional-naming.tftest.hcl cobre a prova de mutação com duas regiões).
   assert {
-    condition     = aws_acm_certificate.alb.domain_name == "*.nonprod.exemplo.com"
-    error_message = "esperado *.nonprod.exemplo.com, veio ${aws_acm_certificate.alb.domain_name}"
+    condition     = aws_acm_certificate.alb.domain_name == "*.us-east-1.nonprod.exemplo.com"
+    error_message = "esperado *.us-east-1.nonprod.exemplo.com, veio ${aws_acm_certificate.alb.domain_name}"
   }
 
   assert {

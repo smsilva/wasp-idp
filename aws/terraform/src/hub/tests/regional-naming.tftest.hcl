@@ -47,6 +47,11 @@ run "names_carry_us_east_1" {
     condition     = aws_acm_certificate.vpn.domain_name == "vpn.us-east-1.nonprod.exemplo.com"
     error_message = "FQDN da VPN sem a regiao: as duas regioes disputam o mesmo record do Route 53."
   }
+
+  assert {
+    condition     = aws_acm_certificate.alb.domain_name == "*.us-east-1.nonprod.exemplo.com"
+    error_message = "FQDN default do ALB sem a regiao: as duas regioes disputam o mesmo record de validacao DNS-01."
+  }
 }
 
 run "names_carry_us_west_2" {
@@ -65,5 +70,10 @@ run "names_carry_us_west_2" {
   assert {
     condition     = aws_acm_certificate.vpn.domain_name == "vpn.us-west-2.nonprod.exemplo.com"
     error_message = "FQDN identico ao do run anterior: a regiao esta escrita no codigo."
+  }
+
+  assert {
+    condition     = aws_acm_certificate.alb.domain_name == "*.us-west-2.nonprod.exemplo.com"
+    error_message = "FQDN do ALB identico ao do run anterior: a regiao esta escrita no codigo."
   }
 }
