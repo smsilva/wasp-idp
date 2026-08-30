@@ -110,6 +110,10 @@ Acrescentar ao bloco Terraform de `/home/silvios/git/wasp-idp/.gitignore`, logo 
 # O .example É versionado — é o inventário de o que precisa ser preenchido.
 aws/terraform/variables/values.tfvars
 **/values.auto.tfvars
+
+# Metadata SAML da aplicacao do Identity Center: uma so, compartilhada por todas as regioes.
+aws/terraform/variables/saml-metadata.xml
+**/saml-metadata.xml
 ```
 
 - [ ] **Step 4: criar os symlinks e provar que o Terraform os lê**
@@ -124,6 +128,30 @@ git check-ignore dns/values.auto.tfvars connectivity/us-east-1/values.auto.tfvar
 
 Esperado: as três linhas ecoadas por `check-ignore` (todas ignoradas). Nenhuma saída ⟹ o padrão do
 Step 3 não pegou, corrigir antes de seguir.
+
+- [ ] **Step 4b: mover o `saml-metadata.xml` para `variables/` (invariante)**
+
+O arquivo mora hoje em `connectivity/us-east-1/` — dentro da pasta de uma região, que a fase 4 apaga.
+Mantê-lo ali obrigaria a `us-west-2` a symlinkar para dentro da `us-east-1`, que é exatamente a
+violação que o invariante nomeia.
+
+```bash
+cd /home/silvios/git/wasp-idp/aws/terraform
+git mv --force connectivity/us-east-1/saml-metadata.xml variables/saml-metadata.xml 2>/dev/null \
+  || mv connectivity/us-east-1/saml-metadata.xml variables/saml-metadata.xml
+ln --symbolic ../../variables/saml-metadata.xml connectivity/us-east-1/saml-metadata.xml
+git check-ignore variables/saml-metadata.xml connectivity/us-east-1/saml-metadata.xml
+```
+
+O `git mv` provavelmente falha porque o arquivo nunca foi versionado (é gitignored, e contém o
+certificado de assinatura do Identity Center) — daí o fallback. As duas linhas do `check-ignore` têm
+que aparecer.
+
+**Uma aplicação do Identity Center serve todas as regiões.** O ACS URL do Client VPN é
+`http://127.0.0.1:35001` para qualquer endpoint, em qualquer região — não há nada de regional no
+documento. O que **é** por região é o `aws_iam_saml_provider` criado a partir dele: IAM é global, e
+duas regiões criando `poc-hub-client-vpn` na mesma conta `network` colidem com
+`EntityAlreadyExists`. A regionalização desse nome é a fase 2, Task 1, Step 2b — não aqui.
 
 - [ ] **Step 5: preencher o `values.tfvars` real a partir do que já existe**
 
@@ -492,7 +520,9 @@ No `up-03`, trocar também o texto de `show_usage` que promete o roteiro de cons
     And on a CONSOLE step: the SAML application in Identity Center. The
     CreateApplication API only creates custom OAuth 2.0 applications, so SAML
     is not Terraform. Save the downloaded metadata as
-    connectivity/us-east-1/saml-metadata.xml — the walkthrough is in
+    variables/saml-metadata.xml — ONE application serves every region, since
+    the Client VPN ACS URL is http://127.0.0.1:35001 everywhere. The
+    walkthrough is in
     docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md,
     section "O passo de console, clique a clique".
 ```
@@ -657,3 +687,8 @@ Refs #36"
 - [ ] Um apply real da camada 03 entrega o endpoint do Client VPN sem passo de geração anterior, e o
       túnel conecta.
 - [ ] `aws/terraform/README.md` e `HANDOFF.md` descrevem a sequência que de fato existe.
+- [ ] **(invariante)** `saml-metadata.xml` mora em `aws/terraform/variables/`, e
+      `readlink connectivity/us-east-1/saml-metadata.xml` aponta para lá — não o contrário. Arquivo
+      compartilhado dentro da pasta de uma região é a segunda região nascendo dependente da primeira.
+- [ ] **(invariante)** `data.aws_availability_zones` substituiu a lista escrita à mão: a região nova
+      não precisa que ninguém descubra e digite as AZs dela.

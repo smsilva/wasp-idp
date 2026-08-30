@@ -2,7 +2,11 @@
 
 Colapsa `network-foundation/us-east-1/` (01) e `connectivity/us-east-1/` (03) num módulo só,
 consumido por uma raiz regional. Ao fim desta fase a região tem o hub de pé, aplicado da raiz nova,
-e a célula ainda não existe — que é um estado legítimo, o mesmo em que a `us-west-2` vai ficar.
+e a célula ainda não existe — estado legítimo, e o mesmo em que a `us-west-2` vai ficar *aplicada*.
+
+**Esta fase carrega metade do invariante do plano.** `src/hub` é o primeiro módulo a ter nome em
+namespace global (o SAML provider em IAM, o FQDN da VPN no Route 53), e é aqui que a região entra
+neles. Errar isso não aparece agora: aparece na fase 4, com `EntityAlreadyExists`, longe da causa.
 
 **Pré-requisito:** fase 1 fechada e o `values.tfvars` de pé. A extração assume que nenhum valor é
 descoberto.
@@ -37,6 +41,18 @@ variable "name" {
   description = "Nome do hub. Prefixo de todos os recursos e base das tags de descoberta."
   type        = string
   default     = "poc-hub"
+}
+
+variable "region" {
+  description = <<-EOT
+    A regiao do hub. NAO configura provider — o provider vem da raiz. Serve para compor os nomes
+    que vivem em namespace GLOBAL: o aws_iam_saml_provider (IAM e global por conta) e o FQDN do
+    endpoint da VPN (a subzona do Route 53 e uma so para a Organization inteira).
+
+    Sem isto, a segunda regiao falha com EntityAlreadyExists no SAML provider e SOBRESCREVE o
+    record vpn.<subzona> da primeira — o segundo em silencio, que e o pior dos dois.
+  EOT
+  type        = string
 }
 
 variable "vpc_cidr" {
@@ -246,6 +262,43 @@ module "network" {
 Se `src/network` não expõe os ids das route tables, acrescentar os outputs lá — é o que substitui
 `data.aws_route_table.hub_private`/`hub_public`.
 
+- [ ] **Step 2b: regionalizar os dois nomes globais (invariante)**
+
+Tudo que o `var.name` prefixa é regional — VPC, subnet, TGW, security group — **menos dois**, que
+vivem em namespace global e por isso colidiriam entre regiões da mesma Organization:
+
+```bash
+cd /home/silvios/git/wasp-idp/aws/terraform
+grep -n 'aws_iam_saml_provider\|vpn_fqdn' src/hub/main.tf
+```
+
+No `locals` do `src/hub`, acrescentar o nome qualificado e usá-lo nos dois pontos:
+
+```hcl
+locals {
+  # IAM e Route 53 nao sao regionais. Dois hubs em duas regioes da MESMA Organization disputam
+  # estes dois nomes: o SAML provider falha com EntityAlreadyExists (barulhento, tudo bem) e o
+  # record do Route 53 e sobrescrito em silencio (o modo ruim de descobrir).
+  regional_name = "${var.name}-${var.region}"
+
+  vpn_fqdn = "vpn.${var.region}.${local.subzone_fqdn}"
+}
+```
+
+| Recurso | Antes | Depois |
+|---|---|---|
+| `aws_iam_saml_provider.client_vpn` | `name = "${local.name}-client-vpn"` | `name = "${local.regional_name}-client-vpn"` |
+| `aws_acm_certificate` do VPN + `aws_route53_record` + `aws_ec2_client_vpn_endpoint` | `vpn.<subzona>` | `vpn.<região>.<subzona>` |
+
+O certificado do ACM **é** regional (ACM não cruza região), então ele não colidiria — mas o `domain_name`
+dele é o mesmo FQDN do record, e emitir dois certificados para o mesmo nome em regiões diferentes
+apontando para endpoints diferentes é como o record acaba sobrescrito. Um FQDN por região resolve os
+três de uma vez.
+
+**Isto invalida o `.ovpn` de quem já usa o hub** — a DNS name do endpoint muda. O `README.md` já diz
+que o `.ovpn` nunca se reaproveita entre applies da 03; aqui o motivo é outro e vale a linha no
+`HANDOFF.md` do Step 5.
+
 - [ ] **Step 3: mover os testes e apontá-los para o módulo**
 
 ```bash
@@ -272,6 +325,66 @@ terraform init -backend=false && terraform test -no-color 2>&1 | tail -20
 Esperado: `Success!` com a mesma contagem de runs que a `connectivity/` tinha. Run que desapareceu é
 cobertura perdida, não simplificação — se um teste não faz mais sentido no módulo, escrever por que
 no arquivo em vez de apagar em silêncio.
+
+- [ ] **Step 4b: teste de duas execuções provando que a região entra nos nomes (invariante)**
+
+A única forma de provar offline que o nome vem da região, e não de um literal, é rodar a **mesma**
+asserção com duas regiões e ver os dois valores diferentes. Um run só passa igual se alguém escrever
+`us-east-1` no código.
+
+`src/hub/tests/regional-naming.tftest.hcl`:
+
+```hcl
+# O invariante do plano, na forma executavel: nada em src/hub pode presumir a regiao. Duas
+# execucoes com regioes diferentes tem que produzir nomes globais diferentes. Um run so nao
+# distingue "veio da variavel" de "esta escrito no codigo".
+mock_provider "aws" {}
+
+variables {
+  name               = "poc-hub"
+  vpc_cidr           = "10.1.0.0/16"
+  availability_zones = ["a", "b"]
+  base_domain        = "example.com"
+}
+
+run "names_carry_us_east_1" {
+  variables {
+    region             = "us-east-1"
+    availability_zones = ["us-east-1a", "us-east-1b"]
+  }
+
+  assert {
+    condition     = aws_iam_saml_provider.client_vpn.name == "poc-hub-us-east-1-client-vpn"
+    error_message = "SAML provider sem a regiao no nome: IAM e global, a segunda regiao colide."
+  }
+
+  assert {
+    condition     = startswith(aws_ec2_client_vpn_endpoint.this.dns_name != null ? local.vpn_fqdn : local.vpn_fqdn, "vpn.us-east-1.")
+    error_message = "FQDN da VPN sem a regiao: as duas regioes disputam o mesmo record do Route 53."
+  }
+}
+
+run "names_carry_us_west_2" {
+  variables {
+    region             = "us-west-2"
+    availability_zones = ["us-west-2a", "us-west-2b"]
+  }
+
+  assert {
+    condition     = aws_iam_saml_provider.client_vpn.name == "poc-hub-us-west-2-client-vpn"
+    error_message = "Nome identico ao do run anterior: a regiao esta escrita no codigo."
+  }
+
+  assert {
+    condition     = startswith(local.vpn_fqdn, "vpn.us-west-2.")
+    error_message = "FQDN identico ao do run anterior: a regiao esta escrita no codigo."
+  }
+}
+```
+
+**Passo de mutação, obrigatório:** trocar `local.regional_name` por `"poc-hub-us-east-1"` literal e
+rodar de novo. O run `names_carry_us_west_2` **tem que** falhar. Se passar, o teste está lendo a
+variável de entrada em vez do valor derivado e não prova nada. Desfazer a mutação.
 
 - [ ] **Step 5: commit**
 
@@ -420,7 +533,14 @@ variable "spoke_account_ids" {
 }
 
 variable "saml_metadata_path" {
-  description = "Caminho do metadata XML da aplicacao SAML, relativo a esta raiz. Passo de console."
+  description = <<-EOT
+    Caminho do metadata XML da aplicacao SAML, relativo a esta raiz. Passo de console.
+
+    O default e um symlink para ../../variables/saml-metadata.xml: UMA aplicacao do Identity
+    Center serve todas as regioes, porque o ACS URL do Client VPN e http://127.0.0.1:35001 em
+    qualquer endpoint. O que e por regiao e o aws_iam_saml_provider criado a partir dele, e o
+    src/hub ja regionaliza esse nome.
+  EOT
   type        = string
   default     = "saml-metadata.xml"
 }
@@ -452,13 +572,15 @@ não herda `profile` do bloco `provider`.
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1
-ln --symbolic ../../variables/values.tfvars values.auto.tfvars
-ln --symbolic ../../connectivity/us-east-1/saml-metadata.xml saml-metadata.xml
+ln --symbolic ../../variables/values.tfvars     values.auto.tfvars
+ln --symbolic ../../variables/saml-metadata.xml saml-metadata.xml
 git check-ignore values.auto.tfvars saml-metadata.xml
 ```
 
-Esperado: as duas linhas ecoadas. O symlink do metadata é temporário — a fase 4 move o arquivo para
-cá quando a `connectivity/` for apagada.
+Esperado: as duas linhas ecoadas. **Os dois symlinks apontam para `variables/`, nunca para outra
+região** — a fase 1, Step 4b já moveu o metadata para lá exatamente por isto. Um symlink para
+`connectivity/us-east-1/` funcionaria hoje e quebraria na fase 4, que apaga a pasta; e obrigaria a
+`us-west-2` a depender do diretório da `us-east-1`, que é a violação que o invariante nomeia.
 
 - [ ] **Step 5: o teste de composição da raiz**
 
@@ -631,3 +753,9 @@ Refs #36"
 - [ ] O túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente.
 - [ ] `.terraform/modules/modules.json` da raiz lista `hub` e `hub.network` — módulo ausente ali
       significa teste da raiz rodando contra árvore velha.
+- [ ] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src/hub` não devolve nada fora de fixture
+      de teste. Região literal em `src/hub` é a segunda região quebrada antes de existir.
+- [ ] **(invariante)** `src/hub/tests/regional-naming.tftest.hcl` passa nos dois runs, e a mutação
+      (nome regional trocado por literal) faz o run da `us-west-2` falhar.
+- [ ] **(invariante)** `regions/us-east-1/saml-metadata.xml` e `values.auto.tfvars` apontam ambos
+      para `../../variables/` — `readlink` em cada um não contém `regions/` nem `connectivity/`.

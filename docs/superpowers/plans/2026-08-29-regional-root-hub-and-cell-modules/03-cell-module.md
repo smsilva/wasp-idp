@@ -63,6 +63,33 @@ lá; aqui ele vira requisito de script.
   }
   ```
 
+- [ ] **Regionalizar o `name` da célula (invariante).** `var.name` tem default `"control-plane"` e
+  prefixa, entre outras coisas, **cinco roles de IAM** (`-load-balancer-controller`, `-ebs-csi`,
+  `-external-secrets`, `-crossplane`, e a do nodegroup) e **dois nomes no Route 53**
+  (`*.<name>.<subzona>` e `services.<name>.<subzona>`). IAM é global por conta e a subzona é uma só
+  para a Organization: duas células com o mesmo `name` em duas regiões colidem — IAM com
+  `EntityAlreadyExists`, Route 53 sobrescrevendo em silêncio.
+
+  Tirar o default e obrigar a raiz a compor:
+
+  ```hcl
+  variable "name" {
+    description = <<-EOT
+      Nome da celula. Prefixo de todos os recursos, incluindo cinco roles de IAM e dois records do
+      Route 53 — os dois namespaces GLOBAIS da conta. Tem de ser unico na Organization inteira, nao
+      so na regiao, por isso a raiz o compoe com a regiao e nao ha default aqui.
+    EOT
+    type        = string
+  }
+  ```
+
+  E na raiz, `regions/<r>/main.tf`: `name = "control-plane-${local.region}"`.
+
+  `local.listener_rule_priority = 1 + parseint(substr(sha256(var.name), 0, 4), 16) % 50000` continua
+  válido e melhora: o hash passa a diferir entre regiões. A prioridade é por listener e cada região
+  tem o seu ALB, então não havia colisão — mas dois nomes iguais mascarariam um conflito real quando
+  a segunda célula da *mesma* região chegar.
+
 As seis variáveis novas que substituem data source, e nada mais — o resto de `control-plane/
 variables.tf` atravessa como está:
 
@@ -765,3 +792,10 @@ Refs #36"
 - [ ] `terraform destroy -target=module.cell` derruba a célula e **deixa o hub de pé** — verificado em
       `terraform state list`, não presumido.
 - [ ] `aws/terraform/CLAUDE.md` registra as duas direções do grafo provadas, com data.
+- [ ] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src/cell` não devolve nada fora de fixture
+      de teste.
+- [ ] **(invariante)** `variable "name"` de `src/cell` **não tem default**, e a raiz o compõe com
+      `local.region`. Um default region-free é a segunda região colidindo em cinco roles de IAM.
+- [ ] **(invariante)** um `terraform plan` da raiz com `local.region` trocado à mão para `us-west-2`
+      e os dois CIDR trocados resolve sem erro de nome duplicado. Desfazer depois — é sonda, não
+      mudança; a `us-west-2` de verdade é a fase 4.

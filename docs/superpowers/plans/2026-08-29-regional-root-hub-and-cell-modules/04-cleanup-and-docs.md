@@ -19,7 +19,7 @@ Duas divergências desse tipo já aconteceram neste repo.
 - Delete: `aws/terraform/connectivity/`
 - Delete: `aws/terraform/control-plane/`
 - Delete: `aws/terraform/scripts/up-01-network-foundation`, `up-03-connectivity`, `up-04-control-plane`
-- Move: `aws/terraform/connectivity/us-east-1/saml-metadata.xml` → `aws/terraform/regions/us-east-1/`
+- Move: `aws/terraform/connectivity/us-east-1/saml-metadata.xml.example` → `aws/terraform/variables/`
 
 **Interfaces:**
 - Consumes: nada. Só remove.
@@ -40,18 +40,24 @@ Esperado: `0` nas três primeiras (a `us-west-2` ainda tem 13, tratada na Task 2
 o SSO caído não prova nada** — daí o `get-caller-identity` no mesmo passo. Qualquer número diferente
 de zero interrompe a task: há recurso vivo, e apagar a raiz o deixaria órfão, fora de qualquer state.
 
-- [ ] **Step 2: mover o metadata SAML para a raiz que sobrevive**
+- [ ] **Step 2: só o `.example` do metadata SAML se move (invariante)**
+
+O arquivo real já vive em `variables/` desde a fase 1, Step 4b — **não** há metadata a mover para
+dentro de `regions/us-east-1/`, e mover seria desfazer o invariante no último passo do plano. O que
+sobrou na `connectivity/` é o `.example` versionado:
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform
-rm --force regions/us-east-1/saml-metadata.xml            # o symlink temporario da fase 2
-mv connectivity/us-east-1/saml-metadata.xml regions/us-east-1/saml-metadata.xml
-git mv connectivity/us-east-1/saml-metadata.xml.example regions/us-east-1/saml-metadata.xml.example
-git check-ignore regions/us-east-1/saml-metadata.xml
+git mv connectivity/us-east-1/saml-metadata.xml.example variables/saml-metadata.xml.example
+rm --force connectivity/us-east-1/saml-metadata.xml      # o symlink que a fase 1 deixou
+readlink regions/us-east-1/saml-metadata.xml
+git check-ignore variables/saml-metadata.xml
 ```
 
-Esperado: `check-ignore` ecoa o caminho. O arquivo identifica a instância do Identity Center e nunca
-pode ser versionado; o `.example` é versionado de propósito.
+Esperado: o `readlink` devolve `../../variables/saml-metadata.xml` — se devolver qualquer caminho com
+`regions/` ou `connectivity/`, o symlink está errado e a `us-west-2` da Task 2 vai quebrar. O
+`check-ignore` ecoa o caminho: o arquivo identifica a instância do Identity Center e nunca pode ser
+versionado; o `.example` é versionado de propósito.
 
 - [ ] **Step 3: apagar as raízes e os scripts órfãos**
 
@@ -116,9 +122,19 @@ Refs #36"
 - Create: `aws/terraform/regions/us-west-2/{main.tf,variables.tf,outputs.tf,versions.tf,values.auto.tfvars}`
 
 **Interfaces:**
-- Consumes: `src/hub` da fase 2.
-- Produces: a segunda região, hub sozinho — o caso que prova que a raiz regional não obriga a existir
-  uma célula.
+- Consumes: `src/hub` da fase 2 e `src/cell` da fase 3.
+- Produces: **a prova do invariante.** Esta task é onde "um hub regional com o seu control plane pode
+  ser criado em outra região" deixa de ser intenção e vira fato verificado.
+
+**O aceite é o `plan` da composição inteira, não o apply.** Aplicar só o hub na `us-west-2` é decisão
+de custo — mas `terraform plan` com `module.hub` **e** `module.cell` tem de ser verde, porque é ele
+que prova que nenhum nome global colide e nenhum caminho de arquivo aponta para a `us-east-1`. Um
+`plan` verde só do hub esconde exatamente as cinco roles de IAM da célula, que são o risco maior.
+
+**Se esta task falhar, a correção é na fase 2 ou 3, não aqui.** Um `EntityAlreadyExists`, um
+`readlink` apontando para `regions/us-east-1/`, um record do Route 53 disputado — nada disso se
+conserta com um `-target` ou um nome escrito à mão na `us-west-2`. Contornar aqui é entregar a
+segunda região quebrada para a terceira descobrir.
 
 - [ ] **Step 1: copiar a raiz de `us-east-1` e trocar o que é regional**
 
@@ -152,15 +168,42 @@ key = "regions/us-west-2/terraform.tfstate"
 Uma raiz por região, com key própria — nunca uma raiz só alternando backend com `init -reconfigure`:
 esquecer de trocar mistura as regiões e nada no Terraform pega isso.
 
-- [ ] **Step 2: `module.cell` fica no código, mas a região não o aplica**
+- [ ] **Step 2: provar a composição inteira offline e no `plan` (invariante)**
 
-Não remover `module "cell"` do `main.tf` da `us-west-2`: a raiz é a mesma composição, e a diferença
-entre as duas regiões é operacional (`up-02-region --region us-west-2` sem `--with-cell`), não
-estrutural. Sem `saml-metadata.xml` nesta região, o `module.hub` também não aplica — o que é
-consistente: o Client VPN é um por região e a `us-west-2` não tem um.
+`module "cell"` **fica** no `main.tf` da `us-west-2`, idêntico ao da `us-east-1`. A diferença entre as
+duas regiões é operacional (`up-02-region --region us-west-2` sem `--with-cell`), nunca estrutural:
+duas raízes que divergem no código deixam de provar qualquer coisa uma sobre a outra.
 
-Escrever isso como comentário no topo do `main.tf` da `us-west-2`, senão a próxima pessoa conclui que
-falta arquivo.
+O `saml-metadata.xml` **não** é obstáculo — a fase 1 o moveu para `variables/`, e uma aplicação do
+Identity Center serve as duas regiões (o ACS URL do Client VPN é `http://127.0.0.1:35001` em qualquer
+endpoint). O symlink é o mesmo dos outros:
+
+```bash
+cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-west-2
+ln --symbolic ../../variables/saml-metadata.xml saml-metadata.xml
+readlink values.auto.tfvars saml-metadata.xml
+```
+
+Esperado: os dois `readlink` apontando para `../../variables/`. **Qualquer `regions/` ou
+`connectivity/` na saída é violação do invariante** — pare e conserte na fase de origem.
+
+```bash
+cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-west-2
+terraform init -no-color
+terraform plan -no-color 2>&1 | tail -40
+```
+
+Esperado: um plano completo, com os recursos do hub **e** os da célula, e nenhum erro. Os três modos
+de falha que este `plan` existe para pegar, e o que cada um significa:
+
+| Erro | Causa | Onde consertar |
+|---|---|---|
+| `EntityAlreadyExists` em role ou SAML provider | nome global sem região | fase 2 Step 2b (hub) ou fase 3 Task 1 (célula) |
+| `no such file or directory` num `file()` | caminho apontando para outra região | fase 1 Step 4b |
+| CIDR sobreposto no TGW | `/16` reusado entre regiões | Step 1 desta task, contra a tabela de alocação |
+
+Um `plan` verde aqui **não** significa que a célula será aplicada nesta região — significa que ela
+pode ser, que é o invariante.
 
 - [ ] **Step 3: destruir a `network-foundation/us-west-2` e aplicar a raiz nova**
 
@@ -170,8 +213,8 @@ Pelo usuário:
 ! cd aws/terraform/network-foundation/us-west-2 && nohup terraform destroy -no-color -auto-approve > /tmp/destroy-01-west.log 2>&1 < /dev/null & disown
 ```
 
-Depois, `up-02-region --region us-west-2` (sem `--with-cell`). A raiz aplica a VPC hub e para — sem
-TGW nem Client VPN enquanto não houver `saml-metadata.xml` da região.
+Depois, `up-02-region --region us-west-2` (sem `--with-cell`). Aplica o hub inteiro — VPC, TGW e
+Client VPN, porque o metadata SAML é compartilhado — e para antes da célula, que é onde o custo está.
 
 **Se a ordem desta task e a da Task 1 se cruzarem**, destruir a `us-west-2` ANTES de apagar a pasta —
 apagar a raiz de um state com 13 recursos os deixa órfãos, fora de qualquer state.
@@ -186,7 +229,12 @@ terraform init -backend=false && terraform test -no-color 2>&1 | tail -20
 ```bash
 cd /home/silvios/git/wasp-idp
 git add aws/terraform/regions/us-west-2
-git commit -m "feat(terraform): regiao us-west-2 como raiz regional, hub sozinho
+git commit -m "feat(terraform): regiao us-west-2 como raiz regional
+
+Mesma composicao da us-east-1, so os locals mudam: regiao, os dois /16 e a
+key do backend. O plan da composicao inteira (hub + celula) e verde, o que
+prova que nenhum nome global colide e nenhum caminho aponta para a outra
+regiao. Aplicado so o hub, por custo.
 
 Refs #36"
 ```
@@ -230,6 +278,20 @@ cell_resources="$( (cd "${root}" && terraform state list) | grep --count '^modul
 
 `vpn` lê `client_vpn_endpoint_id` de `connectivity/us-east-1` — passa a ler de
 `regions/<região>/`, que já repassa o output.
+
+**Nenhum dos sete scripts pode ter região escrita no corpo (invariante).** `vpn` e `platform-status`
+recebem `--region` com default `us-east-1`; `up-all` itera `regions/*` em vez de nomear uma. Hoje
+`up-all` tem `connectivity/us-east-1/scripts/destroy` numa mensagem de log — é literalmente o padrão
+que o invariante proíbe, e some junto com a pasta.
+
+```bash
+cd /home/silvios/git/wasp-idp/aws/terraform/scripts
+grep --line-number 'us-east-1\|us-west-2' up-00-state-backend up-01-dns up-02-region up-all down-cell vpn platform-status
+```
+
+Esperado: hits **só** em valor de default de opção (`region="${region:-us-east-1}"`) e em exemplo de
+`show_usage`. Qualquer caminho de diretório com região literal é violação — o script tem de compor
+`regions/${region}`.
 
 - [ ] **Step 3: exercitar todos os scripts em `--help`**
 
@@ -289,6 +351,45 @@ acrescentar a ela as linhas novas: `variables/values.tfvars` como pré-requisito
 A ordem de derrubada, que hoje é prosa ("control-plane PRIMEIRO, connectivity só depois"), some: o
 grafo a conhece. O que fica no lugar é a explicação do `-target`.
 
+**A tabela de sequência passa a separar os dois eixos explicitamente** — ordem e permanência foram
+confundidos uma vez e o resultado foi um nível "T-1" que não existe. `00`/`01`/`02` é ordem; `T0`/
+`T1`/`T2` é permanência (custo e ciclo de vida). Não há nível abaixo do T0: a fundação da
+Organization é a coisa mais permanente do repositório.
+
+| Ordem | Camada | Permanência | Terraform? |
+|---|---|---|---|
+| — | Organization, contas, OUs, SCP, Identity Center | T0 | não — `aws/docs/accounts/scripts/` |
+| — | *aprovar a região na SCP* | — | não |
+| 00 | `state-backend/` | T0 | sim |
+| 01 | `dns/` | T0 | sim |
+| — | *aplicação SAML no Identity Center* → `variables/saml-metadata.xml` | — | não, é console |
+| 02 | `regions/<r>` → `module.hub` | **T1** | sim |
+| — | *conectar o túnel do Client VPN* | — | não |
+| 02 | `regions/<r>` → `module.cell` | **T2** | sim |
+| — | providers e Compositions do Crossplane | T2 | não — GitOps |
+
+Três coisas que essa tabela obriga a escrever, e que hoje não estão em lugar nenhum:
+
+1. **`module.hub` e `module.cell` dividem o `02` e têm permanências diferentes.** É a novidade desta
+   frente e é o que o Step 3 da Task 3 tem de fazer o `platform-status` refletir: reportar custo por
+   **módulo**, não por raiz, senão T1 e T2 viram uma linha só e "esqueci ligado" volta a ser
+   invisível.
+2. **A fundação não ganha um `up-00`.** `up-NN` significa "raiz Terraform, idempotente, roda
+   sozinha" — e ela não é nenhuma das três: roda uma vez na vida, `create-account` exige e-mail de
+   root único e não é re-executável, e o app SAML é console. Renumerar tudo para acomodá-la só
+   valeria com um `up-all` que fosse da management account vazia até a célula, e aí a fundação
+   precisaria ser idempotente primeiro. Ela entra como bloco próprio acima do `up-*`, apontando para
+   a ordem que `aws/docs/accounts/` já estabelece em `00-strategy` … `07-cloudtrail`.
+3. **A aplicação SAML é uma para toda a Organization, não uma por região** — o ACS URL do Client VPN
+   é `http://127.0.0.1:35001` em qualquer endpoint. É o que permite à `us-west-2` ter Client VPN sem
+   um segundo passo de console, e o motivo de o arquivo morar em `variables/`.
+
+**Uma seção "Nova região" verdadeira.** A que existe hoje manda editar `main.tf` e `versions.tf`; com
+a raiz regional ela vira o procedimento real e curto — copiar `regions/<r>/`, trocar `local.region`,
+os dois `/16` (contra a tabela de alocação) e a `key` do backend, symlinkar `values.auto.tfvars` e
+`saml-metadata.xml` para `../../variables/`, `plan`. Escrever ali que **um `plan` verde da composição
+inteira é o aceite de uma região nova**, mesmo que só o hub seja aplicado.
+
 - [ ] **Step 2: `HANDOFF.md`**
 
 Trechos que ficam falsos: o comando de conferência do "Estado atual" (lista raízes apagadas), a
@@ -333,7 +434,7 @@ sem consultar mais nada. É o único teste que pega instrução faltando.
 ```bash
 git clone /home/silvios/git/wasp-idp /tmp/wasp-idp-clean
 cp /home/silvios/git/wasp-idp/aws/terraform/variables/values.tfvars /tmp/wasp-idp-clean/aws/terraform/variables/
-cp /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1/saml-metadata.xml /tmp/wasp-idp-clean/aws/terraform/regions/us-east-1/
+cp /home/silvios/git/wasp-idp/aws/terraform/variables/saml-metadata.xml /tmp/wasp-idp-clean/aws/terraform/variables/
 cd /tmp/wasp-idp-clean/aws/terraform
 ```
 
@@ -370,8 +471,21 @@ Closes #36, closes #21"
 
 - [ ] `network-foundation/`, `connectivity/` e `control-plane/` não existem no disco nem no bucket de
       state, e nenhum arquivo fora de docs históricas as referencia.
-- [ ] `regions/us-west-2/` existe e aplica o hub sozinho.
-- [ ] Os sete scripts respondem a `--help` sem mencionar camada 03/04 nem `generate-tfvars`.
+- [ ] **(invariante)** `regions/us-west-2/` existe, e `terraform plan` da composição **inteira**
+      (`module.hub` + `module.cell`) é verde ali — sem `EntityAlreadyExists`, sem `file()` quebrado,
+      sem CIDR sobreposto. Aplicado, só o hub, por custo.
+- [ ] **(invariante)** `readlink` de `values.auto.tfvars` e `saml-metadata.xml` nas duas regiões
+      aponta para `../../variables/`; nenhuma região referencia o diretório da outra.
+- [ ] **(invariante)** `grep -rn 'us-east-1' aws/terraform/src aws/terraform/scripts` só devolve
+      default de opção, fixture de teste e exemplo de `show_usage`.
+- [ ] **(invariante)** `diff regions/us-east-1/main.tf regions/us-west-2/main.tf` difere **apenas**
+      no bloco `locals` (região e os dois CIDR). Divergência estrutural entre as duas raízes é a
+      prova se desfazendo.
+- [ ] Os sete scripts respondem a `--help` sem mencionar camada 03/04 nem `generate-tfvars`, e
+      nenhum tem caminho de diretório com região escrita no corpo.
+- [ ] `aws/terraform/README.md` separa os dois eixos (ordem `00`/`01`/`02` × permanência `T0`/`T1`/
+      `T2`), traz a fundação da Organization como bloco acima do `up-*`, e tem uma seção "Nova
+      região" que é o procedimento real.
 - [ ] A regressão offline inteira passa, sem linha vazia.
 - [ ] Um clone limpo, com `values.tfvars` e `saml-metadata.xml` copiados, chega ao `plan` seguindo só
       o `README.md`.
