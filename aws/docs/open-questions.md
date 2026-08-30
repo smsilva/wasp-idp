@@ -45,3 +45,15 @@ referência fica aqui.
   bootstrap/control cluster that deploys and manages) and `Overcloud` (the workload cluster it
   produces) — possible naming inspiration for cluster-zero (undercloud-like) vs. per-project
   Backstage clusters (overcloud-like).
+- **`src/hub` e `src/cell` escolhem AZ por `data.aws_availability_zones` independentes.** O
+  `src/hub` recebe `availability_zones` como variável, calculada UMA vez em
+  `regions/<r>/main.tf` a partir do `data.aws_availability_zones.this` da própria raiz; o
+  `src/cell` não tem essa variável — ele calcula a própria lista com um segundo
+  `data.aws_availability_zones.this`, interno ao módulo, e o mesmo `slice(names, 0, 2)`. Na
+  prática as duas chamadas batem na mesma API, mesma conta/região, e devolvem a mesma lista — mas
+  nada no código nem em teste prova essa igualdade, e o teste de composição
+  (`hub_and_cell_cidrs_do_not_overlap`) só checa CIDR, não AZ. Se um dia divergirem (mudança de
+  ordenação da API, escopo de conta diferente), as target networks do Client VPN (nas AZs do hub)
+  podem não cobrir a AZ onde os nodes da célula caem. Achado da revisão da Task 2 da fase 3
+  (`docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/03-cell-module.md`); não
+  corrigido de propósito — está fora do escopo de arquivo dessa task, e o risco prático é baixo.
