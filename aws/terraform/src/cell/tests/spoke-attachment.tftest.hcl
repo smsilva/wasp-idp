@@ -14,7 +14,6 @@ variables {
   name                = "control-plane"
   region              = "us-east-1"
   aws_profile         = "cicd"
-  network_profile     = "network"
   vpc_cidr            = "10.2.0.0/16"
   target_account_ids  = ["000000000000"]
   network_account_id  = "111111111111"

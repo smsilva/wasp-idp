@@ -18,12 +18,6 @@ variable "aws_profile" {
   default     = "cicd"
 }
 
-variable "network_profile" {
-  description = "Profile local com acesso de leitura a conta network, dona da VPC hub."
-  type        = string
-  default     = "network"
-}
-
 variable "vpc_cidr" {
   description = <<-EOT
     CIDR da VPC spoke. Um /16 dentro do supernet 10.0.0.0/12.

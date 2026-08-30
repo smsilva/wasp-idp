@@ -177,6 +177,29 @@ run "cell_follows_a_different_hub" {
 # mock_provider "helm" nao simula a key (namespace, name) de releases: duas releases com o mesmo
 # nome passam verdes offline e so explodem no apply real com "cannot re-use a name that is still
 # in use". Ja aconteceu com target_group_binding e o gateway do ingress_istio.
+# Guard de regressao do bug que o controller pegou a mao (nao os reviewers) no preflight da
+# Task 3: um `name = "control-plane"` literal, sem regiao, na composicao da raiz — bloqueante,
+# porque criaria 5 roles de IAM e 2 records de Route 53 sem qualificacao regional. Nenhum teste
+# cobria isso ate aqui.
+run "cell_name_carries_the_region" {
+  command = plan
+
+  override_data {
+    target = data.aws_availability_zones.this
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = module.cell.data.aws_availability_zones.this
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  assert {
+    condition     = module.cell.cluster_name == "control-plane-us-east-1"
+    error_message = "o nome da celula tem de carregar a regiao: recursos globais (IAM roles, Route 53) colidem entre regioes sem isso"
+  }
+}
+
 run "helm_release_names_do_not_collide" {
   command = plan
 

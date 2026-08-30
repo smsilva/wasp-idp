@@ -103,9 +103,10 @@ module "cell" {
     helm        = helm
   }
 
-  name     = "control-plane-${local.region}"
-  region   = local.region
-  vpc_cidr = local.cell_vpc_cidr
+  name        = "control-plane-${local.region}"
+  region      = local.region
+  vpc_cidr    = local.cell_vpc_cidr
+  aws_profile = var.aws_profile
 
   base_domain        = var.base_domain
   subzone_label      = var.subzone_label
