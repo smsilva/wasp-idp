@@ -60,16 +60,19 @@ k3d cluster list
 
 **2026-08-30 (fase 4):** as raízes antigas (`network-foundation/`, `connectivity/`, `control-plane/`)
 e os scripts `up-01`/`up-03`/`up-04` foram apagados do disco e do bucket de state — o conteúdo vive
-em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2/` existe: hub aplicado
-(42 recursos, `10.3.0.0/16`), célula não (por custo) — o `plan` da composição inteira (hub+célula) é
-verde, provando o invariante da frente. `regions/us-east-1/` segue com o hub de pé (43 recursos);
-célula aplicada e destruída de volta em sessão anterior, prova já feita. Scripts renumerados:
-`up-00-state-backend`, `up-01-dns`, `up-02-region`. `aws/terraform/README.md` já reflete a sequência
-nova — é a fonte de verdade para custo/ordem, não duplicar números aqui.
+em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2/` existe: o `plan`
+da composição inteira (hub+célula) é verde, provando o invariante da frente; o hub chegou a ser
+aplicado (42 recursos, `10.3.0.0/16`) e foi destruído de volta na mesma sessão. `regions/us-east-1/`
+teve o hub (43 recursos) destruído também — **as duas regiões estão hoje com ZERO recursos
+aplicados**, só `state-backend`/`dns` de pé (T0, permanentes, centavos/mês). Subir de novo é
+`up-02-region --region <r> --yes`. Scripts renumerados: `up-00-state-backend`, `up-01-dns`,
+`up-02-region`. `aws/terraform/README.md` já reflete a sequência nova — é a fonte de verdade para
+custo/ordem, não duplicar números aqui.
 
 Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
 (`aws-vpn-client get-connection-status --profile-name hub-<região>` — o profile leva a região no
-nome porque cada região tem o próprio endpoint).
+nome porque cada região tem o próprio endpoint). Com o hub derrubado, o endpoint não existe mais —
+reexportar depois de reaplicar.
 
 ## Em progresso agora
 
@@ -89,15 +92,36 @@ corrente: `feat/regional-root-hub-cell`, executando a frente `regional-root-hub-
 **Plano de execução da fase corrente:**
 `docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
 (`README.md` + `01`–`05`). Fases 1-3 fechadas — `module.cell` compõe com `module.hub` na raiz
-regional, apply e destroy reais provados. Fase 4 (`04-cleanup-and-docs.md`) em andamento: raízes
-antigas apagadas (Task 1), `regions/us-west-2/` criada com o hub aplicado (Task 2), scripts
-renumerados (Task 3), `README.md` reescrito (Task 4 Step 1). Falta: regressão offline completa
-+ clone limpo (Step 4-5), fechar #36/#21 (Step 6).
+regional, apply e destroy reais provados. Fase 4 (`04-cleanup-and-docs.md`) **fechada**: raízes
+antigas apagadas (Task 1), `regions/us-west-2/` criada e o invariante provado (Task 2), scripts
+renumerados (Task 3), `README.md`/`HANDOFF.md` reescritos, regressão offline completa (14 módulos,
+`Success!` em todos) (Task 4). #21 fechada (absorvida por #36/ADR 0014); #36 já fechada em sessão
+anterior. **Clone limpo rodado e achou dois bugs reais, corrigidos nesta sessão:**
+`state-backend/terraform.tfvars` faltava nos Pré-requisitos do README (corrigido — documentado);
+`up-01-dns` tinha um `generate-tfvars` residual (escrevia `dns/terraform.tfvars` próprio e checava
+colisão de NS no Azure ANTES do `init`) que travava um clone/máquina nova mesmo com a delegação já
+aplicada e tracked no state remoto — removido, `dns/` passou a ler só de `values.auto.tfvars` como
+qualquer outra raiz desde a ADR 0014. Os scripts `up-01-dns`/`up-02-region` agora criam os symlinks
+`values.auto.tfvars`/`saml-metadata.xml` sozinhos (`ensure_symlink` em `scripts/lib`) — antes o
+README só documentava criá-los à mão na seção "Nova região", nada cobria clone/máquina nova de uma
+região já existente. Critério de aceite da #37 ("árvore final aplica do zero seguindo só o
+README") **satisfeito** — clone limpo chegou ao `plan` verde em `dns/` e aplicou/destruiu
+`module.hub` de `us-east-1` de ponta a ponta sem consultar mais nada.
 
-Peer session ativa neste mesmo working directory (`ListAgents`) fez um commit
-(`8707aef feat(docs): update README...`) fora do fluxo normal desta sessão — conteúdo idêntico ao
-que esta sessão já ia escrever, sem conflito, mas vale investigar a origem antes de confiar nisso
-de novo.
+**Cuidado ao repetir o teste de clone limpo:** `up-02-region --region <r> --yes` **sem**
+`--with-cell` já é um `apply` real (`-target=module.hub -auto-approve`), não um `plan` — um erro
+desta sessão foi rodar esse comando pensando estar só testando o script, e ele recriou o hub
+`us-east-1` de verdade (42 recursos, destruído de volta na sequência). Para testar só o `plan` do
+comportamento de um script, usar `terraform plan` direto na raiz, nunca o script `up-*` com
+`--yes`.
+
+Duas issues novas nesta sessão, sem trabalho iniciado: **#40** (acesso administrativo único a
+qualquer hub regional — hoje é preciso trocar de túnel Client VPN por região) e **#41** (workflow
+GitHub Actions para provisionar hub/control plane — depende da decisão da #40 para o acesso
+privado do runner). Ambas com label `private-access-ingress`, no board #6.
+
+A frente `regional-root-hub-and-cell-modules` está pronta para revisão/integração em `main` —
+branch `feat/regional-root-hub-cell`.
 
 A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
 — ver `docs/archived/index.md`.
@@ -141,7 +165,14 @@ e ler o `Account`/`Arn` inteiro. Erro de profile inexistente ou ARN vazio ⟹
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Derrubar (rotina, todo dia):**
+**Nada está de pé agora** (as duas regiões destruídas nesta sessão — conferir com o comando de
+"Estado atual" acima antes de presumir). Subir de novo:
+
+```bash
+cd aws/terraform/scripts && ./up-02-region --region us-east-1 --yes
+```
+
+**Derrubar (rotina, todo dia, quando a célula estiver de pé):**
 
 ```bash
 cd aws/terraform/scripts && ./down-cell --region us-east-1 --yes
@@ -241,6 +272,21 @@ Pré-requisitos: VPN corporativa **desconectada** (senão o pull de `xpkg.upboun
 **Lição operacional:** nunca deixar um `apply`/`destroy` de vários minutos dependurado numa chamada
 síncrona de ferramenta — usar `nohup ... > log 2>&1 < /dev/null & disown` (os scripts `up-NN` já
 fazem isso). Um processo morto no meio não impede recuperação, mas custa tempo evitável.
+
+## Open Questions
+
+- **Peer session compartilhando este working directory pode commitar sem esta sessão saber** — ver
+  `CLAUDE.local.md`, "Operação nesta máquina". Não investigado a fundo; conferir `git log` contra
+  commits sem autoria clara antes de assumir que o histórico reflete só esta sessão.
+- **#40 e #41** (acima) são investigações em aberto, não hipóteses — ver os corpos das issues para
+  os ângulos já mapeados.
+
+## Next Steps
+
+1. Fechar #37 — o clone limpo já passou (ver "Em progresso agora"), critério de aceite satisfeito.
+2. Issues #40 e #41 seguem no backlog do board #6, sem trabalho iniciado.
+3. Investigar a fundo a peer session que compartilha este working directory (ver Open Questions) —
+   já mergeou trabalho em `main` sem revisão nesta sessão uma vez.
 
 ## Completed Work
 
