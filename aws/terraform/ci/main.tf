@@ -129,6 +129,11 @@ resource "aws_iam_role_policy" "cicd_iam_and_assume" {
           "iam:DetachRolePolicy",
           "iam:PassRole",
           "iam:CreateServiceLinkedRole",
+          # Terceiro gap descoberto no mesmo apply real: ao DELETAR uma role (replace ou
+          # destroy), o provider chama ListInstanceProfilesForRole para checar instance
+          # profiles anexados antes de apagar — gotcha ja documentado em aws/CLAUDE.md para o
+          # bootstrap-iam-policy.json do usuario crossplane-poc, repetido aqui.
+          "iam:ListInstanceProfilesForRole",
         ]
         Resource = "*"
       },
