@@ -39,8 +39,7 @@ Em `terraform test`, `override_resource` funcionou normalmente para recursos sob
 computado do mock, então são iguais mesmo sendo um valor sintético, provando a referência sem
 depender do override. Documentado em `aws/terraform/ci/README.md`.
 
-## Ainda não validado
+## Validação real: raiz `ci/` aplicada e `workflow_dispatch` de ponta a ponta
 
-Um `workflow_dispatch` real de `provision-region.yml` — a raiz `ci/` não foi aplicada na AWS (é
-T0, aplicação manual por um admin humano; ver `bootstrap-checklist.md`). Esse é o próximo passo
-antes de fechar a #41.
+Concluída em 2026-08-31. Narrativa completa (as 8 execuções, uma por causa raiz corrigida) em
+`real-run-validation.md`. Fecha a #41 e a #47.

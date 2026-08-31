@@ -60,14 +60,16 @@ k3d cluster list
 
 **2026-08-30 (fase 4):** as raízes antigas (`network-foundation/`, `connectivity/`, `control-plane/`)
 e os scripts `up-01`/`up-03`/`up-04` foram apagados do disco e do bucket de state — o conteúdo vive
-em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2/` existe: o `plan`
-da composição inteira (hub+célula) é verde, provando o invariante da frente; o hub chegou a ser
-aplicado (42 recursos, `10.3.0.0/16`) e foi destruído de volta na mesma sessão. `regions/us-east-1/`
-teve o hub (43 recursos) destruído também — **as duas regiões estão hoje com ZERO recursos
-aplicados**, só `state-backend`/`dns` de pé (T0, permanentes, centavos/mês). Subir de novo é
-`up-02-region --region <r> --yes`. Scripts renumerados: `up-00-state-backend`, `up-01-dns`,
-`up-02-region`. `aws/terraform/README.md` já reflete a sequência nova — é a fonte de verdade para
-custo/ordem, não duplicar números aqui.
+em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2/` existe (`plan`
+verde, sem recursos aplicados). Scripts renumerados: `up-00-state-backend`, `up-01-dns`,
+`up-02-region`. `aws/terraform/README.md` reflete a sequência — fonte de verdade para custo/ordem.
+
+**2026-08-31 (run 8 do `provision-region.yml`):** `regions/us-east-1/` está **de pé de verdade**
+— 123 recursos aplicados (hub + célula: EKS, TGW, Client VPN, os 6 helm releases), provisionados
+pelo próprio workflow de CI, não por uma sessão manual. **Não presumir destruído** como nas sessões
+anteriores — conferir sempre com o comando de "Estado atual" acima antes de decidir subir/derrubar.
+Custo ~US\$ 275/mês (hub ~110 + célula ~165) enquanto ficar de pé; `down-cell --region us-east-1
+--yes` derruba só a célula, mantendo o hub.
 
 Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
 (`aws-vpn-client get-connection-status --profile-name hub-<região>` — o profile leva a região no
@@ -86,27 +88,11 @@ gh issue list -R smsilva/wasp-idp --label private-access-ingress --state open
 Board: https://github.com/users/smsilva/projects/6
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. A issue
-**#41** (workflow GitHub Actions para provisionar hub e célula) está com as duas fatias
-implementadas e mergeadas em `main` — narrativa em
-[`docs/archived/index.md`](docs/archived/index.md), tema "GitHub Actions CI". Falta só validar
-com um `workflow_dispatch` real (ver Next Steps).
-
-**Ponto exato agora (branch `chore/41-ci-root-apply`):** passos 6 e 7 do
-`bootstrap-checklist.md` concluídos em 2026-08-31. Raiz `ci/` aplicada na AWS
-(`terraform apply`, 8 added / 0 changed / 0 destroyed) — um lock órfão de um `plan` anterior
-precisou de `terraform force-unlock` (confirmado com o operador antes) na primeira tentativa.
-Outputs:
-
-| Output | Valor |
-|---|---|
-| `cicd_role_arn` | `arn:aws:iam::270222614208:role/github-actions-provision` |
-| `network_role_arn` | `arn:aws:iam::094289743086:role/github-actions-provision` |
-
-As 4 variáveis/secret do repositório GitHub configuradas via `gh variable set`/`gh secret set`
-(não pelo console): `CICD_ROLE_ARN`, `NETWORK_ROLE_ARN`, `STATE_BUCKET` (`tfstate-o-e4r8ndteju`)
-e `SAML_METADATA_XML` (conteúdo de `variables/saml-metadata.xml`, confirmado com o operador antes
-de subir). **Único passo restante do checklist: o item 8**, o primeiro `workflow_dispatch` real
-de `provision-region.yml` — ainda não disparado.
+**#41** (workflow GitHub Actions para provisionar hub e célula) está **fechada**: as três fatias
+(design, workflow, validação real) implementadas, mergeadas em `main` e validadas por
+`workflow_dispatch` real (run 8, verde de ponta a ponta) em 2026-08-31 — narrativa em
+[`docs/archived/index.md`](docs/archived/index.md), tema "GitHub Actions CI". Issue #47 (teto de
+1h nas sessões de CI) fechada junto, pela causa raiz e não por aceitação do limite.
 
 #37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
 fase 4); #36 fechada em 2026-08-30.
@@ -292,11 +278,7 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Next Steps
 
-1. Validar de ponta a ponta com um `workflow_dispatch` real de `provision-region.yml` contra uma
-   região de teste — exige antes aplicar a raiz `ci/` na AWS (T0, manual, ver
-   `aws/terraform/bootstrap-checklist.md`) e configurar `CICD_ROLE_ARN`/`NETWORK_ROLE_ARN`/
-   `STATE_BUCKET`/`SAML_METADATA_XML` no repositório GitHub. Só então fechar a #41.
-2. #40 segue no backlog do board #6, sem trabalho iniciado.
+1. #40 segue no backlog do board #6, sem trabalho iniciado.
 
 ## Completed Work
 

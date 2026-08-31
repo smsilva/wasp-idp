@@ -23,7 +23,11 @@ detalhe vive — sem duplicar conteúdo.
       `STATE_BUCKET` (variables) e `SAML_METADATA_XML` (secret). Configurado em 2026-08-31 via
       `gh variable set`/`gh secret set`.
       Detalhe: `aws/terraform/ci/README.md`, passo 4-5.
-- [ ] **8. Primeiro `workflow_dispatch` de `provision-region.yml`** — CI, gatilho manual.
+- [x] **8. Primeiro `workflow_dispatch` de `provision-region.yml`** — CI, gatilho manual.
+      Concluído em 2026-08-31, run 8 (todos os passos verdes, hub + cell + fechamento do
+      endpoint). Sete tentativas anteriores diagnosticaram e fecharam: formato do `sub` OIDC,
+      interpolação do secret SAML, três lacunas de leitura IAM, TTL do token OIDC (issue #47),
+      addon órfão fora do state, e ordem endpoint-vs-refresh do `terraform plan`.
       Detalhe: `.github/workflows/provision-region.yml`.
 
 O valor deste checklist é ordenação e completude, não profundidade — o atrito real desta frente

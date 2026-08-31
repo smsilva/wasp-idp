@@ -71,3 +71,8 @@ próprio, agrupado por tema, para este índice não crescer sem limite como o an
 - **2026-08-31** — [Provisioning Workflow (Issue #41, Second Slice)](github-actions-ci/provisioning-workflow.md):
   raiz `ci/` com OIDC + duas roles, workflows `provision-region.yml`/`recover-lock.yml`, checklist
   de bootstrap, 5 issues de limitações abertas.
+- **2026-08-31** — [Real-Run Validation (Issue #41, Third Slice)](github-actions-ci/real-run-validation.md):
+  raiz `ci/` aplicada na AWS, 8 execuções de `workflow_dispatch` até verde de ponta a ponta —
+  formato do `sub` OIDC, interpolação do secret SAML, três lacunas IAM, TTL do token OIDC vs.
+  teto de sessão (fecha a #47 pela causa raiz), addon órfão, ordem endpoint-vs-refresh do plan.
+  Fecha a #41.
