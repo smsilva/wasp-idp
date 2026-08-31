@@ -38,7 +38,11 @@ locals {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/*"
+          # Formato qualificado por ID (owner@owner_id/repo@repo_id), nao repo:<owner>/<repo>:... —
+          # o dono ou o repositorio ja foi renomeado, e o GitHub passa a emitir o claim `sub`
+          # sempre com os IDs numericos imutaveis apos isso, mesmo tendo voltado ao nome atual.
+          # Confirmado num AssumeRoleWithWebIdentity real via CloudTrail. Ver ci/README.md.
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}@${var.github_owner_id}/${var.github_repo}@${var.github_repo_id}:ref:refs/heads/*"
         }
       }
     }]
@@ -114,6 +118,11 @@ resource "aws_iam_role_policy" "cicd_iam_and_assume" {
           "iam:PutRolePolicy",
           "iam:DeleteRolePolicy",
           "iam:GetRolePolicy",
+          # ListRolePolicies faltava na primeira versao: o provider AWS chama essa action logo
+          # apos criar/atualizar uma role (parte do refresh dos inline policies), e sem ela o
+          # apply falha com AccessDenied mesmo tendo PutRolePolicy — confirmado num apply real
+          # (module.cluster.aws_iam_role.cluster e outras 5 roles de Pod Identity).
+          "iam:ListRolePolicies",
           "iam:AttachRolePolicy",
           "iam:DetachRolePolicy",
           "iam:PassRole",
