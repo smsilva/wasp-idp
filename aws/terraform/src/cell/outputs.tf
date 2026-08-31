@@ -120,3 +120,16 @@ output "helm_release_names" {
     local.install_crossplane ? "crossplane-system/crossplane" : "",
   ])
 }
+
+# Reexportados para regions/<regiao> conseguir testar o repasse de endpoint_public_access/
+# public_access_cidrs sem precisar alcancar module.cluster de dois niveis acima (fronteira de
+# modulo nao e transparente — mesmo motivo de cluster_endpoint/cluster_ca_data acima).
+output "endpoint_public_access" {
+  description = "Se o endpoint da API do EKS esta exposto na internet."
+  value       = module.cluster.endpoint_public_access
+}
+
+output "public_access_cidrs" {
+  description = "CIDRs autorizados no endpoint publico, quando aberto."
+  value       = module.cluster.public_access_cidrs
+}

@@ -221,3 +221,54 @@ run "helm_release_names_do_not_collide" {
     error_message = "duas releases com o mesmo nome no mesmo namespace: o mock nao pega isso, o apply real morre com 'cannot re-use a name that is still in use'"
   }
 }
+
+# Achado na sessao 2026-08-31: regions/<regiao> nunca repassava estas duas variaveis para
+# module.cell — o break-glass documentado no README.md ficava sem efeito desde a consolidacao
+# da ADR 0014 (editar values.tfvars so produzia warning de variavel nao declarada aqui).
+run "endpoint_publico_nasce_fechado" {
+  command = plan
+
+  override_data {
+    target = data.aws_availability_zones.network
+    values = { names = ["us-west-2a", "us-west-2b"] }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.cell
+    values = { names = ["us-west-2a", "us-west-2b"] }
+  }
+
+  assert {
+    condition     = module.cell.endpoint_public_access == false
+    error_message = "o default tem de ser fechado, recebido ${module.cell.endpoint_public_access}"
+  }
+}
+
+run "endpoint_publico_repassa_o_cidr_ate_o_cluster" {
+  command = plan
+
+  variables {
+    endpoint_public_access = true
+    public_access_cidrs    = ["203.0.113.10/32"]
+  }
+
+  override_data {
+    target = data.aws_availability_zones.network
+    values = { names = ["us-west-2a", "us-west-2b"] }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.cell
+    values = { names = ["us-west-2a", "us-west-2b"] }
+  }
+
+  assert {
+    condition     = module.cell.endpoint_public_access == true
+    error_message = "o flag do root deveria chegar a module.cell, recebido ${module.cell.endpoint_public_access}"
+  }
+
+  assert {
+    condition     = module.cell.public_access_cidrs == toset(["203.0.113.10/32"])
+    error_message = "o CIDR do root deveria chegar a module.cell, recebido ${jsonencode(module.cell.public_access_cidrs)}"
+  }
+}

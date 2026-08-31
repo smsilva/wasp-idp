@@ -64,3 +64,18 @@ variable "target_account_ids" {
   description = "Contas onde o Crossplane cria recursos, via assume role. Declaradas em variables/values.tfvars."
   type        = list(string)
 }
+
+variable "endpoint_public_access" {
+  description = <<-EOT
+    Expor o endpoint da API do EKS na internet, restrito a public_access_cidrs. DEFAULT false —
+    repassado direto a module.cell, que documenta o resto (src/cell/variables.tf).
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "public_access_cidrs" {
+  description = "CIDRs autorizados quando endpoint_public_access = true. Ver src/cell/variables.tf."
+  type        = list(string)
+  default     = []
+}
