@@ -43,7 +43,9 @@ jobs:
           EOF
 
       - name: Write SAML metadata from secret
-        run: printf '%s' "${{ secrets.SAML_METADATA_XML }}" > aws/terraform/variables/saml-metadata.xml
+        env:
+          SAML_METADATA_XML: ${{ secrets.SAML_METADATA_XML }}
+        run: printf '%s' "${SAML_METADATA_XML}" > aws/terraform/variables/saml-metadata.xml
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
