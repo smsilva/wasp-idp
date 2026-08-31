@@ -15,12 +15,13 @@ detalhe vive — sem duplicar conteúdo.
       `CreateApplication` só cria OAuth 2.0 customizado). Salvar o metadata baixado em
       `variables/saml-metadata.xml`.
       Detalhe: `aws/terraform/README.md`, seção "Os dois eixos".
-- [ ] **6. `terraform apply` da raiz `ci/`** (OIDC provider + as duas roles) — admin humano,
-      local, profiles `cicd`/`network`.
+- [x] **6. `terraform apply` da raiz `ci/`** (OIDC provider + as duas roles) — admin humano,
+      local, profiles `cicd`/`network`. Aplicado em 2026-08-31 (8 added, 0 changed, 0 destroyed).
       Detalhe: `aws/terraform/ci/README.md`.
-- [ ] **7. Configurar variáveis e secret no repositório GitHub** — admin humano, console do
+- [x] **7. Configurar variáveis e secret no repositório GitHub** — admin humano, console do
       GitHub (Settings → Secrets and variables → Actions): `CICD_ROLE_ARN`, `NETWORK_ROLE_ARN`,
-      `STATE_BUCKET` (variables) e `SAML_METADATA_XML` (secret).
+      `STATE_BUCKET` (variables) e `SAML_METADATA_XML` (secret). Configurado em 2026-08-31 via
+      `gh variable set`/`gh secret set`.
       Detalhe: `aws/terraform/ci/README.md`, passo 4-5.
 - [ ] **8. Primeiro `workflow_dispatch` de `provision-region.yml`** — CI, gatilho manual.
       Detalhe: `.github/workflows/provision-region.yml`.
