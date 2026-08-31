@@ -511,3 +511,17 @@ o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem e
   `regions/<r>/` para uma região nova, só o `region` dos `locals` (main.tf) e a `key` do backend
   mudam — o `region` do bloco `backend "s3"` fica igual em toda raiz. Trocá-lo por engano faz o
   `init` procurar o bucket na região errada.
+
+## Trust OIDC (GitHub Actions → AWS)
+
+- **`aws_iam_openid_connect_provider.thumbprint_list` é seguro deixar vazio para o GitHub.** A
+  AWS valida o endpoint JWKS pela própria biblioteca de CAs raiz confiáveis; a doc do provider é
+  explícita que, para o GitHub (entre outros IdPs conhecidos), qualquer thumbprint configurado
+  "is retained in the configuration but not used for verification". Fixar um aqui só cria
+  armadilha de rotação de certificado, sem ganho de segurança.
+- **Role chaining (`source_profile` num profile que já usa `web_identity_token_file`) trava a
+  sessão em 1h, sempre** — a doc da IAM: "When you use role chaining, the session duration is
+  limited to one hour, regardless of the maximum session duration setting configured for
+  individual roles." Nenhum `max_session_duration` da role final levanta esse teto. Relevante
+  para qualquer `apply` de CI que passe de ~1h (ex.: `module.cell`, 20-30 min — margem existe,
+  mas é fina).
