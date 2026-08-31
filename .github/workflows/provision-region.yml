@@ -23,20 +23,37 @@ jobs:
         env:
           ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+          CICD_ROLE_ARN: ${{ vars.CICD_ROLE_ARN }}
+          NETWORK_ROLE_ARN: ${{ vars.NETWORK_ROLE_ARN }}
         run: |
-          curl --silent --show-error --location \
+          oidc_token="$(curl --silent --show-error --location \
             --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-            | jq -r '.value' > /tmp/gha-oidc-token
+            | jq -r '.value')"
+
+          # Trocamos o token OIDC do GitHub por credenciais estaticas da cicd UMA VEZ, em vez
+          # de deixar web_identity_token_file apontando pro arquivo do token: esse JWT vive
+          # so ~5 min, bem menos que os 20-30 min do apply, e uma renovacao de sessao no meio
+          # do caminho falharia com ExpiredTokenException. As credenciais estaticas resultantes
+          # duram ate o max_session_duration da role (1h) — ver aws/terraform/ci/README.md.
+          creds="$(aws sts assume-role-with-web-identity \
+            --role-arn "${CICD_ROLE_ARN}" \
+            --role-session-name "gha-provision-region" \
+            --web-identity-token "${oidc_token}" \
+            --duration-seconds 3600 \
+            --output json)"
 
           mkdir -p ~/.aws
-          cat > ~/.aws/config <<EOF
-          [profile cicd]
-          role_arn = ${{ vars.CICD_ROLE_ARN }}
-          web_identity_token_file = /tmp/gha-oidc-token
+          cat > ~/.aws/credentials <<EOF
+          [cicd]
+          aws_access_key_id = $(jq -r '.Credentials.AccessKeyId' <<<"${creds}")
+          aws_secret_access_key = $(jq -r '.Credentials.SecretAccessKey' <<<"${creds}")
+          aws_session_token = $(jq -r '.Credentials.SessionToken' <<<"${creds}")
+          EOF
 
+          cat > ~/.aws/config <<EOF
           [profile network]
-          role_arn = ${{ vars.NETWORK_ROLE_ARN }}
+          role_arn = ${NETWORK_ROLE_ARN}
           source_profile = cicd
           EOF
 

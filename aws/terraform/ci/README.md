@@ -48,6 +48,19 @@ role chaining, the session duration is limited to one hour, regardless of the ma
 duration setting configured for individual roles"* — nenhum `max_session_duration` levanta esse
 teto. O `apply` da célula leva 20-30 min; a margem existe, mas é fina. Ver issue dedicada.
 
+## Gotcha real: o token OIDC do GitHub não sobrevive ao `apply`
+
+A primeira versão do workflow escrevia `web_identity_token_file` apontando pro arquivo do token
+OIDC bruto (curl uma vez, salvo em `/tmp/gha-oidc-token`) e deixava o SDK reautenticar a partir
+dele a cada renovação de sessão. Isso quebrou num `workflow_dispatch` real: o token do GitHub tem
+vida curta (~5 min) — bem menos que os 20-30 min de um `up-02-region --with-cell` — e a primeira
+renovação de sessão no meio do apply falhou com `ExpiredTokenException`, matando o `terraform
+apply` no meio e deixando recursos órfãos fora do state até a correção. Fix: trocar o token OIDC
+por credenciais estáticas da `cicd` **uma vez**, via `aws sts assume-role-with-web-identity
+--duration-seconds 3600`, gravadas em `~/.aws/credentials`; a `network` encadeia dessas
+credenciais estáticas (`source_profile = cicd` em `~/.aws/config`), sem nunca reler o token OIDC.
+Isso não elimina a limitação de 1h acima — só evita expirar bem antes dela.
+
 ## Gotcha de teste: `override_resource` não propaga para recurso sob provider aliasado
 
 `terraform test` com `mock_provider` funciona normalmente para o provider default, mas
