@@ -175,6 +175,28 @@ Antes de derrubar uma região que hospeda célula, conferir que o Crossplane nã
 "Ordem de teardown" abaixo). Derrubar o hub muda o DNS name do ALB e do Client VPN — invalida o
 `.ovpn` exportado e reescreve os registros alias das células no apply seguinte.
 
+**Duas armadilhas de um `terraform destroy` da região inteira rodado por um humano, sem o túnel
+do Client VPN — nenhuma delas aparece via `provision-region.yml`, que já as evita por desenho:**
+
+1. **Todo `destroy` faz *refresh* antes de decidir o que apagar, e o refresh lê os recursos
+   Kubernetes através do endpoint ATUAL.** Se ele estiver fechado (rotina de encerrar a sessão) e
+   não houver túnel conectado, o `destroy` morre logo no início com
+   `dial tcp <ip-privado>:443: i/o timeout` — mesma causa do gotcha "ordem endpoint-vs-refresh do
+   `terraform plan`" do CI (`CLAUDE.md`), só que fora do `apply`. Fix: abrir o endpoint restrito ao
+   IP de quem roda antes do destroy —
+   `terraform apply -target=module.cell.module.cluster.aws_eks_cluster.this -var
+   'endpoint_public_access=true' -var 'public_access_cidrs=["<meu-ip>/32"]'`.
+2. **RBAC do cluster é de quem o criou, não de quem tem credencial AWS válida.** Um cluster
+   provisionado pelo `provision-region.yml` tem `AccessEntry` só para a role
+   `github-actions-provision` (mais node role e o service-linked role do EKS) —
+   `authenticationMode: API`, sem `bootstrapClusterCreatorAdminPermissions` para ninguém além de
+   quem criou. Uma sessão local com credencial AWS válida e rede alcançando o endpoint ainda
+   recebe `Error: Unauthorized` dos dois recursos `kubernetes_*` do `destroy`. Fix, se o destroy
+   é mesmo a intenção: `aws eks create-access-entry` + `aws eks associate-access-policy`
+   (`AmazonEKSClusterAdminPolicy`, escopo `cluster`) para a role que está rodando o destroy —
+   **temporário por natureza**: some junto com o cluster no mesmo destroy, não precisa de
+   remoção própria.
+
 ## Raízes
 
 **A coluna `Exercitada` diz se a raiz já foi aplicada na AWS ao menos uma vez e teve o resultado
