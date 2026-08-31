@@ -169,6 +169,28 @@ elif [ "${close_public_access}" == "true" ]; then
   cell_network_args=(-var "endpoint_public_access=false")
 fi
 
+# Opening the endpoint is a chicken-and-egg problem for a caller with no VPN tunnel (a GitHub
+# Actions runner, on --public-cidr): a normal `terraform plan` REFRESHES existing state before
+# it applies anything, and that refresh reads the kubernetes/helm resources already in state
+# (platform_bootstrap ConfigMap, the istio-ingress namespace, ...) through the CURRENT endpoint
+# — still closed from the previous run's --close-public-access cleanup, since the var that would
+# open it only takes effect once THIS apply runs. Confirmed in a real run: refresh hung for ~30s
+# each on those two resources, then "dial tcp <private-ip>:443: i/o timeout". Fix: open the
+# endpoint by itself first, with its own tiny apply, before the full plan does any refreshing.
+if [ "${with_cell}" == "true" ] && [ -n "${public_cidr}" ]; then
+  step "Opening the EKS public endpoint first, so the plan's refresh can reach it"
+
+  endpoint_apply_options=()
+  if [ "${assume_yes}" == "true" ]; then
+    endpoint_apply_options+=(-auto-approve)
+  fi
+
+  (cd "${root}" && terraform apply -no-color -input=false \
+    -target=module.cell.module.cluster.aws_eks_cluster.this \
+    "${cell_network_args[@]}" \
+    "${endpoint_apply_options[@]}")
+fi
+
 if [ "${with_cell}" == "true" ]; then
   terraform_plan_and_apply "${root}" "region-${region}" "${assume_yes}" "${cell_network_args[@]}"
 else
