@@ -87,32 +87,25 @@ Board: https://github.com/users/smsilva/projects/6
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Branch
 corrente: `feat/41-github-actions-provisioning`, executando a issue **#41** (workflow GitHub Actions
-para provisionar hub e control plane). PR **#46 pronta para revisão** (saiu de draft em
-2026-08-31) com a primeira fatia: o mecanismo de acesso privado do runner (flags
-`--public-cidr`/`--close-public-access` em `up-02-region` + o wiring gap de
-`endpoint_public_access`/`public_access_cidrs` que nunca chegava a `module.cell` desde a ADR 0014).
-O workflow do Actions em si **ainda não foi escrito** — é a fatia seguinte, na mesma branch ou em
-outra PR sobre esta. Desenho em
-`docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md`, plano em
-`docs/superpowers/plans/2026-08-31-github-actions-runner-private-access.md` (todos os checkboxes
-marcados).
+para provisionar hub e control plane).
 
-**Step 10 do plano rodado de verdade** contra `regions/us-east-1`: o plan mostrou
-`endpoint_public_access = true` e `public_access_cidrs = ["203.0.113.10/32"]` em
-`module.cell.module.cluster.aws_eks_cluster.this` (120 to add, 0 erros — região com zero recursos).
-Exigiu recriar `variables/values.tfvars` (não existia neste checkout; valores redescobertos via
-`aws organizations list-accounts`/`sso-admin list-instances`/`identitystore list-groups` +
-`az network dns zone list`, ver `variables/values.tfvars.example` para o que cada chave significa)
-e baixar `variables/saml-metadata.xml` real do console do Identity Center (passo de console
-documentado em `docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md`,
-seção "O passo de console, clique a clique" — **não** está no `README.md`, só uma referência de
-rodapé lá).
+**PR #46 mergeada em 2026-08-31** — primeira fatia da #41: o mecanismo de acesso privado do runner
+(flags `--public-cidr`/`--close-public-access` em `up-02-region` + o wiring gap de
+`endpoint_public_access`/`public_access_cidrs` que nunca chegava a `module.cell` desde a ADR 0014),
+provado com um `plan` real contra `regions/us-east-1` (120 to add, 0 erros). Detalhe em
+`docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md` e no plano
+correspondente (todos os checkboxes marcados).
 
-**Achado no caminho:** o `plan` falhou na primeira tentativa com `Error acquiring the state lock`
-— lock de `regions/us-east-1` órfão de uma sessão anterior, criado ~1h20 antes e nunca liberado.
-Resolvido com `terraform force-unlock` depois de confirmar (com o operador) que não havia
-`apply`/`plan` ativo em outro lugar. Lição para a próxima vez que isso ocorrer: sempre confirmar
-com o operador antes de forçar — nunca assumir órfão só pela idade do lock.
+**Segunda fatia — o workflow do Actions em si — tem desenho aprovado e plano escrito, execução NÃO
+iniciada.** Spec:
+`docs/superpowers/specs/2026-08-31-github-actions-provisioning-workflow-design.md`. Plano:
+`docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md` (10 tasks — raiz
+Terraform `aws/terraform/ci/` com OIDC provider + duas roles + testes de mutação,
+`ci/README.md`, os dois workflows `provision-region.yml`/`recover-lock.yml`,
+`bootstrap-checklist.md`, `variables/values.tfvars` saindo do `.gitignore`, e 5 issues de
+limitações a abrir). **Nenhuma task foi executada ainda** — nenhum arquivo do plano existe no
+disco além do próprio plano, e as 5 issues não foram abertas (confirmado com
+`gh issue list -R smsilva/wasp-idp --state all` antes deste handoff).
 
 #37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
 fase 4); #36 fechada em 2026-08-30.
@@ -168,15 +161,15 @@ A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress
 
 ## How to Resume
 
-**Primeiro comando — ler a issue escolhida, com o corpo já enriquecido:**
+**Primeiro comando — ler o plano pendente e confirmar com o operador a abordagem de execução:**
 
 ```bash
-gh issue view 7 -R smsilva/wasp-idp
+cat docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md
 ```
 
-Antes de escrever qualquer Terraform para ela, checar em `CLAUDE.local.md` se a GitHub App já tem
-`.pem`/App ID/Installation ID promovidos ao Secrets Manager da conta `cicd` — se não, isso é o
-passo zero.
+Confirmar antes de tocar em qualquer arquivo: **1)** subagente-por-task (`superpowers:subagent-driven-development`)
+ou **2)** inline em lote (`superpowers:executing-plans`) — a pergunta foi feita ao operador ao
+final da sessão anterior, sem resposta registrada.
 
 **Segundo comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
 assumem role a partir de `personal`):
@@ -303,14 +296,19 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
-- **#40 e #41** (acima) são investigações em aberto, não hipóteses — ver os corpos das issues para
-  os ângulos já mapeados.
+- **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
+  ângulos já mapeados.
+- **Execução do plano da #41** (`docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md`):
+  ainda em aberto qual das duas abordagens de execução (subagente-por-task vs. inline em lote) —
+  perguntado ao operador ao final da sessão que escreveu o plano, sem resposta antes do handoff.
 
 ## Next Steps
 
-1. Escrever o workflow do GitHub Actions em si — o entregável central da #41, que o plano de
-   2026-08-31 não cobre (ele só criou o mecanismo de acesso). PR #46 já está pronta para revisão.
-2. #40 segue no backlog do board #6, sem trabalho iniciado.
+1. Escolher e rodar a execução do plano `docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md`
+   (10 tasks, ver acima) — o entregável central da #41.
+2. Depois de executado: validar de ponta a ponta com um `workflow_dispatch` real de
+   `provision-region.yml` contra uma região de teste, e só então fechar a #41.
+3. #40 segue no backlog do board #6, sem trabalho iniciado.
 
 ## Completed Work
 
