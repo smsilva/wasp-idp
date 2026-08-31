@@ -9,6 +9,12 @@ cp values.tfvars.example values.tfvars
 $EDITOR values.tfvars
 ```
 
+Os scripts `up-01-dns` e `up-02-region` criam o symlink `values.auto.tfvars` (e, no caso do
+segundo, `saml-metadata.xml`) sozinhos, se não existir — o symlink é gitignored como o arquivo que
+ele aponta, então um clone novo ou uma máquina nova nunca o tem. Rodar `terraform` direto numa raiz
+sem passar pelo script exige criar o symlink à mão primeiro (ver "Nova região" no
+`aws/terraform/README.md` para o comando exato).
+
 Sem ele, `terraform plan` falha em `base_domain` com uma mensagem que diz o que falta. Isso é o
 mecanismo, não um efeito colateral: variável sem default é a forma de falhar fechado, e um valor
 herdado de outra conta é pior que um erro.

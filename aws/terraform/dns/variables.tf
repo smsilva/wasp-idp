@@ -1,7 +1,8 @@
 # As outras raízes trazem os valores inline, porque região, CIDR e AZs são decisões de
 # desenho documentadas — não segredo. Aqui é diferente: domínio, resource group e
-# subscription identificam a conta pessoal de quem roda, e o repo é público. Vão por
-# terraform.tfvars, que é gitignored.
+# subscription identificam a conta pessoal de quem roda, e o repo é público. Vêm de
+# variables/values.tfvars (gitignored), carregado por esta raiz via symlink values.auto.tfvars —
+# mesmo mecanismo de toda raiz desde a ADR 0014, sem tfvars próprio.
 
 variable "base_domain" {
   description = <<-EOT

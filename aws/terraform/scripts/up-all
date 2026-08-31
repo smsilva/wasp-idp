@@ -33,7 +33,6 @@ show_usage() {
 
       -h,  --help            Show this help
       -y,  --yes             Do not ask before each apply
-      -d,  --base-domain     Passed through to the dns layer on the first run
            --with-cell       Also apply the cell (~US\$ 165/month; needs the
                               Client VPN tunnel connected)
            --state-bucket    Passed through to all
@@ -41,7 +40,7 @@ show_usage() {
 
     Examples:
 
-      ${this_script_name} --base-domain exemplo.com
+      ${this_script_name}
 
       ${this_script_name} --yes --with-cell
 
@@ -49,7 +48,6 @@ EOF
 }
 
 assume_yes="false"
-base_domain=""
 with_cell="false"
 passthrough=()
 
@@ -62,11 +60,6 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 
     -y | --yes )
       assume_yes="true"
-      ;;
-
-    -d | --base-domain )
-      shift
-      base_domain="${1}"
       ;;
 
     --with-cell )
@@ -101,11 +94,7 @@ fi
 
 up-00-state-backend "${common[@]}"
 
-dns_options=("${common[@]}")
-if [ -n "${base_domain}" ]; then
-  dns_options+=(--base-domain "${base_domain}")
-fi
-up-01-dns "${dns_options[@]}"
+up-01-dns "${common[@]}"
 
 region_options=("${common[@]}")
 if [ "${with_cell}" == "true" ]; then
