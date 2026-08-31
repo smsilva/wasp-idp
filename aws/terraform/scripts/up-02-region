@@ -99,6 +99,7 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     --public-cidr )
       shift
       public_cidr="${1}"
+      [ -n "${public_cidr}" ] || fail "--public-cidr requires a CIDR (e.g. 203.0.113.10/32)."
       ;;
 
     --close-public-access )
