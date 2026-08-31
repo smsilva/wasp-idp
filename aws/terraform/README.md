@@ -105,6 +105,15 @@ recriação. Reexportar sempre.
 o bucket; `dns` antes do hub porque o certificado do endpoint da VPN valida por DNS na subzona que
 ele delega; o hub antes da célula porque o caminho até a API do cluster **é** o túnel do Client VPN.
 
+**Para CI (ou qualquer chamador não-interativo) sem túnel do Client VPN:** `--public-cidr <cidr>`
+abre o endpoint público da API do EKS restrito a esse CIDR só para o apply da célula, e
+`--close-public-access` fecha de novo — nenhuma infraestrutura de rede nova, é o mesmo
+break-glass abaixo, só que setado por flag em vez de editar `variables/values.tfvars`. As duas só
+valem com `--with-cell`, e são mutuamente exclusivas. Ver
+`docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md` para o desenho
+completo e as limitações aceitas (sem sweep de fechamento agendado; break-glass manual e de CI
+compartilham o mesmo atributo — não usar os dois ao mesmo tempo).
+
 **Desbloqueio de emergência, se o túnel não estiver disponível:** descomentar
 `endpoint_public_access = true` e `public_access_cidrs = ["<ip>/32"]` em `variables/values.tfvars`
 abre o endpoint público só para o CIDR declarado à mão. É break-glass declarado em arquivo, não

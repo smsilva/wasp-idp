@@ -46,6 +46,14 @@ show_usage() {
       -r,  --region         Region root under regions/ (default: us-east-1)
            --with-cell      Also apply module.cell (~US\$ 165/month; needs
                              the Client VPN tunnel connected)
+           --public-cidr    Open the EKS API's public endpoint restricted to
+                             this CIDR, for module.cell only (needs
+                             --with-cell). Mutually exclusive with
+                             --close-public-access.
+           --close-public-access
+                             Close the EKS API's public endpoint (needs
+                             --with-cell). Mutually exclusive with
+                             --public-cidr.
            --state-bucket   Bucket name (default: tfstate-<organization-id>)
            --org-profile    Profile that reads Organizations and Identity
                              Center (default: personal)
@@ -56,6 +64,8 @@ show_usage() {
 
       ${this_script_name} --yes --with-cell
 
+      ${this_script_name} --yes --with-cell --public-cidr 203.0.113.10/32
+
 EOF
 }
 
@@ -63,6 +73,8 @@ assume_yes="false"
 org_profile="personal"
 region="us-east-1"
 with_cell="false"
+public_cidr=""
+close_public_access="false"
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
   case $1 in
@@ -82,6 +94,15 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 
     --with-cell )
       with_cell="true"
+      ;;
+
+    --public-cidr )
+      shift
+      public_cidr="${1}"
+      ;;
+
+    --close-public-access )
+      close_public_access="true"
       ;;
 
     --state-bucket )
@@ -104,6 +125,14 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
 done
 
 set -e
+
+if [ -n "${public_cidr}" ] && [ "${close_public_access}" == "true" ]; then
+  fail "--public-cidr and --close-public-access are mutually exclusive."
+fi
+
+if { [ -n "${public_cidr}" ] || [ "${close_public_access}" == "true" ]; } && [ "${with_cell}" != "true" ]; then
+  fail "--public-cidr/--close-public-access only affect module.cell — pass --with-cell too."
+fi
 
 require_tools aws jq terraform
 
@@ -132,8 +161,15 @@ terraform_init "${root}" "${state_bucket}"
 # The cell costs ~US$ 165/month and needs the Client VPN tunnel connected: the helm and
 # kubernetes providers talk to the API server from this machine. Without --with-cell only the
 # hub is applied, which is the region's resting state.
+cell_network_args=()
+if [ -n "${public_cidr}" ]; then
+  cell_network_args=(-var "endpoint_public_access=true" -var "public_access_cidrs=[\"${public_cidr}\"]")
+elif [ "${close_public_access}" == "true" ]; then
+  cell_network_args=(-var "endpoint_public_access=false")
+fi
+
 if [ "${with_cell}" == "true" ]; then
-  terraform_plan_and_apply "${root}" "region-${region}" "${assume_yes}"
+  terraform_plan_and_apply "${root}" "region-${region}" "${assume_yes}" "${cell_network_args[@]}"
 else
   step "Cell: skipped (~US\$ 165/month)"
   log "include it with --with-cell when that is the intent, and connect the tunnel first"

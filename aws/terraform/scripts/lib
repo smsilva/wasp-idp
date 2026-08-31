@@ -102,6 +102,8 @@ terraform_plan_and_apply() {
   local root="${1?}"
   local label="${2?}"
   local assume_yes="${3:-false}"
+  shift 3
+  local extra_plan_args=("$@")
 
   local log_directory="${root}/logs"
   local timestamp
@@ -113,7 +115,7 @@ terraform_plan_and_apply() {
   mkdir --parents "${log_directory}"
 
   log "plan (log: ${plan_log})"
-  (cd "${root}" && terraform plan -no-color -input=false -out="${plan_file}") 2>&1 | tee "${plan_log}"
+  (cd "${root}" && terraform plan -no-color -input=false -out="${plan_file}" "${extra_plan_args[@]}") 2>&1 | tee "${plan_log}"
   # tee always returns 0; PIPESTATUS holds the terraform exit code.
   [ "${PIPESTATUS[0]}" -eq 0 ] || fail "the ${label} plan failed. Log: ${plan_log}"
 
