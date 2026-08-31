@@ -1,0 +1,9 @@
+# Copie para terraform.tfvars (gitignored) e ajuste se os defaults de variables.tf nao servirem.
+# Na maioria dos casos nenhum valor aqui precisa mudar — os defaults ja apontam para este repo.
+
+# region        = "us-east-1"
+# cicd_profile  = "cicd"
+# network_profile = "network"
+# github_org    = "smsilva"
+# github_repo   = "wasp-idp"
+# role_name     = "github-actions-provision"
