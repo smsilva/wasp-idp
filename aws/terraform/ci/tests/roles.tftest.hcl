@@ -27,8 +27,8 @@ run "cicd_trust_exige_oidc_do_github_com_aud_e_sub_corretos" {
   }
 
   assert {
-    condition     = strcontains(aws_iam_role.cicd.assume_role_policy, "\"token.actions.githubusercontent.com:sub\":\"repo:smsilva@287870/wasp-idp@522972834:ref:refs/heads/*\"")
-    error_message = "trust da role cicd sem a condicao StringLike de sub esperada (formato qualificado por ID, ver ci/README.md): ${aws_iam_role.cicd.assume_role_policy}"
+    condition     = strcontains(aws_iam_role.cicd.assume_role_policy, "\"token.actions.githubusercontent.com:sub\":\"repo:smsilva@287870/wasp-idp@522972834:ref:refs/heads/main\"")
+    error_message = "trust da role cicd sem a condicao StringEquals de sub esperada, restrita a main (issue #48, formato qualificado por ID, ver ci/README.md): ${aws_iam_role.cicd.assume_role_policy}"
   }
 }
 
