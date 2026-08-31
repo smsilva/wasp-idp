@@ -1,4 +1,5 @@
 mock_provider "aws" {}
+mock_provider "aws" { alias = "network" }
 
 run "cicd_trust_exige_oidc_do_github_com_aud_e_sub_corretos" {
   command = plan
@@ -49,5 +50,36 @@ run "oidc_provider_sem_thumbprint_fixo" {
   assert {
     condition     = contains(aws_iam_openid_connect_provider.github.client_id_list, "sts.amazonaws.com")
     error_message = "client_id_list deveria conter sts.amazonaws.com: ${jsonencode(aws_iam_openid_connect_provider.github.client_id_list)}"
+  }
+}
+
+run "network_trust_confia_so_na_role_cicd_nunca_direto_no_github" {
+  command = plan
+
+  # Mesmo gotcha do primeiro run: aws_iam_role.network.assume_role_policy referencia
+  # aws_iam_role.cicd.arn, computed de outro recurso novo — fixar para ficar known no plan.
+  override_resource {
+    target          = aws_iam_role.cicd
+    override_during = plan
+    values = {
+      arn = "arn:aws:iam::123456789012:role/github-actions-provision"
+    }
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role.network.assume_role_policy, "\"Action\":\"sts:AssumeRole\"")
+    error_message = "trust da role network deveria ser sts:AssumeRole simples: ${aws_iam_role.network.assume_role_policy}"
+  }
+
+  # Mutacao consciente: esta asercao FALHARIA se alguem, por engano, desse trust direto
+  # do OIDC do GitHub tambem a network — o desenho exige que so a cicd confie no GitHub.
+  assert {
+    condition     = !strcontains(aws_iam_role.network.assume_role_policy, "token.actions.githubusercontent.com")
+    error_message = "trust da role network NAO deveria citar o OIDC do GitHub: ${aws_iam_role.network.assume_role_policy}"
+  }
+
+  assert {
+    condition     = !strcontains(aws_iam_role.network.assume_role_policy, "AssumeRoleWithWebIdentity")
+    error_message = "trust da role network NAO deveria usar AssumeRoleWithWebIdentity: ${aws_iam_role.network.assume_role_policy}"
   }
 }

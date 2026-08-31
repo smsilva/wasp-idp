@@ -59,3 +59,20 @@ resource "aws_iam_role" "cicd" {
   name               = var.role_name
   assume_role_policy = local.cicd_trust_policy
 }
+
+locals {
+  network_trust_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { AWS = aws_iam_role.cicd.arn }
+    }]
+  })
+}
+
+resource "aws_iam_role" "network" {
+  provider           = aws.network
+  name               = var.role_name
+  assume_role_policy = local.network_trust_policy
+}
