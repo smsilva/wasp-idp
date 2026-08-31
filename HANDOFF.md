@@ -85,47 +85,11 @@ gh issue list -R smsilva/wasp-idp --label private-access-ingress --state open
 
 Board: https://github.com/users/smsilva/projects/6
 
-**Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Branch
-corrente: `feat/41-github-actions-provisioning`, executando a issue **#41** (workflow GitHub Actions
-para provisionar hub e control plane).
-
-**PR #46 mergeada em 2026-08-31** — primeira fatia da #41: o mecanismo de acesso privado do runner
-(flags `--public-cidr`/`--close-public-access` em `up-02-region` + o wiring gap de
-`endpoint_public_access`/`public_access_cidrs` que nunca chegava a `module.cell` desde a ADR 0014).
-Desenho em `docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md` e no
-plano correspondente (todos os checkboxes marcados).
-
-**Step 10 desse plano rodado de verdade** contra `regions/us-east-1`: o plan mostrou
-`endpoint_public_access = true` e `public_access_cidrs = ["203.0.113.10/32"]` em
-`module.cell.module.cluster.aws_eks_cluster.this` (120 to add, 0 erros — região com zero recursos).
-Exigiu recriar `variables/values.tfvars` (não existia neste checkout; valores redescobertos via
-`aws organizations list-accounts`/`sso-admin list-instances`/`identitystore list-groups` +
-`az network dns zone list`, ver `variables/values.tfvars.example` para o que cada chave significa)
-e baixar `variables/saml-metadata.xml` real do console do Identity Center (passo de console
-documentado em `docs/superpowers/plans/2026-08-26-private-access-and-ingress/02-private-access.md`,
-seção "O passo de console, clique a clique" — **não** está no `README.md`, só uma referência de
-rodapé lá).
-
-**Achado no caminho:** o `plan` falhou na primeira tentativa com `Error acquiring the state lock`
-— lock de `regions/us-east-1` órfão de uma sessão anterior, criado ~1h20 antes e nunca liberado.
-Resolvido com `terraform force-unlock` depois de confirmar (com o operador) que não havia
-`apply`/`plan` ativo em outro lugar. Lição para a próxima vez que isso ocorrer: sempre confirmar
-com o operador antes de forçar — nunca assumir órfão só pela idade do lock.
-
-**Segunda fatia — o workflow do Actions em si — implementada em 2026-08-31.** Spec:
-`docs/superpowers/specs/2026-08-31-github-actions-provisioning-workflow-design.md`. Plano
-executado inline (`superpowers:executing-plans`), 10 tasks, todas as 10 concluídas:
-`docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md`. Entregue: raiz
-Terraform `aws/terraform/ci/` (OIDC provider + role `cicd` + role `network`, PowerUserAccess +
-inline de IAM, `terraform test` com mutação consciente, 4 `run` verdes), `ci/README.md`, os dois
-workflows `.github/workflows/provision-region.yml`/`recover-lock.yml`, `bootstrap-checklist.md`,
-`variables/values.tfvars` versionado (saiu do `.gitignore`), e as 5 issues de limitações abertas e
-adicionadas ao board #6 (#47-#51). Regressão offline completa (14 raízes, incluindo a nova `ci/`)
-— `Success!` em todas. **Gotcha novo, documentado em `ci/README.md`:** `override_resource` em
-`terraform test` não propaga para um recurso sob provider aliasado (`aws.network`) — contornado
-comparando a referência (`==` entre dois atributos computados) em vez de conteúdo/substring.
-**Ainda não validado:** um `workflow_dispatch` real de `provision-region.yml` — a raiz `ci/` não
-foi aplicada na AWS (é T0, aplicação manual por um admin humano; ver checklist).
+**Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. A issue
+**#41** (workflow GitHub Actions para provisionar hub e célula) está com as duas fatias
+implementadas e mergeadas em `main` — narrativa em
+[`docs/archived/index.md`](docs/archived/index.md), tema "GitHub Actions CI". Falta só validar
+com um `workflow_dispatch` real (ver Next Steps).
 
 #37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
 fase 4); #36 fechada em 2026-08-30.
@@ -181,17 +145,7 @@ A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress
 
 ## How to Resume
 
-**Primeiro comando — ler o plano pendente e confirmar com o operador a abordagem de execução:**
-
-```bash
-cat docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md
-```
-
-Confirmar antes de tocar em qualquer arquivo: **1)** subagente-por-task (`superpowers:subagent-driven-development`)
-ou **2)** inline em lote (`superpowers:executing-plans`) — a pergunta foi feita ao operador ao
-final da sessão anterior, sem resposta registrada.
-
-**Segundo comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
+**Primeiro comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
 assumem role a partir de `personal`):
 
 ```bash

@@ -62,3 +62,12 @@ próprio, agrupado por tema, para este índice não crescer sem limite como o an
 
 - **2026-08-27** — [Provisioning Sequence And Resource Dictionary](provisioning-sequence/sequence-and-resource-dictionary.md):
   sequência autoritativa `00`→`08` + dicionário de 61 recursos.
+
+## GitHub Actions CI
+
+- **2026-08-31** — [Runner Private Access (PR #46)](github-actions-ci/runner-private-access.md):
+  flags `--public-cidr`/`--close-public-access`, wiring gap fechado, Step 10 rodado contra
+  `regions/us-east-1`.
+- **2026-08-31** — [Provisioning Workflow (Issue #41, Second Slice)](github-actions-ci/provisioning-workflow.md):
+  raiz `ci/` com OIDC + duas roles, workflows `provision-region.yml`/`recover-lock.yml`, checklist
+  de bootstrap, 5 issues de limitações abertas.
