@@ -64,12 +64,21 @@ em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2
 verde, sem recursos aplicados). Scripts renumerados: `up-00-state-backend`, `up-01-dns`,
 `up-02-region`. `aws/terraform/README.md` reflete a sequência — fonte de verdade para custo/ordem.
 
-**2026-08-31 (run 8 do `provision-region.yml`):** `regions/us-east-1/` está **de pé de verdade**
-— 123 recursos aplicados (hub + célula: EKS, TGW, Client VPN, os 6 helm releases), provisionados
-pelo próprio workflow de CI, não por uma sessão manual. **Não presumir destruído** como nas sessões
-anteriores — conferir sempre com o comando de "Estado atual" acima antes de decidir subir/derrubar.
-Custo ~US\$ 275/mês (hub ~110 + célula ~165) enquanto ficar de pé; `down-cell --region us-east-1
---yes` derruba só a célula, mantendo o hub.
+**2026-08-31 (run 8 do `provision-region.yml`):** `regions/us-east-1/` esteve **de pé de verdade**
+por algumas horas — 123 recursos aplicados (hub + célula: EKS, TGW, Client VPN, os 6 helm
+releases), provisionados pelo próprio workflow de CI, não por uma sessão manual. Validou o
+workflow de ponta a ponta (fecha a #41).
+
+**2026-08-31 (mesma sessão, depois): região inteira derrubada** — `terraform destroy` sem
+`-target` na raiz, 120 recursos destruídos, `terraform state list` confirma 0. Custo parou. Duas
+lacunas descobertas nessa destroy manual (nenhuma delas presente no `provision-region.yml`, que já
+resolve as duas via `--public-cidr`/CI role bootstradora do cluster):
+endpoint público fechado bloqueando o *refresh* do `destroy` sem VPN (mesma classe de bug do run 7,
+mas local) e RBAC do EKS (`Unauthorized`) porque só a role `github-actions-provision` — quem
+bootstrapou o cluster — tinha `AccessEntry`; concedido um `AccessEntry` temporário de
+cluster-admin à `OrganizationAccountAccessRole` local só para a destroy conseguir apagar os
+objetos Kubernetes, destruído junto com o cluster. Issue **#52** criada para revalidar
+`provision-region.yml` do zero (região já vazia) — board #6, label `private-access-ingress`.
 
 Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
 (`aws-vpn-client get-connection-status --profile-name hub-<região>` — o profile leva a região no
@@ -163,8 +172,8 @@ e ler o `Account`/`Arn` inteiro. Erro de profile inexistente ou ARN vazio ⟹
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Nada está de pé agora** (as duas regiões destruídas nesta sessão — conferir com o comando de
-"Estado atual" acima antes de presumir). Subir de novo:
+**Nada está de pé agora** (`us-east-1` destruída nesta sessão — 0 recursos, conferir com o comando
+de "Estado atual" acima antes de presumir). Subir de novo:
 
 ```bash
 cd aws/terraform/scripts && ./up-02-region --region us-east-1 --yes
