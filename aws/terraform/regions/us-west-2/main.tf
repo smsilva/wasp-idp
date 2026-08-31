@@ -124,6 +124,9 @@ module "cell" {
   network_account_id = var.network_account_id
   target_account_ids = var.target_account_ids
 
+  endpoint_public_access = var.endpoint_public_access
+  public_access_cidrs    = var.public_access_cidrs
+
   # O hub, por referencia. Cada linha aqui e um data source que morreu do outro lado.
   hub_vpc_id                         = module.hub.vpc_id
   hub_vpc_cidr_block                 = module.hub.vpc_cidr_block
