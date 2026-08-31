@@ -159,6 +159,26 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   required variable` — erro que não aponta para o passo de geração. Hoje o valor vem de
   `variables/values.tfvars`, mantido à mão, e o que é produto de outro recurso vem de data source ou
   output de módulo. Ver [ADR 0014](../../docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md).
+- **O `generate-tfvars` residual sobrevive escondido — auditar TODA raiz, não confiar que a
+  eliminação da ADR 0014 pegou todas.** `up-01-dns` ainda escrevia um `dns/terraform.tfvars` próprio
+  e fazia um pré-check de colisão de NS no Azure antes até de rodar `init` — mesmo com
+  `dns/variables.tf` já lendo `base_domain`/`azure_subscription_id`/`azure_dns_resource_group` de
+  `values.auto.tfvars` como qualquer outra raiz. Resultado: nem a máquina original tinha
+  `dns/terraform.tfvars` (a raiz nunca precisou dele para os applies reais, só para o script topar
+  rodar), e um clone limpo travava sem chance de recuperação — o guard de colisão de NS disparava
+  **antes** do `init`, sem saber que a delegação já estava tracked no state remoto. Só o teste de
+  clone limpo (fase 4) achou isso; nenhuma regressão offline pega, porque o bug é no script bash, não
+  no Terraform.
+- **`values.auto.tfvars`/`saml-metadata.xml` são symlinks gitignored — nenhum clone ou máquina nova
+  os tem, e a doc mandando criá-los à mão dá errado (ninguém lê antes de rodar).** Fix: os scripts
+  (`up-01-dns`, `up-02-region`) criam o symlink sozinhos via `ensure_symlink` em `scripts/lib`
+  (`realpath --relative-to` calcula o caminho relativo certo por profundidade) — é wiring, não
+  geração de conteúdo, então não viola a regra "guard, not generate" que a checagem de
+  `values.tfvars` já segue.
+- **`up-02-region` sem `--with-cell` já é um `apply` de verdade** (`-target=module.hub
+  -auto-approve` com `--yes`), não um `plan`. Testar o script num clone/ambiente descartável para
+  verificar comportamento de CLI é rodá-lo de verdade — usar `terraform plan` direto na raiz para
+  esse fim, nunca o script, a menos que a intenção seja mesmo aplicar.
 - **O `README.md` desta pasta é a sequência que alguém sem contexto vai copiar — atualizar no MESMO
   trabalho que muda a sequência, nunca depois.** Ele tem a seção "Manter este arquivo verdadeiro" com
   a tabela de o-que-mudou → onde-atualizar. Linha desatualizada ali não é doc velha: é comando que
@@ -486,3 +506,8 @@ o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem e
   por-conta sobre AZ IDs físicos — a mesma label pode ser uma zona física diferente em cada
   conta. Fix: um `data "aws_availability_zones"` por CONTA (`provider = aws.network` para o que
   alimenta o módulo que aplica lá), nunca compartilhado entre módulos de contas diferentes.
+- **A `region` dentro do bloco `backend "s3"` é onde vive o BUCKET de state (sempre `us-east-1`,
+  a região do state-backend), não a região da infraestrutura da raiz.** Ao copiar uma raiz
+  `regions/<r>/` para uma região nova, só o `region` dos `locals` (main.tf) e a `key` do backend
+  mudam — o `region` do bloco `backend "s3"` fica igual em toda raiz. Trocá-lo por engano faz o
+  `init` procurar o bucket na região errada.

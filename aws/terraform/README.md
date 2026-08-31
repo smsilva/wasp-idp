@@ -69,8 +69,8 @@ Um script por camada em `scripts/`, mais `up-all`, que roda a sequência parando
 ```bash
 cd aws/terraform
 
-./scripts/up-all --base-domain <domínio>       # 00 + dns, centavos/mês
-./scripts/up-all --base-domain <domínio> --with-cell   # inclui a célula (~US$ 165/mês)
+./scripts/up-all                               # 00 + dns, centavos/mês
+./scripts/up-all --with-cell                   # inclui a célula (~US$ 165/mês)
 ```
 
 `up-all` sempre aplica o hub (é o repouso da região, ~US$ 110/mês); a célula só entra com
@@ -128,7 +128,6 @@ para a Organization inteira — não há como liberar região só numa conta por
 | Armadilha | Onde | O que o script faz |
 |---|---|---|
 | Bucket de state inexistente | `up-00` | **Para** e imprime o bootstrap manual (state local → apply → `init -migrate-state`). A raiz guarda o próprio state no bucket que gerencia; automatizar às cegas um passo de uma vez só esconde o problema |
-| Zona pai já tem NS para o label | `up-01-dns` | **Recusa.** Delegação antiga colide no apply, e a mensagem do Azure não diz que a causa é um record set preexistente |
 | Sem tty (pipe, CI, harness de agente) | qualquer script com `--yes` opcional | O `read` volta vazio na hora e o cancelamento pareceria decisão de quem rodou. O script **salva o plano, diz onde está e sai com erro**, apontando o `--yes` |
 
 ### O encanamento comum fica em `scripts/lib`
@@ -235,6 +234,10 @@ de dependências do Terraform garante isso somente dentro de um mesmo state — 
 - `aws sso login --profile personal` ativo.
 - Profiles locais `network` e `cicd` assumindo `OrganizationAccountAccessRole`.
 - `variables/values.tfvars` preenchido (gitignored — ver `variables/README.md`).
+- `state-backend/terraform.tfvars` preenchido (gitignored, `cp state-backend/terraform.tfvars.example
+  state-backend/terraform.tfvars` e editar `bucket_name`) — só usado por `up-00-state-backend`, não
+  faz parte de `variables/values.tfvars` porque é o único valor que a raiz `state-backend/` lê antes
+  de o bucket existir.
 - A conta `cicd`, dona da célula, na OU `Deployments`.
 
 ## Submódulos
@@ -382,3 +385,27 @@ deliberado — os nós dependem dele para chegar à API do EKS e aos registries)
 Por isso a célula não fica de pé entre sessões de trabalho — sobe, valida, desce (`down-cell`). O
 hub fica: é o repouso da região, e derrubá-lo e recriá-lo troca o DNS name do ALB e do Client VPN,
 invalidando o `.ovpn` exportado e os registros alias das células.
+
+## Tempos aproximados
+
+Não é custo, é quanto tempo esperar antes de considerar um `apply`/`destroy` travado. Nenhum script
+imprime progresso ao vivo em toda etapa — os números abaixo são a referência de quanto é normal
+demorar.
+
+| Camada | Apply | Destroy | Gargalo |
+|---|---|---|---|
+| `state-backend` | segundos | — (`prevent_destroy`) | 6 recursos S3, sem espera de propagação |
+| `dns` | segundos | — (`prevent_destroy`) | zona Route 53 + 1 registro NS no Azure |
+| `module.hub` | **~10 min** | **~10 min** | as duas `aws_ec2_client_vpn_network_association` (uma por AZ), 7-9 min cada, em paralelo — depois o Internet Gateway, que só sai depois delas |
+| `module.cell` | ordem de 15-25 min (não medido nesta sessão) | ordem de 10-15 min (não medido nesta sessão) | EKS control plane é o mais lento do grupo — no fluxo antigo equivalente (`aws/eks/scripts/provision-eks`), sozinho já levava ~15 min |
+
+**Medido nesta sessão** (destroy real do hub `us-east-1`, 42 recursos): as duas
+`aws_ec2_client_vpn_network_association` levaram 8m30s e 8m31s (paralelas), o Internet Gateway
+10m11s (o passo mais longo — só libera depois que as associações do Client VPN soltam as ENIs da
+VPC), o TGW attachment 2m7s, as duas `aws_ec2_client_vpn_route` 4m26s cada. O resto (VPC, subnets,
+route tables, ALB, certificados, SAML provider) sai em segundos. O apply é **simétrico**: as mesmas
+duas associações do Client VPN dominam o tempo, dos dois lados.
+
+**Por isso `nohup ... & disown`, nunca uma chamada síncrona:** um `apply`/`destroy` de ~10 min
+estoura qualquer teto de tempo de ferramenta de agente ou de terminal com timeout curto — ver
+`CLAUDE.md`, "Endpoint da API do EKS".

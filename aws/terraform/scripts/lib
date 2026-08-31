@@ -36,6 +36,33 @@ require_tools() {
   done
 }
 
+# The identity files (values.tfvars, saml-metadata.xml) are shared and gitignored; every
+# consuming root reaches them by a symlink, ALSO gitignored (the account/domain those files
+# carry is not something to commit). A fresh clone or a new machine has neither symlink — this
+# is wiring, not content, so creating it here does not violate the "guard, not generate" rule
+# that values.tfvars itself follows. Idempotent: a link already pointing at the right target is
+# left alone.
+ensure_symlink() {
+  local root="${1?}"
+  local link_name="${2?}"
+  local target_path="${3?}"
+
+  local link="${root}/${link_name}"
+  local relative_target
+  relative_target="$(realpath --relative-to="${root}" "${target_path}")"
+
+  if [ -L "${link}" ] && [ "$(readlink "${link}")" == "${relative_target}" ]; then
+    return 0
+  fi
+
+  if [ -e "${link}" ] && [ ! -L "${link}" ]; then
+    fail "${link} exists and is not a symlink — resolve by hand before continuing."
+  fi
+
+  ln --symbolic --force "${relative_target}" "${link}"
+  log "linked ${link} -> ${relative_target}"
+}
+
 # The state bucket name is derived from the Organization id, never committed.
 # Accepts an override via --state-bucket for anyone running outside this
 # Organization.

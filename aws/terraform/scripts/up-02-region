@@ -119,6 +119,13 @@ values_file="${terraform_directory}/variables/values.tfvars"
 [ -f "${values_file}" ] \
   || fail "missing ${values_file}. Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
 
+ensure_symlink "${root}" "values.auto.tfvars" "${values_file}"
+
+saml_file="${terraform_directory}/variables/saml-metadata.xml"
+[ -f "${saml_file}" ] \
+  || fail "missing ${saml_file}. module.hub reads it even without --with-cell — see the SAML console step above."
+ensure_symlink "${root}" "saml-metadata.xml" "${saml_file}"
+
 state_bucket="$(discover_state_bucket "${org_profile}")"
 terraform_init "${root}" "${state_bucket}"
 

@@ -10,37 +10,27 @@ source "${this_script_directory}/lib"
 show_usage() {
   cat <<EOF
 
-  Layer 2 — delegated DNS subzone. Creates the <label>.<base-domain> hosted
-  zone in Route 53 in the network account, plus the delegating NS record in the
-  PARENT zone, which lives in Azure DNS. The apex does not move.
+  Layer 1 — delegated DNS subzone. Creates the <label>.<base-domain> hosted
+  zone in Route 53 in the network account, plus the delegating NS record in
+  the PARENT zone, which lives in Azure DNS. The apex does not move.
 
   Tier T0: ~US\$ 0.50/month, prevent_destroy. Stays up between sessions.
 
-  DISCOVERS and writes terraform.tfvars (gitignored) when it does not exist:
-
-    azure_subscription_id      az account show
-    azure_dns_resource_group   the parent zone's resource group, via the Azure API
-
-  VALIDATES before writing any file or touching anything:
-
-    - the parent zone exists in Azure and matches EXACTLY one resource group
-    - the parent does not already have an NS for this label from somewhere else
-      (it would conflict at apply time, and the Azure message does not explain why)
+  DEPENDS ON variables/values.tfvars (base_domain, azure_subscription_id,
+  azure_dns_resource_group) — see variables/README.md. This root has no
+  tfvars of its own; a colliding NS in the parent zone (an old delegation,
+  another cloud) surfaces as a real azurerm apply error, not a pre-check.
 
     Options:
 
       -h,  --help           Show this help
       -y,  --yes            Do not ask before applying
-      -d,  --base-domain    Parent zone in Azure DNS. Required the first time;
-                             afterwards it comes from terraform.tfvars
-      -l,  --label          Subzone label (default: nonprod)
            --state-bucket   Bucket name (default: tfstate-<organization-id>)
            --org-profile    Profile that reads Organizations (default: personal)
-      -f,  --force-tfvars   Regenerate terraform.tfvars even if it exists
 
     Examples:
 
-      ${this_script_name} --base-domain exemplo.com
+      ${this_script_name}
 
       ${this_script_name} --yes
 
@@ -49,9 +39,6 @@ EOF
 
 assume_yes="false"
 org_profile="personal"
-base_domain=""
-label="nonprod"
-force_tfvars="false"
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
   case $1 in
@@ -64,16 +51,6 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       assume_yes="true"
       ;;
 
-    -d | --base-domain )
-      shift
-      base_domain="${1}"
-      ;;
-
-    -l | --label )
-      shift
-      label="${1}"
-      ;;
-
     --state-bucket )
       shift
       STATE_BUCKET="${1}"
@@ -82,10 +59,6 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     --org-profile )
       shift
       org_profile="${1}"
-      ;;
-
-    -f | --force-tfvars )
-      force_tfvars="true"
       ;;
 
     * )
@@ -99,72 +72,23 @@ done
 
 set -e
 
-require_tools aws az jq terraform
+require_tools aws terraform
 
 root="${terraform_directory}/dns"
 [ -d "${root}" ] || fail "missing root: ${root}"
 
-tfvars="${root}/terraform.tfvars"
+step "Layer 1 — delegated DNS subzone"
 
-step "Layer 2 — delegated DNS subzone"
+values_file="${terraform_directory}/variables/values.tfvars"
 
-if [ ! -f "${tfvars}" ] || [ "${force_tfvars}" == "true" ]; then
-  [ -n "${base_domain}" ] \
-    || fail "terraform.tfvars is missing and --base-domain was not given. The domain identifies whoever is running this, so there is no default in the repo."
+# Guard, not generation: without the file the plan would fail on base_domain anyway. What this
+# block buys is the message — Terraform's error names the missing variable, not where to declare it.
+[ -f "${values_file}" ] \
+  || fail "missing ${values_file}. Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
 
-  subscription_id="$(az account show --query id --output tsv 2> /dev/null)" \
-    || fail "az is not logged in. Run 'az login'."
-  log "subscription: $(mask "${subscription_id}")"
-
-  resource_groups="$(az network dns zone list --output json \
-    | jq --raw-output --arg name "${base_domain}" '.[] | select(.name == $name) | .resourceGroup')"
-
-  zone_count="$(echo "${resource_groups}" | grep --count . || true)"
-
-  if [ "${zone_count}" -eq 0 ]; then
-    fail "no '${base_domain}' zone in this subscription. Check the name, or 'az account set --subscription <another>'."
-  fi
-
-  if [ "${zone_count}" -gt 1 ]; then
-    fail "${zone_count} '${base_domain}' zones across different resource groups. Ambiguous — sort it out in Azure first."
-  fi
-
-  log "parent zone '${base_domain}' in resource group '${resource_groups}'"
-
-  # An NS for this label coming from somewhere else (an old delegation, another
-  # cloud) collides at apply time, and the Azure error does not say the cause is
-  # a record set that was already there.
-  if az network dns record-set ns show \
-    --resource-group "${resource_groups}" \
-    --zone-name "${base_domain}" \
-    --name "${label}" > /dev/null 2>&1; then
-    fail "zone '${base_domain}' ALREADY has an NS for '${label}'. If it is an old delegation, delete it in Azure; if it belongs to this root, adopt it with 'terraform import'."
-  fi
-
-  log "the parent has no NS for '${label}' — no collision"
-
-  cat > "${tfvars}" <<EOF
-# Generated by ${this_script_name}. Identity values (domain, subscription,
-# resource group), which is why they live here and not inline in main.tf: this
-# repository is public.
-
-base_domain   = "${base_domain}"
-subzone_label = "${label}"
-
-azure_subscription_id    = "${subscription_id}"
-azure_dns_resource_group = "${resource_groups}"
-EOF
-
-  log "wrote: ${tfvars}"
-
-  git -C "${root}" check-ignore --quiet "${tfvars}" 2> /dev/null \
-    || fail "${tfvars} is NOT gitignored. Fix that before going on — it carries the subscription id."
-else
-  log "terraform.tfvars already exists (use --force-tfvars to regenerate)"
-fi
+ensure_symlink "${root}" "values.auto.tfvars" "${values_file}"
 
 state_bucket="$(discover_state_bucket "${org_profile}")"
-
 terraform_init "${root}" "${state_bucket}"
 terraform_plan_and_apply "${root}" "dns" "${assume_yes}"
 
