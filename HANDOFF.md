@@ -87,17 +87,15 @@ Board: https://github.com/users/smsilva/projects/6
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Branch
 corrente: `feat/41-github-actions-provisioning`, executando a issue **#41** (workflow GitHub Actions
-para provisionar hub e control plane). PR **#46 pronta para revisão** (saiu de draft em
-2026-08-31) com a primeira fatia: o mecanismo de acesso privado do runner (flags
-`--public-cidr`/`--close-public-access` em `up-02-region` + o wiring gap de
-`endpoint_public_access`/`public_access_cidrs` que nunca chegava a `module.cell` desde a ADR 0014).
-O workflow do Actions em si **ainda não foi escrito** — é a fatia seguinte, na mesma branch ou em
-outra PR sobre esta. Desenho em
-`docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md`, plano em
-`docs/superpowers/plans/2026-08-31-github-actions-runner-private-access.md` (todos os checkboxes
-marcados).
+para provisionar hub e control plane).
 
-**Step 10 do plano rodado de verdade** contra `regions/us-east-1`: o plan mostrou
+**PR #46 mergeada em 2026-08-31** — primeira fatia da #41: o mecanismo de acesso privado do runner
+(flags `--public-cidr`/`--close-public-access` em `up-02-region` + o wiring gap de
+`endpoint_public_access`/`public_access_cidrs` que nunca chegava a `module.cell` desde a ADR 0014).
+Desenho em `docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md` e no
+plano correspondente (todos os checkboxes marcados).
+
+**Step 10 desse plano rodado de verdade** contra `regions/us-east-1`: o plan mostrou
 `endpoint_public_access = true` e `public_access_cidrs = ["203.0.113.10/32"]` em
 `module.cell.module.cluster.aws_eks_cluster.this` (120 to add, 0 erros — região com zero recursos).
 Exigiu recriar `variables/values.tfvars` (não existia neste checkout; valores redescobertos via
@@ -113,6 +111,21 @@ rodapé lá).
 Resolvido com `terraform force-unlock` depois de confirmar (com o operador) que não havia
 `apply`/`plan` ativo em outro lugar. Lição para a próxima vez que isso ocorrer: sempre confirmar
 com o operador antes de forçar — nunca assumir órfão só pela idade do lock.
+
+**Segunda fatia — o workflow do Actions em si — implementada em 2026-08-31.** Spec:
+`docs/superpowers/specs/2026-08-31-github-actions-provisioning-workflow-design.md`. Plano
+executado inline (`superpowers:executing-plans`), 10 tasks, todas as 10 concluídas:
+`docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md`. Entregue: raiz
+Terraform `aws/terraform/ci/` (OIDC provider + role `cicd` + role `network`, PowerUserAccess +
+inline de IAM, `terraform test` com mutação consciente, 4 `run` verdes), `ci/README.md`, os dois
+workflows `.github/workflows/provision-region.yml`/`recover-lock.yml`, `bootstrap-checklist.md`,
+`variables/values.tfvars` versionado (saiu do `.gitignore`), e as 5 issues de limitações abertas e
+adicionadas ao board #6 (#47-#51). Regressão offline completa (14 raízes, incluindo a nova `ci/`)
+— `Success!` em todas. **Gotcha novo, documentado em `ci/README.md`:** `override_resource` em
+`terraform test` não propaga para um recurso sob provider aliasado (`aws.network`) — contornado
+comparando a referência (`==` entre dois atributos computados) em vez de conteúdo/substring.
+**Ainda não validado:** um `workflow_dispatch` real de `provision-region.yml` — a raiz `ci/` não
+foi aplicada na AWS (é T0, aplicação manual por um admin humano; ver checklist).
 
 #37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
 fase 4); #36 fechada em 2026-08-30.
@@ -168,15 +181,15 @@ A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress
 
 ## How to Resume
 
-**Primeiro comando — ler a issue escolhida, com o corpo já enriquecido:**
+**Primeiro comando — ler o plano pendente e confirmar com o operador a abordagem de execução:**
 
 ```bash
-gh issue view 7 -R smsilva/wasp-idp
+cat docs/superpowers/plans/2026-08-31-github-actions-provisioning-workflow.md
 ```
 
-Antes de escrever qualquer Terraform para ela, checar em `CLAUDE.local.md` se a GitHub App já tem
-`.pem`/App ID/Installation ID promovidos ao Secrets Manager da conta `cicd` — se não, isso é o
-passo zero.
+Confirmar antes de tocar em qualquer arquivo: **1)** subagente-por-task (`superpowers:subagent-driven-development`)
+ou **2)** inline em lote (`superpowers:executing-plans`) — a pergunta foi feita ao operador ao
+final da sessão anterior, sem resposta registrada.
 
 **Segundo comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
 assumem role a partir de `personal`):
@@ -303,13 +316,15 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
-- **#40 e #41** (acima) são investigações em aberto, não hipóteses — ver os corpos das issues para
-  os ângulos já mapeados.
+- **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
+  ângulos já mapeados.
 
 ## Next Steps
 
-1. Escrever o workflow do GitHub Actions em si — o entregável central da #41, que o plano de
-   2026-08-31 não cobre (ele só criou o mecanismo de acesso). PR #46 já está pronta para revisão.
+1. Validar de ponta a ponta com um `workflow_dispatch` real de `provision-region.yml` contra uma
+   região de teste — exige antes aplicar a raiz `ci/` na AWS (T0, manual, ver
+   `aws/terraform/bootstrap-checklist.md`) e configurar `CICD_ROLE_ARN`/`NETWORK_ROLE_ARN`/
+   `STATE_BUCKET`/`SAML_METADATA_XML` no repositório GitHub. Só então fechar a #41.
 2. #40 segue no backlog do board #6, sem trabalho iniciado.
 
 ## Completed Work

@@ -1,0 +1,87 @@
+name: Provision region
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "Region root under aws/terraform/regions/ (e.g. us-east-1)"
+        required: true
+        default: "us-east-1"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure OIDC credentials
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          curl --silent --show-error --location \
+            --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -r '.value' > /tmp/gha-oidc-token
+
+          mkdir -p ~/.aws
+          cat > ~/.aws/config <<EOF
+          [profile cicd]
+          role_arn = ${{ vars.CICD_ROLE_ARN }}
+          web_identity_token_file = /tmp/gha-oidc-token
+
+          [profile network]
+          role_arn = ${{ vars.NETWORK_ROLE_ARN }}
+          source_profile = cicd
+          EOF
+
+      - name: Write SAML metadata from secret
+        run: printf '%s' "${{ secrets.SAML_METADATA_XML }}" > aws/terraform/variables/saml-metadata.xml
+
+      - name: Discover runner egress IPv4
+        id: egress-ip
+        run: |
+          ip="$(curl --silent --show-error https://checkip.amazonaws.com | tr -d '[:space:]')"
+          if [[ ! "${ip}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
+            echo "runner egress IP is not IPv4: '${ip}' — refusing to build a malformed CIDR" >&2
+            exit 1
+          fi
+          echo "ip=${ip}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Provision hub + cell
+        working-directory: aws/terraform
+        env:
+          REGION: ${{ inputs.region }}
+          EGRESS_IP: ${{ steps.egress-ip.outputs.ip }}
+          STATE_BUCKET: ${{ vars.STATE_BUCKET }}
+        run: |
+          ./scripts/up-02-region \
+            --region "${REGION}" \
+            --with-cell \
+            --public-cidr "${EGRESS_IP}/32" \
+            --state-bucket "${STATE_BUCKET}" \
+            --yes
+
+      - name: Close public endpoint
+        if: always()
+        working-directory: aws/terraform
+        env:
+          REGION: ${{ inputs.region }}
+          STATE_BUCKET: ${{ vars.STATE_BUCKET }}
+        run: |
+          ./scripts/up-02-region \
+            --region "${REGION}" \
+            --with-cell \
+            --close-public-access \
+            --state-bucket "${STATE_BUCKET}" \
+            --yes

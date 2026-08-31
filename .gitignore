@@ -22,9 +22,9 @@ crash.log
 crash.*.log
 terraform.tfvars
 !terraform.tfvars.example
-# Valores locais de identidade: um arquivo, carregado por cada raiz via symlink values.auto.tfvars.
-# O .example É versionado — é o inventário de o que precisa ser preenchido.
-aws/terraform/variables/values.tfvars
+# variables/values.tfvars É versionado (decisão de 2026-08-31): as contas AWS desta PoC são
+# efêmeras e de teste, e versionar elimina toda a maquinaria de materializar o arquivo em CI.
+# Reverter para gitignored quando as contas deixarem de ser descartáveis.
 **/values.auto.tfvars
 # Logs de apply/destroy: carregam account id, ARN e endpoint reais
 logs/
