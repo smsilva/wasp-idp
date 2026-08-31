@@ -83,3 +83,20 @@ run "network_trust_confia_so_na_role_cicd_nunca_direto_no_github" {
     error_message = "trust da role network NAO deveria usar AssumeRoleWithWebIdentity: ${aws_iam_role.network.assume_role_policy}"
   }
 }
+
+run "cicd_pode_assumir_a_role_network" {
+  # command = apply, nao plan: a policy inline referencia aws_iam_role.network.arn, computed
+  # de um recurso sob o provider aliasado aws.network — override_resource nao propaga o
+  # valor fixado para esse atributo neste caso (testado; funciona para recursos sob o
+  # provider default, ver os dois runs acima). Apply resolve o computed de verdade.
+  command = apply
+
+  # Sem override disponivel, a asercao compara a REFERENCIA em vez do conteudo: o campo
+  # Resource da policy tem de ser exatamente o arn resolvido de aws_iam_role.network — ambos
+  # leem o mesmo atributo computado, entao sao iguais mesmo sendo um valor sintetico do mock.
+  # Prova que a policy aponta para a role network, sem depender do gotcha do override.
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.cicd_assume_network.policy).Statement[0].Resource == aws_iam_role.network.arn
+    error_message = "policy inline da cicd deveria referenciar o arn da role network: ${aws_iam_role_policy.cicd_assume_network.policy} vs ${aws_iam_role.network.arn}"
+  }
+}
