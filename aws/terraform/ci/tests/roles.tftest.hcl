@@ -32,6 +32,19 @@ run "cicd_trust_exige_oidc_do_github_com_aud_e_sub_corretos" {
   }
 }
 
+run "cicd_dura_mais_que_uma_hora_para_o_apply_nao_morrer_no_meio" {
+  command = plan
+
+  # Mutacao consciente: esta asercao FALHA se alguem devolver a role ao default de 3600s.
+  # O apply de uma regiao inteira passa de 1h com folga em retries, e a essa altura o token
+  # OIDC do GitHub (~5 min de vida) ja nao existe para renovar nada — a sessao da cicd tem
+  # de durar o job inteiro. Ver ci/README.md.
+  assert {
+    condition     = aws_iam_role.cicd.max_session_duration == 21600
+    error_message = "max_session_duration da role cicd deveria ser 21600 (6h, teto do job do GitHub), recebido ${aws_iam_role.cicd.max_session_duration}"
+  }
+}
+
 run "oidc_provider_sem_thumbprint_fixo" {
   # command = apply, nao plan: thumbprint_list e computed e nao setado na config — sob
   # mock_provider fica "known after apply" ate o recurso ser efetivamente aplicado (mock).

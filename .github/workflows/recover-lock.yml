@@ -39,7 +39,7 @@ jobs:
             --role-arn "${CICD_ROLE_ARN}" \
             --role-session-name "gha-recover-lock" \
             --web-identity-token "${oidc_token}" \
-            --duration-seconds 3600 \
+            --duration-seconds 21600 \
             --output json)"
 
           mkdir -p ~/.aws

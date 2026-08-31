@@ -31,16 +31,19 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
             | jq -r '.value')"
 
-          # Trocamos o token OIDC do GitHub por credenciais estaticas da cicd UMA VEZ, em vez
-          # de deixar web_identity_token_file apontando pro arquivo do token: esse JWT vive
-          # so ~5 min, bem menos que os 20-30 min do apply, e uma renovacao de sessao no meio
-          # do caminho falharia com ExpiredTokenException. As credenciais estaticas resultantes
-          # duram ate o max_session_duration da role (1h) — ver aws/terraform/ci/README.md.
+          # Trocamos o token OIDC do GitHub por credenciais da cicd UMA VEZ, em vez de deixar
+          # web_identity_token_file apontando pro arquivo do token: esse JWT vive so ~5 min,
+          # bem menos que os 20-30 min do apply, e uma renovacao de sessao no meio do caminho
+          # falharia com ExpiredTokenException.
+          #
+          # 21600s = 6h = max_session_duration da role cicd = teto de um job no GitHub. E a
+          # sessao FONTE: a da network e capada em 1h por ser role chaining, mas o SDK a
+          # re-deriva sozinho a partir desta enquanto ela viver. Ver aws/terraform/ci/README.md.
           creds="$(aws sts assume-role-with-web-identity \
             --role-arn "${CICD_ROLE_ARN}" \
             --role-session-name "gha-provision-region" \
             --web-identity-token "${oidc_token}" \
-            --duration-seconds 3600 \
+            --duration-seconds 21600 \
             --output json)"
 
           mkdir -p ~/.aws

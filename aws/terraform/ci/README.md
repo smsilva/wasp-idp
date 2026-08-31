@@ -41,25 +41,39 @@ exclui por desenho da AWS) e para o `sts:AssumeRole` encadeado. Derivar o escopo
 — o que `module.hub` e `module.cell` de fato criam — é trabalho futuro; ver a issue de
 "least-privilege das roles de CI" (aberta junto com este workflow).
 
-## Limitação: role chaining trava a sessão em 1h
+## Credenciais que sobrevivem ao `apply`: as duas expirações, e como cada uma foi resolvida
 
-A role `network` encadeia de `cicd` (`source_profile`). A doc da IAM é explícita: *"When you use
-role chaining, the session duration is limited to one hour, regardless of the maximum session
-duration setting configured for individual roles"* — nenhum `max_session_duration` levanta esse
-teto. O `apply` da célula leva 20-30 min; a margem existe, mas é fina. Ver issue dedicada.
+O provisionamento de uma região leva 20-30 min (mais, com retries). Duas expirações diferentes
+mataram o `workflow_dispatch` no meio antes de o desenho atual fechar — vale entender as duas,
+porque a segunda é a que costuma ser confundida com a primeira.
 
-## Gotcha real: o token OIDC do GitHub não sobrevive ao `apply`
+**1. O token OIDC do GitHub vive ~5 min.** A primeira versão do workflow escrevia
+`web_identity_token_file` apontando pro arquivo do JWT bruto (`curl` uma vez, salvo em
+`/tmp/gha-oidc-token`) e deixava o SDK reautenticar a partir dele a cada renovação de sessão.
+Num apply real isso morreu em 5 minutos com `ExpiredTokenException` — confirmado no CloudTrail
+(job às 22:08:44, `exp` do token às 22:13:46). O JWT é de uso imediato: serve para *trocar* por
+credenciais, não para ficar em disco. Fix: `aws sts assume-role-with-web-identity` **uma vez**,
+no início do job, gravando o resultado em `~/.aws/credentials`. O token nunca mais é lido.
 
-A primeira versão do workflow escrevia `web_identity_token_file` apontando pro arquivo do token
-OIDC bruto (curl uma vez, salvo em `/tmp/gha-oidc-token`) e deixava o SDK reautenticar a partir
-dele a cada renovação de sessão. Isso quebrou num `workflow_dispatch` real: o token do GitHub tem
-vida curta (~5 min) — bem menos que os 20-30 min de um `up-02-region --with-cell` — e a primeira
-renovação de sessão no meio do apply falhou com `ExpiredTokenException`, matando o `terraform
-apply` no meio e deixando recursos órfãos fora do state até a correção. Fix: trocar o token OIDC
-por credenciais estáticas da `cicd` **uma vez**, via `aws sts assume-role-with-web-identity
---duration-seconds 3600`, gravadas em `~/.aws/credentials`; a `network` encadeia dessas
-credenciais estáticas (`source_profile = cicd` em `~/.aws/config`), sem nunca reler o token OIDC.
-Isso não elimina a limitação de 1h acima — só evita expirar bem antes dela.
+**2. A sessão resultante expira — e o token para renovar já não existe.** Trocar por credenciais
+de 1h só empurra o problema: quando a hora acaba, não há como renovar (o JWT de 5 min morreu há
+muito). A saída é fazer a sessão **fonte** durar o job inteiro:
+
+- A sessão da `cicd` nasce de `AssumeRoleWithWebIdentity`, cujo `DurationSeconds` vai de 900s até
+  o `MaxSessionDuration` **da role** ([doc da STS](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html)),
+  que aceita de 1h a 12h. **O teto de 1h do role chaining não se aplica a ela** — esse teto vale
+  para `AssumeRole` a partir de credenciais de role, não para web identity. Daí
+  `max_session_duration = 21600` (6h, o teto de um job em runner hospedado pelo GitHub) na role
+  e `--duration-seconds 21600` na troca.
+- A sessão da `network` **continua capada em 1h**, porque essa sim é role chaining
+  (`source_profile = cicd`): *"When you use role chaining, the session duration is limited to one
+  hour, regardless of the maximum session duration setting configured for individual roles"*.
+  A diferença é que isso deixou de ser fatal: quando ela expira, o SDK simplesmente chama
+  `AssumeRole` de novo usando as credenciais da `cicd`, que ainda estão vivas. O cap continua
+  existindo; ele só não interrompe mais nada.
+
+Vale para o `terraform` e também para os providers `kubernetes`/`helm`, que autenticam por
+`exec` chamando `aws eks get-token --profile ...` a cada recurso — todos leem a mesma cadeia.
 
 ## Gotcha de teste: `override_resource` não propaga para recurso sob provider aliasado
 

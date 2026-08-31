@@ -62,6 +62,17 @@ resource "aws_iam_openid_connect_provider" "github" {
 resource "aws_iam_role" "cicd" {
   name               = var.role_name
   assume_role_policy = local.cicd_trust_policy
+
+  # 6h, o teto de duracao de um job em runner hospedado pelo GitHub — passar disso nao
+  # compra nada (o runner e morto antes) e so alarga a janela de exposicao da credencial.
+  #
+  # Por que precisa ser explicito: a sessao da cicd nasce de AssumeRoleWithWebIdentity, cujo
+  # DurationSeconds vai de 900s ate o MaxSessionDuration DA ROLE (doc da STS) — o teto de 1h
+  # do role chaining NAO se aplica a ela. Com o default de 3600 o apply morria em 1h sem
+  # caminho de renovacao: o token OIDC do GitHub (~5 min) ja nao existe mais a essa altura.
+  # Com 6h aqui, a sessao da network (essa sim capada em 1h por ser chaining) e re-derivada
+  # sozinha pelo SDK a partir da cicd, quantas vezes for preciso. Ver ci/README.md.
+  max_session_duration = 21600
 }
 
 locals {
