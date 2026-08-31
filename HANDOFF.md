@@ -86,8 +86,21 @@ gh issue list -R smsilva/wasp-idp --label private-access-ingress --state open
 Board: https://github.com/users/smsilva/projects/6
 
 **Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. Branch
-corrente: `feat/regional-root-hub-cell`, executando a frente `regional-root-hub-and-cell-modules`
-(issue #37; #36 fechada em 2026-08-30 — a fase 1 sozinha já satisfazia o critério dela).
+corrente: `feat/41-github-actions-provisioning`, executando a issue **#41** (workflow GitHub Actions
+para provisionar hub e control plane). PR **draft #46** aberta com a primeira fatia: o mecanismo de
+acesso privado do runner (flags `--public-cidr`/`--close-public-access` em `up-02-region` + o wiring
+gap de `endpoint_public_access`/`public_access_cidrs` que nunca chegava a `module.cell` desde a ADR
+0014). O workflow do Actions em si **ainda não foi escrito** — é a fatia seguinte, na mesma branch
+ou em outra PR sobre esta. Desenho em
+`docs/superpowers/specs/2026-08-31-github-actions-runner-private-access-design.md`, plano em
+`docs/superpowers/plans/2026-08-31-github-actions-runner-private-access.md`.
+
+**Falta para tirar a #46 de draft:** o Step 10 do plano — `plan` real contra `regions/us-east-1`
+provando o `-var` chegando a `module.cell.module.cluster.aws_eks_cluster.this`. Exige SSO ativo,
+não rodado ainda. Os testes offline com mutação e a regressão completa (14 módulos) já passaram.
+
+#37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
+fase 4); #36 fechada em 2026-08-30.
 
 **Plano de execução da fase corrente:**
 `docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
@@ -115,13 +128,13 @@ desta sessão foi rodar esse comando pensando estar só testando o script, e ele
 comportamento de um script, usar `terraform plan` direto na raiz, nunca o script `up-*` com
 `--yes`.
 
-Duas issues novas nesta sessão, sem trabalho iniciado: **#40** (acesso administrativo único a
-qualquer hub regional — hoje é preciso trocar de túnel Client VPN por região) e **#41** (workflow
-GitHub Actions para provisionar hub/control plane — depende da decisão da #40 para o acesso
-privado do runner). Ambas com label `private-access-ingress`, no board #6.
+**#40** (acesso administrativo único a qualquer hub regional — hoje é preciso trocar de túnel Client
+VPN por região) segue no backlog, sem trabalho iniciado. A #41 **não** ficou bloqueada por ela: a
+spec de 2026-08-31 resolveu o acesso do runner pelo break-glass do endpoint público restrito a CIDR,
+sem depender do desenho da #40. Ambas com label `private-access-ingress`, no board #6.
 
-A frente `regional-root-hub-and-cell-modules` está pronta para revisão/integração em `main` —
-branch `feat/regional-root-hub-cell`.
+A frente `regional-root-hub-and-cell-modules` (branch `feat/regional-root-hub-cell`) está pronta
+para revisão/integração em `main`.
 
 A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
 — ver `docs/archived/index.md`.
@@ -283,9 +296,11 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Next Steps
 
-1. Fechar #37 — o clone limpo já passou (ver "Em progresso agora"), critério de aceite satisfeito.
-2. Issues #40 e #41 seguem no backlog do board #6, sem trabalho iniciado.
-3. Investigar a fundo a peer session que compartilha este working directory (ver Open Questions) —
+1. Rodar o Step 10 do plano da #41 (`plan` real com SSO) e tirar a PR #46 de draft.
+2. Escrever o workflow do GitHub Actions em si — o entregável central da #41, que o plano de
+   2026-08-31 não cobre (ele só criou o mecanismo de acesso).
+3. #40 segue no backlog do board #6, sem trabalho iniciado.
+4. Investigar a fundo a peer session que compartilha este working directory (ver Open Questions) —
    já mergeou trabalho em `main` sem revisão nesta sessão uma vez.
 
 ## Completed Work
