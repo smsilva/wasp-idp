@@ -43,6 +43,7 @@ mais" ou "fica de pé mais tempo".
 |---|---|---|---|
 | — | Organization, contas, OUs, SCP, Identity Center | T0 | não — `aws/docs/accounts/scripts/` |
 | — | *aprovar a região na SCP* | — | não |
+| — | `ci/` — trust OIDC GitHub → AWS | T0 | sim |
 | 00 | `up-00-state-backend` | T0 | sim |
 | 01 | `up-01-dns` | T0 | sim |
 | — | *aplicação SAML no Identity Center* → `variables/saml-metadata.xml` | — | não, é console |
@@ -60,6 +61,13 @@ console). Ela entra como bloco acima do `up-*`, na ordem que `aws/docs/accounts/
 A aplicação SAML é **uma para toda a Organization**, não uma por região — o ACS URL do Client VPN é
 `http://127.0.0.1:35001` em qualquer endpoint. É o que permite a uma região nova ter Client VPN sem
 um segundo passo de console, e o motivo de o metadata morar em `variables/`.
+
+## Provisionar via GitHub Actions
+
+O workflow `.github/workflows/provision-region.yml` roda `up-02-region --with-cell` em CI,
+autenticado por OIDC. O trust GitHub→AWS nasce da raiz `aws/terraform/ci/` — ver
+`ci/README.md` para o passo a passo de bootstrap e `aws/terraform/bootstrap-checklist.md`
+para a sequência completa do zero.
 
 ## Sequência de provisionamento
 
