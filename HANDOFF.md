@@ -91,6 +91,16 @@ implementadas e mergeadas em `main` — narrativa em
 [`docs/archived/index.md`](docs/archived/index.md), tema "GitHub Actions CI". Falta só validar
 com um `workflow_dispatch` real (ver Next Steps).
 
+**Ponto exato agora (branch `chore/41-ci-root-apply`):** aplicando a raiz `ci/` na AWS pela
+primeira vez — passo 6 do `bootstrap-checklist.md`. `terraform plan` já rodado e revisado (8 to
+add, 0 to change, 0 to destroy: OIDC provider + as duas roles `cicd`/`network` + 4
+policies/attachments + 2 outputs) contra os profiles `personal`/`network`/`cicd` (SSO reativado
+nesta sessão). O `terraform apply -no-color -input=false -auto-approve` está para ser rodado pelo
+operador via `!` (classifier de auto-mode bloqueia `apply` para o agente) — ainda **não** foi
+executado no momento deste commit. Depois do apply: ler `cicd_role_arn`/`network_role_arn` via
+`terraform output` e seguir para o passo 7 do checklist (configurar `CICD_ROLE_ARN`,
+`NETWORK_ROLE_ARN`, `STATE_BUCKET`, `SAML_METADATA_XML` no repositório GitHub).
+
 #37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
 fase 4); #36 fechada em 2026-08-30.
 
