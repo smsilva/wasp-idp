@@ -58,7 +58,7 @@ abordagens rejeitadas e as limitações aceitas. Ler antes de executar.
   `module.cell.endpoint_public_access`/`module.cell.public_access_cidrs`. A Task 2 injeta valores
   nessas duas variáveis via `-var`.
 
-- [ ] **Step 1: Escrever o teste que prova a lacuna (falha antes do fix)**
+- [x] **Step 1: Escrever o teste que prova a lacuna (falha antes do fix)**
 
 Em `aws/terraform/regions/us-east-1/tests/composition.tftest.hcl`, acrescentar ao final do
 arquivo:
@@ -116,7 +116,7 @@ run "endpoint_publico_repassa_o_cidr_ate_o_cluster" {
 }
 ```
 
-- [ ] **Step 2: Rodar o teste e confirmar que falha pela razão certa**
+- [x] **Step 2: Rodar o teste e confirmar que falha pela razão certa**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/regions/us-east-1
@@ -128,7 +128,7 @@ novas asserções — `module.cell.endpoint_public_access` não existe ainda. Se
 (ex.: variável `endpoint_public_access` não declarada na raiz), tudo bem também — confirma que a
 raiz não tem a variável, o mesmo sintoma do bug. O importante é NÃO passar.
 
-- [ ] **Step 3: Declarar as duas variáveis em `regions/us-east-1/variables.tf`**
+- [x] **Step 3: Declarar as duas variáveis em `regions/us-east-1/variables.tf`**
 
 Acrescentar ao final do arquivo:
 
@@ -149,7 +149,7 @@ variable "public_access_cidrs" {
 }
 ```
 
-- [ ] **Step 4: Repassar as duas em `regions/us-east-1/main.tf`**
+- [x] **Step 4: Repassar as duas em `regions/us-east-1/main.tf`**
 
 Em `main.tf`, dentro do bloco `module "cell" { ... }`, a linha `target_account_ids =
 var.target_account_ids` (linha 125) é seguida por uma linha em branco e o comentário `# O hub, por
@@ -167,7 +167,7 @@ referencia`. Inserir as duas novas linhas logo após `target_account_ids`:
 (Substitui o texto atual — a linha em branco e o comentário `# O hub, por referencia...` já
 existem; só as duas linhas novas entram entre `target_account_ids` e a linha em branco.)
 
-- [ ] **Step 5: Repetir os Steps 3 e 4 em `regions/us-west-2`**
+- [x] **Step 5: Repetir os Steps 3 e 4 em `regions/us-west-2`**
 
 `regions/us-west-2/variables.tf` e `regions/us-west-2/main.tf` são idênticos aos de
 `us-east-1` (só `locals` de `main.tf` e a `key` de `versions.tf` divergem — invariante já
@@ -183,7 +183,7 @@ do Step 3, e `us-west-2/main.tf` com a mesma inserção do Step 4 (mesmas linhas
 `us-west-2/main.tf` também tem `target_account_ids = var.target_account_ids` seguido do mesmo
 comentário `# O hub, por referencia`).
 
-- [ ] **Step 6: Reexportar os dois outputs em `src/cell/outputs.tf`**
+- [x] **Step 6: Reexportar os dois outputs em `src/cell/outputs.tf`**
 
 Ao final do arquivo, acrescentar:
 
@@ -202,14 +202,14 @@ output "public_access_cidrs" {
 }
 ```
 
-- [ ] **Step 7: Copiar o teste do Step 1 para `regions/us-west-2/tests/composition.tftest.hcl`**
+- [x] **Step 7: Copiar o teste do Step 1 para `regions/us-west-2/tests/composition.tftest.hcl`**
 
 Mesmo conteúdo dos dois `run` blocks do Step 1, adaptado só na região do
 `aws_availability_zones` — `us-west-2a`/`us-west-2b` em vez de `us-east-1a`/`us-east-1b` (mesma
 convenção que o resto do arquivo já usa, confirmável com `diff` entre os dois arquivos de teste
 antes desta task).
 
-- [ ] **Step 8: Rodar os testes das duas regiões e confirmar que passam**
+- [x] **Step 8: Rodar os testes das duas regiões e confirmar que passam**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform
@@ -221,7 +221,7 @@ done
 
 Esperado: `Success!` nas duas raízes, incluindo os dois `run` novos em cada uma.
 
-- [ ] **Step 9: Rodar a regressão offline completa (garantir que nada mais quebrou)**
+- [x] **Step 9: Rodar a regressão offline completa (garantir que nada mais quebrou)**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform
@@ -238,7 +238,7 @@ done
 Esperado: `Success!` em todos, sem linha vazia (linha vazia = `init` morto por SSO caído, não "sem
 testes" — ver `aws/terraform/CLAUDE.md`).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 cd /home/silvios/git/wasp-idp
@@ -278,7 +278,7 @@ EOF
   por um workflow de CI (fora do escopo deste plano) ou por um operador humano na mesma sessão de
   CLI que já usa `--with-cell`.
 
-- [ ] **Step 1: Estender `terraform_plan_and_apply` para aceitar `-var` extra**
+- [x] **Step 1: Estender `terraform_plan_and_apply` para aceitar `-var` extra**
 
 Em `aws/terraform/scripts/lib`, a função hoje (linhas 101-104):
 
@@ -318,7 +318,7 @@ Os `-var` só entram no `plan` — o `apply` usa o arquivo de plano salvo (`terr
 primeiros `local` já garantem isso). Chamadas existentes com exatamente 3 argumentos (como a de
 `up-01-dns`) continuam funcionando sem mudança: `extra_plan_args` fica vazio.
 
-- [ ] **Step 2: Verificar que `up-01-dns` continua funcionando (retrocompatibilidade)**
+- [x] **Step 2: Verificar que `up-01-dns` continua funcionando (retrocompatibilidade)**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/scripts
@@ -329,7 +329,7 @@ bash -n up-01-dns && echo "syntax ok"
 Esperado: `syntax ok` nas duas. (A verificação funcional completa de `up-01-dns` já foi feita na
 fase 4 — este step só garante que a mudança em `lib` não quebrou a sintaxe que ele consome.)
 
-- [ ] **Step 3: Acrescentar as duas variáveis de flag em `up-02-region`**
+- [x] **Step 3: Acrescentar as duas variáveis de flag em `up-02-region`**
 
 Depois de `with_cell="false"` (linha 65), acrescentar:
 
@@ -338,7 +338,7 @@ public_cidr=""
 close_public_access="false"
 ```
 
-- [ ] **Step 4: Acrescentar os dois `case` novos no parsing de opções**
+- [x] **Step 4: Acrescentar os dois `case` novos no parsing de opções**
 
 Depois do bloco `--with-cell )` (linhas 83-85):
 
@@ -362,7 +362,7 @@ Depois do bloco `--with-cell )` (linhas 83-85):
 (a linha `--state-bucket )` já existe logo depois — só as duas novas entram entre `--with-cell`
 e `--state-bucket`.)
 
-- [ ] **Step 5: Guards de uso — mutuamente exclusivas, e exigem `--with-cell`**
+- [x] **Step 5: Guards de uso — mutuamente exclusivas, e exigem `--with-cell`**
 
 Depois de `set -e` (linha 106), antes de `require_tools` (linha 108):
 
@@ -380,7 +380,7 @@ fi
 require_tools aws jq terraform
 ```
 
-- [ ] **Step 6: Montar o `-var` extra e passar para `terraform_plan_and_apply`**
+- [x] **Step 6: Montar o `-var` extra e passar para `terraform_plan_and_apply`**
 
 Antes do `if [ "${with_cell}" == "true" ]; then` (linha 135), acrescentar:
 
@@ -405,7 +405,7 @@ por:
   terraform_plan_and_apply "${root}" "region-${region}" "${assume_yes}" "${cell_network_args[@]}"
 ```
 
-- [ ] **Step 7: Atualizar `--help`**
+- [x] **Step 7: Atualizar `--help`**
 
 No bloco de opções (linhas 44-51), acrescentar as duas novas depois de `--with-cell`:
 
@@ -440,7 +440,7 @@ E um exemplo novo depois dos existentes (linhas 53-57):
       ${this_script_name} --yes --with-cell --public-cidr 203.0.113.10/32
 ```
 
-- [ ] **Step 8: Verificar sintaxe e `--help`**
+- [x] **Step 8: Verificar sintaxe e `--help`**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/scripts
@@ -450,7 +450,7 @@ bash -n up-02-region && echo "syntax ok"
 
 Esperado: sintaxe ok, e as duas flags aparecem documentadas na saída.
 
-- [ ] **Step 9: Verificar os dois guards sem tocar a AWS**
+- [x] **Step 9: Verificar os dois guards sem tocar a AWS**
 
 ```bash
 cd /home/silvios/git/wasp-idp/aws/terraform/scripts
@@ -465,7 +465,7 @@ mutually exclusive.`; a segunda falha com `ERROR: --public-cidr/--close-public-a
 module.cell — pass --with-cell too.`. As duas saem antes de `require_tools`/qualquer chamada AWS —
 conferir que nenhuma delas imprime nada de `aws`/`terraform`.
 
-- [ ] **Step 10: Verificar o `-var` chegando ao plan de verdade (sem aplicar)**
+- [x] **Step 10: Verificar o `-var` chegando ao plan de verdade (sem aplicar)**
 
 Requer SSO ativo. Roda um `plan` manual passando os mesmos `-var` que o script montaria, contra
 `regions/us-east-1` (sem tocar `up-02-region` em si, para não arriscar um apply real por engano —
@@ -484,7 +484,7 @@ se o cluster real já estiver com esse valor — não deve estar, dado que o hub
 recursos nesta sessão, então este `plan` mostra o cluster inteiro sendo criado, e a asserção é
 sobre os valores DENTRO desse plano de criação).
 
-- [ ] **Step 11: Documentar as flags no `README.md`**
+- [x] **Step 11: Documentar as flags no `README.md`**
 
 Na seção "Sequência de provisionamento", depois do parágrafo que explica `--with-cell` (logo após
 a tabela de custo/sequência, antes de "Desbloqueio de emergência"), acrescentar:
@@ -500,7 +500,7 @@ completo e as limitações aceitas (sem sweep de fechamento agendado; break-glas
 compartilham o mesmo atributo — não usar os dois ao mesmo tempo).
 ```
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 cd /home/silvios/git/wasp-idp
@@ -529,13 +529,13 @@ git push
 
 ## Aceite do plano
 
-- [ ] Os testes offline de `regions/us-east-1` e `regions/us-west-2` provam o repasse
+- [x] Os testes offline de `regions/us-east-1` e `regions/us-west-2` provam o repasse
   (`endpoint_public_access`/`public_access_cidrs` chegando a `module.cell`), com mutação (o teste
   falhava antes do fix, passa depois).
-- [ ] `up-02-region --help` documenta as duas flags novas.
-- [ ] As duas flags recusam uso sem `--with-cell` e recusam uso combinado entre si.
-- [ ] Um `-var` equivalente ao que as flags montam, aplicado manualmente contra
+- [x] `up-02-region --help` documenta as duas flags novas.
+- [x] As duas flags recusam uso sem `--with-cell` e recusam uso combinado entre si.
+- [x] Um `-var` equivalente ao que as flags montam, aplicado manualmente contra
   `regions/us-east-1`, muda `endpoint_public_access`/`public_access_cidrs` no plano do cluster.
-- [ ] Regressão offline completa (todos os módulos) continua verde depois das duas tasks.
-- [ ] `variables/values.tfvars` nunca é escrito por nenhuma das duas flags — conferir com
+- [x] Regressão offline completa (todos os módulos) continua verde depois das duas tasks.
+- [x] `variables/values.tfvars` nunca é escrito por nenhuma das duas flags — conferir com
   `git status`/`git diff` no arquivo (fora do repo, gitignored) depois dos testes.
