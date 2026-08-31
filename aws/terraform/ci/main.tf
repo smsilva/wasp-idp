@@ -118,11 +118,13 @@ resource "aws_iam_role_policy" "cicd_iam_and_assume" {
           "iam:PutRolePolicy",
           "iam:DeleteRolePolicy",
           "iam:GetRolePolicy",
-          # ListRolePolicies faltava na primeira versao: o provider AWS chama essa action logo
-          # apos criar/atualizar uma role (parte do refresh dos inline policies), e sem ela o
-          # apply falha com AccessDenied mesmo tendo PutRolePolicy — confirmado num apply real
-          # (module.cluster.aws_iam_role.cluster e outras 5 roles de Pod Identity).
+          # ListRolePolicies/ListAttachedRolePolicies faltavam na primeira versao: o provider AWS
+          # chama as duas (inline e managed) ao ler/atualizar uma role existente, e sem elas o
+          # plan/apply falha com AccessDenied mesmo tendo PutRolePolicy/AttachRolePolicy —
+          # confirmado em dois applies reais (module.cluster.aws_iam_role.cluster e as 5 roles
+          # de Pod Identity).
           "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
           "iam:AttachRolePolicy",
           "iam:DetachRolePolicy",
           "iam:PassRole",
