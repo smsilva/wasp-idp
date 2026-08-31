@@ -36,13 +36,12 @@ locals {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
-        StringLike = {
           # Formato qualificado por ID (owner@owner_id/repo@repo_id), nao repo:<owner>/<repo>:... —
           # o dono ou o repositorio ja foi renomeado, e o GitHub passa a emitir o claim `sub`
           # sempre com os IDs numericos imutaveis apos isso, mesmo tendo voltado ao nome atual.
           # Confirmado num AssumeRoleWithWebIdentity real via CloudTrail. Ver ci/README.md.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}@${var.github_owner_id}/${var.github_repo}@${var.github_repo_id}:ref:refs/heads/*"
+          # Restrito a main (issue #48): so refs/heads/main assume esta role.
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}@${var.github_owner_id}/${var.github_repo}@${var.github_repo_id}:ref:refs/heads/main"
         }
       }
     }]
