@@ -32,6 +32,14 @@ Fato + porquê, um por linha. Narrativa completa de cada achado, quando existe, 
   mudar sozinha entre dois applies da mesma árvore).
 - `curl | tr` engole a falha do `curl` (exit code é o do `tr`) — sem pipe, `--fail`, e validar
   também o formato da resposta (portal cativo devolve HTML com 200).
+- **Bloco `moved` é incompatível com `-target`, e esta árvore vive de applies direcionados.**
+  Enquanto o move estiver pendente no state, QUALQUER plan com `-target` falha com
+  `Moved resource instances excluded by targeting` — e tanto `up-02-region` quanto `down-cell`
+  abrem o endpoint público com `-target=module.cell.module.cluster.aws_eks_cluster.this` antes de
+  qualquer outra coisa. Ou seja: o `moved` derruba o script no primeiro passo, não no apply
+  principal (run `33512949098`). Antes de introduzir um `moved` aqui, ou se resolve o move num
+  apply sem `-target`, ou não se usa `moved` — aceitar o destroy/create é frequentemente mais
+  barato que a coreografia.
 - **Reachability dependia de onde a AWS resolveu pôr as ENIs do endpoint privado.** A rota para o
   supernet existia só nas route tables privadas, mas tanto o cluster (que recebe as 4 subnets)
   quanto o ALB do hub (que vive nas públicas) podem estar do outro lado. Corrigido nas duas

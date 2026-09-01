@@ -424,13 +424,6 @@ resource "aws_eks_addon" "ebs_csi" {
   ]
 }
 
-# O addon saiu do for_each do src/cluster e virou recurso proprio aqui. Sem este moved, o apply
-# faria destroy + create de um addon que esta ACTIVE e saudavel.
-moved {
-  from = module.cluster.aws_eks_addon.this["aws-ebs-csi-driver"]
-  to   = aws_eks_addon.ebs_csi
-}
-
 module "pod_identity_eso" {
   source = "../pod-identity"
 
