@@ -1,75 +1,24 @@
-# Backstage IDP PoC
+# wasp-idp
 
-Internal Developer Portal proof-of-concept built on [Backstage](https://backstage.io) v1.49.0.
+Plataforma AWS multi-tenant (hub-and-spoke, EKS) com um IDP (Backstage) por cima. Ponto de entrada
+único do repo — cada linha abaixo é uma porta para um tronco de documentação.
 
-## Stack
+## Por onde começar
 
-| Component | Version |
-|-----------|---------|
-| Backstage | 1.49.0 |
-| Node.js | 24 |
-| Yarn | 4.4.1 |
-| Database (dev) | SQLite in-memory |
-| Database (prod) | PostgreSQL |
+| Se você quer... | Vá para |
+|---|---|
+| Entender a arquitetura de referência AWS (hub-and-spoke, domínios) | [`aws/docs/README.md`](aws/docs/README.md) |
+| Provisionar a plataforma (Terraform, sequência, raízes) | [`aws/terraform/README.md`](aws/terraform/README.md) |
+| Usar ou desenvolver o Backstage (IDP) | [`docs/idp/README.md`](docs/idp/README.md) |
+| Ver decisões de arquitetura já tomadas (ADRs) | [`docs/adr/README.md`](docs/adr/README.md) |
+| Ver o histórico do que já foi entregue | [`docs/archived/README.md`](docs/archived/README.md) |
+| Entender por que uma decisão passada foi tomada, ou reler um plano antigo | [`docs/superpowers/README.md`](docs/superpowers/README.md) |
+| Retomar de onde a última sessão parou | [`HANDOFF.md`](HANDOFF.md) |
 
-## Quick start
+## Convenções deste repo
 
-```bash
-cd idp
-export GOOGLE_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
-export GOOGLE_CLIENT_SECRET=<your-secret>
-yarn start
-```
-
-Frontend: http://localhost:3000 — Backend: http://localhost:7007
-
-## Structure
-
-```
-idp/           # Backstage Yarn workspaces monorepo
-  packages/
-    app/       # React frontend
-    backend/   # Node.js backend
-  plugins/     # Custom plugins (empty)
-  examples/    # Sample catalog entities and templates
-scripts/       # One-time environment setup (install, configure PostgreSQL)
-```
-
-## UI customisations
-
-- **Theme:** custom blue palette (navy sidebar, `#1565C0` primary) with light and dark variants
-- **Navigation:** manually ordered sidebar — Catalog, Scaffolder, then remaining items
-- **Logo:** Backstage SVG logo in `#7df3e1`
-- **Sign-in:** Guest + Google OAuth 2.0
-
-See `CLAUDE.md` for full technical details and pitfalls.
-
-## Authentication
-
-Google OAuth 2.0 via a custom backend module. The OAuth redirect URI points to the **backend** (port 7007):
-
-```
-http://localhost:7007/api/auth/google/handler/frame
-```
-
-Set up credentials at [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials (Web application type).
-
-## First-time setup
-
-```bash
-# Install Node 24, Yarn, create the app
-./scripts/install.sh
-
-# Install and configure PostgreSQL 18 (production)
-./scripts/configure.sh
-```
-
-## Local cluster-zero exercise
-
-A disposable k3d cluster (3 servers) with ArgoCD and Crossplane (Azure providers), used to exercise the "cluster zero" bootstrap from the multi-tenant IDP design before it's reimplemented in Terraform against real Azure AKS.
-
-```bash
-scripts/cluster-zero/up      # stand up cluster + ArgoCD + Crossplane
-scripts/cluster-zero/verify  # check health of everything
-scripts/cluster-zero/cluster-delete  # tear down
-```
+- `CLAUDE.md` de cada pasta = regras para quem edita ali. `README.md` de cada pasta = índice do
+  que existe. Nunca duplicar o mesmo conteúdo nos dois.
+- Um documento cobre um assunto; quando uma seção se aprofunda demais num subtema, ela vira um
+  arquivo próprio, referenciado de onde fazia sentido.
+- Antes de renomear qualquer arquivo `.md`, rodar `scripts/bin/check-doc-links`.
