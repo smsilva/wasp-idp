@@ -1,0 +1,244 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+show_usage() {
+  cat <<EOF
+
+  Deletes the default VPC of every ACTIVE Organization account, in every approved
+  region (see aws/docs/accounts/03-provisioning.md). Every AWS account is born with
+  one default VPC per region, all of them using the SAME CIDR 172.31.0.0/16 — so the
+  accounts of an Organization overlap with each other by construction.
+
+  Runs from the MANAGEMENT account and assumes --role in each member account
+  (OrganizationAccountAccessRole exists by default in an account created via
+  'create-account'). The management account itself is handled with the ambient
+  credentials, since it cannot assume that role into itself.
+
+  Idempotent: an account with no default VPC is a silent no-op, not an error.
+
+  Deletion order is subnets -> internet gateway (detach + delete) -> VPC. That is the
+  order AWS requires; calling delete-vpc directly fails with DependencyViolation.
+
+    Options:
+
+      -h,  --help              Show this help
+      -a,  --account           Restrict to one account, by name or id (default: all)
+      -r,  --regions           Approved regions, comma separated
+                                (default: us-east-1,us-west-2)
+           --role              Role assumed in each member account
+                                (default: OrganizationAccountAccessRole)
+           --dry-run           Only report what would be deleted
+      -y,  --yes               Do not ask for confirmation
+
+  This script REFUSES to delete a default VPC that has any network interface (ENI):
+  an ENI means something is running in there, and deleting it would not be safe.
+  The refusal is a hard failure, in --dry-run too.
+
+  Regions denied by the baseline SCP are out of scope — 'describe-vpcs' there fails
+  with 'UnauthorizedOperation ... explicit deny in a service control policy'. Their
+  default VPC does exist, but it cannot be used to create anything either.
+
+    Examples:
+
+      ${this_script_name} --dry-run
+
+      ${this_script_name} --yes
+
+      ${this_script_name} --account wasp-nonprod --regions us-east-1 --yes
+EOF
+}
+
+account=""
+regions="us-east-1,us-west-2"
+role="OrganizationAccountAccessRole"
+dry_run="false"
+assume_yes="false"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -a | --account )
+      shift
+      account="${1}"
+      ;;
+
+    -r | --regions )
+      shift
+      regions="${1}"
+      ;;
+
+    --role )
+      shift
+      role="${1}"
+      ;;
+
+    --dry-run )
+      dry_run="true"
+      ;;
+
+    -y | --yes )
+      assume_yes="true"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}"
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+check
+
+management_account_id="$(aws organizations describe-organization \
+  --query Organization.MasterAccountId --output text)"
+
+accounts_text="$(aws organizations list-accounts \
+  --query "Accounts[?Status=='ACTIVE'].[Id,Name]" --output text)"
+
+if [ -n "${account}" ]; then
+  if [[ "${account}" =~ ^[0-9]{12}$ ]]; then
+    accounts_text="$(echo "${accounts_text}" | awk -F'\t' -v id="${account}" '$1 == id')"
+  else
+    accounts_text="$(echo "${accounts_text}" | awk -F'\t' -v name="${account}" '$2 == name')"
+  fi
+
+  if [ -z "${accounts_text}" ]; then
+    echo "No ACTIVE account matching '${account}' in the Organization." >&2
+    exit 1
+  fi
+fi
+
+region_list="$(echo "${regions}" | tr ',' ' ')"
+
+cat <<EOF
+
+Management:  ${management_account_id}
+Regions:     ${regions}
+Role:        ${role}
+Mode:        $([ "${dry_run}" == "true" ] && echo "dry-run (nothing is deleted)" || echo "DELETE")
+Accounts:
+$(echo "${accounts_text}" | awk -F'\t' '{ printf "  %s  %s\n", $1, $2 }')
+
+EOF
+
+if [ "${dry_run}" == "false" ] && [ "${assume_yes}" == "false" ]; then
+  read -r -p "Delete the default VPC of these accounts in ${regions}? [y/N] " answer
+  if [[ ! "${answer}" =~ ^[Yy]$ ]]; then
+    echo "Aborted."
+    exit 1
+  fi
+fi
+
+# Handles one account in one region. Runs in a subshell so the assumed-role
+# credentials never leak into the next account.
+process_account_region() {
+  local account_id="${1}"
+  local account_name="${2}"
+  local region="${3}"
+
+  if [ "${account_id}" != "${management_account_id}" ]; then
+    local credentials_json
+    credentials_json="$(aws sts assume-role \
+      --role-arn "arn:aws:iam::${account_id}:role/${role}" \
+      --role-session-name "${this_script_name}" \
+      --query Credentials --output json)"
+
+    export AWS_ACCESS_KEY_ID="$(echo "${credentials_json}" | jq -r .AccessKeyId)"
+    export AWS_SECRET_ACCESS_KEY="$(echo "${credentials_json}" | jq -r .SecretAccessKey)"
+    export AWS_SESSION_TOKEN="$(echo "${credentials_json}" | jq -r .SessionToken)"
+    unset AWS_PROFILE
+  fi
+
+  export AWS_DEFAULT_REGION="${region}"
+
+  local vpc_id
+  vpc_id="$(aws ec2 describe-vpcs --region "${region}" \
+    --filters Name=isDefault,Values=true \
+    --query 'Vpcs[0].VpcId' --output text)"
+
+  if [ -z "${vpc_id}" ] || [ "${vpc_id}" == "None" ]; then
+    echo "ok      ${account_name} [${region}] no default VPC"
+    return 0
+  fi
+
+  local eni_ids
+  eni_ids="$(aws ec2 describe-network-interfaces --region "${region}" \
+    --filters "Name=vpc-id,Values=${vpc_id}" \
+    --query 'NetworkInterfaces[].NetworkInterfaceId' --output text)"
+
+  if [ -n "${eni_ids}" ]; then
+    echo "REFUSE  ${account_name} [${region}] default VPC ${vpc_id} has network interfaces: ${eni_ids}" >&2
+    echo "        Something is running in there — investigate before deleting." >&2
+    return 1
+  fi
+
+  local subnet_ids
+  subnet_ids="$(aws ec2 describe-subnets --region "${region}" \
+    --filters "Name=vpc-id,Values=${vpc_id}" \
+    --query 'Subnets[].SubnetId' --output text)"
+
+  local internet_gateway_ids
+  internet_gateway_ids="$(aws ec2 describe-internet-gateways --region "${region}" \
+    --filters "Name=attachment.vpc-id,Values=${vpc_id}" \
+    --query 'InternetGateways[].InternetGatewayId' --output text)"
+
+  if [ "${dry_run}" == "true" ]; then
+    echo "would   ${account_name} [${region}] delete VPC ${vpc_id}"
+    echo "          subnets: ${subnet_ids:-none}"
+    echo "          internet gateways: ${internet_gateway_ids:-none}"
+    return 0
+  fi
+
+  local subnet_id
+  for subnet_id in ${subnet_ids}; do
+    aws ec2 delete-subnet --region "${region}" --subnet-id "${subnet_id}"
+    echo "deleted ${account_name} [${region}] subnet ${subnet_id}"
+  done
+
+  local internet_gateway_id
+  for internet_gateway_id in ${internet_gateway_ids}; do
+    aws ec2 detach-internet-gateway --region "${region}" \
+      --internet-gateway-id "${internet_gateway_id}" --vpc-id "${vpc_id}"
+    aws ec2 delete-internet-gateway --region "${region}" \
+      --internet-gateway-id "${internet_gateway_id}"
+    echo "deleted ${account_name} [${region}] internet gateway ${internet_gateway_id}"
+  done
+
+  aws ec2 delete-vpc --region "${region}" --vpc-id "${vpc_id}"
+  echo "deleted ${account_name} [${region}] VPC ${vpc_id}"
+}
+
+failed=0
+
+while IFS=$'\t' read -r account_id account_name; do
+  [ -z "${account_id}" ] && continue
+
+  for region in ${region_list}; do
+    ( process_account_region "${account_id}" "${account_name}" "${region}" ) || failed=1
+  done
+done <<< "${accounts_text}"
+
+if [ "${failed}" -ne 0 ]; then
+  echo
+  echo "At least one account/region failed — see the messages above." >&2
+  exit 1
+fi
+
+echo
+if [ "${dry_run}" == "true" ]; then
+  echo "Dry run finished. Re-run without --dry-run to delete."
+else
+  echo "Done. Every listed account has no default VPC in ${regions}."
+fi

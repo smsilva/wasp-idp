@@ -105,16 +105,42 @@ aws sts assume-role \
 > É o caminho de acesso admin à conta-membro **enquanto** o permission set SSO dela não foi
 > criado (passo ⑤).
 
+## A VPC default: toda conta nova nasce com uma por região, todas no mesmo CIDR
+
+Toda conta AWS nasce com uma **VPC default por região habilitada**, e todas usam `172.31.0.0/16`. Não é uma escolha de quem cria: é o comportamento da AWS. A consequência é que as contas de uma Organization já se sobrepõem entre si antes de qualquer decisão de endereçamento — nada a ver com o supernet `10.0.0.0/12` do [ADR 0003](../../../docs/adr/0003-supernet-cidr-allocation.md). Além da sobreposição, ela vem com subnet pública em todas as AZs, `map_public_ip_on_launch` ligado, IGW anexado, security group default permissivo e NACL allow-all.
+
+**Não existe forma nativa de impedir a criação.** `organizations create-account` não tem flag, não há atributo de conta, e SCP não alcança (a VPC é criada pela própria AWS, não por um principal da conta). A doc do AFT afirma literalmente que *"New AWS accounts are created with a VPC set up in each AWS Region, by default"*. Os únicos caminhos automáticos que a AWS oferece são de **remoção depois**, e ambos exigem Control Tower:
+
+| Caminho | O que faz | Limite |
+|---|---|---|
+| [Control Tower Account Factory](https://docs.aws.amazon.com/controltower/latest/userguide/vpc-concepts.html) | Ao provisionar a conta numa região suportada, *"automatically deletes the default AWS VPC"* e cria a `aws-controltower-VPC` no lugar | Exige Control Tower; aqui `list-landing-zones` devolve vazio |
+| [AFT `aft_feature_delete_default_vpcs_enabled`](https://docs.aws.amazon.com/controltower/latest/userguide/aft-feature-options.html) | Apaga as default em todas as regiões — **só na AFT management account** | A própria doc avisa: *"AFT doesn't delete AWS default VPCs automatically for any AWS Control Tower accounts that AFT provisions"* |
+
+**Terraform também não resolve.** `aws_default_vpc` com `force_destroy` parece a resposta e é o oposto dela: a doc do provider é explícita que, se não existir VPC default, o Terraform **cria** uma. Aplicar numa conta já limpa recria o que se quer eliminar — Terraform não expressa ausência de recurso que ele não criou.
+
+Por isso o caminho aqui é imperativo e idempotente: `scripts/remove-default-vpcs`, chamado pelo `create-account` para a conta recém-criada. Ele apaga na ordem **subnets → internet gateway (detach + delete) → VPC**, que é a ordem que a AWS exige — `delete-vpc` direto falha com `DependencyViolation`. Uma conta sem VPC default é no-op silencioso, e o script **recusa** apagar VPC que tenha qualquer ENI: interface de rede significa que alguém está usando aquilo, e aí a remoção não é segura.
+
+Rodar a partir da management account, que assume `OrganizationAccountAccessRole` em cada conta-membro (para si mesma usa a credencial ambiente, porque uma conta não assume essa role nela própria):
+
+```bash
+scripts/remove-default-vpcs --dry-run          # o que seria apagado, sem apagar
+scripts/remove-default-vpcs --yes              # Organization inteira, regiões aprovadas
+scripts/remove-default-vpcs --account <nome> --regions us-east-1 --yes
+```
+
+**As regiões negadas pela SCP ficam de fora, e continuam com a VPC default.** `describe-vpcs` nelas falha com `UnauthorizedOperation ... explicit deny in a service control policy` — a VPC existe e é inalcançável. O risco residual é baixo (região negada não cria nada), e alcançá-las exigiria abrir exceção na SCP baseline, que é decisão de guardrail. O caminho que neutraliza sem mexer na SCP — declarative policy de EC2 com VPC Block Public Access — está na issue #69.
+
 ## Checklist de uma conta nova, do zero ao "pronta para workload"
 
 ```text
 ① create-account (com e-mail único)
 ② poll até SUCCEEDED
 ③ move-account para a OU correta (Security, Infrastructure ou Workloads)
-④ assume-role OrganizationAccountAccessRole (verificação de acesso)
-⑤ Configurar permission set do SSO para a conta (tópico 4)
-⑥ SCPs da OU já se aplicam automaticamente (herdadas — tópico 2, nada a fazer aqui)
-⑦ Conta pronta — segue para `../network/` provisionar a spoke, se for conta de projeto
+④ remove-default-vpcs na conta nova (o script create-account já chama)
+⑤ assume-role OrganizationAccountAccessRole (verificação de acesso)
+⑥ Configurar permission set do SSO para a conta (tópico 4)
+⑦ SCPs da OU já se aplicam automaticamente (herdadas — tópico 2, nada a fazer aqui)
+⑧ Conta pronta — segue para `../network/` provisionar a spoke, se for conta de projeto
 ```
 
 ## Well-Architected — porquê

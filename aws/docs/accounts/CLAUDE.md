@@ -67,7 +67,8 @@ registrado.
 ## Scripts (`scripts/`)
 
 Implementação executável dos passos acima. Cada script é idempotente (reaproveita o que já
-existir). Só `revoke-permission-set` é destrutivo — pede confirmação e está marcado na tabela. Ver `--help` de cada um para detalhes.
+existir). `revoke-permission-set` e `remove-default-vpcs` são destrutivos — pedem confirmação e
+estão marcados na tabela. Ver `--help` de cada um para detalhes.
 
 | Script | Cobre o passo | O que faz |
 |---|---|---|
@@ -78,6 +79,7 @@ existir). Só `revoke-permission-set` é destrutivo — pede confirmação e est
 | `create-log-archive-bucket` | ④ | Assume role na `log-archive` e cria o bucket de auditoria (BPA, versionamento, SSE, policy do CloudTrail) |
 | `create-organization-trail` | ④ | Cria o trail organizacional multi-region + `start-logging` + validação de integridade |
 | `create-account --ou {security\|infrastructure\|deployments\|nonprod\|production}` | ④ ⑤ ⑤b ⑧ | Cria 1 conta e move para a OU pedida. `--ou production` avisa explicitamente antes de prosseguir |
+| `remove-default-vpcs [--account <conta>] [--dry-run]` | ⑤ ⑧ | Apaga a VPC default (subnets → IGW → VPC) de cada conta nas regiões aprovadas. Chamado pelo `create-account`. **Destrutivo** — pede confirmação salvo `--yes`; recusa VPC que tenha qualquer ENI |
 | `apply-baseline-service-control-policy` | ⑥ | Guardrails do tópico 2: restringe região, exige IMDSv2, nega root, protege CloudTrail/saída da Org |
 | `assign-permission-set --account <conta> --user\|--group <principal>` | ⑦ | Cria/reusa permission set do Identity Center e atribui à conta — tira a conta do limbo do switch-role |
 | `show-permission-sets [--account <conta>]` | ⑦ verificação | Somente leitura: permission sets existentes e, por conta, quem tem qual acesso |
@@ -96,12 +98,16 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
 ## Gotchas de API já descobertos
 
 - **Toda conta nasce com VPC default `172.31.0.0/16` por região — o MESMO CIDR em todas**, logo as
-  contas da Organization já têm VPCs sobrepostas entre si por construção. Remover é seguro (a
-  management desta Organization não tem nenhuma e nada quebrou). **`aws_default_vpc` com
-  `force_destroy` NÃO serve para garantir ausência:** a doc do provider é explícita que, se não
-  existir VPC default, o Terraform **cria** uma — aplicar em conta já limpa recria o que se quer
-  eliminar. Terraform não expressa ausência de recurso que ele não criou; o caminho é script
-  imperativo idempotente. Rastreado na issue #67.
+  contas da Organization já têm VPCs sobrepostas entre si por construção. **Não existe forma nativa
+  de impedir a criação** — só Control Tower/AFT apagam automaticamente, e nem o AFT cobre as contas
+  que ele provisiona. **`aws_default_vpc` com `force_destroy` NÃO serve para garantir ausência:** se
+  não existir VPC default, o Terraform **cria** uma. O caminho é `scripts/remove-default-vpcs`
+  (imperativo, idempotente), chamado pelo `create-account`. Detalhes, fontes e limites em
+  [`03-provisioning.md`](03-provisioning.md) — ler de lá. Removidas de verdade em 2026-09-01 (#67):
+  **8 VPCs**, não 6 como a issue estimava, porque a `log-archive` também tinha as duas. Nada quebrou.
+- **Nome de conta pode ter espaço** (a management desta Organization chama-se `Silvio Silva`), então
+  `list-accounts --output text` só é parseável com o **tab** como separador — `awk -F'\t'`,
+  `IFS=$'\t' read`. Um `awk '$2 == name'` casa só a primeira palavra e falha em silêncio.
 - **Renomear OU é seguro; renomear conta são dois caminhos distintos.**
   `update-organizational-unit` preserva o Id da OU (SCPs e contas seguem válidas). Já a conta
   tem duas identidades independentes:
