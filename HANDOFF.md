@@ -116,10 +116,25 @@ foram corrigidos: não existe recorte Free Tier (pool no escopo privado é Advan
 `auto_import` não substitui alocação explícita — a allocation reserva espaço sem vincular VPC.
 **`us-west-2` foi realocada de `10.3`/`10.4` para `10.4`/`10.5`**: a alocação passou a ser por
 região em `/14` contíguos, porque pool regional exige `locale` e locale é imutável — feito enquanto
-aquela raiz tinha 0 recursos, custo de duas linhas. `aws/terraform/spikes/ipam/` tem o modelo
-mínimo (13 recursos, `plan` verde, **ainda não aplicado**) com sete provas declaradas no README.
-Issue **#66** aberta para o risco real que sobrou: nada impede colisão de CIDR **entre regiões** —
-os CIDRs são literais por raiz e a única asserção compara hub vs célula dentro da mesma raiz.
+aquela raiz tinha 0 recursos, custo de duas linhas. Issue **#66** aberta para o risco real que sobrou: nada impede colisão de CIDR **entre regiões** —
+os CIDRs são literais por raiz e a única asserção compara hub vs célula dentro da mesma raiz. Issue
+**#67** para as **6 VPCs default `172.31.0.0/16`** (3 contas × 2 regiões), sobrepostas entre si por
+construção; a management já não tem nenhuma, o que prova que remover é seguro.
+
+**O spike foi aplicado de verdade, duas vezes, e achou um defeito** —
+`aws/terraform/spikes/ipam/README.md` tem as sete provas com resultado real, incluindo as não
+executadas marcadas como tal. **Em `us-east-1` (brownfield) o IPAM entregou `10.1.0.0/24`, dentro
+da VPC hub `10.1.0.0/16` que estava de pé**: `auto_import` é assíncrono e a alocação não espera por
+ele, e uma alocação prematura **envenena o pool** (VPC que cobre uma alocação existente não pode
+mais ser importada). **Em `us-west-2` (greenfield) o mesmo código devolveu `10.4.0.0/24`, sem
+sobreposição** — o defeito é exclusivo de brownfield. Consequência registrada na ADR: o custo de
+adotar IPAM **salta** quando a primeira VPC nasce fora do pool, o que é o melhor argumento *contra*
+adiar. Por isso a **ADR 0015 está `Proposto`, não `Aceito`** — a decisão é sua.
+
+Números que valem para qualquer trabalho futuro com IPAM: VPC alocada por pool leva **~4 min para
+criar e 18m29s para destruir** (o provider espera a desalocação assíncrona; a VPC some da AWS muito
+antes). Ao diagnosticar um destroy que parece travado, conferir `pgrep -af terraform` **sem
+truncar** — um `| head -3` nesta sessão escondeu o processo vivo e levou a um diagnóstico errado.
 
 **Documentação do CI consolidada:** `aws/terraform/ci/README.md` é o documento único da automação
 (trust OIDC, variables/secrets com o motivo de cada um, GitHub App, composite action `aws/setup`,
