@@ -114,6 +114,23 @@ root="${terraform_directory}/regions/${region}"
 
 step "down-cell — region ${region}"
 
+# Same preamble as up-02-region, and NOT redundant with it: values.auto.tfvars and
+# saml-metadata.xml are symlinks created at runtime, never committed. On a developer machine a
+# previous up-02-region left them behind, so this script worked without them and the gap stayed
+# invisible. On a fresh GitHub Actions checkout they simply do not exist, and every terraform
+# invocation below dies with "No value for required variable: base_domain" before touching AWS
+# (run 33512301706). A destroy needs the same variables an apply does — the root module is the
+# same one either way.
+values_file="${terraform_directory}/variables/values.tfvars"
+[ -f "${values_file}" ] \
+  || fail "missing ${values_file}. Copy variables/values.tfvars.example to values.tfvars and fill in the identity values — see variables/README.md."
+ensure_symlink "${root}" "values.auto.tfvars" "${values_file}"
+
+saml_file="${terraform_directory}/variables/saml-metadata.xml"
+[ -f "${saml_file}" ] \
+  || fail "missing ${saml_file}. module.hub reads it on every plan, including the ones a destroy runs."
+ensure_symlink "${root}" "saml-metadata.xml" "${saml_file}"
+
 state_bucket="$(discover_state_bucket "${org_profile}")"
 terraform_init "${root}" "${state_bucket}"
 
