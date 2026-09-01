@@ -118,8 +118,8 @@ foram corrigidos: não existe recorte Free Tier (pool no escopo privado é Advan
 região em `/14` contíguos, porque pool regional exige `locale` e locale é imutável — feito enquanto
 aquela raiz tinha 0 recursos, custo de duas linhas. Issue **#66** aberta para o risco real que sobrou: nada impede colisão de CIDR **entre regiões** —
 os CIDRs são literais por raiz e a única asserção compara hub vs célula dentro da mesma raiz. Issue
-**#67** para as **6 VPCs default `172.31.0.0/16`** (3 contas × 2 regiões), sobrepostas entre si por
-construção; a management já não tem nenhuma, o que prova que remover é seguro.
+**#67** para as VPCs default `172.31.0.0/16`, sobrepostas entre si por construção; a management já
+não tem nenhuma, o que prova que remover é seguro. (A #67 estimou 6; eram **8** — ver Completed Work.)
 
 **O spike foi aplicado de verdade, duas vezes, e achou um defeito** —
 `aws/terraform/spikes/ipam/README.md` tem as sete provas com resultado real, incluindo as não
@@ -154,16 +154,8 @@ reexportar depois de reaplicar.
 
 ## Em progresso agora
 
-**Frente ativa: #67 — remover as VPCs default da Organization.** Nada iniciado; abrir branch própria
-`feat/67-remove-default-vpcs`. O corpo da issue tem os 6 ids de VPC apurados, as contas, o recorte de
-SCP e os critérios de aceite — **ler a issue antes de investigar qualquer coisa**, ela foi escrita
-para não exigir redescoberta.
-
-O que decide o desenho dessa issue, e já está resolvido: **`aws_default_vpc` com `force_destroy` não
-serve**. A doc do provider é explícita que, se não existir VPC default, o Terraform **cria** uma —
-aplicar em conta limpa recria o que se quer eliminar. Terraform não expressa ausência de recurso que
-ele não criou. O caminho é **script imperativo idempotente** em `aws/docs/accounts/scripts/`,
-chamado também pelo `create-account`. Registrado em `aws/docs/accounts/CLAUDE.md`.
+**Nenhuma frente ativa.** A #67 foi fechada em 2026-09-01 (branch `feat/67-remove-default-vpcs`,
+commit `33e61f5`) — próxima frente sai do board, ver "Next Steps".
 
 **Backlog completo e priorização: GitHub Project.**
 
@@ -403,14 +395,10 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
-- **`log-archive` (`995122007318`) tem VPC default?** Não verificado — não há profile local para essa
-  conta, e a varredura da #67 cobriu só `personal`, `network`, `cicd` e `wasp-nonprod`. Assumir que
-  tem duas (uma por região permitida) e alcançá-la assumindo `OrganizationAccountAccessRole` a partir
-  da management.
-- **Vale abrir exceção na SCP baseline para limpar as VPCs default das 15 regiões negadas?** Hoje
-  `describe-vpcs` nelas falha com `UnauthorizedOperation ... explicit deny in a service control
-  policy`, então as VPCs existem e são inalcançáveis. Risco residual é baixo (região negada não cria
-  nada), e mexer na SCP é decisão de guardrail — deixado fora do escopo da #67 de propósito.
+- **Vale abrir exceção na SCP baseline para limpar as VPCs default das 15 regiões negadas?**
+  Continua em aberto, mas **deixou de ser o único caminho**: a issue **#69** propõe neutralizá-las com
+  *declarative policy* de EC2 (VPC Block Public Access), sem tocar na SCP. O item bloqueante lá é
+  medir se a policy dá para restringir por região — aplicada larga, ela mata o ALB público da célula.
 - **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
   ângulos já mapeados.
 - **A `gp2` in-tree (`kubernetes.io/aws-ebs`) ainda provisiona volume em Kubernetes 1.36, via CSI
@@ -443,15 +431,14 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-1. **#67 — próxima frente, branch própria `feat/67-remove-default-vpcs`.** Escrever o script
-   idempotente em `aws/docs/accounts/scripts/` (convenções de lá: sem extensão, long-form, `set -e`,
-   mensagens em inglês) que apaga subnets → IGW → VPC nessa ordem (`delete-vpc` direto falha com
-   `DependencyViolation`), com `--dry-run`, `--account`/`--region`, e um guard que **recusa apagar
-   VPC que tenha qualquer ENI**. Integrar ao `create-account`. Nenhuma das 6 tem ENI hoje, então
-   exercitar o guard exige criar uma ENI descartável de propósito — é critério de aceite.
-2. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
+1. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
    asserção cruzada, não só a asserção. `aws/terraform/variables/values.tfvars` **é versionado** e é
    lugar viável para a tabela única de alocação.
+2. **#69** — declarative policy de EC2 (VPC Block Public Access) para neutralizar as VPCs default das
+   15 regiões negadas pela SCP, que a #67 não alcançou. **Não aplicar em target que contenha o hub
+   antes de medir** se a policy se restringe por região: modo `ingress-only` preserva a saída por NAT
+   mas mata o ALB público da célula. Critério de aceite inclui o `curl` sem `-k` em
+   `services.<célula>.<subzona>` justamente por isso.
 3. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
    arquivos movidos.
 4. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
@@ -466,5 +453,13 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
+
+- **2026-09-01 — #67, VPCs default removidas da Organization** (`feat/67-remove-default-vpcs`,
+  `33e61f5`). Eram **8**, não 6: a `log-archive` também tinha as duas, e a
+  `OrganizationAccountAccessRole` a alcança sem profile local. `scripts/remove-default-vpcs` é
+  idempotente, recusa VPC com ENI (provado em `--dry-run` e em modo `DELETE` com ENI descartável) e
+  é chamado pelo `create-account`. **Não existe forma nativa de impedir a criação** — só Control
+  Tower/AFT apagam, e o AFT não cobre as contas que ele provisiona; fontes e limites em
+  `aws/docs/accounts/03-provisioning.md`.
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
