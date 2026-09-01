@@ -19,66 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure OIDC credentials
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-          CICD_ROLE_ARN: ${{ vars.CICD_ROLE_ARN }}
-          NETWORK_ROLE_ARN: ${{ vars.NETWORK_ROLE_ARN }}
-        run: |
-          oidc_token="$(curl --silent --show-error --location \
-            --header "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-            | jq -r '.value')"
-
-          # Trocamos o token OIDC do GitHub por credenciais da cicd UMA VEZ — ver
-          # o mesmo comentario em provision-region.yml e aws/terraform/ci/README.md.
-          creds="$(aws sts assume-role-with-web-identity \
-            --role-arn "${CICD_ROLE_ARN}" \
-            --role-session-name "gha-teardown-region" \
-            --web-identity-token "${oidc_token}" \
-            --duration-seconds 21600 \
-            --output json)"
-
-          mkdir -p ~/.aws
-          cat > ~/.aws/credentials <<EOF
-          [cicd]
-          aws_access_key_id = $(jq -r '.Credentials.AccessKeyId' <<<"${creds}")
-          aws_secret_access_key = $(jq -r '.Credentials.SecretAccessKey' <<<"${creds}")
-          aws_session_token = $(jq -r '.Credentials.SessionToken' <<<"${creds}")
-          EOF
-
-          cat > ~/.aws/config <<EOF
-          [profile network]
-          role_arn = ${NETWORK_ROLE_ARN}
-          source_profile = cicd
-          EOF
-
-      - name: Write SAML metadata from secret
-        env:
-          SAML_METADATA_XML: ${{ secrets.SAML_METADATA_XML }}
-        run: printf '%s' "${SAML_METADATA_XML}" > aws/terraform/variables/saml-metadata.xml
-
-      - name: Discover runner egress IPv4
-        id: egress-ip
-        run: |
-          ip="$(curl --silent --show-error https://checkip.amazonaws.com | tr -d '[:space:]')"
-          if [[ ! "${ip}" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
-            echo "runner egress IP is not IPv4: '${ip}' — refusing to build a malformed CIDR" >&2
-            exit 1
-          fi
-          echo "ip=${ip}" >> "${GITHUB_OUTPUT}"
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup AWS auth, SAML, Terraform
+        id: setup
+        uses: smsilva/wasp-gitops/actions/aws/setup@main
         with:
-          terraform_version: "1.15.0"
+          cicd_role_arn: ${{ vars.CICD_ROLE_ARN }}
+          network_role_arn: ${{ vars.NETWORK_ROLE_ARN }}
+          role_session_name: gha-teardown-region
+          saml_metadata_xml: ${{ secrets.SAML_METADATA_XML }}
 
       - name: Teardown cell
         working-directory: aws/terraform
         env:
           REGION: ${{ inputs.region }}
-          EGRESS_IP: ${{ steps.egress-ip.outputs.ip }}
+          EGRESS_IP: ${{ steps.setup.outputs.egress_ip }}
           STATE_BUCKET: ${{ vars.STATE_BUCKET }}
         run: |
           ./scripts/down-cell \
