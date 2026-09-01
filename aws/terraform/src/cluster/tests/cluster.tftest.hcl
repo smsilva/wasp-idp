@@ -164,3 +164,53 @@ run "role_dos_nos_tem_as_tres_policies_gerenciadas" {
     error_message = "o role dos nos precisa de WorkerNode + ECR ReadOnly + CNI, recebidos ${length(aws_iam_role_policy_attachment.node)}"
   }
 }
+
+# --- access_entries (admin access) ---
+
+run "access_entries_vazio_por_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_eks_access_entry.this) == 0
+    error_message = "sem admin_principal_arns, nenhuma access entry deve ser criada, recebidas ${length(aws_eks_access_entry.this)}"
+  }
+}
+
+run "access_entries_com_um_principal" {
+  command = plan
+
+  variables {
+    access_entries = {
+      admin-role = {
+        principal_arn = "arn:aws:iam::123456789012:role/OrganizationAccountAccessRole"
+        policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+        access_scope  = "cluster"
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_eks_access_entry.this) == 1
+    error_message = "com uma access entry, esperado 1, recebidas ${length(aws_eks_access_entry.this)}"
+  }
+
+  assert {
+    condition     = aws_eks_access_entry.this["admin-role"].principal_arn == "arn:aws:iam::123456789012:role/OrganizationAccountAccessRole"
+    error_message = "principal_arn da access entry nao confere, recebido ${aws_eks_access_entry.this["admin-role"].principal_arn}"
+  }
+
+  assert {
+    condition     = length(aws_eks_access_policy_association.this) == 1
+    error_message = "com uma access entry, esperado 1 policy association, recebidas ${length(aws_eks_access_policy_association.this)}"
+  }
+
+  assert {
+    condition     = aws_eks_access_policy_association.this["admin-role"].policy_arn == "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    error_message = "policy_arn deveria ser AmazonEKSClusterAdminPolicy, recebido ${aws_eks_access_policy_association.this["admin-role"].policy_arn}"
+  }
+
+  assert {
+    condition     = aws_eks_access_policy_association.this["admin-role"].access_scope[0].type == "cluster"
+    error_message = "access_scope deveria ser cluster, recebido ${aws_eks_access_policy_association.this["admin-role"].access_scope[0].type}"
+  }
+}
