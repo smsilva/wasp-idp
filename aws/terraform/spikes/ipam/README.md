@@ -63,6 +63,31 @@ O desenho de [`aws/docs/network/08-ipam.md`](../../../docs/network/08-ipam.md) �
 | Vida do spike | ~20 min de operação útil |
 | Custo | desprezível (~US$ 0,05/dia de taxa; nem chegou a fechar uma hora de billing) |
 
+## Segunda rodada: o cenário greenfield (`us-west-2`)
+
+O spike acima rodou em **brownfield** — havia VPC pré-existente, e é daí que veio o defeito. A pergunta que ele não responde é se o problema existe no **dia zero**, quando o IPAM nasce antes de qualquer VPC. A resposta esperada é que não exista: sem nada a importar, `auto_import` é irrelevante e a race some.
+
+`us-west-2` permite testar isso sem criar uma Organization: `regions/us-west-2/` nunca foi aplicada, e o `/14` daquela região (`10.4.0.0/14`) não contém nenhuma VPC. No que importa para o IPAM — o espaço do pool — é greenfield de verdade.
+
+```bash
+terraform plan  -var-file=greenfield-us-west-2.tfvars      # 10 recursos
+terraform apply -var-file=greenfield-us-west-2.tfvars
+terraform output proof_vpc_cidr                            # esperado: dentro de 10.4.0.0/14
+terraform output proof_vpc_is_inside_regional_block         # esperado: true
+```
+
+A VPC default de `us-west-2` (`172.31.0.0/16`) **não interfere**: está fora do supernet, logo fora de qualquer pool. Ela é assunto da issue #67.
+
+### A prova 5, que ficou faltando, cabe aqui
+
+Com o ambiente de pé, `var.proof_vpc_omit_tag = true` recria a VPC de prova **sem** a tag exigida pelo pool. O apply tem de **falhar**:
+
+```bash
+terraform apply -var-file=greenfield-us-west-2.tfvars -var proof_vpc_omit_tag=true
+```
+
+Se ele **passar**, a descoberta é maior que a prova: `allocation_resource_tags` não estaria sendo aplicada, e o argumento de que "o IPAM transforma convenção em condição" cairia junto — que é a principal vantagem dele sobre uma tabela markdown.
+
 ## Rodar
 
 Pré-requisitos: SSO ativo nos três profiles (`personal`, `network`, `cicd`) e Terraform >= 1.15.

@@ -161,6 +161,8 @@ resource "aws_vpc_ipam_pool_cidr" "regional" {
 # reserva o espaco ("preventing usage by IPAM") sem vincular VPC alguma — que e precisamente a
 # diferenca entre este recurso e o auto_import.
 resource "aws_vpc_ipam_pool_cidr_allocation" "organization_reserved" {
+  count = var.organization_reserved_block == null ? 0 : 1
+
   ipam_pool_id = aws_vpc_ipam_pool.regional[var.region].id
   cidr         = var.organization_reserved_block
   description  = "Reservado a Organization (N=0) — sem recurso, por isso explicito"
@@ -197,11 +199,13 @@ resource "aws_vpc" "proof" {
   ipv4_ipam_pool_id   = aws_vpc_ipam_pool.regional[var.region].id
   ipv4_netmask_length = var.proof_vpc_netmask_length
 
-  tags = {
-    Name = "spike-ipam-proof"
-    # Sem esta tag o apply FALHA — e a prova 5. Nao remover "para simplificar".
-    (var.allocation_tag_key) = "spike"
-  }
+  # Sem a tag exigida o apply FALHA — e a prova 5, controlada por var.proof_vpc_omit_tag. Nao
+  # remover a tag no codigo "para simplificar": o flag existe para que a prova negativa seja
+  # reproduzivel sem editar recurso.
+  tags = merge(
+    { Name = "spike-ipam-proof" },
+    var.proof_vpc_omit_tag ? {} : { (var.allocation_tag_key) = "spike" },
+  )
 
   depends_on = [
     aws_ram_resource_association.regional_pool,

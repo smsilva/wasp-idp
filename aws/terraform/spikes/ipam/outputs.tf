@@ -33,3 +33,21 @@ output "how_to_verify_adoption" {
       --profile ${var.network_profile} --region ${var.region} --output json > /tmp/ipam-alloc.json
   EOT
 }
+
+# No greenfield este e o numero que decide: o pool tinha o /14 inteiro livre, entao o CIDR devolvido
+# tem de cair dentro dele e NAO sobrepor nada. No brownfield de us-east-1, foi aqui que a colisao
+# apareceu — e uma comparacao de primeiro octeto NAO teria pego, porque "10." casa com tudo.
+#
+# Terraform nao tem funcao de containment de CIDR (ver aws/terraform/CLAUDE.md). A comparacao de
+# segundo octeto contra a largura do prefixo e o caminho, o mesmo padrao ja usado nas raizes
+# regionais.
+locals {
+  regional_block_octet = tonumber(split(".", var.regional_blocks[var.region])[1])
+  regional_block_width = pow(2, 16 - tonumber(split("/", var.regional_blocks[var.region])[1]))
+  proof_vpc_octet      = tonumber(split(".", aws_vpc.proof.cidr_block)[1])
+}
+
+output "proof_vpc_is_inside_regional_block" {
+  description = "O CIDR devolvido pertence mesmo ao bloco da regiao? Falso indica desenho errado do pool, nao da VPC."
+  value       = local.proof_vpc_octet >= local.regional_block_octet && local.proof_vpc_octet < local.regional_block_octet + local.regional_block_width
+}
