@@ -60,6 +60,16 @@ banco, subnets de endpoints). Um `/16` por spoke é generoso de propósito — o
 | `10.1.0.0/16` | 1º spoke (PoC) | `vpcCidrSecondOctet: 1` |
 | `10.2.0.0/16` … `10.15.0.0/16` | próximos spokes | um N por spoke |
 
+### Agrupamento por região em `/14` (amenda de 2026-09-01, issue #15)
+
+A alocação acima, por ordem de criação, foi **agrupada por região**: cada região ocupa um `/14`
+contíguo (`us-east-1` = `10.0.0.0/14`, `us-west-2` = `10.4.0.0/14`). O motivo é de futuro, não de
+presente: um **pool regional de IPAM exige `locale`, e locale é imutável** — sem bloco contíguo por
+região, adotar IPAM depois exigiria re-endereçar VPC. `us-west-2` saiu de `10.3`/`10.4` para
+`10.4`/`10.5` enquanto aquela raiz tinha zero recursos aplicados. Tabela vigente em
+[`../../terraform/README.md`](../../terraform/README.md), seção "Alocação de CIDR", e em
+[ADR 0003](../../../docs/adr/0003-supernet-cidr-allocation.md).
+
 ## ✅ Gap do CIDR hardcoded — RESOLVIDO
 
 A `Network` XR **hardcodava `172.16.0.0/16`** (fora da supernet + fixo → todo spoke
@@ -96,7 +106,7 @@ CIDR é a única decisão irreversível deste domínio.
 | **Encolher o CIDR roteável do spoke** (CIDR secundário em `100.64.0.0/10` para pods) | Configuração do VPC CNI; não mexe na supernet | **Provavelmente o primeiro a tentar** — ver abaixo |
 | **Ampliar a supernet** (`/12` → `/10`, `/8`) | Migração se houver spoke; um `/8` come todo o espaço privado classe A e colide com peer externo futuro | Só se **todas** as spokes precisarem de rota central |
 | **CIDR repetido para spoke isolada** | Zero — é reinterpretação, não mudança | Se spoke de tenant não participa do roteamento central. Unicidade só é exigida entre VPCs que se falam |
-| **VPC IPAM** com pools por região/tier | Trabalho novo; substitui o octeto calculado. Desenho completo em [`08-ipam.md`](08-ipam.md) | Alocação em escala com múltiplas regiões e tiers |
+| **VPC IPAM** com pools por região/tier | Exige **Advanced Tier** (US$ 0,197/mês por IP ativo); substitui o octeto calculado. Desenho em [`08-ipam.md`](08-ipam.md); **avaliado e adiado** em [ADR 0015](../../../docs/adr/0015-defer-ipam-adoption.md) | Alocação em escala com múltiplas regiões e tiers |
 | **PrivateLink ou private NAT Gateway** | Recurso por conexão, não por VPC | Quando o CIDR repetido é a escolha **e** uma exceção precisa falar com o hub. Nomeados por REL02-BP05 |
 | **Alocação bidimensional** (`/20` por spoke dentro do bloco do tier) | Exige cálculo de IP → `function-kcl` | Muitas spokes pequenas por região |
 | **Dual-stack IPv6** | Reescreve o plano inteiro | Não avaliado. REL02-BP03 o sugere nominalmente para EKS |
