@@ -154,12 +154,26 @@ reexportar depois de reaplicar.
 
 ## Em progresso agora
 
+**Frente ativa: #67 — remover as VPCs default da Organization.** Nada iniciado; abrir branch própria
+`feat/67-remove-default-vpcs`. O corpo da issue tem os 6 ids de VPC apurados, as contas, o recorte de
+SCP e os critérios de aceite — **ler a issue antes de investigar qualquer coisa**, ela foi escrita
+para não exigir redescoberta.
+
+O que decide o desenho dessa issue, e já está resolvido: **`aws_default_vpc` com `force_destroy` não
+serve**. A doc do provider é explícita que, se não existir VPC default, o Terraform **cria** uma —
+aplicar em conta limpa recria o que se quer eliminar. Terraform não expressa ausência de recurso que
+ele não criou. O caminho é **script imperativo idempotente** em `aws/docs/accounts/scripts/`,
+chamado também pelo `create-account`. Registrado em `aws/docs/accounts/CLAUDE.md`.
+
 **Backlog completo e priorização: GitHub Project.**
 
 ```bash
-gh project item-list 6 --owner smsilva --format json    # board inteiro
-gh issue list -R smsilva/wasp-idp --label private-access-ingress --state open
+gh project item-list 6 --owner smsilva --limit 100 --format json   # board inteiro
+gh issue list -R smsilva/wasp-idp --label network-foundation --state open
 ```
+
+`--limit 100` é obrigatório: o default de 30 já não cobre o board, e uma auditoria sem ele acusa
+issues como "fora do board" que já estão nele.
 
 Board: https://github.com/users/smsilva/projects/6
 
@@ -243,15 +257,23 @@ com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` 
 
 ## How to Resume
 
-**Primeiro comando — o SSO cai sozinho e leva os três profiles juntos** (`network` e `cicd`
-assumem role a partir de `personal`):
+**Primeiro comando** — abrir a branch da frente ativa e conferir credencial:
 
 ```bash
-for p in personal network cicd; do
+git checkout -b feat/67-remove-default-vpcs
+gh issue view 67 --repo smsilva/wasp-idp          # ids das VPCs, contas e critérios já apurados
+for p in personal network cicd wasp-nonprod; do
   echo "=== ${p} ==="
   aws sts get-caller-identity --profile "${p}" --output json
 done
 ```
+
+**O SSO cai sozinho, e nem sempre leva os três profiles juntos.** `network` e `cicd` assumem role a
+partir de `personal`, mas as sessões de role assumida ficam em cache e sobrevivem à expiração do
+token de origem — já aconteceu de `personal` estar morto e os outros dois respondendo. Sintoma quando
+falta só o `personal`: qualquer coisa que use o provider da management falha com
+`InvalidGrantException ... refresh cached SSO token failed`. Recuperação: `! aws sso login --profile
+personal`.
 
 `--query` devolve lixo nesta máquina (wrapper `rtk`, ver `CLAUDE.local.md`) — usar `--output json`
 e ler o `Account`/`Arn` inteiro. Erro de profile inexistente ou ARN vazio ⟹
@@ -381,6 +403,14 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
+- **`log-archive` (`995122007318`) tem VPC default?** Não verificado — não há profile local para essa
+  conta, e a varredura da #67 cobriu só `personal`, `network`, `cicd` e `wasp-nonprod`. Assumir que
+  tem duas (uma por região permitida) e alcançá-la assumindo `OrganizationAccountAccessRole` a partir
+  da management.
+- **Vale abrir exceção na SCP baseline para limpar as VPCs default das 15 regiões negadas?** Hoje
+  `describe-vpcs` nelas falha com `UnauthorizedOperation ... explicit deny in a service control
+  policy`, então as VPCs existem e são inalcançáveis. Risco residual é baixo (região negada não cria
+  nada), e mexer na SCP é decisão de guardrail — deixado fora do escopo da #67 de propósito.
 - **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
   ângulos já mapeados.
 - **A `gp2` in-tree (`kubernetes.io/aws-ebs`) ainda provisiona volume em Kubernetes 1.36, via CSI
@@ -413,11 +443,15 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-1. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
-   asserção cruzada, não só a asserção.
-2. **#67** — remover as 6 VPCs default `172.31.0.0/16`. **`aws_default_vpc` com `force_destroy` é
-   cilada:** ele *cria* a VPC default se ela não existir, então aplicá-lo em conta limpa recria o
-   que se quer eliminar. O caminho é script imperativo idempotente.
+1. **#67 — próxima frente, branch própria `feat/67-remove-default-vpcs`.** Escrever o script
+   idempotente em `aws/docs/accounts/scripts/` (convenções de lá: sem extensão, long-form, `set -e`,
+   mensagens em inglês) que apaga subnets → IGW → VPC nessa ordem (`delete-vpc` direto falha com
+   `DependencyViolation`), com `--dry-run`, `--account`/`--region`, e um guard que **recusa apagar
+   VPC que tenha qualquer ENI**. Integrar ao `create-account`. Nenhuma das 6 tem ENI hoje, então
+   exercitar o guard exige criar uma ENI descartável de propósito — é critério de aceite.
+2. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
+   asserção cruzada, não só a asserção. `aws/terraform/variables/values.tfvars` **é versionado** e é
+   lugar viável para a tabela única de alocação.
 3. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
    arquivos movidos.
 4. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon

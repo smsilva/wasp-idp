@@ -68,6 +68,16 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   implementação de propósito e confirmar que o teste falha. Duas assertions desta base eram
   vazias até isso ser feito — uma comparava dois valores desconhecidos, outra usava
   `alltrue([])`, que é `true`.
+- **Asserção sobre CIDR por prefixo de string é vazia neste repo:** todo bloco começa com `10.`, então
+  `startswith(cidr, "10.")` casa com o supernet inteiro e não distingue nada. Containment se verifica
+  comparando o **segundo octeto** contra a largura do prefixo
+  (`octeto >= base && octeto < base + pow(2, 16 - prefixo)`) — não há função de containment de CIDR no
+  Terraform.
+- **Regra server-side avaliada na CRIAÇÃO não é reavaliada no update, e provar que ela existe exige
+  `-replace`.** Ex.: `allocation_resource_tags` de pool de IPAM recusa `CreateVpc` sem a tag, mas
+  remover a tag de uma VPC já criada passa sem erro. Um teste negativo feito com `apply` simples
+  produz falso negativo e se lê como "a regra não funciona". Vale para qualquer validação que o
+  serviço só aplica no create.
 - Validação que vive numa `variable` some quando os valores viram inline. Ao mover valores para
   dentro do `main.tf`, transformar a validação em assertion de teste — senão vira buraco
   silencioso. Foi o que aconteceu com a checagem de supernet do CIDR.
@@ -214,6 +224,11 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
 - **Todo `terraform apply`/`destroy` rodado fora dos scripts `up-NN` precisa de `-no-color`.**
   `scripts/lib` já usa; um `apply`/`destroy` improvisado com `| tee arquivo.log` sem essa flag
   salva o log cheio de códigos ANSI, ilegível fora de um terminal que os interpreta.
+- **Ao checar se um `apply`/`destroy` longo ainda está vivo, NÃO truncar a saída do `pgrep`.** Um
+  `pgrep -af terraform | head -3` devolve o language server do VS Code e o MCP server e esconde o
+  processo real, que aparece depois deles — a ausência se lê como "o comando morreu". Isso já levou a
+  propor um segundo `destroy` concorrente sobre o mesmo state, com o primeiro ainda rodando. Rodar
+  `pgrep -af terraform` inteiro, e conferir também se o log ainda avança.
 - **Nunca rodar um `apply`/`destroy` de vários minutos de forma síncrona — nem com `timeout`, nem
   sem redirecionar.** Os dois matam o processo no meio (o `timeout` explicitamente; um comando
   síncrono comum também, se o que o invoca tiver teto de tempo próprio) e deixam recurso órfão fora

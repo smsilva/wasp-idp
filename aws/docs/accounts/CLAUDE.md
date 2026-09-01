@@ -95,6 +95,13 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
 
 ## Gotchas de API já descobertos
 
+- **Toda conta nasce com VPC default `172.31.0.0/16` por região — o MESMO CIDR em todas**, logo as
+  contas da Organization já têm VPCs sobrepostas entre si por construção. Remover é seguro (a
+  management desta Organization não tem nenhuma e nada quebrou). **`aws_default_vpc` com
+  `force_destroy` NÃO serve para garantir ausência:** a doc do provider é explícita que, se não
+  existir VPC default, o Terraform **cria** uma — aplicar em conta já limpa recria o que se quer
+  eliminar. Terraform não expressa ausência de recurso que ele não criou; o caminho é script
+  imperativo idempotente. Rastreado na issue #67.
 - **Renomear OU é seguro; renomear conta são dois caminhos distintos.**
   `update-organizational-unit` preserva o Id da OU (SCPs e contas seguem válidas). Já a conta
   tem duas identidades independentes:
