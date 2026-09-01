@@ -1,6 +1,11 @@
 # Defer IPAM adoption
 
-**Status:** Aceito
+**Status:** Proposto — pendente do teste greenfield em `us-west-2`
+
+> Não aceitar antes disso. O spike de `us-east-1` provou o cenário **brownfield** e encontrou um
+> defeito real, mas o argumento contrário (o custo de adotar **salta** quando a primeira VPC nasce
+> fora do pool) só pode ser pesado depois de o fluxo de dia zero ser exercitado. Ver
+> `aws/terraform/spikes/ipam/greenfield-us-west-2.tfvars`.
 
 ## Contexto
 

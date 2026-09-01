@@ -62,9 +62,23 @@ variable "regional_blocks" {
 }
 
 variable "organization_reserved_block" {
-  description = "Bloco reservado a Organization (N=0). Nao tem recurso, entao entra por alocacao EXPLICITA, nao por auto_import."
+  description = <<-EOT
+    Bloco reservado a Organization (N=0). Nao tem recurso, entao entra por alocacao EXPLICITA, nao
+    por auto_import. `null` desliga — necessario quando o pool regional nao contem este bloco (o
+    N=0 vive no /14 de us-east-1, entao um teste em us-west-2 tem de desligar).
+  EOT
   type        = string
   default     = "10.0.0.0/16"
+}
+
+variable "proof_vpc_omit_tag" {
+  description = <<-EOT
+    Quando true, a VPC de prova nasce SEM a tag exigida pelo pool. E a prova negativa: o apply tem
+    de FALHAR. Serve para demonstrar que `allocation_resource_tags` e condicao de alocacao, nao
+    convencao — a unica coisa que separa IPAM de planilha.
+  EOT
+  type        = bool
+  default     = false
 }
 
 variable "allocation_tag_key" {
