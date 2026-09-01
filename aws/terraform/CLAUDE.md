@@ -388,6 +388,13 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   cria as target groups que gerencia — quando o Terraform é o dono, o ARN é conhecido e escopar é
   estritamente mais fechado.
 
+## Client VPN (operação)
+
+- **O roteiro de operação diária (exportar `.ovpn`, importar profile, conectar, diagnosticar) está
+  em [`aws/docs/vpn/client-vpn-operations.md`](../docs/vpn/client-vpn-operations.md).** Ler de lá,
+  não deduzir — inclui a tabela de perfis AWS envolvidos, problemas comuns e os comandos exatos.
+- O `.ovpn` nunca se reaproveita entre applies do hub (DNS name muda). Reexportar sempre.
+
 ## Rede
 
 - **Alcance da malha é propriedade da CAMADA, não de uma subnet dela: a rota para o supernet existe em

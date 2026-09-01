@@ -71,3 +71,26 @@ jobs:
             --close-public-access \
             --state-bucket "${STATE_BUCKET}" \
             --yes
+
+      - name: Summary
+        if: always()
+        working-directory: aws/terraform
+        env:
+          REGION: ${{ inputs.region }}
+          STATE_BUCKET: ${{ vars.STATE_BUCKET }}
+        run: |
+          cd "regions/${REGION}"
+          terraform init -backend-config="bucket=${STATE_BUCKET}" -reconfigure >/dev/null 2>&1
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Region provisioned: ${REGION}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo
+          terraform output -raw kubeconfig_command 2>/dev/null || echo "(kubeconfig command not available)"
+          echo
+          terraform output -raw cell_services_url 2>/dev/null || echo "(services URL not available)"
+          echo
+          echo "  VPN operations: aws/docs/vpn/client-vpn-operations.md"
+          echo "    (or https://github.com/${GITHUB_REPOSITORY}/blob/main/aws/docs/vpn/client-vpn-operations.md)"
+          echo
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

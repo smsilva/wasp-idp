@@ -90,18 +90,8 @@ cd aws/terraform
 `--with-cell`, e exige o túnel do Client VPN conectado primeiro — os providers `helm`/`kubernetes`
 falam com o API server a partir desta máquina durante o apply.
 
-```bash
-# depois do hub, antes de --with-cell
-endpoint="$(cd regions/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
-aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
-  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
-aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
-aws-vpn-client connect --profile-name hub
-aws-vpn-client get-connection-status --profile-name hub    # Connected antes de seguir
-```
-
-O `.ovpn` **nunca** se reaproveita entre applies do hub: a DNS name do endpoint muda a cada
-recriação. Reexportar sempre.
+**Roteiro completo de operação do túnel (exportar `.ovpn`, importar profile, conectar, diagnosticar):**
+[`aws/docs/vpn/client-vpn-operations.md`](../docs/vpn/client-vpn-operations.md).
 
 | # | Script | Raiz | Depende de | Custo/mês | Nível |
 |---|---|---|---|---|---|
