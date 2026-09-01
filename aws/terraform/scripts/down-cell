@@ -141,10 +141,24 @@ elif [ "${close_public_access}" == "true" ]; then
   cell_network_args=(-var "endpoint_public_access=false")
 fi
 
+cells="$( (cd "${root}" && terraform state list) | grep --count '^module\.cell\.' || true)"
+
 # --close-public-access is the cleanup step: it only flips the endpoint back to
 # closed and exits. No destroy, no confirmation — the destroy already ran (or
 # never started because there was nothing to tear down).
 if [ "${close_public_access}" == "true" ]; then
+  # And when the destroy DID run, there is no endpoint left to close. This guard is not
+  # defensive tidiness: `terraform apply -target` on a resource absent from the state CREATES
+  # it, and the region's desired state includes the cell, so the cleanup step happily rebuilt
+  # a VPC, 4 subnets, an IAM role and a whole EKS control plane right after the destroy removed
+  # them — "Apply complete! Resources: 8 added" on a run whose job was to tear down (run
+  # 33513636185). The caller cannot avoid this: teardown-region.yml runs this step with
+  # `if: always()` on purpose, because on the FAILURE path the endpoint really is left open.
+  if [ "${cells}" -eq 0 ]; then
+    log "no cell resources in the state of ${region} — no endpoint to close"
+    exit 0
+  fi
+
   step "Closing the EKS public endpoint (cleanup step — no destroy)"
   close_apply_options=()
   if [ "${assume_yes}" == "true" ]; then
@@ -157,8 +171,6 @@ if [ "${close_public_access}" == "true" ]; then
   log "endpoint closed."
   exit 0
 fi
-
-cells="$( (cd "${root}" && terraform state list) | grep --count '^module\.cell\.' || true)"
 
 if [ "${cells}" -eq 0 ]; then
   log "no cell resources in the state of ${region} — nothing to tear down"

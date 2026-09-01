@@ -32,6 +32,14 @@ Fato + porquê, um por linha. Narrativa completa de cada achado, quando existe, 
   mudar sozinha entre dois applies da mesma árvore).
 - `curl | tr` engole a falha do `curl` (exit code é o do `tr`) — sem pipe, `--fail`, e validar
   também o formato da resposta (portal cativo devolve HTML com 200).
+- **`terraform apply -target` num recurso AUSENTE do state CRIA o recurso — não é no-op.** O step
+  de cleanup do `down-cell` (`--close-public-access`, alvo
+  `module.cell.module.cluster.aws_eks_cluster.this`) rodava depois do destroy e, como o estado
+  desejado da região inclui a célula, reconstruiu VPC, 4 subnets, IAM role e um **control plane EKS
+  inteiro**: `Apply complete! Resources: 8 added` numa run cujo trabalho era destruir (run
+  `33513636185`). O `if: always()` do workflow está certo — no caminho de FALHA o endpoint fica
+  mesmo aberto. Quem tem de saber que não há nada a fechar é o script, via guard de `state list`.
+  **Regra: todo passo "de ajuste" com `-target` precisa checar que o alvo existe no state.**
 - **Bloco `moved` é incompatível com `-target`, e esta árvore vive de applies direcionados.**
   Enquanto o move estiver pendente no state, QUALQUER plan com `-target` falha com
   `Moved resource instances excluded by targeting` — e tanto `up-02-region` quanto `down-cell`
