@@ -26,6 +26,14 @@ show_usage() {
       -h,  --help           Show this help
       -y,  --yes            Do not ask before destroying
       -r,  --region         Region root under regions/ (default: us-east-1)
+           --public-cidr    Open the EKS API's public endpoint restricted to
+                            this CIDR before the destroy, so the refresh can
+                            reach the API server. Mutually exclusive with
+                            --close-public-access.
+           --close-public-access
+                            Close the EKS API's public endpoint (does NOT run
+                            a destroy — it is the cleanup step). Mutually
+                            exclusive with --public-cidr.
            --state-bucket   Bucket name (default: tfstate-<organization-id>)
            --org-profile    Profile that reads Organizations (default: personal)
 
@@ -35,12 +43,18 @@ show_usage() {
 
       ${this_script_name} --yes
 
+      # From CI (no VPN tunnel): open the endpoint, destroy, close it again
+      ${this_script_name} --yes --public-cidr 203.0.113.10/32
+      ${this_script_name} --yes --close-public-access
+
 EOF
 }
 
 assume_yes="false"
 org_profile="personal"
 region="us-east-1"
+public_cidr=""
+close_public_access="false"
 
 while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
   case $1 in
@@ -56,6 +70,16 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
     -r | --region )
       shift
       region="${1}"
+      ;;
+
+    --public-cidr )
+      shift
+      public_cidr="${1}"
+      [ -n "${public_cidr}" ] || fail "--public-cidr requires a CIDR (e.g. 203.0.113.10/32)."
+      ;;
+
+    --close-public-access )
+      close_public_access="true"
       ;;
 
     --state-bucket )
@@ -79,6 +103,10 @@ done
 
 set -e
 
+if [ -n "${public_cidr}" ] && [ "${close_public_access}" == "true" ]; then
+  fail "--public-cidr and --close-public-access are mutually exclusive."
+fi
+
 require_tools terraform
 
 root="${terraform_directory}/regions/${region}"
@@ -89,11 +117,53 @@ step "down-cell — region ${region}"
 state_bucket="$(discover_state_bucket "${org_profile}")"
 terraform_init "${root}" "${state_bucket}"
 
+cell_network_args=()
+if [ -n "${public_cidr}" ]; then
+  cell_network_args=(-var "endpoint_public_access=true" -var "public_access_cidrs=[\"${public_cidr}\"]")
+elif [ "${close_public_access}" == "true" ]; then
+  cell_network_args=(-var "endpoint_public_access=false")
+fi
+
+# --close-public-access is the cleanup step: it only flips the endpoint back to
+# closed and exits. No destroy, no confirmation — the destroy already ran (or
+# never started because there was nothing to tear down).
+if [ "${close_public_access}" == "true" ]; then
+  step "Closing the EKS public endpoint (cleanup step — no destroy)"
+  close_apply_options=()
+  if [ "${assume_yes}" == "true" ]; then
+    close_apply_options+=(-auto-approve)
+  fi
+  (cd "${root}" && terraform apply -no-color -input=false \
+    -target=module.cell.module.cluster.aws_eks_cluster.this \
+    "${cell_network_args[@]}" \
+    "${close_apply_options[@]}")
+  log "endpoint closed."
+  exit 0
+fi
+
 cells="$( (cd "${root}" && terraform state list) | grep --count '^module\.cell\.' || true)"
 
 if [ "${cells}" -eq 0 ]; then
   log "no cell resources in the state of ${region} — nothing to tear down"
   exit 0
+fi
+
+# Open the endpoint before the destroy if --public-cidr was passed, so the
+# refresh can reach the API server. Same chicken-and-egg fix as up-02-region:
+# a normal terraform destroy REFRESHES before deciding what to delete, and the
+# refresh reads kubernetes/helm resources through the CURRENT endpoint — still
+# closed from the last --close-public-access cleanup. Without this targeted
+# apply first, the destroy times out on "dial tcp <private-ip>:443".
+if [ -n "${public_cidr}" ]; then
+  step "Opening the EKS public endpoint first, so the destroy's refresh can reach it"
+  endpoint_apply_options=()
+  if [ "${assume_yes}" == "true" ]; then
+    endpoint_apply_options+=(-auto-approve)
+  fi
+  (cd "${root}" && terraform apply -no-color -input=false \
+    -target=module.cell.module.cluster.aws_eks_cluster.this \
+    "${cell_network_args[@]}" \
+    "${endpoint_apply_options[@]}")
 fi
 
 cat >&2 <<EOF

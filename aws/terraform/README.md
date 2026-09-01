@@ -164,6 +164,13 @@ cd aws/terraform/scripts
 (hub incluso — TGW, Client VPN, ALB) não é rotina, e não tem script próprio de propósito: a
 assimetria é intencional.
 
+**Via GitHub Actions:** `.github/workflows/teardown-region.yml` dispara `down-cell
+--public-cidr <runner-egress-ip>/32` (abre o endpoint para o refresh alcançar a API) seguido de
+`down-cell --close-public-access` com `if: always()`. Esse caminho não sofre da armadilha de RBAC
+(item 2 abaixo): a role `github-actions-provision` é quem criou o cluster, então já tem
+`AccessEntry`. Ver `ci/README.md` para o bootstrap OIDC e `bootstrap-checklist.md` para a sequência
+completa do zero.
+
 ```bash
 cd aws/terraform/regions/<região>
 terraform init -backend-config="bucket=<state-bucket-name>"   # se a raiz não estiver inicializada
@@ -176,7 +183,8 @@ Antes de derrubar uma região que hospeda célula, conferir que o Crossplane nã
 `.ovpn` exportado e reescreve os registros alias das células no apply seguinte.
 
 **Duas armadilhas de um `terraform destroy` da região inteira rodado por um humano, sem o túnel
-do Client VPN — nenhuma delas aparece via `provision-region.yml`, que já as evita por desenho:**
+do Client VPN — nenhuma delas aparece via `provision-region.yml` ou `teardown-region.yml`, que já
+as evitam por desenho:**
 
 1. **Todo `destroy` faz *refresh* antes de decidir o que apagar, e o refresh lê os recursos
    Kubernetes através do endpoint ATUAL.** Se ele estiver fechado (rotina de encerrar a sessão) e
