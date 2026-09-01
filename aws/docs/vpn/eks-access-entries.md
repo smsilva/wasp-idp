@@ -108,6 +108,6 @@ diferentes, e só o da `OrganizationAccountAccessRole` está na lista de access 
 
 - [Access entries — doc oficial AWS](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html)
 - [Access policy permissions](https://docs.aws.amazon.com/eks/latest/userguide/access-policy-permissions.html)
-- [#56](../../../issues/56) — implementação de `admin_principal_arns`
-- [#71](../../../issues/71) — `admin_group_ids` (grupos do Identity Center)
+- [#56](https://github.com/smsilva/wasp-idp/issues/56) — implementação de `admin_principal_arns`
+- [#71](https://github.com/smsilva/wasp-idp/issues/71) — `admin_group_ids` (grupos do Identity Center)
 - [Client VPN operations](client-vpn-operations.md) — como chegar ao cluster quando o endpoint público está fechado

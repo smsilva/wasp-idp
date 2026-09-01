@@ -14,7 +14,7 @@ Fato + porquê, um por linha. Narrativa completa de cada achado, quando existe, 
 - ALB só lê certificado do ACM, nunca Secret do Kubernetes, e não valida certificado de backend —
   autoassinado basta no trecho ALB→NLB→gateway.
 - Wildcard cobre um nível só (`*.*.` não existe) — daí um wildcard por cluster (ver
-  [ADR 0010](../../adr/0010-one-acm-wildcard-per-cluster.md)).
+  [ADR 0010](../../../docs/adr/0010-one-acm-wildcard-per-cluster.md)).
 - Um NLB por cluster, não por Service — fan-out por aplicação no mesh; hub escala por listener
   rule.
 - `X-Forwarded-For` + `numTrustedProxies`: com ALB na frente, o Istio vê o IP do ALB.
