@@ -5,7 +5,7 @@ O Client VPN é o caminho de manutenção para o cluster EKS. O endpoint públic
 `kubernetes`/`helm` locais) passa pelo túnel.
 
 Este documento cobre a **operação**. O desenho e as decisões de arquitetura estão em
-[ADR 0006](../../docs/adr/0006-client-vpn-saml-for-maintenance-access.md).
+[ADR 0006](../../../docs/adr/0006-client-vpn-saml-for-maintenance-access.md).
 
 ## Pré-requisitos
 
@@ -91,6 +91,6 @@ O Client VPN cobra por **associação de endpoint** (~US$ 0,10/h por AZ = ~US$ 0
 
 ## Ver também
 
-- [ADR 0006: Client VPN with SAML for maintenance access](../../docs/adr/0006-client-vpn-saml-for-maintenance-access.md)
-- [README do aws/terraform/](../terraform/README.md) — sequência de provisionamento
-- [HANDOFF.md](../../HANDOFF.md) — estado atual (o que está de pé, custo, how to resume)
+- [ADR 0006: Client VPN with SAML for maintenance access](../../../docs/adr/0006-client-vpn-saml-for-maintenance-access.md)
+- [README do aws/terraform/](../../terraform/README.md) — sequência de provisionamento
+- [HANDOFF.md](../../../HANDOFF.md) — estado atual (o que está de pé, custo, how to resume)

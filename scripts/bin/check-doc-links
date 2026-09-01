@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -e
+
+# Finds markdown-style relative links [text](path) in every versioned file
+# (not just *.md — descriptions in YAML/XRD and --help text also cite doc
+# paths) and reports any target that does not resolve on disk.
+
+root_dir="$(git rev-parse --show-toplevel)"
+cd "${root_dir}"
+
+broken=0
+
+while IFS=: read -r file line rest; do
+  # Skip vendored/generated code (idp/.yarn/ has one committed release
+  # binary whose minified JS coincidentally matches the link pattern) and
+  # docs/superpowers/ (process memory, not live-verified documentation —
+  # Task 13 of this plan declares that tree out of the read index).
+  case "${file}" in
+    idp/.yarn/*|docs/superpowers/*)
+      continue
+      ;;
+  esac
+
+  link="${rest#\]\(}"
+  link="${link%\)}"
+
+  # Skip external links and anchor-only links.
+  case "${link}" in
+    http://*|https://*|mailto:*|\#*)
+      continue
+      ;;
+  esac
+
+  # Only consider links that look like a file path: letters, digits,
+  # underscore, dot, slash, dash. Filters out shell/template
+  # interpolation (${VAR}) and regex character classes that coincidentally
+  # match the ](...) pattern (seen in aws/terraform/**/variables.tf and
+  # .github/workflows/provision-region.yml).
+  case "${link}" in
+    *[!A-Za-z0-9_./-]*)
+      continue
+      ;;
+  esac
+
+  # Strip a trailing #anchor before resolving the file path.
+  target_path="${link%%#*}"
+  [ -z "${target_path}" ] && continue
+
+  resolved="$(dirname "${file}")/${target_path}"
+
+  if [ ! -e "${resolved}" ]; then
+    echo "${file}:${line}: broken link to ${link}"
+    broken=1
+  fi
+done < <(git ls-files | xargs grep -noE '\]\([^()]+\)')
+
+exit "${broken}"
