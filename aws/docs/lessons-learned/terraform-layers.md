@@ -55,6 +55,19 @@ Fato + porquê, um por linha. Narrativa completa de cada achado, quando existe, 
   da VPC, ou o alcance é sorteado a cada apply.** Auditar qualquer camada nova sob essa lente — e
   desconfiar de `i/o timeout` atribuído a `depends_on` sem antes conferir a tabela de rotas da
   subnet onde o recurso realmente nasceu.
+- **Passo auxiliar com `-target` que só faz sentido com state populado tem de ser CONDICIONAL ao
+  state.** O `up-02-region` abria o endpoint público num apply direcionado antes do apply completo,
+  para o refresh alcançar a API — necessário quando a célula já existe, ativamente nocivo do zero:
+  sem nada em state não há refresh, e o `-target` fazia nascer control plane, VPC, 4 subnets e IAM
+  role **fora do grafo**, num plano próprio, exatamente a fragmentação que escondeu a race de Pod
+  Identity. **Apply do zero tem de ser UM apply, hub e célula juntos, ou não prova ordenação
+  nenhuma.** Mesmo guard do `down-cell`: `state list | grep --count '^module\.cell\.'`.
+- **Passo de cleanup roda no caminho de FALHA (`if: always()`) — então não pode ser apply
+  completo.** O `--close-public-access` do `up-02-region` era um plan/apply de tudo com
+  `endpoint_public_access=false`: no caminho de falha tentaria terminar a célula com o endpoint já
+  fechado, de um runner sem túnel, e se a falha tivesse ocorrido antes do cluster existir criaria a
+  célula inteira numa run que acabara de falhar. Cleanup vira o campo e sai — `-target` no cluster,
+  com guard de state.
 - **`terraform_plan_and_apply` ignora plano que só muda OUTPUT.** A contagem é
   `grep --count '^  # '`, que conta recursos, então um plan com apenas `Changes to Outputs` é
   reportado como "nothing to change" e o output nunca chega ao state. Se um script passar a
