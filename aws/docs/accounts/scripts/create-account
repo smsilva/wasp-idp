@@ -12,10 +12,14 @@ show_usage() {
   OU (see aws/docs/accounts/03-provisioning.md). Idempotent: if an ACTIVE account
   with the requested --name already exists, it only ensures it sits in the right OU.
 
-  Then calls 'remove-default-vpcs' for that account: every AWS account is born with a
-  default VPC per region, all of them on the same CIDR 172.31.0.0/16, so leaving them
-  in place makes the accounts of the Organization overlap by construction. A failure
-  there does not fail the account creation — it prints the command to re-run.
+  Right after CREATING an account — never for an account that already existed — it
+  calls 'remove-default-vpcs' for it: every AWS account is born with a default VPC per
+  region, all of them on the same CIDR 172.31.0.0/16, so leaving them in place makes
+  the accounts of the Organization overlap by construction. A failure there does not
+  fail the account creation; it prints the command to re-run.
+
+  Cleaning up an account that already existed is 'remove-default-vpcs' on its own —
+  this script does not delete anything it did not create.
 
     Options:
 
@@ -191,7 +195,6 @@ if [ -n "${existing_account_id}" ]; then
   else
     echo "ok  already in ${ou_name}"
   fi
-  remove_default_vpcs "${existing_account_id}"
   echo "${existing_account_id}"
   exit 0
 fi
