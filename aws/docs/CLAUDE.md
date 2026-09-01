@@ -87,33 +87,6 @@ curl -s https://docs.aws.amazon.com/whitepapers/latest/<guia>/toc-contents.json 
   | grep -oE '"[a-z0-9_-]+\.html"' | sort -u
 ```
 
-## Domínios
-
-| # | Domínio | Índice | Estado |
-|---|---|---|---|
-| 0 | **Bootstrap** — conta `network` vazia → IAM user da automação com credencial | [`bootstrap/CLAUDE.md`](bootstrap/CLAUDE.md) | ✅ completo |
-| 1 | **Network** — hub-and-spoke, VPC/subnets, TGW, VPN, DNS, CIDR | [`network/CLAUDE.md`](network/CLAUDE.md) | ✅ completo |
-| 2 | **Accounts & Organizations** — conta vazia → `network` → contas por projeto | [`accounts/CLAUDE.md`](accounts/CLAUDE.md) | ✅ completo |
-| 3 | **Security & IAM** — perímetro de identidade, menor privilégio, roles cross-account, RAM, Pod Identity, VPN auth, detecção | [`security/CLAUDE.md`](security/CLAUDE.md) | ✅ completo |
-| 4 | **DNS** — zonas públicas/privadas, delegação, alias/apex/wildcard, resolução cross-account, external-dns + TLS | [`dns/CLAUDE.md`](dns/CLAUDE.md) | ✅ completo |
-| 5 | **Compute** — EKS como spoke, node groups, add-ons + Pod Identity, RBAC, ingress, GitOps | [`compute/CLAUDE.md`](compute/CLAUDE.md) | ✅ completo |
-| 6 | **Observability** — logs, métricas, alertas de conectividade, custo como sinal | [`observability/CLAUDE.md`](observability/CLAUDE.md) | ✅ completo |
-| 7 | **Tenancy & SaaS** — SaaS Lens (silo/pool/bridge), conta por tenant, OU por geografia, CIDR × tenant | [`tenancy/CLAUDE.md`](tenancy/CLAUDE.md) | 🟡 desenho (nada aplicado) |
-
-> A ordem de construção segue a dependência real: **bootstrap primeiro** (dá à automação a
-> credencial que ela usa em todos os domínios seguintes), depois **network** (a fundação
-> sobre a qual contas, clusters e VPNs se apoiam). Os domínios **0–6 estão completos**; o
-> **7 (tenancy)** é o único puramente prospectivo — desenho sem nada aplicado numa conta real.
->
-> **Tenancy decide antes de `accounts/` executar.** Quando houver cliente externo, os tiers e os
-> perfis de residência (`tenancy/`) precisam estar definidos **antes** de criar contas de tenant —
-> definir depois vira reorganização da árvore de OUs, com janela sem SCP durante o move. Para a
-> topologia interna atual (projetos próprios, sem tenant externo), `accounts/` basta.
->
-> A visão de plataforma correspondente — sequência de provisionamento por fases, células,
-> roteamento global — vive em `../../decisions.md`. Onde os dois divergirem, **a doc de domínio
-> ganha** (regra registrada em `decisions.md` §8).
-
 ## Relação com o resto do repo
 
 - **Código Crossplane** (o que materializa esta arquitetura): `../eks/resources/`
