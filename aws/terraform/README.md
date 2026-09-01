@@ -21,6 +21,7 @@ Atualizar junto com a mudança, no mesmo trabalho — não depois:
 | Guarda nova num script | `### Armadilhas que os scripts pegam antes de tocar em nada` |
 | Custo por hora de um módulo | tabela da sequência **e** `## Custo` (as duas divergem calado) |
 | Região nova aplicada de verdade | coluna `Exercitada` em `## Raízes`, tabela de CIDR |
+| **Raiz nova** (pasta com backend próprio) | linha em `## Raízes` — sem ela a raiz é indescobrível, e o README dela também: a `ci/` ficou fora da tabela e a documentação dos workflows foi escrita de novo em outro arquivo por isso |
 
 **O que NÃO entra aqui:** o que está de pé agora, IDs de recurso, valores da conta. Isso é estado de
 sessão e vive em `HANDOFF.md` — repetir aqui garante duas fontes e uma delas errada. Armadilhas de

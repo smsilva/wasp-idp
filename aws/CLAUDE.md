@@ -235,6 +235,10 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   distinto do caller SSO do `70-access`. O `crossplaneArn` é derivado em runtime por
   `provision-eks` via `aws sts get-caller-identity` (as creds exportadas SÃO do user do
   Crossplane, então o ARN vem direto, sem o rodeio de sessão SSO do `configure-access`).
+- **`AccessEntry` do EKS aceita SÓ ARN de principal IAM — nunca id de grupo do Identity Center.**
+  Mapear grupo para ARN exige uma account assignment que provisione a role
+  `AWSReservedSSO_<PermissionSet>_<hash>`, e é esse ARN que entra na access entry. Consequência:
+  "dar acesso ao meu grupo" não é um campo, é uma cadeia — ver issue #56.
 - **Trust de Pod Identity exige `sts:TagSession` além de `sts:AssumeRole`.** A Composition de
   referência tem as duas actions; um trust só com `AssumeRole` falha. Vale para toda role de
   Pod Identity (EBS CSI, ESO, external-dns, cert-manager, ALB controller, Crossplane).
