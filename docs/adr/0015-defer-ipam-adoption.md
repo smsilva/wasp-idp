@@ -49,6 +49,23 @@ Isso inverte o papel que a avaliação inicial atribuía à allocation explícit
 
 O que **não** se confirmou como problema: criar um IPAM sobre uma árvore Terraform viva não a perturba. `terraform plan -target=module.hub` em `regions/us-east-1/` deu `0 to add, 1 to change, 0 to destroy`, e a única mudança é drift pré-existente e já conhecido. O critério "adoção, não realocação" se sustenta — o que falha é o *timing* da adoção, não a premissa de não re-endereçar.
 
+### O defeito é de brownfield, e some no dia zero
+
+Delimitação que importa para não generalizar demais: **a race só existe porque havia VPC pré-existente para adotar.** Numa Organization nova, o IPAM nasce antes de qualquer VPC — não há nada a importar, `auto_import` deixa de ser relevante, e toda VPC nasce alocando do pool. O modo de falha simplesmente não ocorre.
+
+Isso separa dois cenários que a avaliação inicial tratava como um só:
+
+| | Greenfield (Organization nova) | Brownfield (o estado deste repo) |
+|---|---|---|
+| VPCs a adotar | nenhuma | 2 no supernet, mais as default |
+| `auto_import` | irrelevante | é a race |
+| Ordem obrigatória | criar IPAM antes da primeira VPC | as quatro fases acima |
+| Risco de colisão na adoção | **nenhum** | alto, e o dano se fixa |
+
+Consequência: **o custo de adotar IPAM cresce com o tempo**, e não de forma suave — ele salta no instante em que a primeira VPC nasce fora do pool. Isso é um argumento *contra* adiar, e é o mais forte que existe do outro lado da decisão. O que sustenta adiar mesmo assim é que a adoção brownfield **é possível**, só exige a sequência disciplinada acima; e que hoje são 2 blocos a adotar, não 20.
+
+**Existe uma terceira coisa que o dia zero limparia de graça e que hoje é dívida:** toda conta nasce com VPC default `172.31.0.0/16`, idêntica em todas as contas — 6 alcançáveis nesta Organization, todas sobrepostas entre si por construção. Rastreado em issue própria, e independente do IPAM.
+
 ## Consequências
 
 O anti-pattern de REL02-BP05 permanece em aberto, **conscientemente e com plano** — que é a diferença entre gap registrado e dívida no escuro. O risco Medium da própria BP é o que sustenta essa resposta: fosse High, adiar não seria defensável.
