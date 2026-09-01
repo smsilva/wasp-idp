@@ -36,7 +36,7 @@ O desenho de [`aws/docs/network/08-ipam.md`](../../../docs/network/08-ipam.md) �
 | 2 | A management é **recusada** como IPAM account | o `precondition` do `main.tf` barra antes da API | 🟡 **inconclusivo** — o `precondition` não disparou porque os profiles estavam certos. A recusa da própria AWS não foi exercitada |
 | 3 | As VPCs `10.1`/`10.2` são **adotadas sem serem recriadas** | `get-ipam-pool-allocations` + `terraform plan` em `regions/us-east-1/` | 🔴 **falhou na adoção, passou na não-destruição** — ver o aviso acima |
 | 4 | Uma VPC nasce com CIDR **escolhido pelo pool**, cross-account | `terraform output proof_vpc_cidr` | ✅ **sim, e é assim que o defeito apareceu** — `10.1.0.0/24`, alocado do pool compartilhado por RAM, sem nenhum CIDR escrito na configuração. O mecanismo funciona; o que falta é a barreira |
-| 5 | Alocação **sem a tag exigida falha** | remover a tag `cell` do `aws_vpc.proof` e aplicar | ⬜ **não executado** |
+| 5 | Alocação **sem a tag exigida falha** | `-var proof_vpc_omit_tag=true -replace=aws_vpc.proof` | ✅ **sim** — `InvalidParameterValue: The resource is missing one or more of the resource tags required by the IPAM pool.` A criação foi **recusada pela AWS** |
 | 6 | Custo real por IP ativo | usage type `IPAddressManager-IP-Hours` no Cost Explorer | ⬜ **não executado** — precisaria de ~24h de dados, e o spike viveu ~20 min |
 | 7 | `destroy` devolve a Organization ao estado anterior | `describe-ipams` vazio, `list-delegated-administrators` sem o IPAM | ✅ **sim, mas lento** — 13 destruídos; `describe-ipams` = 0, `list-delegated-administrators` = 0, VPC hub intacta. **18m29s só na VPC**, contra ~1 min para os 12 recursos restantes |
 
@@ -45,7 +45,16 @@ O desenho de [`aws/docs/network/08-ipam.md`](../../../docs/network/08-ipam.md) �
 - **Não-destruição: passou.** `terraform plan -target=module.hub` em `regions/us-east-1/` deu `0 to add, 1 to change, 0 to destroy`, e a única mudança é o drift **pré-existente** do `aws_iam_saml_provider.client_vpn`, já registrado em Known Broken. Nenhuma VPC recriada, nenhuma rota tocada. Criar um IPAM sobre uma árvore Terraform viva não a perturba.
 - **Adoção: não aconteceu.** Descoberta sim (14 recursos, incluindo `10.1.0.0/16` e suas subnets), importação como alocação não — nem em 15 minutos, e provavelmente nunca, pelo envenenamento descrito acima.
 
-**A prova 5 continua sendo a mais valiosa das não executadas**, porque é ela que separa IPAM de planilha: a regra de tag é o que torna "cada célula tem seu bloco" uma **condição de alocação** em vez de convenção. Vale executá-la se e quando um gatilho da ADR 0015 disparar.
+**A prova 5 é a que separa IPAM de planilha, e passou.** A VPC foi recriada sem a tag exigida pelo pool e a AWS **recusou a criação**:
+
+```
+Error: creating EC2 VPC: ... api error InvalidParameterValue:
+The resource is missing one or more of the resource tags required by the IPAM pool.
+```
+
+Isso prova no mecanismo — não por citação da doc — que `allocation_resource_tags` é **condição de alocação**. Um `terraform apply` que esqueça a tag não pega um bloco errado: ele falha, e falha no `CreateVpc`, antes de qualquer recurso existir. É a única coisa que um arquivo markdown de alocação nunca conseguirá fazer.
+
+**Cuidado ao reproduzir:** só vale com `-replace`. A regra é avaliada na **criação**; um `apply` que apenas remova a tag de uma VPC já criada e já alocada passa sem erro, e o resultado se lê como "a regra não funciona".
 
 **Expectativa que ficou registrada e não chegou a ser observada:** as VPCs adotadas apareceriam como `noncompliant`, por não terem a tag `cell = spike` — a doc é explícita que o `auto_import` *"will import a CIDR regardless of its compliance"*. Como nenhuma foi importada, isso não foi visto.
 

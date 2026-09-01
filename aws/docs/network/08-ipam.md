@@ -43,7 +43,7 @@ manutenção e teto de tempo de CI.
 |---|---|
 | Criar IPAM, escopo, 3 pools, 3 CIDRs de pool, RAM share | **segundos** (o apply inteiro, sem a VPC, fecha em ~1 min) |
 | **Criar** uma VPC com `ipv4_ipam_pool_id` | **4m22s** |
-| **Destruir** a mesma VPC | **18m29s** |
+| **Destruir** a mesma VPC | **18m29s** e **27m29s** em duas medições — varia muito; orçar pelo pior caso |
 | Destruir todo o resto (IPAM, pools, RAM, delegação) | **~1 min somados** |
 | Delegar/remover o IPAM admin da Organization | 1–2 s |
 
@@ -59,6 +59,20 @@ Três consequências práticas:
    `nohup <comando> > log 2>&1 < /dev/null & disown`. Ao diagnosticar um que pareça parado, conferir
    `pgrep -af terraform` **sem truncar a saída** — um `| head -3` escondeu o processo vivo nesta
    sessão e produziu um diagnóstico errado.
+
+**O que exatamente está lento, verificado durante o destroy:** a VPC já não existe
+(`describe-vpcs` → `InvalidVpcID.NotFound`), mas `get-ipam-pool-allocations` ainda lista a alocação
+apontando para o id da VPC morta. O Terraform espera o IPAM **reciclar uma alocação órfã**.
+
+Isso tem uma consequência que não é óbvia: **durante esses ~18 minutos o bloco fica retido no pool,
+sem nenhuma VPC usando.** Numa recriação rápida — destroy seguido de apply — a VPC nova recebe um
+bloco **diferente**, porque o antigo ainda está reservado.
+
+> **CIDR alocado por IPAM não é estável entre recriações.** Com CIDR literal no código, recriar uma
+> VPC devolve sempre o mesmo bloco. Com IPAM, não. Qualquer coisa que dependa do endereço — regra de
+> security group escrita à mão, rota estática, allowlist de terceiro, peer externo — passa a ser
+> frágil. É mais um argumento a favor do *prefix list resolver* (abaixo): referenciar prefix list
+> em vez de CIDR literal deixa de ser conveniência e vira requisito.
 
 ### Custo
 
@@ -214,7 +228,21 @@ a ferramenta para de acusar sobreposição porque sabe que aquelas redes não se
 | `auto_import` | adota CIDRs pré-existentes que caiam no espaço do pool |
 
 A terceira é a que separa IPAM de planilha: ela transforma "cada tenant tem seu bloco" de convenção
-em **condição de alocação**. Um `apply` que esqueça a tag não pega o bloco errado — ele falha.
+em **condição de alocação**. **Verificado no mecanismo**, criando uma VPC sem a tag exigida:
+
+```
+Error: creating EC2 VPC: ... api error InvalidParameterValue:
+The resource is missing one or more of the resource tags required by the IPAM pool.
+```
+
+A recusa vem do `CreateVpc`, antes de qualquer recurso existir. Um `apply` que esqueça a tag não
+pega o bloco errado — ele falha. É a única coisa desta lista que um arquivo markdown de alocação
+nunca conseguirá fazer.
+
+> **A regra vale na CRIAÇÃO, não na atualização.** Remover a tag de uma VPC que já foi criada e já
+> alocou seu bloco **não** dispara erro nenhum: a condição não é reavaliada. Ao testar isso, é
+> preciso forçar a recriação (`-replace`), senão o teste passa e se conclui, errado, que a regra não
+> funciona.
 
 > **Regra do pai não vale para recurso do filho:** *"Allocation rules apply only to the managed
 > resources within that pool. The rules do not apply to resources in pools within a pool."* A
