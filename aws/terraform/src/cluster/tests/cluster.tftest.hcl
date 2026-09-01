@@ -45,12 +45,18 @@ run "menos_de_duas_subnets_e_erro" {
   expect_failures = [var.subnet_ids]
 }
 
-run "addons_de_base_sao_dois_com_overwrite" {
+# Este modulo entrega SO a base de Pod Identity. O aws-ebs-csi-driver saiu daqui de proposito:
+# como consumidor de uma association que o chamador cria, ele precisa de depends_on que este
+# modulo nao pode expressar sem ciclo. Ver o comentario em src/cell/main.tf.
+#
+# O assert de contagem e o que segura a regressao: alguem que reintroduza o driver neste
+# for_each ressuscita a race, e o unico sintoma seria um apply vermelho 20 min depois.
+run "o_unico_addon_de_base_e_o_agent_de_pod_identity" {
   command = plan
 
   assert {
-    condition     = length(aws_eks_addon.this) == 2
-    error_message = "esperados 2 addons de base, recebidos ${length(aws_eks_addon.this)}"
+    condition     = keys(aws_eks_addon.this) == ["eks-pod-identity-agent"]
+    error_message = "este modulo so deve entregar o eks-pod-identity-agent, recebidos ${jsonencode(keys(aws_eks_addon.this))}"
   }
 
   assert {
