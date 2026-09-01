@@ -18,9 +18,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Generate App Token for wasp-gitops
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: wasp-gitops
+
+      - name: Checkout wasp-gitops (private action repo)
+        uses: actions/checkout@v4
+        with:
+          repository: smsilva/wasp-gitops
+          token: ${{ steps.app-token.outputs.token }}
+          path: .github/actions/wasp-gitops
+
       - name: Setup AWS auth, SAML, Terraform
         id: setup
-        uses: smsilva/wasp-gitops/actions/aws/setup@main
+        uses: ./.github/actions/wasp-gitops/actions/aws/setup
         with:
           cicd_role_arn: ${{ vars.CICD_ROLE_ARN }}
           network_role_arn: ${{ vars.NETWORK_ROLE_ARN }}
