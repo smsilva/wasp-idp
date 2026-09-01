@@ -3,10 +3,16 @@
 **Pilar WAF principal:** Reliability
 ([REL02-BP05 — Enforce non-overlapping private IP address ranges in all private address spaces where they are connected](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_non_overlap_ip.html)).
 
-> **Nada aqui está implementado.** Este arquivo registra o desenho de IPAM hierárquico e o
+> **Nada aqui está aplicado numa conta.** Este arquivo registra o desenho de IPAM hierárquico e o
 > critério de quando adotá-lo. O plano vigente continua sendo o octeto calculado em
-> [`01-cidr-addressing.md`](01-cidr-addressing.md). O que muda com este registro é que a decisão
-> passa a ter forma concreta em vez de ser uma linha numa tabela de alternativas.
+> [`01-cidr-addressing.md`](01-cidr-addressing.md).
+>
+> **Decisão tomada em 2026-09-01 (issue #15):** adiar a adoção, com gatilhos declarados —
+> [ADR 0015](../../../docs/adr/0015-defer-ipam-adoption.md). Um **modelo mínimo executável** que
+> prova o desenho ponta a ponta vive em `aws/terraform/spikes/ipam/`: código versionado, aplicado
+> uma vez para produzir evidência, e destruído. Os fatos deste arquivo foram reconferidos contra a
+> doc oficial nessa passagem, e **duas afirmações estavam erradas** — ver os avisos de correção nas
+> seções de tier e de `auto_import`.
 
 ## Por que isto deixou de ser opcional na argumentação
 
@@ -84,6 +90,29 @@ A terceira é a mais subestimada: ela transforma "cada tenant tem seu bloco" de 
 **condição de alocação**. Um `terraform apply` que esqueça a tag não pega um bloco errado — ele
 falha.
 
+> **Regra definida no pai não vale para recurso do filho:** *"Allocation rules apply only to the
+> managed resources within that pool. The rules do not apply to resources in pools within a pool."*
+> Junto com a pegadinha de não-herança acima, isso significa que a política tem de ser escrita no
+> pool que **aloca**, não no que contém.
+
+#### `auto_import`: quatro comportamentos que a doc nomeia e que mudam o desenho
+
+Levantados de [`create-top-ipam.html`](https://docs.aws.amazon.com/vpc/latest/ipam/create-top-ipam.html):
+
+1. **Não está disponível se o `Locale` é `None`** — ou seja, só no pool **regional**, nunca no
+   top-level. Isso amarra quem adota: é o pool regional que importa as VPCs existentes.
+2. Importa **independentemente de compliance** — o recurso entra e pode aparecer como
+   `noncompliant` logo depois.
+3. Em sobreposição, importa **só o maior CIDR**; com CIDRs idênticos, importa **um aleatoriamente**.
+4. Uma VPC **não** pode ser auto-importada se sobrepõe uma alocação que já existe no pool.
+
+**`auto_import` e alocação explícita não são alternativas — são complementares.** O
+`aws_vpc_ipam_pool_cidr_allocation` "reserva um CIDR, prevenindo uso pelo IPAM": ele **bloqueia o
+espaço**, mas não vincula VPC alguma ao pool. Quem cria o vínculo rastreável (a VPC aparecer como
+alocação, com estado de compliance) é `auto_import`, ou criar a VPC já com `ipv4_ipam_pool_id`.
+Logo: `auto_import` para adotar VPC existente; allocation explícita para espaço reservado que **não
+tem recurso** (o `10.0.0.0/16` da Organization).
+
 ### Como o consumo acontece
 
 Não se escolhe mais o CIDR; **pede-se um tamanho**. No Terraform:
@@ -103,7 +132,16 @@ extra.
 ### Multi-conta: delegated admin + RAM
 
 1. Integrar o IPAM com a Organization e **delegar uma conta membro como IPAM admin** — pelo
-   desenho deste repo, a conta `network` (Connectivity Account), não a management.
+   desenho deste repo, a conta `network` (Connectivity Account), não a management. **Isso não é
+   preferência de desenho, é regra do serviço:**
+   [`enable-integ-ipam.html`](https://docs.aws.amazon.com/vpc/latest/ipam/enable-integ-ipam.html) —
+   *"The IPAM account must be an AWS Organizations member account. You cannot use the AWS
+   Organizations management account as the IPAM account."* O pattern oficial da AWS
+   ([multi-Region IPAM com Terraform](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/multi-region-ipam-architecture.html))
+   assume o mesmo: *"a network hub or network management account that will serve as the IPAM
+   delegated administrator"*. Habilitar tem de ser feito por `enable-ipam-organization-admin-account`
+   (ou pelo console do IPAM) — fazê-lo pelo console/CLI do **Organizations** não cria a
+   service-linked role `AWSServiceRoleForIPAM`, e sem ela o IPAM não monitora nada.
 2. **Compartilhar o pool por RAM** com a OU ou com as contas de spoke. A permissão do RAM é
    granular: alocar CIDR do pool ≠ administrar o pool.
 3. A conta da spoke passa a alocar do pool compartilhado **sem** poder ver ou alterar o plano.
@@ -132,17 +170,63 @@ bloco significa caçar todos os lugares onde ele foi escrito à mão.
 
 ## Free Tier vs. Advanced Tier — o corte que importa
 
+> **Corrigido em 2026-09-01 (issue #15).** Este trecho dizia que o corte era o *locale* dos pools e
+> que o Free Tier "atenderia a uma prova de conceito de uma região só". **É falso.** Pool no escopo
+> privado é recurso de Advanced Tier, independentemente de quantas regiões — não existe recorte
+> Free Tier para este desenho.
+
 | | Free Tier | Advanced Tier |
 |---|---|---|
-| Locale dos pools | **só a home region do IPAM** | qualquer operating region |
-| Cobrança | sem custo de IPAM | **por IP ativo por hora** (conferir na página de preços da VPC) |
-| Prefix list resolver, integrações | não | sim |
+| Pools no **escopo privado** (IPv4 privado) | **não** | sim |
+| Escopo privado adicional (não-default) | **não** | sim |
+| Pools com locale ≠ home region | **não** | sim |
+| Alocação para conta que não é o IPAM owner (RAM) | **não** | sim |
+| Features através de operating regions | só **Public IP insights** | todas |
+| Prefix list resolver, IP history, integrações | não | sim |
+| Cobrança | sem custo | **US$ 0,00027 por IP ativo/hora ≈ US$ 0,197/mês por IP** |
 
-**O corte de locale é o que decide.** Este repo já tem hub em `us-east-1` e `us-west-2` — duas
-regiões — logo o Free Tier não atende ao desenho multi-região; ele atenderia a uma prova de
-conceito de uma região só. E a cobrança do Advanced é **por IP ativo**, não por pool ou por VPC:
-o custo escala com o tamanho da frota, o que o torna barato num ambiente de PoC e não-trivial num
-ambiente com muitos nós.
+Três fontes oficiais convergem, e vale citar porque é o fato que decide:
+
+- [`create-ipam.html`](https://docs.aws.amazon.com/vpc/latest/ipam/create-ipam.html): *"If you are
+  creating an IPAM in the Free Tier, you can select multiple operating Regions […] but the only IPAM
+  feature that will be available across operating Regions is Public IP insights."*
+- [`mod-ipam-tier.html`](https://docs.aws.amazon.com/vpc/latest/ipam/mod-ipam-tier.html) — para
+  **voltar** de Advanced a Free é preciso apagar *private scope pools*, escopos privados
+  não-default, pools com locale diferente da home region, e alocações para contas que não sejam o
+  IPAM owner. Essa lista é a definição invertida do que só existe no Advanced.
+- Tabela da **IPAM** na [página de preços da VPC](https://aws.amazon.com/vpc/pricing/): *Private
+  IPv4 management* e *Share IPAM pools with AWS accounts* ambos ausentes do Free Tier.
+
+O caso deste repo (IPv4 privado + multi-conta + multi-região) cai em Advanced por **três motivos
+independentes**. Não há decisão a tomar sobre tier: há uma conta a pagar.
+
+### Quanto custa, medido nesta conta
+
+A cobrança é por **IP ativo** — *"an IP address or a prefix associated with an Elastic Network
+Interface (ENI) that is attached to a resource"* — não por pool, VPC ou alocação. Medição real de
+2026-09-01 (`describe-network-interfaces` nas 4 contas × 2 regiões, com só `module.hub` de pé):
+
+| Cenário | IPs ativos | Custo/mês |
+|---|---|---|
+| Só o hub de `us-east-1` de pé | **7** (medido) | **US$ 1,38** |
+| Hub + célula de pé | ~40 (estimado) | ~US$ 8 |
+| 10 células × 2 regiões | ~340 (estimado) | ~US$ 67 |
+
+A estimativa da célula é dominada pelo **VPC CNI**: cada nó mantém ENIs com IPs secundários
+pré-alocados (~12 por `t3.medium` no `WARM_ENI_TARGET` default), então o custo do IPAM escala com a
+frota de pods, não com o número de VPCs. É a razão de o número ficar não-trivial num cluster grande
+e desprezível numa PoC.
+
+Duas letras miúdas que mudam a conta:
+
+- Integrado à Organization, o IPAM **cobra por IP ativo que monitora em todas as contas membro**,
+  não só nas que alocam de pool. Mitigável por
+  [OU exclusion](https://docs.aws.amazon.com/vpc/latest/ipam/exclude-ous.html) — excluir a OU
+  `Sandbox`, por exemplo. O delegated admin nunca é excluído, mesmo dentro de OU excluída.
+- O *metering mode* `resource-owner`
+  ([cost distribution](https://docs.aws.amazon.com/vpc/latest/ipam/ipam-enable-cost-distro.html))
+  **redistribui** a cobrança para a conta dona do IP, não reduz — e trava por 7 dias depois de
+  habilitado (24h para desistir).
 
 ## Quando adotar — gatilhos, não calendário
 
@@ -172,11 +256,19 @@ Baixo, e vale dizer por quê — é o que sustenta adiar sem culpa:
 Isso é o oposto do CIDR em si, que é irreversível. **Adiar IPAM é barato; adiar a decisão de
 supernet não era.**
 
+> **Uma parte NÃO é barata de adiar, e foi paga em 2026-09-01:** o pool regional exige `locale`, e
+> **locale é imutável**. Um plano de endereçamento que aloque por ordem de criação, e não por
+> região, não tem bloco contíguo por região — e aí a adoção do IPAM passa a exigir re-endereçar VPC,
+> que é justamente o que a adoção deveria evitar. Foi o caso aqui: `us-west-2` estava em
+> `10.3`/`10.4`, com o `10.3` dentro do `/14` de `us-east-1`. Corrigido para `10.4`/`10.5` enquanto
+> a raiz tinha zero recursos. **Agrupar por região é pré-requisito de adiar com segurança**, não
+> parte da adoção.
+
 ## Well-Architected — porquê
 
 | Best practice | Como se relaciona |
 |---|---|
-| **[REL02-BP05 — Enforce non-overlapping private IP address ranges in all private address spaces where they are connected](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_non_overlap_ip.html)** | recomenda IPAM nominalmente; a tabela manual é o anti-pattern que a BP cita. **Gap consciente**, com os gatilhos acima como plano |
+| **[REL02-BP05 — Enforce non-overlapping private IP address ranges in all private address spaces where they are connected](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_non_overlap_ip.html)** | recomenda IPAM nominalmente; a tabela manual é o anti-pattern que a BP cita. **Gap consciente**, com os gatilhos acima como plano. A BP declara *level of risk* **Medium** — dado que calibra a urgência: não é High, e é por isso que adiar com gatilhos é resposta legítima em vez de dívida aceita no escuro |
 | **[REL02-BP03 — Ensure IP subnet allocation accounts for expansion and availability](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_ip_subnet_allocation.html)** | regras de netmask por pool tornam "tamanho por finalidade" mecanismo em vez de convenção |
 | **[SEC05-BP01 — Create network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** | escopo separado = espaço roteável e espaço isolado deixam de ser distinção informal |
 
