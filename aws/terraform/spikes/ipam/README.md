@@ -1,6 +1,8 @@
 # Spike: IPAM scope for CIDR allocation
 
-**Status: aplicado e destruído em 2026-09-01.** Spike descartável da [issue #15](https://github.com/smsilva/wasp-idp/issues/15), decidida na [ADR 0015](../../../../docs/adr/0015-defer-ipam-adoption.md).
+**Status: aplicado e destruído em 2026-09-01, duas vezes — nada permanece na AWS.** Spike descartável da [issue #15](https://github.com/smsilva/wasp-idp/issues/15), decidida na [ADR 0015](../../../../docs/adr/0015-defer-ipam-adoption.md).
+
+Verificação final: `describe-ipams` = 0 em `us-east-1` e `us-west-2`, `list-delegated-administrators` = 0, state vazio, e a única VPC no supernet é o hub `10.1.0.0/16`, intacto.
 
 > ## ⚠️ O achado: o IPAM entregou um CIDR já em uso
 >
@@ -65,7 +67,7 @@ Isso prova no mecanismo — não por citação da doc — que `allocation_resour
 | Recursos criados | 13 (`apply` completo, ~5 min) |
 | Criação da VPC via pool | **4m22s** — alocação por IPAM é lenta, orçar isso em qualquer apply que dependa dela |
 | Destruição da mesma VPC | **18m29s**, e a VPC já não existia na AWS (`InvalidVpcID.NotFound`) muito antes de o Terraform seguir em frente. O provider fica preso esperando a **desalocação no IPAM**, que é assíncrona — um destroy que parece travado e não está. Vale para qualquer VPC com `ipv4_ipam_pool_id` |
-| Destruição dos outros 12 recursos | **~1 min** no total, IPAM e delegação inclusos — toda a lentidão está na VPC |
+| Destruição de todo o resto | **~1 min**, IPAM, pools, RAM share e delegação inclusos. Medido duas vezes (12 e 9 recursos) — **toda a lentidão está na VPC**, nada mais |
 | Estado final verificado | `describe-ipams` = 0, `list-delegated-administrators` = 0, VPC hub `10.1.0.0/16` intacta, state do spike vazio |
 | Adoção do legado em 15 min | **0 de 2** blocos |
 | Recursos descobertos pelo IPAM | 14 na conta `network` (VPCs, subnets, EIPs) |
