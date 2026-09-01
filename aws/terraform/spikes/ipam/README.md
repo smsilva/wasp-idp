@@ -1,6 +1,28 @@
 # Spike: IPAM scope for CIDR allocation
 
-**Status: código escrito, ainda não aplicado.** Spike descartável da [issue #15](https://github.com/smsilva/wasp-idp/issues/15), decidida na [ADR 0015](../../../../docs/adr/0015-defer-ipam-adoption.md).
+**Status: aplicado e destruído em 2026-09-01.** Spike descartável da [issue #15](https://github.com/smsilva/wasp-idp/issues/15), decidida na [ADR 0015](../../../../docs/adr/0015-defer-ipam-adoption.md).
+
+> ## ⚠️ O achado: o IPAM entregou um CIDR já em uso
+>
+> A VPC de prova nasceu com **`10.1.0.0/24`** — dentro de `10.1.0.0/16`, a VPC do hub que estava **de pé** na conta `network`. Duas VPCs sobrepostas, em contas que se falam pelo TGW. Exatamente a colisão que o IPAM existe para impedir.
+>
+> **Causa: `auto_import` é assíncrono e a alocação não espera por ele.** O Terraform criou o pool e pediu o CIDR segundos depois; nenhuma VPC existente tinha sido importada ainda, então o pool via `10.0.0.0/14` inteiro como livre. Quinze minutos depois, `10.1.0.0/16` **continuava não importada**.
+>
+> Não foi falha de descoberta: `get-ipam-discovered-resource-cidrs` já listava 14 recursos, **incluindo a VPC hub e suas quatro subnets**. O IPAM sabia da VPC. O que não aconteceu foi a promoção de *descoberto* para *alocado* — e **essas duas coisas são distintas**, o que `08-ipam.md` não separava.
+>
+> Pior, e por regra documentada: com a alocação `/24` existindo, a VPC `/16` que a cobre **não pode mais ser auto-importada** — *"a VPC with an overlapping CIDR cannot be automatically imported"*. Uma alocação prematura **envenena o pool** de forma que a adoção do legado deixa de ser possível.
+>
+> ### A lição que muda a ordem de operações da adoção
+>
+> **Adotar primeiro, alocar depois — e verificar a adoção, não esperá-la.** Criar pool com `auto_import` e alocar no mesmo `terraform apply` é uma race silenciosa. A adoção real precisa ser em duas fases separadas por verificação explícita:
+>
+> 1. criar IPAM e pools, **sem nada que aloque**;
+> 2. confirmar por `get-ipam-pool-allocations` que **cada bloco legado entrou** como alocação;
+> 3. só então liberar alocação dinâmica.
+>
+> Alternativa mais segura, e que inverte o papel que eu tinha atribuído à allocation explícita: **reservar cada bloco legado por `aws_vpc_ipam_pool_cidr_allocation` antes de qualquer alocação dinâmica**, usando a allocation como barreira determinística em vez de depender da descoberta assíncrona. É o único mecanismo aqui que é síncrono e revisável em PR.
+>
+> Consequência para a [ADR 0015](../../../../docs/adr/0015-defer-ipam-adoption.md): a migração para IPAM **não** é o passo mecânico e seguro que `08-ipam.md` descrevia. Ela tem uma janela de corrida capaz de produzir a exata colisão que o serviço deveria prevenir — argumento novo, e melhor que os anteriores, a favor de adiar.
 
 > **Isto não é uma camada.** Não entra em `up-all`, não tem script `up-NN`, e o state é **local** de propósito. A decisão do repo é **adiar** o IPAM; este diretório existe para que a decisão tenha sido tomada com o desenho provado, não com o desenho imaginado — e para que a adoção futura comece de código que já funcionou em vez de página em branco.
 
@@ -10,17 +32,36 @@ O desenho de [`aws/docs/network/08-ipam.md`](../../../docs/network/08-ipam.md) �
 
 | # | Prova | Como se verifica | Resultado |
 |---|---|---|---|
-| 1 | Free Tier **recusa** pool no escopo privado | `apply` com `tier = "free"` tem de falhar | ⬜ não executado |
-| 2 | A management é **recusada** como IPAM account | o `precondition` do `main.tf` barra antes da API; trocar `management_profile` por `network_profile` tem de dar erro | ⬜ não executado |
-| 3 | As VPCs `10.1`/`10.2` são **adotadas sem serem recriadas** | `get-ipam-pool-allocations` lista as duas **e** `terraform plan` em `regions/us-east-1/` continua `0 changes` | ⬜ não executado |
-| 4 | Uma VPC nasce com CIDR **escolhido pelo pool**, cross-account | `terraform output proof_vpc_cidr` — nenhum CIDR foi escrito na configuração | ⬜ não executado |
-| 5 | Alocação **sem a tag exigida falha** | remover a tag `cell` do `aws_vpc.proof` e aplicar | ⬜ não executado |
-| 6 | Custo real por IP ativo | `TotalActiveIpCount` no CloudWatch e o usage type `IPAddressManager-IP-Hours` no Cost Explorer | ⬜ não executado |
-| 7 | `destroy` devolve a Organization ao estado anterior | `describe-ipams` vazio e `list-delegated-administrators` sem o IPAM | ⬜ não executado |
+| 1 | Free Tier **recusa** pool no escopo privado | `apply` com `tier = "free"` tem de falhar | ⬜ **não executado** — exigiria um segundo apply deliberadamente quebrado |
+| 2 | A management é **recusada** como IPAM account | o `precondition` do `main.tf` barra antes da API | 🟡 **inconclusivo** — o `precondition` não disparou porque os profiles estavam certos. A recusa da própria AWS não foi exercitada |
+| 3 | As VPCs `10.1`/`10.2` são **adotadas sem serem recriadas** | `get-ipam-pool-allocations` + `terraform plan` em `regions/us-east-1/` | 🔴 **falhou na adoção, passou na não-destruição** — ver o aviso acima |
+| 4 | Uma VPC nasce com CIDR **escolhido pelo pool**, cross-account | `terraform output proof_vpc_cidr` | ✅ **sim, e é assim que o defeito apareceu** — `10.1.0.0/24`, alocado do pool compartilhado por RAM, sem nenhum CIDR escrito na configuração. O mecanismo funciona; o que falta é a barreira |
+| 5 | Alocação **sem a tag exigida falha** | remover a tag `cell` do `aws_vpc.proof` e aplicar | ⬜ **não executado** |
+| 6 | Custo real por IP ativo | usage type `IPAddressManager-IP-Hours` no Cost Explorer | ⬜ **não executado** — precisaria de ~24h de dados, e o spike viveu ~20 min |
+| 7 | `destroy` devolve a Organization ao estado anterior | `describe-ipams` vazio, `list-delegated-administrators` sem o IPAM | ✅ **sim, mas lento** — 13 destruídos; `describe-ipams` = 0, `list-delegated-administrators` = 0, VPC hub intacta. **18m29s só na VPC**, contra ~1 min para os 12 recursos restantes |
 
-**As duas provas mais importantes são a 3 e a 5**, e por motivos opostos. A 3 é o critério de aceite literal da issue ("adoção do bloco existente no pool do IPAM, não realocação"). A 5 é o que separa IPAM de planilha: a regra de tag é o que torna "cada célula tem seu bloco" uma **condição de alocação** em vez de uma convenção que alguém pode esquecer.
+**Detalhamento da prova 3, que é o critério de aceite literal da issue.** Ela tem duas metades e elas deram resultados opostos:
 
-**Resultado esperado da 3, que parece erro e não é:** as VPCs adotadas vão aparecer como `noncompliant`. Elas não têm a tag `cell = spike`, e a doc é explícita que o `auto_import` *"will import a CIDR regardless of its compliance with the pool's allocation rules"*. Isso é informação — o IPAM mostrando que o legado não satisfaz a política nova — não falha da adoção.
+- **Não-destruição: passou.** `terraform plan -target=module.hub` em `regions/us-east-1/` deu `0 to add, 1 to change, 0 to destroy`, e a única mudança é o drift **pré-existente** do `aws_iam_saml_provider.client_vpn`, já registrado em Known Broken. Nenhuma VPC recriada, nenhuma rota tocada. Criar um IPAM sobre uma árvore Terraform viva não a perturba.
+- **Adoção: não aconteceu.** Descoberta sim (14 recursos, incluindo `10.1.0.0/16` e suas subnets), importação como alocação não — nem em 15 minutos, e provavelmente nunca, pelo envenenamento descrito acima.
+
+**A prova 5 continua sendo a mais valiosa das não executadas**, porque é ela que separa IPAM de planilha: a regra de tag é o que torna "cada célula tem seu bloco" uma **condição de alocação** em vez de convenção. Vale executá-la se e quando um gatilho da ADR 0015 disparar.
+
+**Expectativa que ficou registrada e não chegou a ser observada:** as VPCs adotadas apareceriam como `noncompliant`, por não terem a tag `cell = spike` — a doc é explícita que o `auto_import` *"will import a CIDR regardless of its compliance"*. Como nenhuma foi importada, isso não foi visto.
+
+## Números observados
+
+| | |
+|---|---|
+| Recursos criados | 13 (`apply` completo, ~5 min) |
+| Criação da VPC via pool | **4m22s** — alocação por IPAM é lenta, orçar isso em qualquer apply que dependa dela |
+| Destruição da mesma VPC | **18m29s**, e a VPC já não existia na AWS (`InvalidVpcID.NotFound`) muito antes de o Terraform seguir em frente. O provider fica preso esperando a **desalocação no IPAM**, que é assíncrona — um destroy que parece travado e não está. Vale para qualquer VPC com `ipv4_ipam_pool_id` |
+| Destruição dos outros 12 recursos | **~1 min** no total, IPAM e delegação inclusos — toda a lentidão está na VPC |
+| Estado final verificado | `describe-ipams` = 0, `list-delegated-administrators` = 0, VPC hub `10.1.0.0/16` intacta, state do spike vazio |
+| Adoção do legado em 15 min | **0 de 2** blocos |
+| Recursos descobertos pelo IPAM | 14 na conta `network` (VPCs, subnets, EIPs) |
+| Vida do spike | ~20 min de operação útil |
+| Custo | desprezível (~US$ 0,05/dia de taxa; nem chegou a fechar uma hora de billing) |
 
 ## Rodar
 
@@ -36,8 +77,13 @@ terraform apply         # via `! terraform apply`, como todo apply deste repo
 O `apply` leva ~2 min. A adoção do `auto_import` é **assíncrona** (a doc registra até ~20 min de atraso no monitoramento): lista de alocações vazia logo depois do apply **não** é resultado negativo — esperar antes de concluir qualquer coisa sobre a prova 3.
 
 ```bash
-terraform destroy       # cascade = true no aws_vpc_ipam garante que isto termina
+# NUNCA sincrono: passa de 15 minutos, quase todos numa unica linha do log.
+nohup terraform destroy -no-color -auto-approve > /tmp/spike-ipam-destroy.log 2>&1 < /dev/null & disown
 ```
+
+O `destroy` fica **mais de 15 minutos** em `aws_vpc.proof: Still destroying...`, e a VPC já não existe na AWS (`describe-vpcs` devolve `InvalidVpcID.NotFound`) muito antes disso — o provider está esperando a **liberação da alocação no IPAM**, que é assíncrona. `cascade = true` garante que pools e escopos saiam sem ordem manual, mas não acelera essa espera.
+
+**Um destroy que pareça travado provavelmente não está.** Ao diagnosticar, conferir o processo com `pgrep -af terraform` **sem truncar a saída** — nesta sessão um `| head -3` mostrou só o language server e o MCP server, e a ausência foi lida como processo morto. Um segundo `destroy` concorrente sobre o mesmo state teria sido um problema real.
 
 ## Custo
 
