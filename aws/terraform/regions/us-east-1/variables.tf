@@ -79,3 +79,14 @@ variable "public_access_cidrs" {
   type        = list(string)
   default     = []
 }
+
+variable "admin_principal_arns" {
+  description = <<-EOT
+    ARNs IAM com acesso admin ao cluster (AmazonEKSClusterAdminPolicy, escopo cluster).
+    Cada ARN vira uma access entry + policy association, alem do criador do cluster.
+
+    DEFAULT vazio: nenhum principal alem do criador tem acesso.
+  EOT
+  type        = list(string)
+  default     = []
+}

@@ -127,6 +127,14 @@ module "cell" {
   endpoint_public_access = var.endpoint_public_access
   public_access_cidrs    = var.public_access_cidrs
 
+  # access_entries converte admin_principal_arns para o formato que src/cluster espera.
+  # A politica e sempre AmazonEKSClusterAdminPolicy com escopo cluster: "admin" e admin.
+  access_entries = { for arn in var.admin_principal_arns : arn => {
+    principal_arn = arn
+    policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    access_scope  = "cluster"
+  } }
+
   # O hub, por referencia. Cada linha aqui e um data source que morreu do outro lado.
   hub_vpc_id                         = module.hub.vpc_id
   hub_vpc_cidr_block                 = module.hub.vpc_cidr_block

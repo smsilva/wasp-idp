@@ -44,6 +44,15 @@ network_account_id = "000000000000"
 # Contas onde o Crossplane cria recursos, via assume role.
 target_account_ids = ["000000000000"]
 
+# Admins do cluster (access entries). ARNs IAM com AmazonEKSClusterAdminPolicy. O criador do
+# cluster (github-actions-provision, via bootstrap_cluster_creator_admin_permissions) ja tem
+# acesso; os ARNs aqui sao principals ADICIONAIS. DEFAULT vazio — sem nenhum, so o criador acessa.
+# Resolva com:
+#
+#   aws sts get-caller-identity --profile cicd  # para OrganizationAccountAccessRole
+#   aws iam list-roles --profile cicd --query 'Roles[?contains(RoleName,`AWSReservedSSO`)].Arn'
+admin_principal_arns = ["arn:aws:iam::000000000000:role/OrganizationAccountAccessRole"]
+
 # BREAK-GLASS — descomente para abrir o endpoint público da API do EKS e declarar quem o alcança.
 # Ausente, o endpoint fica fechado e o caminho é o túnel do Client VPN -> TGW -> ENI do endpoint.
 # O CIDR é declarado à MÃO: não há descoberta do "/32 desta máquina".

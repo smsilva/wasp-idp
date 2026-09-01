@@ -17,3 +17,7 @@ target_account_ids = ["832721568602"]
 # BREAK-GLASS — endpoint público fechado. Descomente para abrir.
 # endpoint_public_access = true
 # public_access_cidrs    = ["203.0.113.10/32"]
+
+# Admins do cluster (access entries). O criador (github-actions-provision) tem acesso
+# automatico; os ARNs aqui sao principals ADICIONAIS com cluster-admin.
+admin_principal_arns = ["arn:aws:iam::270222614208:role/OrganizationAccountAccessRole"]
