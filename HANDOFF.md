@@ -108,6 +108,19 @@ Cinco bugs corrigidos no caminho, nenhum deles pego por regressão offline:
   `--close-public-access` era apply **completo** — no caminho de falha (`if: always()`) tentaria
   terminar a célula com o endpoint fechado. Ambos guardados por state.
 
+**2026-09-01 (#15, branch `feat/15-ipam-scope-evaluation`): IPAM avaliado e decidido — adiar**
+([ADR 0015](docs/adr/0015-defer-ipam-adoption.md)). Nenhum dos cinco gatilhos disparou; o custo
+medido seria US$ 1,38/mês (7 IPs ativos na Organization inteira, com só o hub de pé) e REL02-BP05
+declara o risco como **Medium**. Dois fatos do `aws/docs/network/08-ipam.md` estavam **errados** e
+foram corrigidos: não existe recorte Free Tier (pool no escopo privado é Advanced, sempre), e
+`auto_import` não substitui alocação explícita — a allocation reserva espaço sem vincular VPC.
+**`us-west-2` foi realocada de `10.3`/`10.4` para `10.4`/`10.5`**: a alocação passou a ser por
+região em `/14` contíguos, porque pool regional exige `locale` e locale é imutável — feito enquanto
+aquela raiz tinha 0 recursos, custo de duas linhas. `aws/terraform/spikes/ipam/` tem o modelo
+mínimo (13 recursos, `plan` verde, **ainda não aplicado**) com sete provas declaradas no README.
+Issue **#66** aberta para o risco real que sobrou: nada impede colisão de CIDR **entre regiões** —
+os CIDRs são literais por raiz e a única asserção compara hub vs célula dentro da mesma raiz.
+
 **Documentação do CI consolidada:** `aws/terraform/ci/README.md` é o documento único da automação
 (trust OIDC, variables/secrets com o motivo de cada um, GitHub App, composite action `aws/setup`,
 os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `## Raízes` do
@@ -379,15 +392,22 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-1. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
+1. **#15** — falta só **aplicar** `aws/terraform/spikes/ipam/` e preencher as sete provas do README
+   dele com resultado real (o `plan` já está verde, 13 recursos). É **ação org-wide**: cria a
+   service-linked role do IPAM em todas as contas membro e o IPAM passa a monitorar a Organization
+   inteira. O `destroy` é parte do experimento, não limpeza opcional — `cascade = true` no
+   `aws_vpc_ipam` existe para isso.
+2. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
+   asserção cruzada, não só a asserção.
+3. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
    arquivos movidos.
-2. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
+4. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
    e a Pod Identity dele, eliminando a race junto) tem de ser considerada primeiro, não descartada
    por reflexo. Se precisar, o valor real está no smoke test: um PVC + pod que monte volume, senão a
    próxima regressão de Pod Identity volta a ser invisível.
-3. **#56** — admins declaráveis. Fecha a lacuna de não haver como entrar num cluster novo.
-4. **#65** — site MkDocs, depois de #64 e #23.
-5. **#40** segue no backlog do board #6, sem trabalho iniciado.
+5. **#56** — admins declaráveis. Fecha a lacuna de não haver como entrar num cluster novo.
+6. **#65** — site MkDocs, depois de #64 e #23.
+7. **#40** segue no backlog do board #6, sem trabalho iniciado.
 
 ## Completed Work
 
