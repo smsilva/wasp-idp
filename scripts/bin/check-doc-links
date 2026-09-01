@@ -12,11 +12,12 @@ broken=0
 
 while IFS=: read -r file line rest; do
   # Skip vendored/generated code (idp/.yarn/ has one committed release
-  # binary whose minified JS coincidentally matches the link pattern) and
+  # binary whose minified JS coincidentally matches the link pattern),
   # docs/superpowers/ (process memory, not live-verified documentation —
-  # Task 13 of this plan declares that tree out of the read index).
+  # Task 13 of this plan declares that tree out of the read index), and
+  # this script's own comments which contain example link syntax.
   case "${file}" in
-    idp/.yarn/*|docs/superpowers/*)
+    idp/.yarn/*|docs/superpowers/*|scripts/bin/check-doc-links)
       continue
       ;;
   esac
