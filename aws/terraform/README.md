@@ -222,7 +222,8 @@ repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state 
 | `ci/` | `cicd` + `network` | `ci/` | Provider OIDC do GitHub Actions + uma role por conta. Documenta também o lado GitHub inteiro — ver [`ci/README.md`](ci/README.md) | sim — os três workflows autenticam por ela |
 | `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | sim |
 | `regions/us-east-1/` | `network` (hub) + `cicd` (célula) | `regions/us-east-1/` | `module.hub` (VPC `10.1.0.0/16`, TGW, Client VPN, ALB público) + `module.cell` (VPC `10.2.0.0/16`, EKS, node group, Pod Identities, ESO, ArgoCD, Crossplane) | sim — apply e destroy reais dos dois módulos provados |
-| `regions/us-west-2/` | `network` (hub) + `cicd` (célula) | `regions/us-west-2/` | `module.hub` (VPC `10.3.0.0/16`) + `module.cell` (VPC `10.4.0.0/16`) | sim para o `plan` da composição inteira (invariante); aplicado só o hub, por custo |
+| `regions/us-west-2/` | `network` (hub) + `cicd` (célula) | `regions/us-west-2/` | `module.hub` (VPC `10.4.0.0/16`) + `module.cell` (VPC `10.5.0.0/16`) | sim para o `plan` da composição inteira (invariante); aplicado só o hub, por custo |
+| `spikes/ipam/` | `personal` + `network` + `cicd` | **state local**, não o bucket | **Spike descartável, fora da sequência** — prova o desenho de IPAM da [ADR 0015](../../docs/adr/0015-defer-ipam-adoption.md). Não tem `up-NN` e não entra em `up-all`. Ver [`spikes/ipam/README.md`](spikes/ipam/README.md) | não — código escrito, ainda não aplicado |
 
 ### `dns/` é a única raiz sem região na state key
 
@@ -266,12 +267,19 @@ região, idêntico entre elas — a diferença entre aplicar só o hub ou hub+c�
 
 Supernet `10.0.0.0/12`, um `/16` por VPC. N=0 reservado à Organization.
 
+A alocação é **por região, não por ordem de criação**: cada região ocupa um `/14` contíguo, para que
+um pool regional de IPAM (que exige `locale` por região) possa ser criado sem re-endereçar nada.
+
 | Bloco | Região | Módulo |
 |---|---|---|
-| `10.1.0.0/16` | us-east-1 | `module.hub` |
-| `10.2.0.0/16` | us-east-1 | `module.cell` |
-| `10.3.0.0/16` | us-west-2 | `module.hub` |
-| `10.4.0.0/16` | us-west-2 | `module.cell` |
+| `10.0.0.0/16` | — | **reservado à Organization** |
+| `10.1.0.0/16` | us-east-1 (`10.0.0.0/14`) | `module.hub` |
+| `10.2.0.0/16` | us-east-1 (`10.0.0.0/14`) | `module.cell` |
+| `10.3.0.0/16` | us-east-1 (`10.0.0.0/14`) | livre |
+| `10.4.0.0/16` | us-west-2 (`10.4.0.0/14`) | `module.hub` |
+| `10.5.0.0/16` | us-west-2 (`10.4.0.0/14`) | `module.cell` |
+| `10.6`–`10.7` | us-west-2 (`10.4.0.0/14`) | livres |
+| `10.8`–`10.15` | — | livres, 2 regiões futuras |
 
 **Teto de 15, e região multiplica** — ver `aws/docs/network/01-cidr-addressing.md`. É a única
 decisão irreversível da cadeia.

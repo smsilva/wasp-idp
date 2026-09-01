@@ -32,9 +32,15 @@ provider "aws" {
 locals {
   # Regiao e CIDRs sao decisao de desenho documentada em aws/docs/network/01-cidr-addressing.md,
   # nao identidade: inline aqui, como a network-foundation ja fazia. N=0 e reservado a Organization.
-  region        = "us-west-2"
-  hub_vpc_cidr  = "10.3.0.0/16"
-  cell_vpc_cidr = "10.4.0.0/16"
+  region = "us-west-2"
+
+  # 10.4 e 10.5, nao 10.3 e 10.4: a alocacao e por REGIAO, nao por ordem de criacao. us-east-1 ocupa
+  # 10.0.0.0/14 (10.0-10.3) e us-west-2 ocupa 10.4.0.0/14 (10.4-10.7), de modo que cada regiao cabe
+  # num bloco contiguo — pre-requisito de um pool regional de IPAM, que exige locale por regiao.
+  # Realocado enquanto esta raiz tinha 0 recursos aplicados; com VPC de pe custaria recriar. Ver
+  # docs/adr/0003-supernet-cidr-allocation.md e aws/docs/network/08-ipam.md.
+  hub_vpc_cidr  = "10.4.0.0/16"
+  cell_vpc_cidr = "10.5.0.0/16"
 
   # Duas AZs: o Client VPN associa uma target network por AZ e o NLB interno da celula fixa um IP
   # privado por AZ. UM data source por CONTA, nunca compartilhado: AZ names sao alias por-conta

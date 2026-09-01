@@ -107,7 +107,7 @@ run "cell_reads_the_transit_gateway_from_the_hub" {
     target = module.hub
     outputs = {
       vpc_id                         = "vpc-aaaaaaaaaaaaaaaa1"
-      vpc_cidr_block                 = "10.3.0.0/16"
+      vpc_cidr_block                 = "10.4.0.0/16"
       private_subnet_ids             = ["subnet-aaaa1", "subnet-aaaa2"]
       public_subnet_ids              = ["subnet-bbbb1", "subnet-bbbb2"]
       transit_gateway_id             = "tgw-aaaaaaaaaaaaaaaa1"
