@@ -80,6 +80,39 @@ cluster-admin à `OrganizationAccountAccessRole` local só para a destroy conseg
 objetos Kubernetes, destruído junto com o cluster. Issue **#52** criada para revalidar
 `provision-region.yml` do zero (região já vazia) — board #6, label `private-access-ingress`.
 
+**2026-09-01 (#52 fechada, os dois critérios):** `provision-region.yml` provado **do zero num único
+apply** (78 recursos, `0 changed, 0 destroyed`) e `teardown-region.yml` provado (78 destruídos, zero
+recriados). Estado ao fim da sessão: **`regions/us-east-1` com 43 recursos de `module.hub` de pé e
+`module.cell` em zero** — o hub fica de pé por desenho (~US$ 110/mês); a célula (~US$ 165/mês) foi
+derrubada.
+
+Cinco bugs corrigidos no caminho, nenhum deles pego por regressão offline:
+
+- **Race de Pod Identity do EBS CSI (bug de produto, não de CI).** `aws_eks_addon` em `src/cluster` e
+  `module.pod_identity_ebs_csi` em `src/cell` não se referenciavam, então nasciam em paralelo — numa
+  run o addon começou 7s **antes** da association e morreu `DEGRADED` 20 min depois. Os env vars de
+  Pod Identity são injetados por webhook na **admissão** do pod: pod spec é imutável, restart nunca
+  recupera, e aumentar timeout só adia. O addon virou recurso próprio em `src/cell` com
+  `depends_on = [module.pod_identity_ebs_csi, module.nodegroup]` — mesmo split 65→68 do lado
+  Crossplane. Agora sobe `ACTIVE` em 35s. `aws/docs/lessons-learned/terraform-layers.md` afirmava
+  que essa race "não existe no Terraform, o grafo já ordena" — riscado e corrigido lá.
+- `down-cell` não criava os symlinks de runtime (`values.auto.tfvars`, `saml-metadata.xml`): num
+  runner limpo morria com `No value for required variable` antes de tocar a AWS.
+- Bloco `moved` derruba **todo** plan com `-target`, e os dois scripts abrem o endpoint com apply
+  direcionado como primeira ação. Removido — `moved` é incompatível com esta árvore.
+- `--close-public-access` do `down-cell` rodava `apply -target` no cluster **depois** do destroy;
+  `-target` em recurso ausente **cria**, e o estado desejado da região inclui a célula. Uma run
+  destruiu 78 e recriou 8 (VPC, 4 subnets, IAM role e um control plane EKS inteiro). Guard de state
+  nos dois scripts.
+- `up-02-region` fragmentava o apply do zero pelo mesmo `-target` auxiliar, e seu
+  `--close-public-access` era apply **completo** — no caminho de falha (`if: always()`) tentaria
+  terminar a célula com o endpoint fechado. Ambos guardados por state.
+
+**Documentação do CI consolidada:** `aws/terraform/ci/README.md` é o documento único da automação
+(trust OIDC, variables/secrets com o motivo de cada um, GitHub App, composite action `aws/setup`,
+os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `## Raízes` do
+`aws/terraform/README.md` — ela não estava lá, e é por isso que o README dela era indescobrível.
+
 Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
 (`aws-vpn-client get-connection-status --profile-name hub-<região>` — o profile leva a região no
 nome porque cada região tem o próprio endpoint). Com o hub derrubado, o endpoint não existe mais —
@@ -143,6 +176,25 @@ para revisão/integração em `main`.
 A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
 — ver `docs/archived/index.md`.
 
+**Issues abertas nesta sessão, nenhuma com trabalho iniciado:**
+
+| Issue | O que é | Depende de |
+|---|---|---|
+| **#56** | Declarar admins do cluster (access entries) opcionalmente, por grupo | — |
+| **#62** | Nenhuma StorageClass usa `ebs.csi.aws.com`; só existe a `gp2` in-tree, e nenhum PVC exercita o addon | — |
+| **#64** | Reorganizar a documentação — **primeira atividade é brainstorming, não mover arquivo** | — |
+| **#65** | Publicar a doc como site MkDocs Material | #64 e #23 |
+
+**#64 e #65 têm orientação explícita de não ler os 247 `.md` de uma vez** — taxonomia se decide por
+metadados e cabeçalhos (`git ls-files … | xargs wc -l`, `grep -H '^#'`), não pelo corpo dos
+documentos; leitura integral só dos índices; amostragem para o resto; delegação em lote quando a
+varredura completa for inevitável.
+
+**Board #6 estava incompleto:** seis issues (#38, #39, #56, #62, #64, #65) nunca entraram, porque
+`gh issue create` não adiciona ao Project v2 e o board não tem workflow "Auto-add". Corrigido, todas
+com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` do `Status`) está em
+`CLAUDE.md` — sem o segundo passo o item cai numa coluna "No Status" que ninguém olha.
+
 ## Referências (ler sob demanda, não de uma vez)
 
 | Precisa de... | Vá para |
@@ -172,8 +224,21 @@ e ler o `Account`/`Arn` inteiro. Erro de profile inexistente ou ARN vazio ⟹
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**Nada está de pé agora** (`us-east-1` destruída nesta sessão — 0 recursos, conferir com o comando
-de "Estado atual" acima antes de presumir). Subir de novo:
+**O hub de `us-east-1` está de pé (43 recursos); a célula, não** — conferir com o comando de "Estado
+atual" acima antes de presumir. Subir a célula por CI é o caminho provado e não exige túnel:
+
+```bash
+gh workflow run provision-region.yml --ref main -f region=us-east-1
+gh workflow run teardown-region.yml  --ref main -f region=us-east-1
+```
+
+`--ref main` é obrigatório: o trust policy da role `cicd` restringe o claim `sub` a
+`ref:refs/heads/main`, e disparar de um branch falha no `AssumeRoleWithWebIdentity` com mensagem que
+não menciona branch nenhum. **Não há caminho de teste em branch.** Provisionamento leva 20-30 min,
+teardown ~8 min; sondar com `sleep 285` (sleep de 10 min é morto pelo harness). Detalhes e mais
+exemplos de `gh` em `aws/terraform/ci/README.md`.
+
+Localmente (exige túnel conectado):
 
 ```bash
 cd aws/terraform/scripts && ./up-02-region --region us-east-1 --yes
@@ -284,10 +349,45 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 - **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
   ângulos já mapeados.
+- **A `gp2` in-tree (`kubernetes.io/aws-ebs`) ainda provisiona volume em Kubernetes 1.36, via CSI
+  migration?** Muda se a #62 é gap de qualidade (classe legada, `gp2` mais caro por IOPS que `gp3`)
+  ou bug latente (classe que não funciona mais). Conferir na doc da AWS **antes** de escrever
+  código — a regra existe porque o passo `2.4` custou ~US$ 180/mês por não fazer isso.
+- **Um cluster recém-criado não tem admin além da role de CI**, cuja trust OIDC é restrita a
+  `refs/heads/main`. `aws eks update-kubeconfig` + `kubectl` falham com "the server has asked for the
+  client to provide credentials". Para depurar de dentro, ou resolver a #56, ou criar uma access
+  entry fora do Terraform (`aws eks create-access-entry` + `associate-access-policy`; não gera drift
+  porque `var.access_entries` está vazio, então o `for_each` não gerencia nada).
+
+## Known Broken
+
+Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken.md). Desta sessão:
+
+- **`recover-lock.yml` nunca foi executado e não roda** — *unexpected*, item 25. Dois defeitos:
+  referencia o composite action do repositório privado direto (a correção do App token tocou só os
+  outros dois workflows), e cria apenas o symlink de `values.auto.tfvars`, sem o de
+  `saml-metadata.xml` que `module.hub` lê em todo plan. **Não corrigido de propósito:** a correção
+  precisa de uma execução real para ser dada por boa, e é a lição que a #52 inteira ensinou.
+- **Endpoint público do EKS fica aberto se o job morrer antes do passo de fechamento** —
+  *intentional*, issue #49. O `if: always()` cobre falha de step, não cancelamento nem morte do
+  runner.
+- **`terraform validate` em `src/cell` acusa "Provider configuration not present"** — *intentional*,
+  pré-existente (confirmado por `git stash` + reexecução): resíduo de estado de teste com o provider
+  aliasado `aws.network`. A checagem que vale é o `plan` na raiz regional.
+- **`aws_iam_saml_provider.client_vpn` tem drift** entre o XML local e o que está na AWS —
+  *unexpected*, não aplicado nesta sessão para não mexer em config compartilhada do Client VPN.
 
 ## Next Steps
 
-1. #40 segue no backlog do board #6, sem trabalho iniciado.
+1. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
+   arquivos movidos.
+2. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
+   e a Pod Identity dele, eliminando a race junto) tem de ser considerada primeiro, não descartada
+   por reflexo. Se precisar, o valor real está no smoke test: um PVC + pod que monte volume, senão a
+   próxima regressão de Pod Identity volta a ser invisível.
+3. **#56** — admins declaráveis. Fecha a lacuna de não haver como entrar num cluster novo.
+4. **#65** — site MkDocs, depois de #64 e #23.
+5. **#40** segue no backlog do board #6, sem trabalho iniciado.
 
 ## Completed Work
 
