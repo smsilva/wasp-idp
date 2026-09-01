@@ -79,7 +79,7 @@ estão marcados na tabela. Ver `--help` de cada um para detalhes.
 | `create-log-archive-bucket` | ④ | Assume role na `log-archive` e cria o bucket de auditoria (BPA, versionamento, SSE, policy do CloudTrail) |
 | `create-organization-trail` | ④ | Cria o trail organizacional multi-region + `start-logging` + validação de integridade |
 | `create-account --ou {security\|infrastructure\|deployments\|nonprod\|production}` | ④ ⑤ ⑤b ⑧ | Cria 1 conta e move para a OU pedida. `--ou production` avisa explicitamente antes de prosseguir |
-| `remove-default-vpcs [--account <conta>] [--dry-run]` | ⑤ ⑧ | Apaga a VPC default (subnets → IGW → VPC) de cada conta nas regiões aprovadas. Chamado pelo `create-account`. **Destrutivo** — pede confirmação salvo `--yes`; recusa VPC que tenha qualquer ENI |
+| `remove-default-vpcs [--account <conta>] [--dry-run]` | ⑤ ⑧ | Apaga a VPC default (subnets → IGW → VPC) de cada conta nas regiões aprovadas. Chamado pelo `create-account` **só para a conta que ele acabou de criar**; conta pré-existente é sempre chamada explícita. **Destrutivo** — pede confirmação salvo `--yes`; recusa VPC que tenha qualquer ENI |
 | `apply-baseline-service-control-policy` | ⑥ | Guardrails do tópico 2: restringe região, exige IMDSv2, nega root, protege CloudTrail/saída da Org |
 | `assign-permission-set --account <conta> --user\|--group <principal>` | ⑦ | Cria/reusa permission set do Identity Center e atribui à conta — tira a conta do limbo do switch-role |
 | `show-permission-sets [--account <conta>]` | ⑦ verificação | Somente leitura: permission sets existentes e, por conta, quem tem qual acesso |

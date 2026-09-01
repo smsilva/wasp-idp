@@ -31,7 +31,7 @@ show_usage() {
                                 (default: us-east-1,us-west-2)
            --role              Role assumed in each member account
                                 (default: OrganizationAccountAccessRole)
-           --dry-run           Only report what would be deleted
+      -dr, --dry-run           Only report what would be deleted (default: false)
       -y,  --yes               Do not ask for confirmation
 
   This script REFUSES to delete a default VPC that has any network interface (ENI):
@@ -80,8 +80,13 @@ while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
       role="${1}"
       ;;
 
-    --dry-run )
-      dry_run="true"
+    -dr | --dry-run )
+      if [[ -n "${2}" && "${2}" =~ ^(true|false)$ ]]; then
+        dry_run="${2}"
+        shift
+      else
+        dry_run="true"
+      fi
       ;;
 
     -y | --yes )
@@ -134,7 +139,8 @@ $(echo "${accounts_text}" | awk -F'\t' '{ printf "  %s  %s\n", $1, $2 }')
 EOF
 
 if [ "${dry_run}" == "false" ] && [ "${assume_yes}" == "false" ]; then
-  read -r -p "Delete the default VPC of these accounts in ${regions}? [y/N] " answer
+  # An EOF here (no tty) must abort with a message, not die silently under 'set -e'.
+  read -r -p "Delete the default VPC of these accounts in ${regions}? [y/N] " answer || answer=""
   if [[ ! "${answer}" =~ ^[Yy]$ ]]; then
     echo "Aborted."
     exit 1
