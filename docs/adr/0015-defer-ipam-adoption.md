@@ -30,6 +30,25 @@ O desenho técnico já existia em [`aws/docs/network/08-ipam.md`](../../aws/docs
 - **A supernet passa a ser alocada por região, em `/14` contíguos** (`us-east-1` = `10.0.0.0/14`, `us-west-2` = `10.4.0.0/14`), amendando o [ADR 0003](0003-supernet-cidr-allocation.md). Um pool regional exige `locale`, e **locale é imutável**: sem bloco contíguo por região, adotar o IPAM depois exigiria re-endereçar VPC — exatamente o que a adoção deveria evitar. `us-west-2` saiu de `10.3`/`10.4` para `10.4`/`10.5` enquanto aquela raiz tinha **zero recursos aplicados**.
 - **Um modelo mínimo executável fica versionado** em [`aws/terraform/spikes/ipam/`](../../aws/terraform/spikes/ipam/), com sete provas declaradas. A decisão de adiar é tomada com o desenho provado, não imaginado.
 
+## O que o spike ensinou, e que nenhuma leitura de doc teria produzido
+
+O modelo mínimo foi aplicado de verdade em 2026-09-01 e **reprovou a premissa central de `08-ipam.md`**: a de que a migração é "de processo de alocação, não de endereço", e portanto mecânica e segura.
+
+A VPC de prova nasceu com `10.1.0.0/24` — **dentro de `10.1.0.0/16`, a VPC do hub que estava de pé**. O IPAM entregou espaço já ocupado, em outra conta, para redes que se falam pelo TGW. `auto_import` é assíncrono e a alocação não espera por ele: quinze minutos depois, `10.1.0.0/16` continuava não importada, embora o IPAM já a tivesse **descoberto** (14 recursos listados por `get-ipam-discovered-resource-cidrs`). *Descoberto* e *alocado* são estados distintos, e só o segundo bloqueia o espaço.
+
+E o dano se fixa: pela regra da própria AWS, uma VPC cujo CIDR **cobre** uma alocação existente não pode mais ser auto-importada. Uma alocação prematura **envenena o pool**, e a adoção do legado deixa de ser possível sem intervenção manual.
+
+**Consequência normativa para quando um gatilho disparar** — a adoção é em fases separadas por verificação, nunca num `apply` só:
+
+1. criar IPAM e pools, **sem nenhum recurso que aloque**;
+2. **reservar cada bloco legado** por `aws_vpc_ipam_pool_cidr_allocation` explícita — síncrono, determinístico e revisável em PR, ao contrário da descoberta;
+3. confirmar por `get-ipam-pool-allocations` que os blocos entraram;
+4. só então liberar alocação dinâmica.
+
+Isso inverte o papel que a avaliação inicial atribuía à allocation explícita: ela não é só para espaço sem recurso (o `10.0.0.0/16` da Organization) — é a **barreira** que torna a adoção segura.
+
+O que **não** se confirmou como problema: criar um IPAM sobre uma árvore Terraform viva não a perturba. `terraform plan -target=module.hub` em `regions/us-east-1/` deu `0 to add, 1 to change, 0 to destroy`, e a única mudança é drift pré-existente e já conhecido. O critério "adoção, não realocação" se sustenta — o que falha é o *timing* da adoção, não a premissa de não re-endereçar.
+
 ## Consequências
 
 O anti-pattern de REL02-BP05 permanece em aberto, **conscientemente e com plano** — que é a diferença entre gap registrado e dívida no escuro. O risco Medium da própria BP é o que sustenta essa resposta: fosse High, adiar não seria defensável.
