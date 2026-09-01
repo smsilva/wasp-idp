@@ -22,3 +22,4 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0012](0012-argocd-github-app-auth.md) | GitHub App (não deploy key SSH) para autenticação do ArgoCD |
 | [0013](0013-consolidate-local-values-yaml.md) | Consolidar valores locais em `variables/values.yaml`; adiar parametrização formal |
 | [0014](0014-single-regional-root-composing-hub-and-cell-modules.md) | Raiz única `regions/<região>` compondo `module.hub` + `module.cell`; revisa 0007 |
+| [0015](0015-defer-ipam-adoption.md) | Adiar a adoção do IPAM; supernet passa a ser alocada por região em `/14`; amenda 0003 |
