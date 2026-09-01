@@ -69,6 +69,10 @@ autenticado por OIDC. O trust GitHub→AWS nasce da raiz `aws/terraform/ci/` —
 `ci/README.md` para o passo a passo de bootstrap e `aws/terraform/bootstrap-checklist.md`
 para a sequência completa do zero.
 
+O lado GitHub — variables, secrets, o GitHub App que dá acesso ao action privado, o composite
+action `aws/setup` e os três workflows, com exemplos de execução via `gh` — está em
+[`github/README.md`](github/README.md).
+
 ## Sequência de provisionamento
 
 Um script por camada em `scripts/`, mais `up-all`, que roda a sequência parando na primeira falha, e

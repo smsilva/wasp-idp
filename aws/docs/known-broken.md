@@ -74,6 +74,16 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     nasce, nunca ganha `status.loadBalancer`, e a `Application` fica em `Progressing` para
     sempre — falso negativo que se lê como falha de credencial.
 
+25. **`recover-lock.yml` nunca foi executado e tem dois defeitos que o impedem de rodar** —
+    *unexpected*. (a) Referencia o composite action privado direto
+    (`uses: smsilva/wasp-gitops/actions/aws/setup@main`): o fix do App token tocou só
+    `provision-region.yml` e `teardown-region.yml`, então este falha na resolução do action, antes
+    de qualquer step. (b) Cria só o symlink de `values.auto.tfvars`, não o de `saml-metadata.xml`
+    — e `module.hub` faz `file(var.saml_metadata_path)` em todo plan, então o `plan` de revisão
+    falha por arquivo ausente (mesma causa da run `33512301706`, corrigida no `down-cell` pelo
+    PR #58). Ele também duplica `ln`/`init` em vez de usar `scripts/lib`. Detalhe em
+    [`../terraform/github/README.md`](../terraform/github/README.md).
+
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e
 `load-balancer-and-tls.md` têm as mais recentes, do apply do `3.2`.
