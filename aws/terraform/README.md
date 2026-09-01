@@ -65,13 +65,13 @@ um segundo passo de console, e o motivo de o metadata morar em `variables/`.
 ## Provisionar via GitHub Actions
 
 O workflow `.github/workflows/provision-region.yml` roda `up-02-region --with-cell` em CI,
-autenticado por OIDC. O trust GitHub→AWS nasce da raiz `aws/terraform/ci/` — ver
-`ci/README.md` para o passo a passo de bootstrap e `aws/terraform/bootstrap-checklist.md`
-para a sequência completa do zero.
+autenticado por OIDC.
 
-O lado GitHub — variables, secrets, o GitHub App que dá acesso ao action privado, o composite
-action `aws/setup` e os três workflows, com exemplos de execução via `gh` — está em
-[`github/README.md`](github/README.md).
+**[`ci/README.md`](ci/README.md) é o documento único da automação**, dos dois lados: o trust
+GitHub→AWS (a raiz `ci/`, aplicada uma vez por um admin), as variables e secrets do repositório com
+o motivo de cada um, o GitHub App que dá acesso ao composite action privado, os três workflows e os
+exemplos de execução via `gh`. Para a sequência completa do zero, incluindo esse bootstrap no lugar
+certo da ordem, ver [`bootstrap-checklist.md`](bootstrap-checklist.md).
 
 ## Sequência de provisionamento
 
@@ -218,6 +218,7 @@ repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state 
 | Raiz | Contas | State key | Entrega | Exercitada |
 |---|---|---|---|---|
 | `state-backend/` | `network` | `state-backend/` | O bucket de state, uma vez, sem região | sim |
+| `ci/` | `cicd` + `network` | `ci/` | Provider OIDC do GitHub Actions + uma role por conta. Documenta também o lado GitHub inteiro — ver [`ci/README.md`](ci/README.md) | sim — os três workflows autenticam por ela |
 | `dns/` | `network` + Azure | `dns/` | Subzona `nonprod.<domínio>` no Route 53 + delegação NS na zona pai | sim |
 | `regions/us-east-1/` | `network` (hub) + `cicd` (célula) | `regions/us-east-1/` | `module.hub` (VPC `10.1.0.0/16`, TGW, Client VPN, ALB público) + `module.cell` (VPC `10.2.0.0/16`, EKS, node group, Pod Identities, ESO, ArgoCD, Crossplane) | sim — apply e destroy reais dos dois módulos provados |
 | `regions/us-west-2/` | `network` (hub) + `cicd` (célula) | `regions/us-west-2/` | `module.hub` (VPC `10.3.0.0/16`) + `module.cell` (VPC `10.4.0.0/16`) | sim para o `plan` da composição inteira (invariante); aplicado só o hub, por custo |

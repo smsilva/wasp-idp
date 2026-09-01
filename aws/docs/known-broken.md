@@ -73,7 +73,6 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     `global.environment.cluster.ingress.type` (default `nginx`). Num cluster sem nginx o Ingress
     nasce, nunca ganha `status.loadBalancer`, e a `Application` fica em `Progressing` para
     sempre — falso negativo que se lê como falha de credencial.
-
 25. **`recover-lock.yml` nunca foi executado e tem dois defeitos que o impedem de rodar** —
     *unexpected*. (a) Referencia o composite action privado direto
     (`uses: smsilva/wasp-gitops/actions/aws/setup@main`): o fix do App token tocou só
@@ -82,7 +81,7 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     — e `module.hub` faz `file(var.saml_metadata_path)` em todo plan, então o `plan` de revisão
     falha por arquivo ausente (mesma causa da run `33512301706`, corrigida no `down-cell` pelo
     PR #58). Ele também duplica `ln`/`init` em vez de usar `scripts/lib`. Detalhe em
-    [`../terraform/github/README.md`](../terraform/github/README.md).
+    [`../terraform/ci/README.md`](../terraform/ci/README.md).
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e
