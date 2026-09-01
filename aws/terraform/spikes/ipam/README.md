@@ -78,13 +78,42 @@ terraform output proof_vpc_is_inside_regional_block         # esperado: true
 
 A VPC default de `us-west-2` (`172.31.0.0/16`) **não interfere**: está fora do supernet, logo fora de qualquer pool. Ela é assunto da issue #67.
 
+### Resultado (2026-09-01)
+
+**Limpo, e confirma que o defeito é exclusivo de brownfield.**
+
+| | |
+|---|---|
+| `proof_vpc_cidr` | **`10.4.0.0/24`** — dentro do `/14` da região |
+| `proof_vpc_is_inside_regional_block` | `true` |
+| Alocações no pool | exatamente uma, a própria VPC de prova |
+| VPCs no supernet em `us-west-2` | só a de prova — **nenhuma sobreposição** |
+| VPCs default (`172.31.0.0/16`, 3 contas) | descobertas, **fora do pool**, como previsto |
+| Recursos | 10 |
+
+Comparando as duas rodadas lado a lado, com a mesma configuração e a mesma sequência de apply:
+
+| | Brownfield (`us-east-1`) | Greenfield (`us-west-2`) |
+|---|---|---|
+| CIDR devolvido | `10.1.0.0/24` | `10.4.0.0/24` |
+| Já estava em uso? | **sim**, sob a VPC hub `10.1.0.0/16` | não |
+| Adoção do legado | falhou, e o pool ficou envenenado | não se aplica |
+
+**A conclusão que isso sustenta:** o IPAM funciona como anunciado quando entra antes da primeira VPC. O que ele não faz é entrar com segurança *depois*, sem a sequência disciplinada de quatro fases da [ADR 0015](../../../../docs/adr/0015-defer-ipam-adoption.md). O risco não está no serviço — está na migração.
+
 ### A prova 5, que ficou faltando, cabe aqui
 
-Com o ambiente de pé, `var.proof_vpc_omit_tag = true` recria a VPC de prova **sem** a tag exigida pelo pool. O apply tem de **falhar**:
+Com o ambiente de pé, `var.proof_vpc_omit_tag = true` tira a tag exigida pelo pool. Mas **um `apply` simples não prova nada**: mudar tag não força replace, então o Terraform apenas removeria a tag de uma VPC **já criada e já alocada** — a condição de alocação nunca seria reavaliada, o apply passaria, e o resultado se leria como "a regra não funciona".
+
+A regra vale na **criação**. Então a VPC precisa nascer de novo, sem a tag:
 
 ```bash
-terraform apply -var-file=greenfield-us-west-2.tfvars -var proof_vpc_omit_tag=true
+terraform apply -var-file=greenfield-us-west-2.tfvars \
+  -var proof_vpc_omit_tag=true \
+  -replace=aws_vpc.proof
 ```
+
+Leva ~20 min (a destruição da VPC sozinha passa de 18). O apply tem de **falhar na criação**.
 
 Se ele **passar**, a descoberta é maior que a prova: `allocation_resource_tags` não estaria sendo aplicada, e o argumento de que "o IPAM transforma convenção em condição" cairia junto — que é a principal vantagem dele sobre uma tabela markdown.
 
