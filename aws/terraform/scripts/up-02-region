@@ -52,8 +52,9 @@ show_usage() {
                              --close-public-access.
            --close-public-access
                              Close the EKS API's public endpoint (needs
-                             --with-cell). Mutually exclusive with
-                             --public-cidr.
+                             --with-cell). Cleanup step: flips that one field
+                             and exits, without a full apply. Mutually
+                             exclusive with --public-cidr.
            --state-bucket   Bucket name (default: tfstate-<organization-id>)
            --org-profile    Profile that reads Organizations and Identity
                              Center (default: personal)
@@ -159,6 +160,8 @@ ensure_symlink "${root}" "saml-metadata.xml" "${saml_file}"
 state_bucket="$(discover_state_bucket "${org_profile}")"
 terraform_init "${root}" "${state_bucket}"
 
+cells="$( (cd "${root}" && terraform state list) | grep --count '^module\.cell\.' || true)"
+
 # The cell costs ~US$ 165/month and needs the Client VPN tunnel connected: the helm and
 # kubernetes providers talk to the API server from this machine. Without --with-cell only the
 # hub is applied, which is the region's resting state.
@@ -177,7 +180,15 @@ fi
 # open it only takes effect once THIS apply runs. Confirmed in a real run: refresh hung for ~30s
 # each on those two resources, then "dial tcp <private-ip>:443: i/o timeout". Fix: open the
 # endpoint by itself first, with its own tiny apply, before the full plan does any refreshing.
-if [ "${with_cell}" == "true" ] && [ -n "${public_cidr}" ]; then
+#
+# ONLY when the cell already exists. With an empty state there is nothing to refresh, so the
+# problem this step solves does not exist — and running it anyway is actively harmful: a
+# `-target` on an absent resource CREATES it, so the cell's control plane, VPC, 4 subnets and
+# IAM role would be born OUTSIDE the graph, in a plan of their own, before the real apply. That
+# is precisely the -target fragmentation that hid the Pod Identity ordering race (see
+# aws/docs/lessons-learned/terraform-layers.md): a from-zero run has to be ONE apply, hub and
+# cell together, or it proves nothing about ordering.
+if [ "${with_cell}" == "true" ] && [ -n "${public_cidr}" ] && [ "${cells}" -gt 0 ]; then
   step "Opening the EKS public endpoint first, so the plan's refresh can reach it"
 
   endpoint_apply_options=()
@@ -189,6 +200,34 @@ if [ "${with_cell}" == "true" ] && [ -n "${public_cidr}" ]; then
     -target=module.cell.module.cluster.aws_eks_cluster.this \
     "${cell_network_args[@]}" \
     "${endpoint_apply_options[@]}")
+fi
+
+# --close-public-access is the cleanup step, and its whole job is flipping ONE field back. It is
+# NOT a full apply: the caller runs it with `if: always()`, so on the failure path a full apply
+# would try to finish building the cell with the endpoint already closed, from a runner with no
+# tunnel — and if the failure happened before the cluster existed, it would create the cell from
+# scratch on a run that had just failed. Same shape as down-cell's cleanup step, and the same
+# guard: nothing in state means nothing to close.
+if [ "${close_public_access}" == "true" ]; then
+  if [ "${cells}" -eq 0 ]; then
+    log "no cell resources in the state of ${region} — no endpoint to close"
+    exit 0
+  fi
+
+  step "Closing the EKS public endpoint (cleanup step — no full apply)"
+
+  close_apply_options=()
+  if [ "${assume_yes}" == "true" ]; then
+    close_apply_options+=(-auto-approve)
+  fi
+
+  (cd "${root}" && terraform apply -no-color -input=false \
+    -target=module.cell.module.cluster.aws_eks_cluster.this \
+    "${cell_network_args[@]}" \
+    "${close_apply_options[@]}")
+
+  log "endpoint closed."
+  exit 0
 fi
 
 if [ "${with_cell}" == "true" ]; then
