@@ -391,6 +391,46 @@ module "pod_identity_ebs_csi" {
   tags                 = local.tags
 }
 
+# Este addon mora AQUI, e nao no src/cluster junto do eks-pod-identity-agent, por causa de uma
+# race que ja custou um apply inteiro (run 33505550033, 01/09/2026): o addon comecou a criar 7s
+# ANTES de a association do pod_identity_ebs_csi existir. Os env vars de Pod Identity
+# (AWS_CONTAINER_CREDENTIALS_FULL_URI + o volume do token) sao injetados por um webhook na
+# ADMISSAO do pod, uma unica vez; pod spec e imutavel, entao os pods do ebs-csi-controller que
+# nasceram naquela janela nunca recuperaram — CrashLoopBackOff permanente e addon DEGRADED pelos
+# 20 min inteiros do timeout, mesmo com os nos Ready desde os 3min. Nao e falta de tempo, e falta
+# de ordem: aumentar timeouts.create so adia a falha.
+#
+# O depends_on nao poderia ficar no src/cluster — module.pod_identity_ebs_csi le
+# module.cluster.cluster_name, entao o cluster nao pode depender dele (ciclo) — e os dois addons
+# compartilhavam um for_each, que nao ordena um em relacao ao outro. Mesmo split que o chart do
+# Crossplane ja fez nas fases 65 -> 68 (ver aws/CLAUDE.md).
+#
+# O nodegroup entra no depends_on porque sem no nao ha onde admitir o controller: o addon ficaria
+# Pending ate o timeout por outro motivo.
+#
+# Sem serviceAccountRoleArn: a identidade chega por Pod Identity. Sem addon_version: a AWS
+# escolhe a compativel com a versao do cluster.
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name                = module.cluster.cluster_name
+  addon_name                  = "aws-ebs-csi-driver"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = merge(local.tags, { Name = "${var.name}-aws-ebs-csi-driver" })
+
+  depends_on = [
+    module.pod_identity_ebs_csi,
+    module.nodegroup,
+  ]
+}
+
+# O addon saiu do for_each do src/cluster e virou recurso proprio aqui. Sem este moved, o apply
+# faria destroy + create de um addon que esta ACTIVE e saudavel.
+moved {
+  from = module.cluster.aws_eks_addon.this["aws-ebs-csi-driver"]
+  to   = aws_eks_addon.ebs_csi
+}
+
 module "pod_identity_eso" {
   source = "../pod-identity"
 

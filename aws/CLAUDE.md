@@ -186,6 +186,15 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 - **Fix pontual (se ainda ocorrer por reaplicação fora de ordem):** com a association
   `Ready`, `kubectl rollout restart deploy/ebs-csi-controller` no contexto do EKS. Comandos
   no `aws/eks/README.md`.
+- **A MESMA race existia na camada Terraform, e passou despercebida por mais tempo** — o doc de
+  lessons-learned chegou a afirmar que ela "não existe no Terraform, o grafo já ordena". Não
+  ordenava: `aws_eks_addon` (em `src/cluster`) e `module.pod_identity_ebs_csi` (em `src/cell`) não
+  se referenciam, então nasciam em paralelo. Na run `33505550033` o addon começou 7s antes da
+  association e o apply morreu 20 min depois. **Fix idêntico ao 65→68:** o addon do driver saiu do
+  `for_each` do `src/cluster` (que ficou só com o `eks-pod-identity-agent`) e virou recurso próprio
+  em `src/cell`, com `depends_on = [module.pod_identity_ebs_csi, module.nodegroup]`. Não dava para
+  resolver dentro do `src/cluster`: `module.pod_identity_ebs_csi` lê `module.cluster.cluster_name`,
+  então o cluster depender dele seria ciclo.
 
 ## Gotcha: `provision-eks` longo excede o timeout de uma chamada Bash
 

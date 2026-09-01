@@ -26,14 +26,14 @@ variables {
   # O hub, por referencia — ver o comentario no variables.tf do modulo. hub_vpc_cidr_block
   # precisa ser CIDR real: alimenta a regra de 443 do security group do cluster, e a validacao
   # de schema do provider (client-side, roda sob mock) recusa valor sintetico.
-  hub_vpc_id                          = "vpc-00000000000000001"
-  hub_vpc_cidr_block                  = "10.1.0.0/16"
-  transit_gateway_id                  = "tgw-00000000000000001"
-  hub_transit_gateway_route_table_id  = "tgw-rtb-00000000000000001"
-  hub_transit_gateway_attachment_id   = "tgw-attach-00000000000000001"
-  hub_alb_listener_arn                = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
-  hub_alb_dns_name                    = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
-  hub_alb_zone_id                     = "Z35SXDOTRQ7X7K"
+  hub_vpc_id                         = "vpc-00000000000000001"
+  hub_vpc_cidr_block                 = "10.1.0.0/16"
+  transit_gateway_id                 = "tgw-00000000000000001"
+  hub_transit_gateway_route_table_id = "tgw-rtb-00000000000000001"
+  hub_transit_gateway_attachment_id  = "tgw-attach-00000000000000001"
+  hub_alb_listener_arn               = "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/poc-hub-ingress/0000000000000001/aaaaaaaaaaaaaaaa"
+  hub_alb_dns_name                   = "poc-hub-ingress-000000001.us-east-1.elb.amazonaws.com"
+  hub_alb_zone_id                    = "Z35SXDOTRQ7X7K"
 }
 
 run "spoke_usa_o_segundo_octeto_reservado" {
@@ -178,4 +178,30 @@ run "o_mundo_e_recusado_mesmo_explicito" {
   }
 
   expect_failures = [var.public_access_cidrs]
+}
+
+# O driver do EBS mora nesta camada, nao no src/cluster, porque so aqui existe a association de
+# Pod Identity que ele consome — ver o comentario extenso em main.tf. `terraform test` nao assere
+# aresta do grafo (o depends_on so se prova em apply real), entao o que este run segura e a outra
+# metade: que o recurso continue AQUI, com o nome de addon certo. Se alguem o devolver para o
+# for_each do src/cluster, este run falha antes de custar 20 min de apply.
+run "o_driver_do_ebs_csi_e_desta_camada_nao_do_modulo_cluster" {
+  command = plan
+
+  assert {
+    condition     = aws_eks_addon.ebs_csi.addon_name == "aws-ebs-csi-driver"
+    error_message = "esperado o addon aws-ebs-csi-driver nesta camada, recebido ${aws_eks_addon.ebs_csi.addon_name}"
+  }
+
+  assert {
+    condition     = aws_eks_addon.ebs_csi.resolve_conflicts_on_create == "OVERWRITE"
+    error_message = "o addon deveria resolver conflitos com OVERWRITE, recebido ${aws_eks_addon.ebs_csi.resolve_conflicts_on_create}"
+  }
+
+  # O Name vinha de "${var.name}-${each.value}" no for_each do src/cluster. Sair do for_each
+  # nao pode renomear a tag: e ela que identifica o addon no console e nos relatorios de custo.
+  assert {
+    condition     = aws_eks_addon.ebs_csi.tags["Name"] == "control-plane-aws-ebs-csi-driver"
+    error_message = "a tag Name tem de sobreviver a mudanca de camada, recebido ${aws_eks_addon.ebs_csi.tags["Name"]}"
+  }
 }

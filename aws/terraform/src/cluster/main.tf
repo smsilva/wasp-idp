@@ -107,10 +107,15 @@ resource "aws_eks_access_policy_association" "this" {
   depends_on = [aws_eks_access_entry.this]
 }
 
-# Sem serviceAccountRoleArn: a identidade do EBS CSI chega por Pod Identity, montada no
-# root. Sem addon_version: a AWS escolhe a compativel com a versao do cluster.
+# So a BASE de identidade mora aqui: o agent que serve as credenciais de Pod Identity. Quem
+# CONSOME Pod Identity nao pode nascer neste modulo — o cluster nao enxerga as associations,
+# que sao criadas pelo chamador a partir do cluster_name deste modulo (depender delas daqui
+# seria ciclo). O addon do EBS CSI, que consome, mora em src/cell com depends_on explicito;
+# ver o comentario la e aws/CLAUDE.md, "race de Pod Identity do EBS CSI".
+#
+# Sem addon_version: a AWS escolhe a compativel com a versao do cluster.
 resource "aws_eks_addon" "this" {
-  for_each = toset(["eks-pod-identity-agent", "aws-ebs-csi-driver"])
+  for_each = toset(["eks-pod-identity-agent"])
 
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = each.value
