@@ -12,6 +12,11 @@ show_usage() {
   OU (see aws/docs/accounts/03-provisioning.md). Idempotent: if an ACTIVE account
   with the requested --name already exists, it only ensures it sits in the right OU.
 
+  Then calls 'remove-default-vpcs' for that account: every AWS account is born with a
+  default VPC per region, all of them on the same CIDR 172.31.0.0/16, so leaving them
+  in place makes the accounts of the Organization overlap by construction. A failure
+  there does not fail the account creation — it prints the command to re-run.
+
     Options:
 
       -h,  --help              Show this help
@@ -109,6 +114,21 @@ if [ "${ou}" == "production" ]; then
   echo "Confirm you have validated the same setup in NonProd before going ahead here." >&2
 fi
 
+# A brand new account is born with a default VPC per region, all of them on the same
+# CIDR — overlapping every other account of the Organization. Never fatal here: the
+# account already exists at this point, and the removal is idempotent, so re-running
+# it later is always safe.
+remove_default_vpcs() {
+  local target_account_id="${1}"
+
+  if remove-default-vpcs --account "${target_account_id}" --yes; then
+    return 0
+  fi
+
+  echo "WARNING  could not remove the default VPCs of ${target_account_id}." >&2
+  echo "         Re-run: ${this_script_directory}/remove-default-vpcs --account ${target_account_id} --yes" >&2
+}
+
 set -e
 
 check
@@ -171,6 +191,7 @@ if [ -n "${existing_account_id}" ]; then
   else
     echo "ok  already in ${ou_name}"
   fi
+  remove_default_vpcs "${existing_account_id}"
   echo "${existing_account_id}"
   exit 0
 fi
@@ -209,5 +230,7 @@ echo "account created  ${name} = ${account_id}"
 aws organizations move-account --account-id "${account_id}" \
   --source-parent-id "${root_id}" --destination-parent-id "${parent_id}"
 echo "moved  '${name}' -> ${ou_name}"
+
+remove_default_vpcs "${account_id}"
 
 echo "${account_id}"
