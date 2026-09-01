@@ -131,9 +131,15 @@ sobreposição** — o defeito é exclusivo de brownfield. Consequência registr
 adotar IPAM **salta** quando a primeira VPC nasce fora do pool, o que é o melhor argumento *contra*
 adiar. Por isso a **ADR 0015 está `Proposto`, não `Aceito`** — a decisão é sua.
 
+**Decisão: adiar** — ADR 0015 **Aceita**. `aws/docs/network/08-ipam.md` foi reescrita com todos os
+achados medidos; ler de lá, não daqui. Nada permanece na AWS: `describe-ipams` = 0 nas duas regiões,
+`list-delegated-administrators` = 0, state do spike vazio.
+
 Números que valem para qualquer trabalho futuro com IPAM: VPC alocada por pool leva **~4 min para
-criar e 18m29s para destruir** (o provider espera a desalocação assíncrona; a VPC some da AWS muito
-antes). Ao diagnosticar um destroy que parece travado, conferir `pgrep -af terraform` **sem
+criar e 18–27 min para destruir**; todo o resto (IPAM, pools, RAM, delegação) sai em **~1 min**. O
+provider espera a **desalocação assíncrona**: a VPC some da AWS muito antes, e a alocação fica
+retida no pool apontando para a VPC morta — logo **CIDR alocado por IPAM não é estável entre
+recriações**. Ao diagnosticar um destroy que parece travado, conferir `pgrep -af terraform` **sem
 truncar** — um `| head -3` nesta sessão escondeu o processo vivo e levou a um diagnóstico errado.
 
 **Documentação do CI consolidada:** `aws/terraform/ci/README.md` é o documento único da automação
@@ -407,13 +413,11 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-1. **#15** — falta só **aplicar** `aws/terraform/spikes/ipam/` e preencher as sete provas do README
-   dele com resultado real (o `plan` já está verde, 13 recursos). É **ação org-wide**: cria a
-   service-linked role do IPAM em todas as contas membro e o IPAM passa a monitorar a Organization
-   inteira. O `destroy` é parte do experimento, não limpeza opcional — `cascade = true` no
-   `aws_vpc_ipam` existe para isso.
-2. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
+1. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
    asserção cruzada, não só a asserção.
+2. **#67** — remover as 6 VPCs default `172.31.0.0/16`. **`aws_default_vpc` com `force_destroy` é
+   cilada:** ele *cria* a VPC default se ela não existir, então aplicá-lo em conta limpa recria o
+   que se quer eliminar. O caminho é script imperativo idempotente.
 3. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
    arquivos movidos.
 4. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
