@@ -56,13 +56,15 @@ contra a aplicação SAML do Identity Center; o grupo `platform-admins`
 
 ```bash
 # kubeconfig — uma vez por região
-aws eks update-kubeconfig --name control-plane-us-east-1 --region us-east-1 --profile cicd
+aws eks update-kubeconfig --name control-plane-us-east-1 --region us-east-1 --profile platform-admin
 kubectl get nodes
 ```
 
-A role usada para o `kubectl` é a mesma do profile `cicd`: `OrganizationAccountAccessRole` na
-conta `270222614208`. Ela tem access entry de cluster-admin provisionada pelo Terraform via
-`admin_principal_arns` em `variables/values.tfvars` (issue #56).
+`platform-admin` é o profile SSO federado pelo grupo `platform-admins` do Identity Center
+(`admin_group_ids`, issue #71) — criar esse profile local está em
+[`local-sso-profile.md`](local-sso-profile.md). O caminho antigo (`--profile cicd`, via
+`OrganizationAccountAccessRole` + `admin_principal_arns`, issue #56) ainda funciona: as duas
+fontes coexistem até a issue #75 aposentar a segunda.
 
 ## Problemas comuns
 
@@ -82,7 +84,8 @@ conta `270222614208`. Ela tem access entry de cluster-admin provisionada pelo Te
 | `personal` | `221047292361` (management) | SSO direto | Identity Center, Organizations |
 | `hub` (VPN) | `094289743086` (network) | `OrganizationAccountAccessRole` | Túnel — **é profile do `aws-vpn-client`, não do `~/.aws/config`** |
 | `network` | `094289743086` (network) | `OrganizationAccountAccessRole` | `export-client-vpn-client-configuration` + recursos da VPC hub |
-| `cicd` | `270222614208` (cicd) | `OrganizationAccountAccessRole` | `eks update-kubeconfig` + recursos da célula |
+| `cicd` | `270222614208` (cicd) | `OrganizationAccountAccessRole` | Recursos da célula (Terraform); caminho antigo de `eks update-kubeconfig` (issue #56) |
+| `platform-admin` | `270222614208` (cicd) | `AWSReservedSSO_PlatformAdmin_*` (SSO, grupo `platform-admins`) | `eks update-kubeconfig` (issue #71) — ver [`local-sso-profile.md`](local-sso-profile.md) |
 
 ## Custo
 

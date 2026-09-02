@@ -86,6 +86,8 @@ jobs:
           SERVICES_URL="$(terraform output -raw cell_services_url 2>/dev/null || true)"
           VPN_DOC="aws/docs/vpn/client-vpn-operations.md"
           VPN_DOC_URL="https://github.com/${GITHUB_REPOSITORY}/blob/main/${VPN_DOC}"
+          PROFILE_DOC="aws/docs/vpn/local-sso-profile.md"
+          PROFILE_DOC_URL="https://github.com/${GITHUB_REPOSITORY}/blob/main/${PROFILE_DOC}"
 
           {
             echo "## Region provisioned: \`${REGION}\`"
@@ -95,4 +97,5 @@ jobs:
             echo "| **kubeconfig** | \`${KUBECONFIG_CMD:-not available}\` |"
             echo "| **Services URL** | ${SERVICES_URL:-not available} |"
             echo "| **VPN operations** | [${VPN_DOC}](${VPN_DOC_URL}) |"
+            echo "| **Create the \`platform-admin\` local profile** | [${PROFILE_DOC}](${PROFILE_DOC_URL}) |"
           } | tee -a "${GITHUB_STEP_SUMMARY}"

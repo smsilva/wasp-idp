@@ -40,8 +40,14 @@ output "crossplane_namespace" {
 }
 
 output "kubeconfig_command" {
-  description = "Comando que escreve o contexto deste cluster no kubeconfig local."
-  value       = "aws eks update-kubeconfig --name ${module.cluster.cluster_name} --region ${var.region} --profile ${var.aws_profile}"
+  description = <<-EOT
+    Comando que escreve o contexto deste cluster no kubeconfig local. O profile e FIXO
+    ("platform-admin"), desacoplado de var.aws_profile (que autentica o apply em si, via CI ou
+    localmente) — e o profile SSO federado pelo grupo platform-admins (admin_group_ids, issue
+    #71), nao o antigo cicd/OrganizationAccountAccessRole. Ver
+    aws/docs/vpn/local-sso-profile.md para criar esse profile.
+  EOT
+  value       = "aws eks update-kubeconfig --name ${module.cluster.cluster_name} --region ${var.region} --profile platform-admin"
 }
 
 # --------------------------------------------------------------------------------------

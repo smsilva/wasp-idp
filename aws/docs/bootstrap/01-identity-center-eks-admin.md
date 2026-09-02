@@ -94,13 +94,15 @@ O shape (chave = nome do permission set, valor = GroupId em UUID) está document
 
 Só funciona **depois** do `terraform apply` que cria a access entry correspondente (ver a tabela do passo ①) — antes disso, `aws eks update-kubeconfig` autentica mas `kubectl` é negado pela API do EKS.
 
+Exige o profile local do permission set — criar com [`vpn/local-sso-profile.md`](../vpn/local-sso-profile.md) se ainda não existir.
+
 ```bash
-aws sso login --profile <profile-do-permission-set-PlatformAdmin>
-aws eks update-kubeconfig --profile <profile-do-permission-set-PlatformAdmin> --region us-east-1 --name <cluster-name>
+aws sso login --profile personal   # se a sessao SSO ainda nao estiver ativa
+aws eks update-kubeconfig --profile platform-admin --region us-east-1 --name <cluster-name>
 kubectl auth can-i '*' '*'
 ```
 
-Esperado: `yes`.
+Esperado: `yes`. Verificado de ponta a ponta em 2026-09-02 (run `provision-region.yml` #33618082730, região `us-east-1`).
 
 ## Armadilhas
 
