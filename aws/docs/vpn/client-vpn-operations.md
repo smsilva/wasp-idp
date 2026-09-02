@@ -26,12 +26,51 @@ vive na VPC hub daquela região.
 O `.ovpn` **nunca** se reaproveita entre applies do hub: a DNS name do endpoint muda a cada
 recriação. Reexportar sempre.
 
+**Sem Terraform state (direto via API) — caminho preferencial:**
+
 ```bash
 region="us-east-1"
+
+aws ec2 describe-client-vpn-endpoints \
+  --profile network \
+  --region "${region}" \
+  --query 'ClientVpnEndpoints[*].{Id:ClientVpnEndpointId,Status:Status.Description,DnsName:DnsName}' \
+  --output table
+```
+
+O comando lista os endpoints Client VPN da conta `network`. Copie o `ClientVpnEndpointId`
+da saída e use nos passos seguintes:
+
+```bash
+endpoint="cvpn-endpoint-00000000000000000"  # cole o ID real aqui
+
+aws ec2 export-client-vpn-client-configuration \
+  --client-vpn-endpoint-id "${endpoint?}" \
+  --profile network \
+  --region "${region}" \
+  --output text > ~/"trash/hub-${region}.ovpn"
+
+aws-vpn-client import-profile \
+  --profile-name "hub-${region}" \
+  --config-path ~/"trash/hub-${region}.ovpn"
+```
+
+**Com Terraform state:**
+
+```bash
+region="us-east-1"
+
 endpoint="$(cd "regions/${region}" && terraform output -raw client_vpn_endpoint_id)"
-aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
-  --profile network --region "${region}" --output text > ~/"trash/hub-${region}.ovpn"
-aws-vpn-client import-profile --profile-name "hub-${region}" --config-path ~/"trash/hub-${region}.ovpn"
+
+aws ec2 export-client-vpn-client-configuration \
+  --client-vpn-endpoint-id "${endpoint?}" \
+  --profile network \
+  --region "${region}" \
+  --output text > ~/"trash/hub-${region}.ovpn"
+
+aws-vpn-client import-profile \
+  --profile-name "hub-${region}" \
+  --config-path ~/"trash/hub-${region}.ovpn"
 ```
 
 ### Conectar

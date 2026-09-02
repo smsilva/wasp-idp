@@ -84,6 +84,7 @@ jobs:
 
           KUBECONFIG_CMD="$(terraform output -raw kubeconfig_command 2>/dev/null || true)"
           SERVICES_URL="$(terraform output -raw cell_services_url 2>/dev/null || true)"
+          VPN_ENDPOINT_ID="$(terraform output -raw client_vpn_endpoint_id 2>/dev/null || true)"
           VPN_DOC="aws/docs/vpn/client-vpn-operations.md"
           VPN_DOC_URL="https://github.com/${GITHUB_REPOSITORY}/blob/main/${VPN_DOC}"
           PROFILE_DOC="aws/docs/vpn/local-sso-profile.md"
@@ -96,6 +97,7 @@ jobs:
             echo "|---|---|"
             echo "| **kubeconfig** | \`${KUBECONFIG_CMD:-not available}\` |"
             echo "| **Services URL** | ${SERVICES_URL:-not available} |"
+            echo "| **VPN endpoint** | \`${VPN_ENDPOINT_ID:-not available}\` |"
             echo "| **VPN operations** | [${VPN_DOC}](${VPN_DOC_URL}) |"
             echo "| **Create the \`platform-admin\` local profile** | [${PROFILE_DOC}](${PROFILE_DOC_URL}) |"
           } | tee -a "${GITHUB_STEP_SUMMARY}"
