@@ -17,8 +17,9 @@ Este documento cobre a **operação**. O desenho e as decisões de arquitetura e
 ## Profile do Client VPN
 
 O profile é separado do `~/.aws/config` — vive no keychain do sistema, gerenciado pelo
-`aws-vpn-client`. O nome `hub` é fixo (não por região — cada região tem o próprio endpoint,
-mas o profile local chama-se `hub` porque o endpoint vive na VPC hub).
+`aws-vpn-client`. O nome carrega a **região** (`hub-<região>`, ex.: `hub-us-east-1`) porque
+cada região tem o próprio Client VPN endpoint; "hub" continua no nome porque o endpoint
+vive na VPC hub daquela região.
 
 ### Criar/recriar
 
@@ -26,23 +27,24 @@ O `.ovpn` **nunca** se reaproveita entre applies do hub: a DNS name do endpoint 
 recriação. Reexportar sempre.
 
 ```bash
-endpoint="$(cd regions/us-east-1 && terraform output -raw client_vpn_endpoint_id)"
+region="us-east-1"
+endpoint="$(cd "regions/${region}" && terraform output -raw client_vpn_endpoint_id)"
 aws ec2 export-client-vpn-client-configuration --client-vpn-endpoint-id "${endpoint}" \
-  --profile network --region us-east-1 --output text > ~/trash/hub.ovpn
-aws-vpn-client import-profile --profile-name hub --config-path ~/trash/hub.ovpn
+  --profile network --region "${region}" --output text > ~/"trash/hub-${region}.ovpn"
+aws-vpn-client import-profile --profile-name "hub-${region}" --config-path ~/"trash/hub-${region}.ovpn"
 ```
 
 ### Conectar
 
 ```bash
-aws-vpn-client connect --profile-name hub        # abre navegador para autenticar
-aws-vpn-client get-connection-status --profile-name hub   # tem de dizer "Connected"
+aws-vpn-client connect --profile-name hub-us-east-1        # abre navegador para autenticar
+aws-vpn-client get-connection-status --profile-name hub-us-east-1   # tem de dizer "Connected"
 ```
 
 ### Desconectar
 
 ```bash
-aws-vpn-client disconnect --profile-name hub
+aws-vpn-client disconnect --profile-name hub-us-east-1
 ```
 
 ## Autenticação
@@ -82,7 +84,7 @@ fontes coexistem até a issue #75 aposentar a segunda.
 | Profile | Conta | Role | Para quê |
 |---|---|---|---|
 | `personal` | `221047292361` (management) | SSO direto | Identity Center, Organizations |
-| `hub` (VPN) | `094289743086` (network) | `OrganizationAccountAccessRole` | Túnel — **é profile do `aws-vpn-client`, não do `~/.aws/config`** |
+| `hub-<região>` (VPN) | `094289743086` (network) | `OrganizationAccountAccessRole` | Túnel — **é profile do `aws-vpn-client`, não do `~/.aws/config`** |
 | `network` | `094289743086` (network) | `OrganizationAccountAccessRole` | `export-client-vpn-client-configuration` + recursos da VPC hub |
 | `cicd` | `270222614208` (cicd) | `OrganizationAccountAccessRole` | Recursos da célula (Terraform); caminho antigo de `eks update-kubeconfig` (issue #56) |
 | `platform-admin` | `270222614208` (cicd) | `AWSReservedSSO_PlatformAdmin_*` (SSO, grupo `platform-admins`) | `eks update-kubeconfig` (issue #71) — ver [`local-sso-profile.md`](local-sso-profile.md) |
