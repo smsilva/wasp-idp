@@ -81,7 +81,7 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     — e `module.hub` faz `file(var.saml_metadata_path)` em todo plan, então o `plan` de revisão
     falha por arquivo ausente (mesma causa da run `33512301706`, corrigida no `down-cell` pelo
     PR #58). Ele também duplica `ln`/`init` em vez de usar `scripts/lib`. Detalhe em
-    [`../terraform/ci/README.md`](../terraform/ci/README.md).
+    [`terraform/ci/README.md`](../terraform/ci/README.md).
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e

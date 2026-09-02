@@ -50,7 +50,7 @@ design consolidado da organização (ver `<hub-repo>/.../2026-05-26-hub-spoke-de
 
 > **Não confundir conta com região.** "1× por região" acima descreve o **conjunto de recursos**
 > do Hub, não a conta: a conta `network` é uma só e é global. Ver
-> `../accounts/00-strategy.md`, seção "Conta não tem região".
+> [`accounts/00-strategy.md`](../accounts/00-strategy.md), seção "Conta não tem região".
 
 **Por que account por projeto?** Isolamento de blast radius, billing por projeto, e cotas
 AWS que são por-conta (VPCs, EIPs) deixam de ser limite arquitetural global. Todas as

@@ -27,7 +27,7 @@
 > topologia interna atual (projetos próprios, sem tenant externo), `accounts/` basta.
 >
 > A visão de plataforma correspondente — sequência de provisionamento por fases, células,
-> roteamento global — vive em `../../decisions.md`. Onde os dois divergirem, **a doc de domínio
+> roteamento global — vive em [`decisions.md`](../../decisions.md). Onde os dois divergirem, **a doc de domínio
 > ganha** (regra registrada em `decisions.md` §8).
 
 ## Fora dos domínios

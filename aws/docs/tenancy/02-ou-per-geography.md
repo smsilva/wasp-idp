@@ -63,7 +63,7 @@ custo próprio), não como caso base.
 ## Conecta com o guardrail que já existe
 
 O baseline deste repo já aplica **"Restringir região"** nas OUs de workload
-(`../accounts/02-scp-guardrails.md`). Este tópico não introduz um mecanismo novo: mostra que
+([`accounts/02-scp-guardrails.md`](../accounts/02-scp-guardrails.md)). Este tópico não introduz um mecanismo novo: mostra que
 aquele guardrail é **o eixo pelo qual as OUs de tenant devem ser particionadas**, em vez de uma
 lista única aplicada a todas.
 
@@ -95,7 +95,7 @@ Tentador: `Condition` em `aws:PrincipalTag/residency` ou `aws:ResourceTag`. Prob
 
 OU é imutável do ponto de vista da conta-membro: nenhuma identidade **dentro** da conta pode
 mover a própria conta de OU. Essa é exatamente a propriedade que um guardrail de residência
-precisa. Tag serve para **alocação de custo** (`../accounts/05-billing-and-tags.md`), não para
+precisa. Tag serve para **alocação de custo** ([`accounts/05-billing-and-tags.md`](../accounts/05-billing-and-tags.md)), não para
 fronteira de compliance.
 
 ## Consequência para o control plane
@@ -104,7 +104,7 @@ Um control plane regional que provisiona spokes de tenant fica **abaixo** da SCP
 no momento em que age naquela conta. Isso é desejável: mesmo que o Crossplane receba um XR com a
 região errada, a SCP nega. É a razão pela qual a SCP em OU é a **primeira** linha de contenção
 regional, à frente de qualquer condição em role — detalhe em
-`../security/08-control-plane-identity.md`.
+[`security/08-control-plane-identity.md`](../security/08-control-plane-identity.md).
 
 ## Well-Architected — porquê
 

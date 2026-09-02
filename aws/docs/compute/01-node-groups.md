@@ -16,10 +16,10 @@ referência (vs. self-managed nodes ou Fargate).
 
 ## Sempre nas subnets privadas
 
-Node groups vão nas subnets **privadas** (`../network/02`):
+Node groups vão nas subnets **privadas** ([`network/02-vpc-subnets.md`](../network/02-vpc-subnets.md)):
 
 - Sem IP público — nenhum node é diretamente alcançável da internet.
-- Saída (pull de imagem, API AWS) via **NAT** ou, melhor, **VPC endpoints** (`../network/06`,
+- Saída (pull de imagem, API AWS) via **NAT** ou, melhor, **VPC endpoints** ([`network/06-security.md`](../network/06-security.md),
   ECR/STS/etc. sem passar pelo NAT).
 - Distribuir por **≥2 AZs** (subnet privada por AZ) — se uma AZ cai, o node group continua.
 
@@ -76,7 +76,7 @@ spec:
 > **Fan-out de N node groups é deferido:** `function-patch-and-transform` não itera arrays — N
 > node groups exigem function-kcl (já instalada no Control Plane) ou status-arrays prontos. Por isso a
 > fatia fixa `nodeGroups[0]` no código, mantendo o **schema** de lista. Detalhe em
-> `../network/07` (open questions) e no tópico 6.
+> [`network/07-crossplane-map.md`](../network/07-crossplane-map.md) (open questions) e no tópico 6.
 
 ## Well-Architected — porquê
 

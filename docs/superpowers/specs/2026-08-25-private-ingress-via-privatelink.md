@@ -139,7 +139,7 @@ Mais data processing por GB nos três (NLB, endpoint, ALB) — irrelevante em te
 
 ## Fronteira: o que é Terraform e o que não é
 
-Coerente com `../../decisions.md` §7 (cardinalidade × churn) e com o ADR de que **apps são helm puro
+Coerente com [`decisions.md`](../../decisions.md) §7 (cardinalidade × churn) e com o ADR de que **apps são helm puro
 fora do Crossplane**:
 
 - **Terraform:** LBC, Pod Identity, endpoint service, interface endpoint, ALB, instância de teste.

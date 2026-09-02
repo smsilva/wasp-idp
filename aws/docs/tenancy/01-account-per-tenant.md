@@ -33,7 +33,7 @@ Piso realista: **~US$ 150/mês por tenant-região**. Consequência direta:
 
 **É esta conta, não preferência arquitetural, que define onde cai a linha entre os tiers.**
 Números correlatos (região de plataforma ociosa, Network Firewall) estão em
-`../../../decisions.md`, §10.
+[`decisions.md`](../../../decisions.md), §10.
 
 ## Escala: onboarding é pré-requisito, não melhoria
 
@@ -41,9 +41,9 @@ Números correlatos (região de plataforma ociosa, Network Firewall) estão em
   precisar dele — o pedido não é instantâneo.
 - **`create-account` tem rate limit** e é assíncrono (`describe-create-account-status`).
 - **A conta não nasce na OU de destino** — nasce na Root e é movida depois. Na janela entre os
-  dois passos a SCP da OU **não vale** (`../accounts/03-provisioning.md`).
+  dois passos a SCP da OU **não vale** ([`accounts/03-provisioning.md`](../accounts/03-provisioning.md)).
 - **Conta nova não está no portal SSO** — o único gancho é a `OrganizationAccountAccessRole` até
-  um permission set ser atribuído (`../accounts/04-cross-account-access.md`).
+  um permission set ser atribuído ([`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md)).
 
 Cada um desses passos é trivial uma vez e insustentável cem vezes. Conta por tenant **exige**
 onboarding automatizado desde o primeiro cliente; não é otimização para depois.
@@ -57,7 +57,7 @@ ser fechadas por janela de tempo (percentual da base, em janela móvel). Efeitos
 - Enquanto suspensas, continuam contando para a quota da Organization.
 - A árvore de OUs acumula resíduo que não é lixo (ainda existe) nem ativo (ninguém usa).
 
-Isso se soma a uma limitação já registrada em `../../../decisions.md`, §7: o recurso `Account` do
+Isso se soma a uma limitação já registrada em [`decisions.md`](../../../decisions.md), §7: o recurso `Account` do
 provider-aws **não deleta de verdade** — o fechamento é assíncrono e sujeito a essa cota, então
 `deletionPolicy: Orphan` é obrigatório e o recurso passa a ser uma representação parcial da
 realidade. Account vending declarativo via XRD é território de Control Tower/AFT ou pipeline
@@ -80,8 +80,8 @@ esse tier em conta própria. Reserve conta por tenant para tiers com contrato e 
 
 Erro comum de leitura: supor que um tenant com workload em duas regiões precisa de duas contas.
 **Não.** Conta AWS é global; região é dimensão dentro dela. O tenant ganha uma segunda VPC, não
-uma segunda conta. Detalhe em `../accounts/00-strategy.md`, seção "Conta não tem
-região", e a consequência para IAM em `../security/08-control-plane-identity.md`.
+uma segunda conta. Detalhe em [`accounts/00-strategy.md`](../accounts/00-strategy.md), seção "Conta não tem
+região", e a consequência para IAM em [`security/08-control-plane-identity.md`](../security/08-control-plane-identity.md).
 
 O que **sim** varia por região é o consumo de CIDR — e é aí que o plano de endereçamento estoura
 ([`03-cidr.md`](03-cidr.md)).

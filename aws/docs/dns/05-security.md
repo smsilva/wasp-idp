@@ -32,7 +32,7 @@ bug pode escrever fora). As duas camadas juntas.
 
 ## Menor privilégio para external-dns e cert-manager
 
-Ambos rodam idealmente com **Pod Identity** (`../security/04`), role escopada:
+Ambos rodam idealmente com **Pod Identity** ([`security/04-workload-identity.md`](../security/04-workload-identity.md)), role escopada:
 
 ```text
 external-dns role:
@@ -64,7 +64,7 @@ poisoning). Route53 suporta DNSSEC signing por Hosted Zone, com uma KSK em KMS.
 - **Public DNS query logging** → CloudWatch Logs: registra as queries recebidas pela zona
   pública. Útil para ver o que está sendo resolvido (reconhecimento, nomes inesperados).
 - **Resolver query logging** (VPC) → o que as VPCs resolvem, alimentando GuardDuty
-  (`../security/06`) para detectar exfiltração via DNS.
+  ([`security/06-detection-and-audit.md`](../security/06-detection-and-audit.md)) para detectar exfiltração via DNS.
 - Coerente com [SEC04 — Detection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/detection.html): sem log de query, um abuso de DNS é invisível.
 
 ## Prevenção de sequestro em zona compartilhada

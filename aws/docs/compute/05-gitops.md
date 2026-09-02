@@ -35,7 +35,7 @@ O elo é um Secret que o provisionamento do cluster grava e o ArgoCDInstance lê
 | `kubeconfig` | o ArgoCD (via provider-helm) instala o chart no cluster remoto |
 | `id` / `domain` | parametrizar a instalação (nome, ingress do ArgoCD sob a subzona) |
 
-É o mesmo padrão de ponte Crossplane→EKS de `../compute/03` (kubeconfig com RBAC via Access
+É o mesmo padrão de ponte Crossplane→EKS de [`compute/03-access-and-rbac.md`](../compute/03-access-and-rbac.md) (kubeconfig com RBAC via Access
 Entry) — aqui aplicado para instalar o ArgoCD, não add-ons.
 
 ## App-of-apps — o cluster se popula sozinho
@@ -62,7 +62,7 @@ Divisão consciente nesta referência:
 | **Infra do cluster** (control plane, nodes, add-ons, identidade) | **Crossplane** | EKS, node groups, Pod Identity, LB Controller |
 | **Aplicações no cluster** | **GitOps (ArgoCD)** | apps de negócio, config de plataforma |
 
-O PoC hoje faz as **apps como Helm puro fora do Crossplane** (`../../eks/apps/`, ADR decisão 5)
+O PoC hoje faz as **apps como Helm puro fora do Crossplane** ([`eks/apps/`](../../eks/apps/), ADR decisão 5)
 — um degrau; o alvo é essas apps entrarem por ArgoCD/Git. A infra permanece Crossplane; a
 aplicação migra para GitOps. Não misturar: Crossplane não deve reconciliar app de negócio, nem
 ArgoCD provisionar control plane.

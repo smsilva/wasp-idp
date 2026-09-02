@@ -292,7 +292,7 @@ O XRD `Network`, as validações de `vpc_cidr` em `src/hub`/`src/cell`, o teste 
 3. **Compartilhar o pool por RAM.** A permissão é granular: alocar CIDR ≠ administrar o pool. A
    conta spoke aloca sem ver nem alterar o plano.
 
-O toggle `aws_ram_sharing_with_organization` já está ligado (em `../../terraform/dns/`) — o
+O toggle `aws_ram_sharing_with_organization` já está ligado (em [`terraform/dns/`](../../terraform/dns/)) — o
 pré-requisito mais chato já estava pago, e o RAM share funcionou de primeira nas duas rodadas.
 
 **Delegar é ação org-wide.** Cria a service-linked role em **todas** as contas membro, e o IPAM
@@ -383,4 +383,4 @@ certa.
 → Índice do domínio: [`CLAUDE.md`](CLAUDE.md). Plano de endereçamento vigente:
 [`01-cidr-addressing.md`](01-cidr-addressing.md). Teto que motiva a discussão:
 [`../tenancy/03-cidr.md`](../tenancy/03-cidr.md). Código e provas do experimento:
-`../../terraform/spikes/ipam/README.md`.
+[`terraform/spikes/ipam/README.md`](../../terraform/spikes/ipam/README.md).

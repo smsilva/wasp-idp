@@ -5,10 +5,10 @@
 ## O que este domínio entrega
 
 O passo **anterior** a tudo o mais: sair de uma conta `network` recém-criada (ver
-`../accounts/03-provisioning.md`) e ter uma identidade de máquina
+[`accounts/03-provisioning.md`](../accounts/03-provisioning.md)) e ter uma identidade de máquina
 (`crossplane-poc`) com exatamente o privilégio que ela precisa para o Crossplane começar a
-provisionar rede (`../network/`) e depois cluster (`../compute/`). É o "galinha-e-ovo" descrito
-em `../security/04-workload-identity.md` e `../security/07-crossplane-map.md`: a
+provisionar rede ([`network/`](../network/)) e depois cluster ([`compute/`](../compute/)). É o "galinha-e-ovo" descrito
+em [`security/04-workload-identity.md`](../security/04-workload-identity.md) e [`security/07-crossplane-map.md`](../security/07-crossplane-map.md): a
 automação não pode se auto-conceder IAM, então alguém com `AdministratorAccess` faz esse
 grant **uma única vez**, manualmente.
 

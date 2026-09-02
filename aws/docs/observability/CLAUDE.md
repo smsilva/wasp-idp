@@ -32,10 +32,10 @@ Monitoring account"*.
 
 **Não confundir com `log-archive`** (OU `Security`): aquela **armazena** o acervo imutável e é
 imutável por SCP; `Monitoring` **lê** o acervo para analisar. A separação existe para que quem
-consulta o log não possa apagá-lo (`../accounts/07-cloudtrail-and-log-archive.md`).
+consulta o log não possa apagá-lo ([`accounts/07-cloudtrail-and-log-archive.md`](../accounts/07-cloudtrail-and-log-archive.md)).
 
 Nada disto é pendência hoje — é o slot reconhecido para quando o ⑥ sair do papel. Ver
-`../accounts/01-organizations-and-ous.md` para as contas canônicas da OU `Infrastructure`.
+[`accounts/01-organizations-and-ous.md`](../accounts/01-organizations-and-ous.md) para as contas canônicas da OU `Infrastructure`.
 
 ## Estado atual vs. alvo (resumo)
 
@@ -47,14 +47,14 @@ Nada disto é pendência hoje — é o slot reconhecido para quando o ⑥ sair d
   conectividade** (o que o hub-and-spoke exige) e custo como sinal — consolidados, não
   espalhados.
 - **Gap central:** os alarmes de conectividade só fazem sentido quando TGW/VPN existirem
-  (`../network/07`, Gap 2) — hoje são mapa; o que já dá para ligar é logs + Container Insights.
+  ([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), Gap 2) — hoje são mapa; o que já dá para ligar é logs + Container Insights.
 
 ## Relação com o resto do repo
 
-- **Consolida** sinais de `../network/06` (VPC Flow Logs), `../security/06` (CloudTrail,
-  GuardDuty, Access Analyzer), `../dns/05` (query logging) e `../accounts/05` (Budgets) — este
+- **Consolida** sinais de [`network/06-security.md`](../network/06-security.md) (VPC Flow Logs), [`security/06-detection-and-audit.md`](../security/06-detection-and-audit.md) (CloudTrail,
+  GuardDuty, Access Analyzer), [`dns/05-security.md`](../dns/05-security.md) (query logging) e [`accounts/05-billing-and-tags.md`](../accounts/05-billing-and-tags.md) (Budgets) — este
   domínio os organiza, não os reinventa.
-- **Adiciona** a camada de compute (Container Insights, `../compute/`) e de conectividade
-  (TGW/VPN, `../network/03-04`).
+- **Adiciona** a camada de compute (Container Insights, [`compute/`](../compute/)) e de conectividade
+  (TGW/VPN, [`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md) e [`network/04-vpn-access.md`](../network/04-vpn-access.md)).
 - **Código/ferramenta:** o `eks-mcp-server` (CloudWatch Logs/Insights, métricas, eventos) é a
   interface de leitura já usada no PoC — apêndice.

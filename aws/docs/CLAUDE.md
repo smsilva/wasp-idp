@@ -31,7 +31,7 @@ por qualquer time.
 | **Well-Architected** | Cada decisão é justificada contra os pilares AWS WAF (com foco em Security, Reliability, Operational Excellence e Cost). Referências REL/SEC/OPS citadas nos tópicos. **Conferir o ID contra a página oficial antes de citar** — nunca de memória: numeração e títulos mudam entre revisões do framework, e IDs errados já passaram batido em três tabelas. **O WAF nomeia zero contas e zero OUs** — nome de conta vem do AWS SRA, nome de OU vem do whitepaper *Organizing Your AWS Environment*; ver a tabela de hierarquia de fontes em `accounts/01-organizations-and-ous.md`. |
 | **Composable by design** | Cada peça é uma abstração componível (Crossplane XR): Network, Cluster, DnsZone. Um recurso de alto nível compõe os de baixo; nada é monolítico. (Pilar 5 do "Platform Engineering 2.0".) |
 | **Agnóstico ao ambiente** | O corpo da doc usa **placeholders** (`<hub-cidr>`, `<root-domain>`, `<asn>`) — ninguém precisa dos valores reais de uma organização específica para reusar a referência. |
-| **Nunca alterar config compartilhada** | Só ADICIONAR recursos isolados. Regra herdada do PoC (ver `../../CLAUDE.md`). |
+| **Nunca alterar config compartilhada** | Só ADICIONAR recursos isolados. Regra herdada do PoC (ver [`CLAUDE.md`](../../CLAUDE.md)). |
 
 ## Vocabulário: "Hub" é topologia; `network` é conta
 
@@ -66,7 +66,7 @@ Helm = **papel topológico** (`hub`, `spoke`). O chart `hub` provisiona na conta
 
 Varrer **todos os arquivos versionados**, não só `*.md`. Referências a caminhos de doc vivem
 também em: texto de `--help` dos scripts em `accounts/scripts/`, comentários de YAML em
-`../eks/resources/`, e campos `description` de XRD. Uma varredura restrita a `*.md` deixa esses
+[`eks/resources/`](../eks/resources/), e campos `description` de XRD. Uma varredura restrita a `*.md` deixa esses
 apontando para arquivo inexistente — já aconteceu, com 13 referências quebradas em 10 arquivos.
 
 ```bash
@@ -89,10 +89,10 @@ curl -s https://docs.aws.amazon.com/whitepapers/latest/<guia>/toc-contents.json 
 
 ## Relação com o resto do repo
 
-- **Código Crossplane** (o que materializa esta arquitetura): `../eks/resources/`
-  (`network/`, `cluster/`, `argocd/`) e o chart faseado em `../eks/chart/`.
-- **Contexto operacional AWS** (conta, IAM user do Crossplane, credenciais): `../CLAUDE.md`.
-- **Design/brainstorm da decomposição** (Environment → Network + Cluster): `../../docs/superpowers/`.
+- **Código Crossplane** (o que materializa esta arquitetura): [`eks/resources/`](../eks/resources/)
+  (`network/`, `cluster/`, `argocd/`) e o chart faseado em [`eks/chart/`](../eks/chart/).
+- **Contexto operacional AWS** (conta, IAM user do Crossplane, credenciais): [`CLAUDE.md`](../CLAUDE.md).
+- **Design/brainstorm da decomposição** (Environment → Network + Cluster): [`docs/superpowers/`](../../docs/superpowers/).
 
 ## Fontes externas de referência
 

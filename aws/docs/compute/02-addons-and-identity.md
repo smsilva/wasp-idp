@@ -7,7 +7,7 @@
 Control plane + node groups dão um cluster que **agenda pods** — mas sem storage persistente,
 sem DNS, sem ingress, sem acesso a segredos. Os **add-ons** preenchem isso, e quase todos
 precisam de **identidade AWS** (para criar volumes, escrever DNS, ler segredos). É aqui que
-Compute e `../security/04` (identidade de workload) se encontram.
+Compute e [`security/04-workload-identity.md`](../security/04-workload-identity.md) (identidade de workload) se encontram.
 
 ## Os add-ons desta referência
 
@@ -15,9 +15,9 @@ Compute e `../security/04` (identidade de workload) se encontram.
 |---|---|---|
 | **eks-pod-identity-agent** | habilita Pod Identity no cluster | — (é o que emite identidade aos outros) |
 | **aws-ebs-csi-driver** | volumes EBS para PVCs | role com EC2 volume actions |
-| **external-dns** | publica DNS por app (`../dns/04`) | role Route53 escopada |
+| **external-dns** | publica DNS por app ([`dns/04-automation-and-tls.md`](../dns/04-automation-and-tls.md)) | role Route53 escopada |
 | **aws-load-balancer-controller** | materializa NLB/ALB (tópico 4) | role ELBv2/EC2 escopada por tag |
-| **cert-manager** | TLS via DNS-01 (`../dns/04`) | role Route53 da subzona |
+| **cert-manager** | TLS via DNS-01 ([`dns/04-automation-and-tls.md`](../dns/04-automation-and-tls.md)) | role Route53 da subzona |
 | **external-secrets (ESO)** | sincroniza Secrets Manager → K8s Secret | role `secretsmanager:GetSecretValue` escopada `poc-eks/*` |
 
 Cada um roda com uma **ServiceAccount** própria, associada a uma **role própria, escopada** —
@@ -25,7 +25,7 @@ menor privilégio por add-on, não uma role gorda compartilhada.
 
 ## Pod Identity — a identidade nativa (preferida)
 
-Todos os add-ons acima recebem credencial AWS via **Pod Identity** (`../security/04`), não
+Todos os add-ons acima recebem credencial AWS via **Pod Identity** ([`security/04-workload-identity.md`](../security/04-workload-identity.md)), não
 access key montada:
 
 ```text

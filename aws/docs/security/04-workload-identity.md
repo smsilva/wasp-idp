@@ -74,7 +74,7 @@ credencial-raiz de longa duração **deixa de existir** sem tocar no hop cross-a
 
 > **O EKS não é mais hipótese.** O desenho de plataforma já decidiu que o control plane roda
 > numa **spoke privilegiada** com EKS + ArgoCD + Crossplane instalados pelo Terraform, com o
-> trust da Pod Identity criado junto (`../../../decisions.md`, §2 e §7). A linha "EKS" acima é
+> trust da Pod Identity criado junto ([`decisions.md`](../../../decisions.md), §2 e §7). A linha "EKS" acima é
 > o alvo, não um cenário alternativo — e a granularidade de *quantas* identidades isso exige
 > (uma por control plane regional, não uma por cluster gerenciado) está em
 > [`08-control-plane-identity.md`](08-control-plane-identity.md).
@@ -136,7 +136,7 @@ categoria** de criar o IAM user — um passo de admin humano, não um MR do Cros
 key existe porque, no bootstrap, **ainda não há cluster** para hospedar o Pod Identity que a
 substituiria. É um degrau: uma vez o cluster de pé, os workloads usam Pod Identity, e a access
 key fica restrita ao Crossplane externo. O JSON versionado
-(`../../eks/providers/bootstrap-iam-policy.json`) é a fonte de verdade do estado desejado;
+([`eks/providers/bootstrap-iam-policy.json`](../../eks/providers/bootstrap-iam-policy.json)) é a fonte de verdade do estado desejado;
 o `put-user-policy` é o ato de bootstrap.
 
 > **Não remover ações "só de teardown":** `iam:ListInstanceProfilesForRole` é usada pelo

@@ -21,7 +21,7 @@ no PoC vs. o alvo multi-account) está no tópico 7.
 ## Estado atual vs. alvo (resumo)
 
 - **Hoje no PoC:** uma `Network` XR (single-account, CIDR `172.16.0.0/16` fixo, 4 subnets)
-  provisiona a VPC que hospeda o EKS. Não há Hub, TGW nem VPN. Ver `../../eks/resources/network/`.
+  provisiona a VPC que hospeda o EKS. Não há Hub, TGW nem VPN. Ver [`eks/resources/network/`](../../eks/resources/network/).
 - **Alvo desta referência:** Hub-and-spoke multi-account com TGW, VPN e isolamento por
   tenant — a `Network` do PoC vira uma **spoke** desse desenho maior.
 - **Gap crítico já mapeado:** o CIDR `172.16.0.0/16` hardcoded é incompatível com

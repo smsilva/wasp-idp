@@ -28,7 +28,7 @@ nela. Um spoke existe sem cluster (uninstall do cluster não derruba o spoke).
 
 O `metadata.name` do XR é a identidade (Crossplane v2, sem `spec.id`). **O cluster e o spoke
 que ele consome DEVEM ter o mesmo `name`** — é o label que casa as subnets. Gere com
-`../../eks/scripts/random-id`.
+[`eks/scripts/random-id`](../../eks/scripts/random-id).
 
 ```bash
 ID=$(aws/eks/scripts/random-id)     # ex.: ha13c

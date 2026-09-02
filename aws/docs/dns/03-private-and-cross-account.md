@@ -37,8 +37,8 @@ VPC ↔ outro resolver), entram os **Resolver endpoints**:
 - **Regras de forwarding** dizem *qual domínio* vai para *qual resolver* (ex.:
   `corp.example.com` → resolver on-prem via o outbound endpoint).
 - Exigência AWS: endpoints de Resolver precisam de IPs em **≥2 subnets em AZs distintas**
-  (HA) — reservar isso no plano de subnets (`../network/02`).
-- O tráfego DNS on-prem fecha pela **VPN no Hub** (`../network/04`) — coerente com "tudo
+  (HA) — reservar isso no plano de subnets ([`network/02-vpc-subnets.md`](../network/02-vpc-subnets.md)).
+- O tráfego DNS on-prem fecha pela **VPN no Hub** ([`network/04-vpn-access.md`](../network/04-vpn-access.md)) — coerente com "tudo
   externo passa pelo Hub".
 
 ## Resolução cross-account — uma PHZ para várias contas
@@ -56,7 +56,7 @@ Dois passos, duas contas: a **dona autoriza** (`VPCAssociationAuthorization`), a
 associa**. Sem a autorização, a associação cross-account é negada — é o controle de segurança
 que impede associar uma VPC arbitrária a uma PHZ alheia. No mundo Crossplane, os dois MRs
 (authorization + association) são materializáveis, coerente com as roles cross-account de
-`../security/02`.
+[`security/02-cross-account-roles.md`](../security/02-cross-account-roles.md).
 
 ## Ordem de precedência (split-horizon na prática)
 

@@ -9,9 +9,9 @@ sustenta o isolamento em cada tier comercial. É o domínio que traduz uma exig�
 ("este cliente exige residência na UE", "este cliente paga por cluster dedicado") em estrutura de
 conta, OU e endereçamento.
 
-Ortogonal a `../accounts/`: aquele decide **como a Organization é estruturada**; este decide
+Ortogonal a [`accounts/`](../accounts/): aquele decide **como a Organization é estruturada**; este decide
 **quantos clientes cabem em cada peça** e **qual eixo justifica separá-los**. Ortogonal a
-`../network/`: aquele decide por onde o tráfego passa; este decide se dois tenants podem
+[`network/`](../network/): aquele decide por onde o tráfego passa; este decide se dois tenants podem
 compartilhar bloco de endereço.
 
 **Referência primária:** a [SaaS Lens](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/saas-lens.html)

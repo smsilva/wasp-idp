@@ -1,7 +1,7 @@
 # CLAUDE.md — `accounts/` (Domain: Accounts and Organizations)
 
 > Regras e convenções do domínio **Accounts & Organizations** — o container que hospeda a
-> rede (`../network/`). Corpo genérico (placeholders `<...>`). Índice de leitura em
+> rede ([`network/`](../network/)). Corpo genérico (placeholders `<...>`). Índice de leitura em
 > [`README.md`](README.md).
 
 ## Sequência de construção (conta vazia → contas prontas)
@@ -146,7 +146,7 @@ ausente: manda executar de novo o que já foi feito, ou pior, o que já mudou de
   `log-archive`; `network` e `<projeto>-nonprod` ainda sem permission set — ver
   `04-cross-account-access.md`. Break-glass **documentado**, controles (MFA no root, alarme de
   uso) **pendentes** — decisões 4 e 5 acima.
-- **Pendente:** ⑧ conta de produção do projeto; ⑨ spokes de rede (→ domínio `../network/`).
+- **Pendente:** ⑧ conta de produção do projeto; ⑨ spokes de rede (→ domínio [`network/`](../network/)).
 
 ### Gap conhecido: a conta pré-existente do PoC
 

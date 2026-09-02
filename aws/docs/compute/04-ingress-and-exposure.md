@@ -31,12 +31,12 @@ NLB/ALB **de verdade** na AWS:
   (`aws-load-balancer-type: external`, `nlb-target-type: ip`, `scheme: internet-facing`) faz o
   controller criar um **NLB** público.
 - O controller descobre as subnets por **tag** (`kubernetes.io/role/elb` para público,
-  `.../internal-elb` para interno — postas em `../network/02`), sem configuração manual de
+  `.../internal-elb` para interno — postas em [`network/02-vpc-subnets.md`](../network/02-vpc-subnets.md)), sem configuração manual de
   subnet.
 - Mutações são **escopadas por tag** (`elbv2.k8s.aws/cluster`) na policy IAM — o controller de
-  um cluster não mexe no LB de outro (`../security/01`).
+  um cluster não mexe no LB de outro ([`security/01-least-privilege-and-policies.md`](../security/01-least-privilege-and-policies.md)).
 
-O NLB é o ponto público estável; o wildcard DNS aponta a ele (`../dns/02`), e é o mesmo NLB
+O NLB é o ponto público estável; o wildcard DNS aponta a ele ([`dns/02-records-and-alias.md`](../dns/02-records-and-alias.md)), e é o mesmo NLB
 para todos os apps do cluster (o Istio roteia por host).
 
 ## Istio Gateway — roteamento dentro do cluster
@@ -53,15 +53,15 @@ host/path via `Gateway` + `VirtualService`:
 
 ## TLS termina no cluster (cert-manager) ou na borda (ACM)
 
-Duas posturas (detalhe em `../dns/04`):
+Duas posturas (detalhe em [`dns/04-automation-and-tls.md`](../dns/04-automation-and-tls.md)):
 
 - **TLS no cluster** — cert-manager emite o cert wildcard por subzona (DNS-01), o Istio gateway
   o usa. É o modelo do PoC (NLB passa TCP; TLS termina no Istio).
 - **TLS na borda** — se a exposição for por ALB/CloudFront/APIM, o cert vive no ACM e o TLS
-  termina lá. (Na fatia Azure do PoC, a exposição pública é via APIM/Front Door — `../../CLAUDE.md`.)
+  termina lá. (Na fatia Azure do PoC, a exposição pública é via APIM/Front Door — [`CLAUDE.md`](../../CLAUDE.md).)
 
 **Apex de novo:** o wildcard cobre `foo.<spoke>` mas não `<spoke>` em si — expor no apex exige
-Record A do apex + apex no SAN do cert + Gateway/VS no host apex (`../dns/02`).
+Record A do apex + apex no SAN do cert + Gateway/VS no host apex ([`dns/02-records-and-alias.md`](../dns/02-records-and-alias.md)).
 
 ## external-dns e o gateway Istio (gotcha)
 
@@ -74,7 +74,7 @@ Duas saídas:
   inexistente + annotation `external-dns.alpha.kubernetes.io/target`) publica o A-record, e uma
   `IngressClass istio` inativa existe só para o Ingress passar na validação do LB Controller.
 
-O wildcard (`../dns/`) é o que torna o legado desnecessário.
+O wildcard ([`dns/`](../dns/)) é o que torna o legado desnecessário.
 
 ## Endpoint público vs. privado
 

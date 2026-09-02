@@ -26,9 +26,9 @@ essas ferramentas diretamente — os princípios são os mesmos).
 | Papel | Quantas | Hospeda | Nunca hospeda |
 |---|---|---|---|
 | **Management Account** (gerência) | 1 | A Organization em si: OUs, SCPs, billing consolidado, IAM Identity Center | **Nenhum workload.** Nem VPC, nem EC2, nem Crossplane. |
-| **`network`** (Connectivity Account) | **1, para todas as regiões** | O(s) Hub(s) — Transit Gateway, VPN Connections, RAM shares de `../network/`. Um conjunto desses recursos **por região**, todos na mesma conta | Workloads de projeto |
+| **`network`** (Connectivity Account) | **1, para todas as regiões** | O(s) Hub(s) — Transit Gateway, VPN Connections, RAM shares de [`network/`](../network/). Um conjunto desses recursos **por região**, todos na mesma conta | Workloads de projeto |
 | **`log-archive`** | 1 | Bucket de auditoria do trail organizacional (`07-cloudtrail-and-log-archive.md`) | Qualquer coisa além de logs |
-| **Control plane / plataforma** | 1 por ambiente | A spoke privilegiada que roda EKS + Crossplane + ArgoCD e provisiona as demais spokes (`../compute/00-cluster-as-spoke.md`) | Workload de aplicação de tenant |
+| **Control plane / plataforma** | 1 por ambiente | A spoke privilegiada que roda EKS + Crossplane + ArgoCD e provisiona as demais spokes ([`compute/00-cluster-as-spoke.md`](../compute/00-cluster-as-spoke.md)) | Workload de aplicação de tenant |
 | **Project / workload account** | 1 por projeto **por ambiente** | A(s) spoke(s) daquele projeto-ambiente — VPC, subnets, EKS, apps | Recursos de outro projeto ou de outro ambiente |
 
 > **A regra mais importante deste tópico:** a conta de gerência **nunca** hospeda
@@ -50,7 +50,7 @@ entre contas. Consequências que costumam ser lidas ao contrário:
 
 Criar conta por região só se justifica quando o eixo real é outro (residência de dados,
 compliance por jurisdição) — e nesse caso o agrupamento correto é por **perfil de residência**
-via OU, não por região solta. Ver `../tenancy/02-ou-per-geography.md`.
+via OU, não por região solta. Ver [`tenancy/02-ou-per-geography.md`](../tenancy/02-ou-per-geography.md).
 
 ## Conta por projeto **e** por ambiente
 
@@ -68,7 +68,7 @@ O eixo por projeto e o eixo por ambiente **não competem** — compõem:
 | **Por ambiente** | Guardrail diferenciado (SCP mais restritiva em prod), cota independente, e a garantia de que um erro em nonprod não alcança prod por IAM |
 
 Dentro de cada conta projeto-ambiente, cada cluster continua sendo uma spoke própria — a
-granularidade fina segue em `../network/00-topology.md`.
+granularidade fina segue em [`network/00-topology.md`](../network/00-topology.md).
 
 ## Bootstrap: a "conta vazia" que você já tem
 

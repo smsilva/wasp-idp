@@ -53,7 +53,7 @@ assunto, não porque é necessário nesta referência.
 ## Zona pai compartilhada — a regra imutável
 
 Quase sempre a pai é **compartilhada** entre times. Aí vale a regra herdada do PoC
-(`../../CLAUDE.md`): **só ADICIONAR** o record NS da **sua** subzona; **nunca** tocar,
+([`CLAUDE.md`](../../CLAUDE.md)): **só ADICIONAR** o record NS da **sua** subzona; **nunca** tocar,
 sobrescrever ou remover records de terceiros na pai.
 
 ```text

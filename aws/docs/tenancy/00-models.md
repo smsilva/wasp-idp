@@ -46,7 +46,7 @@ tier dedicado — tem N produtos com um cliente cada, e o custo operacional cres
 base de clientes.
 
 É a mesma regra que o desenho de plataforma deste repo já havia registrado por conta própria
-(`../../../decisions.md`, §3): *"mesmo artefato, mesmo pipeline, mesma observabilidade; a única
+([`decisions.md`](../../../decisions.md), §3): *"mesmo artefato, mesmo pipeline, mesma observabilidade; a única
 variável é quantos tenants entram"*. A lens dá o vocabulário oficial; §3 dá o teste prático.
 
 ## Reconciliando os dois vocabulários

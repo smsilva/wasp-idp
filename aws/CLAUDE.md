@@ -49,7 +49,7 @@ O plano de `cluster-zero` referencia `infra/terraform/cluster-zero/README.md`, q
 plano é registro de desenho de outra trilha.
 
 **Regra:** no contexto AWS, nunca dizer "cluster zero". O cluster que roda o Crossplane é o
-**Control Plane**; a unidade regional que o entrega é a **Fase 2** de `../decisions.md` §8.
+**Control Plane**; a unidade regional que o entrega é a **Fase 2** de [`decisions.md`](../decisions.md) §8.
 
 > **Cuidado com a analogia de "cluster inicial que cria os demais":** `decisions.md` §7
 > **descartou** o padrão seed cluster / hub-of-hubs — um Crossplane provisionando os hubs

@@ -25,10 +25,10 @@ de baixo, nada é monolítico (Pilar 5, "Platform Engineering 2.0"):
 
 | Peça da arquitetura | XRD/Composition | Arquivo | Estado |
 |---|---|---|---|
-| VPC + 4 subnets + IGW/NAT + routes (16 MRs) | `Network` (`platform.example.com/v1alpha1`) | `../../eks/resources/network/` | ✅ roda, single-account |
-| Cluster EKS + node group + auth | `Cluster` | `../../eks/resources/cluster/` | ✅ roda |
-| Orquestrador Network+Cluster | `Environment` | `../../eks/resources/environment/` | ⚠️ a remover |
-| ArgoCD no cluster | `ArgoCDInstance` | `../../eks/resources/argocd/` | ✅ roda |
+| VPC + 4 subnets + IGW/NAT + routes (16 MRs) | `Network` (`platform.example.com/v1alpha1`) | [`eks/resources/network/`](../../eks/resources/network/) | ✅ roda, single-account |
+| Cluster EKS + node group + auth | `Cluster` | [`eks/resources/cluster/`](../../eks/resources/cluster/) | ✅ roda |
+| Orquestrador Network+Cluster | `Environment` | [`eks/resources/environment/`](../../eks/resources/environment/) | ⚠️ a remover |
+| ArgoCD no cluster | `ArgoCDInstance` | [`eks/resources/argocd/`](../../eks/resources/argocd/) | ✅ roda |
 | **HubNetwork (TGW/VPN/RAM)** | — | — | ❌ não existe |
 | **DnsZone (subzona pública)** | — | — | ❌ não existe (planejado) |
 

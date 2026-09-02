@@ -8,11 +8,11 @@ Cada camada produz um tipo de log; juntos, respondem "o que aconteceu" em qualqu
 
 | Fonte | O que registra | Onde nasce | Já documentado em |
 |---|---|---|---|
-| **Control plane EKS** | api, audit, authenticator, scheduler, controllerManager | control plane (opt-in) | `../compute/00` |
-| **Container / aplicação** | stdout/stderr dos pods | nodes → CloudWatch (Fluent Bit/Container Insights) | `../compute/` |
-| **VPC Flow Logs** | o que trafegou (aceito/negado) por ENI/subnet/VPC | VPC de cada spoke | `../network/06` |
-| **CloudTrail** | toda chamada de API (quem, o quê, quando) | Organization | `../security/06` |
-| **DNS query logging** | o que foi resolvido (público e Resolver) | Route53 | `../dns/05` |
+| **Control plane EKS** | api, audit, authenticator, scheduler, controllerManager | control plane (opt-in) | [`compute/00-cluster-as-spoke.md`](../compute/00-cluster-as-spoke.md) |
+| **Container / aplicação** | stdout/stderr dos pods | nodes → CloudWatch (Fluent Bit/Container Insights) | [`compute/`](../compute/) |
+| **VPC Flow Logs** | o que trafegou (aceito/negado) por ENI/subnet/VPC | VPC de cada spoke | [`network/06-security.md`](../network/06-security.md) |
+| **CloudTrail** | toda chamada de API (quem, o quê, quando) | Organization | [`security/06-detection-and-audit.md`](../security/06-detection-and-audit.md) |
+| **DNS query logging** | o que foi resolvido (público e Resolver) | Route53 | [`dns/05-security.md`](../dns/05-security.md) |
 
 Este tópico não reexplica cada um (os links têm o detalhe) — organiza **destino, retenção e
 para que servem juntos**.
@@ -23,9 +23,9 @@ Os logs do control plane EKS (`api`, `audit`, `authenticator`, `controllerManage
 `scheduler`) são **opt-in** — o cluster nasce sem eles. Ligar cedo importa porque:
 
 - **`audit`** é a trilha de quem fez o quê **dentro** do cluster (o par K8s do CloudTrail) —
-  essencial para investigar RBAC (`../compute/03`) e ação de workload.
+  essencial para investigar RBAC ([`compute/03-access-and-rbac.md`](../compute/03-access-and-rbac.md)) e ação de workload.
 - **`authenticator`** mostra falhas de mapeamento IAM→RBAC — o sintoma do "creator sem admin"
-  (`../compute/03`) aparece aqui.
+  ([`compute/03-access-and-rbac.md`](../compute/03-access-and-rbac.md)) aparece aqui.
 
 Vão para CloudWatch Logs; habilitar ao menos `audit` + `authenticator` como baseline.
 

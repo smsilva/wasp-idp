@@ -14,7 +14,7 @@ IAM tem uma fronteira dura de automação, imposta pelo **bootstrap galinha-e-ov
 | RAM share do TGW (cross-account) | ✅ sim (alvo) | `ResourceShare`/`Association` como MR — hoje suprimido (conta única) |
 | Roles cross-account Hub↔projeto | ✅ sim (alvo) | `Role` + trust policy como MR, quando houver 2 contas |
 | **Grant de IAM à própria automação** | ❌ **não** | a automação tem `implicitDeny` em `iam:PutUserPolicy` — não pode se auto-conceder |
-| SCP / OU / Organization | ⚠️ conta de gerência | `provider-aws-organizations` numa **instância separada** (`../accounts/06`) |
+| SCP / OU / Organization | ⚠️ conta de gerência | `provider-aws-organizations` numa **instância separada** ([`accounts/06-crossplane-map.md`](../accounts/06-crossplane-map.md)) |
 | Access Analyzer / GuardDuty / CloudTrail | ⚠️ possível, não no escopo | habilitação de conta, barata, ainda manual no PoC |
 
 A linha vermelha: **o Crossplane provisiona o IAM do que ele gerencia, mas não o IAM que o
@@ -30,7 +30,7 @@ aws iam put-user-policy --user-name crossplane-poc \
   --policy-document file://aws/eks/providers/bootstrap-iam-policy.json
 ```
 
-O JSON versionado (`../../eks/providers/bootstrap-iam-policy.json`) **é a fonte de verdade** do
+O JSON versionado ([`eks/providers/bootstrap-iam-policy.json`](../../eks/providers/bootstrap-iam-policy.json)) **é a fonte de verdade** do
 estado desejado — o `put-user-policy` só o aplica. Ele escopa duas coisas:
 
 - `CrossplaneEksRoleManagement` → todas as ações de role restritas a
@@ -61,7 +61,7 @@ menor privilégio como código.
 | IAM user da automação | ✅ `crossplane-poc`, `PowerUserAccess` + inline escopada | customer-managed escopada (enxugar `PowerUserAccess` via tópico 6) |
 | Roles do cluster (Pod Identity/ESO/EBS/node) | ✅ criadas por MR, escopadas `poc-eks-*` | idem |
 | Permission boundary | ❌ não existe | boundary por conta exigida em `iam:CreateRole` (tópico 1) |
-| Roles cross-account | ❌ conta única, suprimidas | Hub↔projeto quando `../accounts/` separar contas |
+| Roles cross-account | ❌ conta única, suprimidas | Hub↔projeto quando [`accounts/`](../accounts/) separar contas |
 | RAM share (perímetro) | ❌ suprimido (conta única) | `allowExternalPrincipals=false` por tenant (tópico 3) |
 | Access Analyzer / GuardDuty | ❌ não habilitados | ligados por Organization (detecção sempre on) |
 | Grant de IAM à automação | ✅ bootstrap manual documentado | permanece manual (galinha-e-ovo é intrínseco) |
@@ -73,5 +73,5 @@ menor privilégio como código.
 3. Adicionar **permission boundary** por conta e exigi-la em `iam:CreateRole` (tópico 1).
 4. Habilitar **Access Analyzer + GuardDuty** por Organization (barato, sem workload).
 5. Usar CloudTrail/Access Analyzer para **enxugar `PowerUserAccess`** numa policy escopada.
-6. Quando `../accounts/` separar Hub e projeto: introduzir **roles cross-account** e **RAM**
+6. Quando [`accounts/`](../accounts/) separar Hub e projeto: introduzir **roles cross-account** e **RAM**
    escopado à Organization (tópicos 2 e 3), removendo a supressão de conta única.

@@ -53,7 +53,7 @@ sem `matchControllerRef`, pois os MRs vivem em XRs distintos).
 > **Identidade = `metadata.name`** (Crossplane v2, sem `spec.id` — migrado 2026-08-18). O
 > orquestrador `environment/` está **BLOCKED** (filhos compostos ganham nome hasheado → label
 > não cruza; rework em `examples/topology/05-07`). Use os charts diretos `hub`/`spoke`/`cluster`
-> (`../../platform/charts/`), que instanciam Network+Cluster com o MESMO `metadata.name`. Ver
+> ([`platform/charts/`](../../platform/charts/)), que instanciam Network+Cluster com o MESMO `metadata.name`. Ver
 `docs/superpowers/specs/2026-08-15-decompor-environment-network-cluster-plano.md` e o brainstorm
 de 2026-08-14. Enquadramento: Pilar 5 "Composable by design" (PE 2.0), princípios *Modular by
 design* + *API-first contracts*.

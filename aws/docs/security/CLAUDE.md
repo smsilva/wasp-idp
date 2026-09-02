@@ -24,8 +24,8 @@
   inline policy escopada às roles `poc-eks-*` opera o Crossplane; humanos entram via SSO
   `AdministratorAccess`. **Cross-account já existe:** uma role na conta de workload com trust
   para esse user, assumida via `assumeRoleChain` do ProviderConfig — o hop Hub→spoke está
-  validado. Ainda sem permission boundary e sem Access Analyzer. Ver `../../CLAUDE.md` e
-  `../../eks/providers/bootstrap-iam-policy.json`.
+  validado. Ainda sem permission boundary e sem Access Analyzer. Ver [`CLAUDE.md`](../../CLAUDE.md) e
+  [`eks/providers/bootstrap-iam-policy.json`](../../eks/providers/bootstrap-iam-policy.json).
 - **Alvo desta referência:** perímetro completo — boundaries por conta, roles cross-account
   escopadas Hub↔projeto, Pod Identity para os workloads do cluster, RAM restrito à
   Organization, detecção sempre ligada.
@@ -37,7 +37,7 @@
 
 ## Relação com o resto do repo
 
-- **Depende de** `../accounts/` (SSO e contas onde as identidades vivem) e serve
-  `../network/` (RAM do TGW, auth de VPN) e o futuro domínio Compute (Pod Identity do EKS).
-- Regra herdada do PoC (`../../CLAUDE.md`): **só ADICIONAR** recursos isolados; nunca alterar
+- **Depende de** [`accounts/`](../accounts/) (SSO e contas onde as identidades vivem) e serve
+  [`network/`](../network/) (RAM do TGW, auth de VPN) e o futuro domínio Compute (Pod Identity do EKS).
+- Regra herdada do PoC ([`CLAUDE.md`](../../CLAUDE.md)): **só ADICIONAR** recursos isolados; nunca alterar
   policy/role compartilhada de outro time. Toda policy escopa a ARNs `poc-eks-*`/`poc-idp/*`.

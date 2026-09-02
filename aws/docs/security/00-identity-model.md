@@ -29,7 +29,7 @@ Todo acesso se decide respondendo três coisas, nesta ordem:
 
 As três são camadas **AND**: a ação só passa se autenticada **e** permitida pela policy **e**
 não negada por SCP. Um `Deny` em qualquer camada barra — é o que torna o perímetro robusto a
-erro numa camada só (um IAM permissivo demais ainda esbarra no SCP; ver `../accounts/02`).
+erro numa camada só (um IAM permissivo demais ainda esbarra no SCP; ver [`accounts/02-scp-guardrails.md`](../accounts/02-scp-guardrails.md)).
 
 ## Credenciais temporárias por padrão
 
@@ -47,13 +47,13 @@ um degrau, não o destino (tópico 4 e 7).
 
 ## Onde cada peça é decidida
 
-Este domínio não redefine SSO nem permission sets — isso é `../accounts/04-cross-account-access.md`.
+Este domínio não redefine SSO nem permission sets — isso é [`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md).
 Aqui a divisão é:
 
 | Pergunta | Domínio/arquivo |
 |---|---|
-| Onde as identidades humanas vivem (SSO, permission sets) | `../accounts/04` |
-| Que teto de conta/OU limita todas elas (SCP) | `../accounts/02` |
+| Onde as identidades humanas vivem (SSO, permission sets) | [`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md) |
+| Que teto de conta/OU limita todas elas (SCP) | [`accounts/02-scp-guardrails.md`](../accounts/02-scp-guardrails.md) |
 | **O que exatamente cada policy permite (menor privilégio)** | **este domínio, tópico 1** |
 | **Como uma conta age em outra (role cross-account)** | **tópico 2** |
 | **Como um workload no cluster tem identidade** | **tópico 4** |

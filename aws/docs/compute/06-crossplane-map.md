@@ -12,11 +12,11 @@
 | Ordem | sequência imperativa (o script aplica fase, espera, avança) | dependências declarativas (readiness entre MRs) |
 | Node groups | fase `60-nodegroup` (1) | `spec.nodeGroups[]` (lista, `[0]` fixado nesta fatia) |
 | Rede | fases `10-20-30` embutidas | `Network` referenciada por `networkRef.name` (cross-XR) |
-| DNS | fases `86-88` + Route53 solto | XR `DnsZone`, **filho** do Cluster (`../dns/06`) |
+| DNS | fases `86-88` + Route53 solto | XR `DnsZone`, **filho** do Cluster ([`dns/06-crossplane-map.md`](../dns/06-crossplane-map.md)) |
 | Orquestrador | `Environment` (a remover) | **sem** `Environment` — `Cluster` é o topo |
 
 O faseado **funciona fim-a-fim** (validado end-to-end); o componível é o destino ratificado. A
-migração é o Gap 4 de `../network/07`.
+migração é o Gap 4 de [`network/07-crossplane-map.md`](../network/07-crossplane-map.md).
 
 ## O `Cluster` como CR de topo (alvo)
 
@@ -44,7 +44,7 @@ Pontos de design decididos:
 - **`DnsZone` é filho do Cluster** — o Cluster passa `domain`/`nlbHostname`; o DnsZone
   materializa Zone + NS + wildcard.
 - **`nodeGroups[]` shape de lista** já no schema, `[0]` implementado (evita 2ª migração —
-  `../compute/01`).
+  [`compute/01-node-groups.md`](../compute/01-node-groups.md)).
 - **Config do Control Plane** (`control-plane-config.yaml`, EnvironmentConfig na raiz): `crossplaneArn`, `prefix`,
   `parentHostedZoneId`, `canonicalNlbZoneId` — lidos via `FromEnvironmentFieldPath`.
 
@@ -57,23 +57,23 @@ Pontos de design decididos:
 | Add-ons + Pod Identity | ✅ fases `65/68/80-92/100` (EBS, ESO, external-dns, LB, cert-manager) | idem, compostos pelo Cluster |
 | Access Entries (RBAC) | ✅ fases `70/72` (operador + Crossplane) | idem |
 | Ingress (NLB + Istio) | ✅ fases `92/94/96/98` | idem |
-| DNS | ✅ fases `86/88` + Route53 solto | XR `DnsZone` filho (`../dns/06`, Gap 3) |
+| DNS | ✅ fases `86/88` + Route53 solto | XR `DnsZone` filho ([`dns/06-crossplane-map.md`](../dns/06-crossplane-map.md), Gap 3) |
 | `Cluster` como topo | ⚠️ XR `Cluster` existe mas sob `Environment`, grupo `platform.*` | topo, grupo `aws.*`, sem `Environment` |
 | `Environment` orquestrador | ✅ existe (`environment/`) | **removido** (Gap 4) |
-| ArgoCD | ✅ `ArgoCDInstance` (connection secret) | só rename `environment*`→`cluster*` (`../compute/05`) |
-| Apps de negócio | ⚠️ Helm puro fora do Crossplane (`apps/`) | GitOps via ArgoCD (`../compute/05`) |
+| ArgoCD | ✅ `ArgoCDInstance` (connection secret) | só rename `environment*`→`cluster*` ([`compute/05-gitops.md`](../compute/05-gitops.md)) |
+| Apps de negócio | ⚠️ Helm puro fora do Crossplane (`apps/`) | GitOps via ArgoCD ([`compute/05-gitops.md`](../compute/05-gitops.md)) |
 
 ## Ordem de implementação sugerida
 
 1. `Cluster`: virar CR de topo — grupo `aws.example.com`, `networkRef.name`, `domain`,
    `nodeGroups[]` (`[0]`), sem `spec.id`.
-2. Compor o **DnsZone** como filho (`../dns/06`, Gap 3).
+2. Compor o **DnsZone** como filho ([`dns/06-crossplane-map.md`](../dns/06-crossplane-map.md), Gap 3).
 3. Remover o **`Environment`** (`environment/{xrd,composition,environmentconfig}.yaml`) — Gap 4.
 4. **Rename** do campo no `ArgoCDInstance` (`environmentConnectionSecretRef` →
    `clusterConnectionSecretRef`).
 5. Validar no Control Plane (k3d): dry-run → real (reusar a `Network net01` existente — não reprovisionar).
 6. **Futuro** (mapeado, não agora): fan-out de N node groups (function-kcl); Karpenter;
-   endpoint privado; attachment/RAM ao TGW (`../network/07`, Gap 2).
+   endpoint privado; attachment/RAM ao TGW ([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), Gap 2).
 
 ## Well-Architected — porquê
 
