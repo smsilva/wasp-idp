@@ -1,7 +1,8 @@
 # CLAUDE.md — `compute/` (Domain: Compute — EKS as a Spoke)
 
-> Índice do domínio de **Compute** — o cluster EKS que roda os workloads, modelado como uma
-> **spoke** da topologia hub-and-spoke. Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio de **Compute** — o cluster EKS que roda os workloads,
+> modelado como uma **spoke** da topologia hub-and-spoke. Corpo genérico (placeholders
+> `<...>`). Índice de leitura em [`README.md`](README.md).
 
 ## Sequência de construção (rede pronta → cluster com apps)
 

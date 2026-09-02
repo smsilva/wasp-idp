@@ -29,3 +29,14 @@
 > A visão de plataforma correspondente — sequência de provisionamento por fases, células,
 > roteamento global — vive em `../../decisions.md`. Onde os dois divergirem, **a doc de domínio
 > ganha** (regra registrada em `decisions.md` §8).
+
+## Fora dos domínios
+
+Conteúdo que vive direto sob `aws/docs/` — não indexado por nenhuma tabela de domínio acima.
+
+| O que é | Onde |
+|---|---|
+| **VPN** — operação do Client VPN e access entries do EKS | [`vpn/`](vpn/) (`client-vpn-operations.md`, `eks-access-entries.md`) |
+| **Lessons learned** — armadilhas já resolvidas, para não reaprender (EKS API endpoint, LB/TLS, VPN de rede, camadas Terraform) | [`lessons-learned/`](lessons-learned/) |
+| **Known broken** — achados operacionais em aberto ou limitações intencionais aceitas | [`known-broken.md`](known-broken.md) |
+| **Open questions** — perguntas sem decisão tomada; viram ADR ou issue quando resolvidas | [`open-questions.md`](open-questions.md) |

@@ -1,7 +1,7 @@
 # CLAUDE.md — `network/` (Domain: Hub-and-Spoke Network)
 
-> Índice do domínio de **rede** — a fundação da arquitetura de referência. Ordem de leitura
-> = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio de **rede** — a fundação da arquitetura de referência.
+> Corpo genérico (placeholders `<...>`). Índice de leitura em [`README.md`](README.md).
 
 ## Sequência de construção (conta vazia → rede pronta)
 

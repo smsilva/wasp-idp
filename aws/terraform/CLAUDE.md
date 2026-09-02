@@ -190,11 +190,11 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   verificar comportamento de CLI é rodá-lo de verdade — usar `terraform plan` direto na raiz para
   esse fim, nunca o script, a menos que a intenção seja mesmo aplicar.
 - **O `README.md` desta pasta é a sequência que alguém sem contexto vai copiar — atualizar no MESMO
-  trabalho que muda a sequência, nunca depois.** Ele tem a seção "Manter este arquivo verdadeiro" com
-  a tabela de o-que-mudou → onde-atualizar. Linha desatualizada ali não é doc velha: é comando que
-  falha no meio, às vezes com recurso já criado atrás. Duas divergências desse tipo já aconteceram
-  (camada marcada como não aplicada depois de aceita; `up-all --with-control-plane` documentado depois
-  de o túnel virar obrigatório).
+  trabalho que muda a sequência, nunca depois.** Este arquivo (`CLAUDE.md`) tem a seção "Manter este
+  arquivo verdadeiro" com a tabela de o-que-mudou → onde-atualizar. Linha desatualizada ali não é doc
+  velha: é comando que falha no meio, às vezes com recurso já criado atrás. Duas divergências desse
+  tipo já aconteceram (camada marcada como não aplicada depois de aceita; `up-all --with-control-plane`
+  documentado depois de o túnel virar obrigatório).
 - **Estado de sessão não entra no `README.md`** — o que está de pé agora, IDs de recurso e valores da
   conta vivem em `HANDOFF.md`. Duas fontes garantem que uma esteja errada.
 - **`scripts/lib` é sourced, não executado.** Log com timestamp, `PIPESTATUS[0]`, confirmação e
@@ -550,14 +550,14 @@ o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem e
 
 ## Manter este arquivo verdadeiro
 
-**Este README é a sequência executável.** Quem chega sem contexto segue o que está aqui e espera que
-funcione; uma linha desatualizada aqui não é doc velha, é comando que falha no meio, às vezes com
-recurso já criado atrás. Já aconteceu duas vezes antes da raiz regional existir, e a razão não muda
-com o desenho novo.
+**O `README.md` desta pasta é a sequência executável.** Quem chega sem contexto segue o que está lá
+e espera que funcione; uma linha desatualizada lá não é doc velha, é comando que falha no meio, às
+vezes com recurso já criado atrás. Já aconteceu duas vezes antes da raiz regional existir, e a razão
+não muda com o desenho novo.
 
 Atualizar junto com a mudança, no mesmo trabalho — não depois:
 
-| Mudou isto | Atualizar aqui |
+| Mudou isto | Atualizar no README |
 |---|---|
 | Script novo ou renomeado (`up-NN`) | bloco de comandos, tabela da sequência, `## Raízes`, `## Ordem de teardown` |
 | Pré-requisito novo que **não é Terraform** (console, túnel, SCP) | linha `—` própria na tabela da sequência, com o que ele custa e de quem depende |
@@ -567,13 +567,14 @@ Atualizar junto com a mudança, no mesmo trabalho — não depois:
 | Região nova aplicada de verdade | coluna `Exercitada` em `## Raízes`, tabela de CIDR |
 | **Raiz nova** (pasta com backend próprio) | linha em `## Raízes` — sem ela a raiz é indescobrível, e o README dela também: a `ci/` ficou fora da tabela e a documentação dos workflows foi escrita de novo em outro arquivo por isso |
 
-**O que NÃO entra aqui:** o que está de pé agora, IDs de recurso, valores da conta. Isso é estado de
-sessão e vive em `HANDOFF.md` — repetir aqui garante duas fontes e uma delas errada. Armadilhas de
-código e de comportamento de provider vão para `CLAUDE.md`, não para este arquivo.
+**O que NÃO entra no README:** o que está de pé agora, IDs de recurso, valores da conta. Isso é
+estado de sessão e vive em `HANDOFF.md` — repetir lá garante duas fontes e uma delas errada.
+Armadilhas de código e de comportamento de provider ficam neste arquivo (`CLAUDE.md`), não no
+README.
 
 **Contagem de testes também não entra** — em nenhum arquivo versionado. O número muda a cada módulo
 novo, envelhece sozinho e não informa decisão nenhuma: o que importa é `0 falhas`, e quem quer o
 total roda o loop.
 
 Ao fechar um passo de plano que muda a sequência, a checagem é uma pergunta só: **alguém que só leia
-este README consegue subir o ambiente hoje?**
+o `README.md` desta pasta consegue subir o ambiente hoje?**

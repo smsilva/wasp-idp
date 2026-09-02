@@ -1,8 +1,9 @@
 # CLAUDE.md — `dns/` (Domain: DNS)
 
-> Índice do domínio de **DNS** — como nomes estáveis chegam aos serviços de cada spoke, do
-> registro público delegado à resolução privada cross-account, com automação no cluster e
-> TLS. Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio de **DNS** — como nomes estáveis chegam aos serviços de
+> cada spoke, do registro público delegado à resolução privada cross-account, com
+> automação no cluster e TLS. Corpo genérico (placeholders `<...>`). Índice de leitura em
+> [`README.md`](README.md).
 
 ## Sequência de construção (nome resolvível → app com TLS)
 
