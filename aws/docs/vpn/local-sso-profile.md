@@ -21,10 +21,10 @@ aws sts get-caller-identity --profile platform-admin
 
 Esperado: `arn:aws:sts::270222614208:assumed-role/AWSReservedSSO_PlatformAdmin_<hash>/<usuário>`.
 
-Descubra o nome do cluster na região atual (`platform-admin` não tem `eks:ListClusters` — só o mínimo, `eks:DescribeCluster` — use `cicd` para listar):
+Descubra o nome do cluster na região atual:
 
 ```bash
-aws eks list-clusters --profile cicd --query 'clusters' --output text
+aws eks list-clusters --profile platform-admin --query 'clusters' --output text
 ```
 
 Com o [Client VPN conectado](client-vpn-operations.md):
