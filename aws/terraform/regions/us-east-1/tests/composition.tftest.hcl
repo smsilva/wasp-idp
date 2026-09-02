@@ -7,6 +7,7 @@ mock_provider "aws" { alias = "network" }
 
 variables {
   base_domain        = "exemplo.com"
+  admin_group_ids    = {}
   operator_group_ids = ["00000000-0000-0000-0000-000000000000"]
   spoke_account_ids  = ["000000000000"]
   saml_metadata_path = "../../src/hub/tests/fixtures/saml-metadata.xml"
