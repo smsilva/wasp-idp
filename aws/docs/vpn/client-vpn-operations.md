@@ -41,7 +41,7 @@ da saída e use nos passos seguintes:
 
 ```bash
 vpn_region="us-east-1"
-endpoint="cvpn-endpoint-0d465604c79a944a7" # cole o ID real aqui
+endpoint="cvpn-endpoint-00000000000000000" # ID real deve ser informado aqui
 vpn_profile_name="hub-${vpn_region?}"
 vpn_client_configuration_file="${HOME}/trash/${vpn_profile_name?}.ovpn"
 
