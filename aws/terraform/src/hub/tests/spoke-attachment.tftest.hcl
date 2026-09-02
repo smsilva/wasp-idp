@@ -21,10 +21,10 @@ override_module {
 
   outputs = {
     vpc_id                 = "vpc-hub000000000001"
-  vpc_cidr               = "10.1.0.0/16"
-  private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
-  public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
-  private_route_table_id = "rtb-hubprivate00001"
+    vpc_cidr               = "10.1.0.0/16"
+    private_subnet_ids     = ["subnet-priv0000000a", "subnet-priv0000000b"]
+    public_subnet_ids      = ["subnet-pub00000000a", "subnet-pub00000000b"]
+    private_route_table_id = "rtb-hubprivate00001"
     public_route_table_id  = "rtb-hubpublic000001"
   }
 }

@@ -93,7 +93,7 @@ run "a_target_group_do_hub_aponta_para_os_enderecos_fixos_do_nlb" {
   # ingress. Foi para isso que foram FIXADOS: são conhecidos em tempo de plan, então o lado
   # hub pode ser planejado sem o NLB existir.
   assert {
-    condition = toset([for a in aws_lb_target_group_attachment.hub_to_cell : a.target_id]) == toset(["10.2.32.10", "10.2.48.10"])
+    condition     = toset([for a in aws_lb_target_group_attachment.hub_to_cell : a.target_id]) == toset(["10.2.32.10", "10.2.48.10"])
     error_message = "a target group do hub deveria registrar os IPs fixos do NLB, recebido ${jsonencode([for a in aws_lb_target_group_attachment.hub_to_cell : a.target_id])}"
   }
 
@@ -156,7 +156,7 @@ run "os_alvos_acompanham_o_cidr_da_spoke" {
   }
 
   assert {
-    condition = toset([for a in aws_lb_target_group_attachment.hub_to_cell : a.target_id]) == toset(["10.5.32.10", "10.5.48.10"])
+    condition     = toset([for a in aws_lb_target_group_attachment.hub_to_cell : a.target_id]) == toset(["10.5.32.10", "10.5.48.10"])
     error_message = "os alvos deveriam derivar de vpc_cidr, recebido ${jsonencode([for a in aws_lb_target_group_attachment.hub_to_cell : a.target_id])}"
   }
 }
@@ -169,7 +169,7 @@ run "a_rule_casa_o_host_da_celula_e_encaminha_para_a_target_group_dela" {
   command = plan
 
   assert {
-    condition = one(one(aws_lb_listener_rule.cell.condition).host_header).values == toset(["*.control-plane.nonprod.exemplo.com"])
+    condition     = one(one(aws_lb_listener_rule.cell.condition).host_header).values == toset(["*.control-plane.nonprod.exemplo.com"])
     error_message = "a rule tem de casar o wildcard da célula"
   }
 
@@ -197,7 +197,7 @@ run "o_registro_da_celula_e_alias_wildcard_para_o_alb_do_hub" {
   # dns_name e zone_id têm de vir do MESMO data source do ALB. Um alias com zone_id de outro
   # load balancer é aceito pelo Route53 e nunca resolve.
   assert {
-    condition = one(aws_route53_record.cell_wildcard.alias).zone_id == "Z35SXDOTRQ7X7K"
+    condition     = one(aws_route53_record.cell_wildcard.alias).zone_id == "Z35SXDOTRQ7X7K"
     error_message = "o alias tem de usar a zone_id canônica do ALB do hub"
   }
 }
