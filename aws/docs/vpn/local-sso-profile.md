@@ -21,16 +21,11 @@ aws sts get-caller-identity --profile platform-admin
 
 Esperado: `arn:aws:sts::270222614208:assumed-role/AWSReservedSSO_PlatformAdmin_<hash>/<usuário>`.
 
-Descubra o nome do cluster na região atual:
+Com o [Client VPN conectado](client-vpn-operations.md), descubra o nome do cluster na região atual e escreva o kubeconfig (`--alias`/`--user-alias` evitam contexto com o ARN inteiro como nome):
 
 ```bash
-aws eks list-clusters --profile platform-admin --query 'clusters' --output text
-```
-
-Com o [Client VPN conectado](client-vpn-operations.md):
-
-```bash
-aws eks update-kubeconfig --name <cluster-name> --profile platform-admin
+CLUSTER_NAME="$(aws eks list-clusters --profile platform-admin --query 'clusters[0]' --output text)"
+aws eks update-kubeconfig --name "${CLUSTER_NAME}" --profile platform-admin --alias "${CLUSTER_NAME}" --user-alias platform-admin
 kubectl auth can-i '*' '*'   # esperado: yes
 ```
 
