@@ -1,10 +1,6 @@
-# 0016. Estrutura de navegação da documentação
+# Documentation navigation structure
 
-Data: 2026-09-01
-
-## Status
-
-Aceito
+**Status:** Aceito (2026-09-01)
 
 ## Contexto
 
