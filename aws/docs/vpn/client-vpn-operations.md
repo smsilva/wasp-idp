@@ -29,61 +29,68 @@ recriação. Reexportar sempre.
 **Sem Terraform state (direto via API) — caminho preferencial:**
 
 ```bash
-region="us-east-1"
-
 aws ec2 describe-client-vpn-endpoints \
   --profile network \
-  --region "${region}" \
-  --query 'ClientVpnEndpoints[*].{Id:ClientVpnEndpointId,Status:Status.Description,DnsName:DnsName}' \
+  --region us-east-1 \
+  --query 'ClientVpnEndpoints[*].{EndpointId:ClientVpnEndpointId,Status:Status.Code,DnsName:DnsName}' \
   --output table
 ```
 
-O comando lista os endpoints Client VPN da conta `network`. Copie o `ClientVpnEndpointId`
+O comando lista os endpoints Client VPN da conta `network`. Copie o `EndpointId`
 da saída e use nos passos seguintes:
 
 ```bash
-endpoint="cvpn-endpoint-00000000000000000"  # cole o ID real aqui
+vpn_region="us-east-1"
+endpoint="cvpn-endpoint-0d465604c79a944a7" # cole o ID real aqui
+vpn_profile_name="hub-${vpn_region?}"
+vpn_client_configuration_file="${HOME}/trash/${vpn_profile_name?}.ovpn"
+
+cat <<EOF
+vpn_region....................: ${vpn_region}
+endpoint......................: ${endpoint}
+vpn_profile_name..............: ${vpn_profile_name}
+vpn_client_configuration_file.: ${vpn_client_configuration_file}
+EOF
 
 aws ec2 export-client-vpn-client-configuration \
   --client-vpn-endpoint-id "${endpoint?}" \
   --profile network \
-  --region "${region}" \
-  --output text > ~/"trash/hub-${region}.ovpn"
+  --region ${vpn_region?} \
+  --output text > "${vpn_client_configuration_file?}"
+
+aws-vpn-client delete-profile \
+  --profile-name "${vpn_profile_name?}"
 
 aws-vpn-client import-profile \
-  --profile-name "hub-${region}" \
-  --config-path ~/"trash/hub-${region}.ovpn"
+  --profile-name "${vpn_profile_name?}" \
+  --config-path "${vpn_client_configuration_file?}"
 ```
 
 **Com Terraform state:**
 
+Só o `endpoint` muda — o resto da sequência acima é igual:
+
 ```bash
-region="us-east-1"
-
-endpoint="$(cd "regions/${region}" && terraform output -raw client_vpn_endpoint_id)"
-
-aws ec2 export-client-vpn-client-configuration \
-  --client-vpn-endpoint-id "${endpoint?}" \
-  --profile network \
-  --region "${region}" \
-  --output text > ~/"trash/hub-${region}.ovpn"
-
-aws-vpn-client import-profile \
-  --profile-name "hub-${region}" \
-  --config-path ~/"trash/hub-${region}.ovpn"
+endpoint="$(cd "regions/${vpn_region?}" && terraform output -raw client_vpn_endpoint_id)"
 ```
 
 ### Conectar
 
 ```bash
-aws-vpn-client connect --profile-name hub-us-east-1        # abre navegador para autenticar
-aws-vpn-client get-connection-status --profile-name hub-us-east-1   # tem de dizer "Connected"
+# abre navegador para autenticar
+aws-vpn-client connect \
+  --profile-name "${vpn_profile_name?}"
+
+# tem de dizer "Connected"
+aws-vpn-client get-connection-status \
+  --profile-name "${vpn_profile_name?}"
 ```
 
 ### Desconectar
 
 ```bash
-aws-vpn-client disconnect --profile-name hub-us-east-1
+aws-vpn-client disconnect \
+  --profile-name "${vpn_profile_name?}"
 ```
 
 ## Autenticação
@@ -96,8 +103,11 @@ contra a aplicação SAML do Identity Center; o grupo `platform-admins`
 ## Depois de conectado
 
 ```bash
-# kubeconfig — uma vez por região
-aws eks update-kubeconfig --name control-plane-us-east-1 --region us-east-1 --profile platform-admin
+aws eks update-kubeconfig \
+  --name control-plane-us-east-1 \
+  --region us-east-1 \
+  --profile platform-admin
+
 kubectl get nodes
 ```
 
