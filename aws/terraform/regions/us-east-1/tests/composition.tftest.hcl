@@ -272,3 +272,151 @@ run "endpoint_publico_repassa_o_cidr_ate_o_cluster" {
     error_message = "o CIDR do root deveria chegar a module.cell, recebido ${jsonencode(module.cell.public_access_cidrs)}"
   }
 }
+
+# admin_group_ids: issue #71. Quatro casos — default vazio, um permission set, dois permission
+# sets fundidos com admin_principal_arns, e bootstrap ausente (postcondition falha).
+
+run "admin_group_ids_default_vazio_nao_cria_data_source" {
+  command = plan
+
+  # values.auto.tfvars (o symlink real) ja declara admin_principal_arns nao-vazio para esta conta;
+  # zerar aqui isola o que este run quer provar (admin_group_ids sozinho).
+  variables {
+    admin_principal_arns = []
+  }
+
+  override_data {
+    target = data.aws_availability_zones.network
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.cell
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  assert {
+    condition     = length(local.admin_group_access_entries) == 0
+    error_message = "sem admin_group_ids nenhuma access entry deveria vir do Identity Center, recebido ${jsonencode(local.admin_group_access_entries)}"
+  }
+
+  assert {
+    condition     = toset(keys(merge(local.admin_principal_access_entries, local.admin_group_access_entries))) == toset([])
+    error_message = "com admin_principal_arns e admin_group_ids default vazios, access_entries devia ficar vazio, recebido ${jsonencode(keys(merge(local.admin_principal_access_entries, local.admin_group_access_entries)))}"
+  }
+}
+
+run "admin_group_ids_um_permission_set_resolve_a_role_sso" {
+  command = plan
+
+  variables {
+    admin_group_ids = {
+      PlatformAdmin = "00000000-0000-0000-0000-000000000000"
+    }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.network
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.cell
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  # override_data com for_each exige a chave no target (probado): sem ela nao resolve.
+  override_data {
+    target = data.aws_iam_roles.admin_group["PlatformAdmin"]
+    values = {
+      arns = ["arn:aws:iam::270222614208:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_PlatformAdmin_aaaaaaaaaaaaaaaa"]
+    }
+  }
+
+  assert {
+    condition     = length(local.admin_group_access_entries) == 1
+    error_message = "um permission set deveria produzir exatamente 1 access entry, recebido ${jsonencode(local.admin_group_access_entries)}"
+  }
+
+  assert {
+    condition     = local.admin_group_access_entries["PlatformAdmin"].principal_arn == "arn:aws:iam::270222614208:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_PlatformAdmin_aaaaaaaaaaaaaaaa"
+    error_message = "o ARN resolvido tem de manter o path /aws-reserved/sso.amazonaws.com/ — EKS access entries aceita path, remover quebraria a rastreabilidade"
+  }
+}
+
+run "admin_group_ids_dois_permission_sets_fundem_com_admin_principal_arns" {
+  command = plan
+
+  variables {
+    admin_principal_arns = ["arn:aws:iam::270222614208:role/OrganizationAccountAccessRole"]
+    admin_group_ids = {
+      PlatformAdmin       = "00000000-0000-0000-0000-000000000000"
+      UserDiscoveryDevOps = "11111111-1111-1111-1111-111111111111"
+    }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.network
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.cell
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.admin_group["PlatformAdmin"]
+    values = {
+      arns = ["arn:aws:iam::270222614208:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_PlatformAdmin_aaaaaaaaaaaaaaaa"]
+    }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.admin_group["UserDiscoveryDevOps"]
+    values = {
+      arns = ["arn:aws:iam::270222614208:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_Viewer_bbbbbbbbbbbbbbbb"]
+    }
+  }
+
+  assert {
+    condition     = length(merge(local.admin_principal_access_entries, local.admin_group_access_entries)) == 3
+    error_message = "1 principal + 2 grupos deveria fundir em 3 access entries, recebido ${jsonencode(keys(merge(local.admin_principal_access_entries, local.admin_group_access_entries)))}"
+  }
+
+  assert {
+    condition     = toset(keys(merge(local.admin_principal_access_entries, local.admin_group_access_entries))) == toset(["arn:aws:iam::270222614208:role/OrganizationAccountAccessRole", "PlatformAdmin", "UserDiscoveryDevOps"])
+    error_message = "as chaves tem de ser o ARN (fonte admin_principal_arns) e o nome do permission set (fonte admin_group_ids), recebido ${jsonencode(keys(merge(local.admin_principal_access_entries, local.admin_group_access_entries)))}"
+  }
+}
+
+run "admin_group_ids_sem_bootstrap_falha_no_postcondition" {
+  command = plan
+
+  variables {
+    admin_group_ids = {
+      PlatformAdmin = "00000000-0000-0000-0000-000000000000"
+    }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.network
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = data.aws_availability_zones.cell
+    values = { names = ["us-east-1a", "us-east-1b"] }
+  }
+
+  override_data {
+    target = data.aws_iam_roles.admin_group["PlatformAdmin"]
+    values = {
+      arns = []
+    }
+  }
+
+  expect_failures = [
+    data.aws_iam_roles.admin_group,
+  ]
+}
