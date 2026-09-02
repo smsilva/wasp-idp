@@ -36,13 +36,19 @@ Escreva o kubeconfig com o nome escolhido acima (`--alias`/`--user-alias` evitam
 cluster_name=<nome-do-cluster-acima>
 
 aws eks update-kubeconfig \
-  --name "${cluster_name}" \
+  --name "${cluster_name?}" \
+  --alias "${cluster_name?}" \
   --profile platform-admin \
-  --alias "${cluster_name}" \
   --user-alias platform-admin
 
-kubectl auth can-i '*' '*'   # esperado: yes
+kubectl config get-contexts
+
+kubectl auth whoami          # quem sou eu — esperado: .../AWSReservedSSO_PlatformAdmin_<hash>/<usuário>
+
+kubectl auth can-i '*' '*'   # o que posso — esperado: yes
 ```
+
+O `whoami` é o que distingue os dois caminhos: `can-i` devolve `yes` tanto pelo `platform-admin` quanto pelo `cicd`, mas só o `whoami` mostra qual dos dois está em uso — e o `sessionName` nele é o usuário individual, a rastreabilidade que a role compartilhada não dá.
 
 ## Informações relevantes
 
