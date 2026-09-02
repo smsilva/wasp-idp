@@ -186,11 +186,30 @@ O prorateio horário importa aqui mais que o valor: esta camada é destruída to
 
 **Capacidade:** 700 + 200 + 200 + 25 = 1.125 WCU dos **1.500 inclusos** no preço básico (teto absoluto 5.000, e acima de 1.500 há [cobrança adicional em tiers](https://docs.aws.amazon.com/waf/latest/developerguide/aws-waf-capacity-units.html)). A rate-based rule custa 2 WCU. Sobram ~373 — cabe uma regra custom ou um grupo pequeno; **não** cabe um segundo grupo grande (Bot Control, ATP) sem sair do tier básico. Registrado porque a #89 (segregação por tenant) pode querer regras por spoke.
 
-## Armadilha conhecida de apply
+## Propagação do Web ACL: o provider já resolve, e não é com um segundo apply
 
 A [doc](https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-testing.html) avisa sobre inconsistência temporária na propagação, e um dos exemplos é exatamente o que este design faz num apply só: *"After you create a protection pack (web ACL), if you try to associate it with a resource, you might get an exception indicating that the web ACL is unavailable."*
 
-Propagação de segundos a minutos. Se o apply falhar na associação logo após criar o Web ACL, é isso — e um segundo apply resolve, sem recurso órfão. Registrado para não virar caça a bug inexistente.
+**Um segundo apply seria a resposta errada, e não é necessária: o provider já trata isso.** Lendo o código do `aws` v6.62.0 (`internal/service/wafv2/web_acl_association.go`):
+
+```go
+Timeouts: &schema.ResourceTimeout{
+    Create: schema.DefaultTimeout(10 * time.Minute),   // linha 44
+},
+...
+tfresource.RetryWhenIsA[any, *awstypes.WAFUnavailableEntityException](  // linha 83
+    ctx, d.Timeout(schema.TimeoutCreate), func(...)
+```
+
+O recurso faz retry **na exceção exata da propagação** (`WAFUnavailableEntityException`) por até 10 minutos. Não por acaso: `aws_wafv2_web_acl_association` é o único dos dois recursos deste design que expõe bloco `timeouts` — o `aws_wafv2_web_acl` não tem nenhum, porque não precisa.
+
+Consequência para a implementação:
+
+1. **O primeiro apply vai sem nenhuma mitigação explícita** — nada de `time_sleep`, nada de `depends_on` extra, nada de aumentar timeout preventivamente. O objetivo é observar o comportamento real: o esperado é que a associação simplesmente funcione, com o retry absorvendo a propagação em silêncio.
+2. **Se o apply falhar mesmo assim**, a alavanca é `timeouts { create = "..." }` no próprio `aws_wafv2_web_acl_association` — um argumento nativo do recurso, não um workaround. Só se isso também falhar é que a hipótese "retry do provider é insuficiente" se sustenta, e aí o problema é outro (permissão, ARN errado, região) e não propagação.
+3. `time_sleep` do provider `hashicorp/time` fica registrado como o que **não** fazer aqui: acrescentaria um provider ao módulo para reimplementar, pior, uma espera que o recurso já faz — e espera fixa é sempre longa demais ou curta demais.
+
+Registrado com essa profundidade porque o sintoma (apply que morre na associação logo após criar o Web ACL) é o tipo de coisa que gera workaround por reflexo, e o workaround sobrevive no código muito depois de ter deixado de ser necessário.
 
 ## Verificação
 
