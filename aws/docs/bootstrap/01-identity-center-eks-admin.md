@@ -37,7 +37,20 @@ Convenção deste repo: um permission set por grupo que precisa de admin.
 - `PlatformAdmin` — para o cluster de control plane (é o caso deste roteiro).
 - Clusters de workload podem ter outros, por exemplo `UserDiscoveryDevOps`, `CloudOpsOperations`.
 
-**Policy a anexar:** o permission set precisa dar à role poder de **falar com o EKS**, não poder **dentro** do cluster. Na prática, o mínimo é `eks:DescribeCluster` (o que `aws eks update-kubeconfig` chama); uma managed policy como `AmazonEKSReadOnlyAccess` também cobre isso e é uma opção razoável de começo.
+**Policy a anexar:** o permission set precisa dar à role poder de **falar com o EKS**, não poder **dentro** do cluster. Não existe managed policy da AWS pronta para isso — as policies `AmazonEKS*` são todas para roles de serviço/nodegroup, nenhuma para um principal humano alcançar a API via CLI. Anexe uma **inline policy** customizada, escopada só a `eks:DescribeCluster` (a única action que `aws eks update-kubeconfig` chama):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "eks:DescribeCluster",
+      "Resource": "*"
+    }
+  ]
+}
+```
 
 **Não confundir com o poder dentro do cluster.** Essa é a separação que mais gera confusão:
 
