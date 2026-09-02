@@ -21,20 +21,16 @@ aws sts get-caller-identity --profile platform-admin
 
 Esperado: `arn:aws:sts::270222614208:assumed-role/AWSReservedSSO_PlatformAdmin_<hash>/<usuário>`.
 
-Descubra o nome, a região e o comando pronto (lido do Terraform, uma raiz por região; `platform-admin` não tem `eks:ListClusters` — só o mínimo, `eks:DescribeCluster`):
+Descubra o nome do cluster na região atual (`platform-admin` não tem `eks:ListClusters` — só o mínimo, `eks:DescribeCluster` — use `cicd` para listar):
 
 ```bash
-cd aws/terraform
-for r in regions/*/; do
-  echo "== $(basename "${r}") =="
-  (cd "${r}" && terraform output -raw kubeconfig_command 2>/dev/null)
-  echo
-done
+aws eks list-clusters --profile cicd --query 'clusters' --output text
 ```
 
-Com o [Client VPN conectado](client-vpn-operations.md), rode o comando impresso acima e:
+Com o [Client VPN conectado](client-vpn-operations.md):
 
 ```bash
+aws eks update-kubeconfig --name <cluster-name> --profile platform-admin
 kubectl auth can-i '*' '*'   # esperado: yes
 ```
 
