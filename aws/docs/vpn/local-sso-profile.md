@@ -33,12 +33,12 @@ aws eks list-clusters \
 Escreva o kubeconfig com o nome escolhido acima (`--alias`/`--user-alias` evitam contexto com o ARN inteiro como nome):
 
 ```bash
-CLUSTER_NAME=<nome-do-cluster-acima>
+cluster_name=<nome-do-cluster-acima>
 
 aws eks update-kubeconfig \
-  --name "${CLUSTER_NAME}" \
+  --name "${cluster_name}" \
   --profile platform-admin \
-  --alias "${CLUSTER_NAME}" \
+  --alias "${cluster_name}" \
   --user-alias platform-admin
 
 kubectl auth can-i '*' '*'   # esperado: yes
