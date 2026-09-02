@@ -1,9 +1,10 @@
-# CLAUDE.md — `bootstrap/` (Domain: Manual Bootstrap of the `network` Account)
+# CLAUDE.md — `bootstrap/` (Domain: Manual Bootstrap)
 
-> Regras e convenções do domínio de **bootstrap** — o único passo imperativo e
-> não-automatizável desta arquitetura de referência: dar à automação (Crossplane) uma
-> primeira identidade na conta vazia. Corpo genérico (placeholders `<...>`). Índice de
-> leitura em [`README.md`](README.md).
+> Regras e convenções do domínio de **bootstrap** — os passos imperativos e
+> não-automatizáveis desta arquitetura de referência: dar à automação (Crossplane) uma
+> primeira identidade na conta vazia (tópico 0, conta `network`) e criar no Identity Center o
+> permission set que vira admin do cluster (tópico 1, conta `cicd`). Corpo genérico
+> (placeholders `<...>`). Índice de leitura em [`README.md`](README.md).
 
 ## Sequência de construção (conta `network` vazia → automação com credencial)
 
