@@ -37,7 +37,7 @@ Convenção deste repo: um permission set por grupo que precisa de admin.
 - `PlatformAdmin` — para o cluster de control plane (é o caso deste roteiro).
 - Clusters de workload podem ter outros, por exemplo `UserDiscoveryDevOps`, `CloudOpsOperations`.
 
-**Policy a anexar:** o permission set precisa dar à role poder de **falar com o EKS**, não poder **dentro** do cluster. Não existe managed policy da AWS pronta para isso — as policies `AmazonEKS*` são todas para roles de serviço/nodegroup, nenhuma para um principal humano alcançar a API via CLI. Anexe uma **inline policy** customizada, escopada só a `eks:DescribeCluster` (a única action que `aws eks update-kubeconfig` chama):
+**Policy a anexar:** o permission set precisa dar à role poder de **falar com o EKS**, não poder **dentro** do cluster. Não existe managed policy da AWS pronta para isso — as policies `AmazonEKS*` são todas para roles de serviço/nodegroup, nenhuma para um principal humano alcançar a API via CLI. Anexe uma **inline policy** customizada, escopada a `eks:DescribeCluster` (a action que `aws eks update-kubeconfig` chama) e `eks:ListClusters` (descoberta de nome/região — ver [`vpn/local-sso-profile.md`](../vpn/local-sso-profile.md)); as duas são só leitura, nenhuma delas dá acesso dentro do cluster:
 
 ```json
 {
@@ -45,7 +45,7 @@ Convenção deste repo: um permission set por grupo que precisa de admin.
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": "eks:DescribeCluster",
+      "Action": ["eks:DescribeCluster", "eks:ListClusters"],
       "Resource": "*"
     }
   ]
@@ -94,13 +94,15 @@ O shape (chave = nome do permission set, valor = GroupId em UUID) está document
 
 Só funciona **depois** do `terraform apply` que cria a access entry correspondente (ver a tabela do passo ①) — antes disso, `aws eks update-kubeconfig` autentica mas `kubectl` é negado pela API do EKS.
 
+Exige o profile local do permission set — criar com [`vpn/local-sso-profile.md`](../vpn/local-sso-profile.md) se ainda não existir.
+
 ```bash
-aws sso login --profile <profile-do-permission-set-PlatformAdmin>
-aws eks update-kubeconfig --profile <profile-do-permission-set-PlatformAdmin> --region us-east-1 --name <cluster-name>
+aws sso login --profile personal   # se a sessao SSO ainda nao estiver ativa
+aws eks update-kubeconfig --profile platform-admin --region us-east-1 --name <cluster-name>
 kubectl auth can-i '*' '*'
 ```
 
-Esperado: `yes`.
+Esperado: `yes`. Verificado de ponta a ponta em 2026-09-02 (run `provision-region.yml` #33618082730, região `us-east-1`).
 
 ## Armadilhas
 

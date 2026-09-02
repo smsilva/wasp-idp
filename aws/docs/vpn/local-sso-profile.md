@@ -1,0 +1,63 @@
+# Local SSO Profile for Cluster Access
+
+Pré-requisito: bootstrap do permission set já feito — [`bootstrap/01-identity-center-eks-admin.md`](../bootstrap/01-identity-center-eks-admin.md).
+
+## Passos
+
+Acrescente ao `~/.aws/config`:
+
+```ini
+[profile platform-admin]
+sso_session = personal
+sso_account_id = 270222614208
+sso_role_name = PlatformAdmin
+region = us-east-1
+```
+
+```bash
+aws sso login --profile personal          # se a sessão SSO ainda não estiver ativa
+aws sts get-caller-identity --profile platform-admin
+```
+
+Esperado: `arn:aws:sts::270222614208:assumed-role/AWSReservedSSO_PlatformAdmin_<hash>/<usuário>`.
+
+Com o [Client VPN conectado](client-vpn-operations.md), descubra o nome do cluster na região atual:
+
+```bash
+aws eks list-clusters \
+  --profile platform-admin \
+  --query 'clusters' \
+  --output text
+```
+
+Escreva o kubeconfig com o nome escolhido acima (`--alias`/`--user-alias` evitam contexto com o ARN inteiro como nome):
+
+```bash
+cluster_name=<nome-do-cluster-acima>
+
+aws eks update-kubeconfig \
+  --name "${cluster_name?}" \
+  --alias "${cluster_name?}" \
+  --profile platform-admin \
+  --user-alias platform-admin
+
+kubectl config get-contexts
+
+kubectl auth whoami          # quem sou eu — esperado: .../AWSReservedSSO_PlatformAdmin_<hash>/<usuário>
+
+kubectl auth can-i '*' '*'   # o que posso — esperado: yes
+```
+
+O `whoami` é o que distingue os dois caminhos: `can-i` devolve `yes` tanto pelo `platform-admin` quanto pelo `cicd`, mas só o `whoami` mostra qual dos dois está em uso — e o `sessionName` nele é o usuário individual, a rastreabilidade que a role compartilhada não dá.
+
+## Informações relevantes
+
+- `sso_role_name` é o **nome do permission set**, não uma role IAM — muda junto se o permission set for outro (outro grupo, outro cluster).
+- `platform-admin` reaproveita a `sso-session personal` já autenticada — não precisa de `aws sso login --profile platform-admin` separado (mesmo mecanismo do profile `cicd`, via `source_profile = personal`).
+- `platform-admin` federa pelo grupo `platform-admins` do Identity Center (`admin_group_ids`, issue #71); o caminho antigo (`--profile cicd`, via `OrganizationAccountAccessRole`) ainda funciona até a issue #75 aposentá-lo.
+
+## Onde buscar mais
+
+- [`client-vpn-operations.md`](client-vpn-operations.md) — profile `personal`, conexão do Client VPN, tabela de profiles envolvidos.
+- [`bootstrap/01-identity-center-eks-admin.md`](../bootstrap/01-identity-center-eks-admin.md) — por que o permission set é manual, o que ele concede e o que a access entry do Terraform concede.
+- [`eks-access-entries.md`](eks-access-entries.md) — como o EKS decide quem tem acesso via access entries.
