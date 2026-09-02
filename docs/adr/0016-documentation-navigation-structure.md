@@ -22,7 +22,8 @@ estão — nenhum `git mv` de conteúdo de referência. Em vez disso:
 - Documento cobre um assunto; quando uma seção aprofunda demais um subtema, vira arquivo próprio
   referenciado de onde fazia sentido. Sem limite de linhas fixo.
 - `scripts/bin/check-doc-links` verifica link relativo quebrado em todo arquivo versionado (não só
-  `*.md`); reutilizável, não é gate de CI nesta iteração.
+  `*.md`; exclui árvores vendorizadas e `docs/superpowers/`); reutilizável, não é gate de CI nesta
+  iteração.
 
 Detalhamento completo:
 [`docs/superpowers/specs/2026-09-01-documentation-reorganization-design.md`](../superpowers/specs/2026-09-01-documentation-reorganization-design.md).

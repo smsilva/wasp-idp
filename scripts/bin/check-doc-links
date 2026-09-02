@@ -53,6 +53,6 @@ while IFS=: read -r file line rest; do
     echo "${file}:${line}: broken link to ${link}"
     broken=1
   fi
-done < <(git ls-files | xargs grep -noE '\]\([^()]+\)')
+done < <(git ls-files -z | xargs -0 grep -noE '\]\([^()]+\)' /dev/null)
 
 exit "${broken}"

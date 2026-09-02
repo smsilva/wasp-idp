@@ -1,8 +1,9 @@
 # CLAUDE.md — `bootstrap/` (Domain: Manual Bootstrap of the `network` Account)
 
-> Índice do domínio de **bootstrap** — o único passo imperativo e não-automatizável desta
-> arquitetura de referência: dar à automação (Crossplane) uma primeira identidade na conta
-> vazia. Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio de **bootstrap** — o único passo imperativo e
+> não-automatizável desta arquitetura de referência: dar à automação (Crossplane) uma
+> primeira identidade na conta vazia. Corpo genérico (placeholders `<...>`). Índice de
+> leitura em [`README.md`](README.md).
 
 ## Sequência de construção (conta `network` vazia → automação com credencial)
 

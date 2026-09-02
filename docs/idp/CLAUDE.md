@@ -1,3 +1,8 @@
+# Backstage IDP
+
+Rules and conventions for the Backstage app. Overview and reading index in
+[`README.md`](README.md).
+
 ## Branches
 
 | Branch | Purpose |

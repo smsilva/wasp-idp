@@ -1,8 +1,8 @@
 # CLAUDE.md — `tenancy/` (Domain: Tenancy & SaaS)
 
-> Índice do domínio de **Tenancy** — quanta infraestrutura é compartilhada entre clientes e onde
-> está a fronteira que impede um de alcançar o outro. Ordem de leitura = ordem dos arquivos.
-> Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio de **Tenancy** — quanta infraestrutura é compartilhada
+> entre clientes e onde está a fronteira que impede um de alcançar o outro. Corpo genérico
+> (placeholders `<...>`). Índice de leitura em [`README.md`](README.md).
 
 ## Sequência de decisão (não é sequência de provisionamento)
 

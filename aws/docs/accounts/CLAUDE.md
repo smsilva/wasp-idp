@@ -1,7 +1,8 @@
 # CLAUDE.md — `accounts/` (Domain: Accounts and Organizations)
 
-> Índice do domínio **Accounts & Organizations** — o container que hospeda a rede
-> (`../network/`). Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio **Accounts & Organizations** — o container que hospeda a
+> rede (`../network/`). Corpo genérico (placeholders `<...>`). Índice de leitura em
+> [`README.md`](README.md).
 
 ## Sequência de construção (conta vazia → contas prontas)
 

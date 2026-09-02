@@ -1,9 +1,9 @@
 # CLAUDE.md — `aws/docs/` (Reference Architecture: Hub-and-Spoke on AWS)
 
-> **Índice mestre.** Esta pasta é a documentação **evolutiva** de como montar, do zero,
+> **Regras deste domínio.** Esta pasta é a documentação **evolutiva** de como montar, do zero,
 > um ambiente AWS completo seguindo o **Well-Architected Framework** — organizada em
-> subpastas por domínio, cada uma com seu próprio índice (`CLAUDE.md`). Comece por aqui,
-> depois desça para o domínio de interesse.
+> subpastas por domínio, cada uma com seu próprio índice (`README.md`). O índice desta pasta
+> é [`README.md`](README.md); comece por lá, depois desça para o domínio de interesse.
 
 ---
 
@@ -51,7 +51,7 @@ Helm = **papel topológico** (`hub`, `spoke`). O chart `hub` provisiona na conta
 
 ## Como esta documentação é organizada
 
-- **Uma subpasta por domínio.** Cada uma tem um `CLAUDE.md` que indexa seus tópicos.
+- **Uma subpasta por domínio.** Cada uma tem um `README.md` que indexa seus tópicos.
 - **Tópicos são arquivos curtos e focados** — um assunto por arquivo, evoluível de forma
   independente.
 - **Referência + mapa para Crossplane.** Cada domínio explica primeiro o *quê/porquê*

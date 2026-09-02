@@ -1,8 +1,8 @@
 # CLAUDE.md — `observability/` (Domain: Observability)
 
-> Índice do domínio de **Observabilidade** — a camada transversal que torna todos os outros
-> domínios **visíveis**: o que trafega, o que consome recurso, o que está prestes a falhar.
-> Ordem de leitura = ordem dos arquivos. Corpo genérico (placeholders `<...>`).
+> Regras e convenções do domínio de **Observabilidade** — a camada transversal que torna
+> todos os outros domínios **visíveis**: o que trafega, o que consome recurso, o que está
+> prestes a falhar. Índice de leitura em [`README.md`](README.md). Corpo genérico (placeholders `<...>`).
 
 ## Sequência de construção (plataforma → plataforma observável)
 
