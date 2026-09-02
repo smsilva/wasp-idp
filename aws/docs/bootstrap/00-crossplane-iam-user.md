@@ -5,7 +5,7 @@ segredos).
 
 ## Pré-requisitos
 
-- Conta `network` já criada (`../accounts/03-provisioning.md`) e você com acesso
+- Conta `network` já criada ([`accounts/03-provisioning.md`](../accounts/03-provisioning.md)) e você com acesso
   **`AdministratorAccess`** **na própria conta `network`** (não a `crossplane-poc` — ela ainda
   não existe). Sem isso os passos ③ e ⑤ abaixo falham com `AccessDenied`. Há dois caminhos
   para obter esse admin, dependendo do estágio do Identity Center:
@@ -13,7 +13,7 @@ segredos).
   - **(a) Permission set SSO atribuído à conta `network`** (estado-alvo): `aws sso login --profile
     <network-profile>` e pronto — a identidade vira `assumed-role/AWSReservedSSO_*`. Requer que
     o Identity Center já tenha uma atribuição para a conta `network` (ver
-    `../accounts/04-cross-account-access.md`).
+    [`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md)).
 
   - **(b) Cross-account via `OrganizationAccountAccessRole`** (o que vale enquanto o SSO
     **ainda não foi propagado** para a conta-membro — caso comum logo após criar a conta).
@@ -29,7 +29,7 @@ segredos).
     ```
 
     O `<management-profile>` precisa de sessão SSO ativa (`aws sso login --profile
-    <management-profile>`). Detalhe do padrão em `../accounts/04-cross-account-access.md`.
+    <management-profile>`). Detalhe do padrão em [`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md).
 
 - `aws` CLI apontando para a conta `network`. **Confirme antes de qualquer passo abaixo:**
 
@@ -135,7 +135,7 @@ aws secretsmanager put-secret-value \
 
 > **Nunca** deixar a saída do passo ⑤ num arquivo (`/tmp/...env`, histórico de shell
 > persistido) — colar direto no comando acima e descartar o terminal scroll-back se
-> necessário. Ver `../../CLAUDE.md` (seção "Operação: credenciais AWS via CLI") para o
+> necessário. Ver [`CLAUDE.md`](../../CLAUDE.md) (seção "Operação: credenciais AWS via CLI") para o
 > padrão de recuperação inline usado depois, no consumo.
 
 ## ⑦ Consumir a credencial no Crossplane (k3d)
@@ -172,12 +172,12 @@ lista de inline policies, secret existente na região `us-east-1`.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** | não atende ainda — access key é degrau inevitável (ver `../security/04`); mitigado por escopo e por ser substituída por Pod Identity assim que o cluster existir |
+| **[SEC02-BP02 — Use temporary credentials](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_identities_unique.html)** | não atende ainda — access key é degrau inevitável (ver [`security/04-workload-identity.md`](../security/04-workload-identity.md)); mitigado por escopo e por ser substituída por Pod Identity assim que o cluster existir |
 | **[SEC03-BP01 — Define access requirements](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_define.html)** | `PowerUserAccess` exclui IAM; a inline policy escopa o restante a `role/poc-eks-*`, nunca `"*"` |
 | **[SEC08-BP01 — Implement secure key management](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_protect_data_rest_key_mgmt.html)** | Secrets Manager como única fonte de verdade da credencial, nunca arquivo em disco/repo |
 | **[OPS05-BP04 — Use build and deployment management systems](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_dev_integ_build_mgmt_sys.html)** | JSON da policy versionado — o `put-user-policy` é só a aplicação de um estado declarado |
 
 ## Próximo
 
-→ `../network/00-topology.md`: com a automação credenciada, a próxima peça é a rede
+→ [`network/00-topology.md`](../network/00-topology.md): com a automação credenciada, a próxima peça é a rede
 (VPC/subnets) que hospedará o cluster.
