@@ -53,6 +53,16 @@ target_account_ids = ["000000000000"]
 #   aws iam list-roles --profile cicd --query 'Roles[?contains(RoleName,`AWSReservedSSO`)].Arn'
 admin_principal_arns = ["arn:aws:iam::000000000000:role/OrganizationAccountAccessRole"]
 
+# Grupos do Identity Center com admin do cluster. Chave = nome do permission set, valor = GroupId.
+# Exige bootstrap manual (permission set + account assignment) — ver aws/docs/bootstrap/.
+# Descubra as roles ja provisionadas na conta da celula com:
+#
+#   aws iam list-roles --profile cicd --path-prefix /aws-reserved/sso.amazonaws.com/ --query 'Roles[].RoleName'
+#
+# admin_group_ids = {
+#   PlatformAdmin = "00000000-0000-0000-0000-000000000000"
+# }
+
 # BREAK-GLASS — descomente para abrir o endpoint público da API do EKS e declarar quem o alcança.
 # Ausente, o endpoint fica fechado e o caminho é o túnel do Client VPN -> TGW -> ENI do endpoint.
 # O CIDR é declarado à MÃO: não há descoberta do "/32 desta máquina".

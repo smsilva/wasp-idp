@@ -50,6 +50,22 @@ locals {
   # herdar AZs resolvidas na conta ERRADA.
   hub_availability_zones  = slice(data.aws_availability_zones.network.names, 0, 2)
   cell_availability_zones = slice(data.aws_availability_zones.cell.names, 0, 2)
+
+  # Fonte A: um ARN de var.admin_principal_arns por access entry, chaveado pelo proprio ARN — NAO
+  # mudar a chave, mudar destruiria/recriaria access entries existentes.
+  admin_principal_access_entries = { for arn in var.admin_principal_arns : arn => {
+    principal_arn = arn
+    policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    access_scope  = "cluster"
+  } }
+
+  # Fonte B: um grupo do Identity Center (var.admin_group_ids) por access entry, chaveado pelo
+  # nome do permission set. O ARN vem do data source que resolve o GroupId para a role SSO.
+  admin_group_access_entries = { for name in keys(var.admin_group_ids) : name => {
+    principal_arn = one(data.aws_iam_roles.admin_group[name].arns)
+    policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    access_scope  = "cluster"
+  } }
 }
 
 data "aws_availability_zones" "network" {
@@ -59,6 +75,25 @@ data "aws_availability_zones" "network" {
 
 data "aws_availability_zones" "cell" {
   state = "available"
+}
+
+# Resolve o GroupId do Identity Center (var.admin_group_ids) para o ARN da role SSO provisionada
+# na conta da celula. O ARN carrega o path /aws-reserved/sso.amazonaws.com/ de proposito — a doc
+# do provider AWS sugere remover esse path de roles SSO, mas isso vale para o aws-auth ConfigMap
+# legado; a doc de EKS access entries diz textualmente que o ARN de role PODE incluir path. Nao
+# "consertar" removendo o path aqui.
+data "aws_iam_roles" "admin_group" {
+  for_each = var.admin_group_ids
+
+  name_regex  = "^AWSReservedSSO_${each.key}_"
+  path_prefix = "/aws-reserved/sso.amazonaws.com/"
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.arns) == 1
+      error_message = "esperada exatamente 1 role para o permission set ${each.key} na conta da celula, encontradas ${length(self.arns)} — bootstrap do Identity Center faltando ou nome ambiguo (ver aws/docs/bootstrap/)."
+    }
+  }
 }
 
 module "hub" {
@@ -133,13 +168,9 @@ module "cell" {
   endpoint_public_access = var.endpoint_public_access
   public_access_cidrs    = var.public_access_cidrs
 
-  # access_entries converte admin_principal_arns para o formato que src/cluster espera.
-  # A politica e sempre AmazonEKSClusterAdminPolicy com escopo cluster: "admin" e admin.
-  access_entries = { for arn in var.admin_principal_arns : arn => {
-    principal_arn = arn
-    policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-    access_scope  = "cluster"
-  } }
+  # access_entries funde duas fontes de admin no formato que src/cluster espera. A politica e
+  # sempre AmazonEKSClusterAdminPolicy com escopo cluster: "admin" e admin.
+  access_entries = merge(local.admin_principal_access_entries, local.admin_group_access_entries)
 
   # O hub, por referencia. Cada linha aqui e um data source que morreu do outro lado.
   hub_vpc_id                         = module.hub.vpc_id

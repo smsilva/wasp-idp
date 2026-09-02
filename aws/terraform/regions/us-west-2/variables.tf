@@ -90,3 +90,27 @@ variable "admin_principal_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "admin_group_ids" {
+  description = <<-EOT
+    Grupos do Identity Center com acesso admin ao cluster. Chave = NOME do permission set
+    (ex.: "PlatformAdmin"), valor = GroupId (UUID) do grupo atribuido a ele.
+
+    O GroupId nao entra em nenhuma chamada AWS: o vinculo grupo -> role provisionada existe
+    so no Identity Center, e o nome da role (AWSReservedSSO_<PermissionSet>_<hash>) carrega
+    apenas o permission set. O UUID fica aqui para rastreabilidade de QUAL grupo recebeu o
+    acesso, e e validado como UUID para nao aceitar nome de grupo por engano.
+
+    Exige bootstrap manual previo (permission set + account assignment na conta cicd):
+    ver aws/docs/bootstrap/.
+
+    DEFAULT vazio: nenhum grupo tem acesso.
+  EOT
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for id in values(var.admin_group_ids) : can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", id))])
+    error_message = "admin_group_ids tem de mapear nome do permission set -> GroupId do Identity Center (UUID), nao nome de grupo."
+  }
+}
