@@ -41,12 +41,12 @@ Num multi-account, sinais espalhados por conta são inúteis na hora do incident
 
 - **Conta de observabilidade** (ou a de gerência/segurança) recebe logs e métricas das contas
   de projeto, via cross-account (CloudWatch cross-account observability, ou log destinations).
-- **Coerente com o perímetro** (`../security/`): centralizar leitura via role cross-account
+- **Coerente com o perímetro** ([`security/`](../security/)): centralizar leitura via role cross-account
   escopada (`ReadOnlyAccess`/observabilidade), não copiar credencial.
-- **CloudTrail** já é organization-wide e protegido por SCP (`../security/06`) — o modelo a
+- **CloudTrail** já é organization-wide e protegido por SCP ([`security/06-detection-and-audit.md`](../security/06-detection-and-audit.md)) — o modelo a
   seguir para os demais sinais.
 
-No PoC (conta única) a centralização ainda não se aplica; é mapa para quando `../accounts/`
+No PoC (conta única) a centralização ainda não se aplica; é mapa para quando [`accounts/`](../accounts/)
 separar contas.
 
 ## Push vs. pull, CloudWatch vs. Prometheus

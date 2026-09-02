@@ -6,7 +6,7 @@
 ## O plano vigente e o seu teto
 
 O domínio de rede aloca **um `/16` por spoke** dentro da supernet `10.0.0.0/12`, escolhido por
-`spec.vpcCidrSecondOctet` (N), com N=0 reservado para a Org (`../network/01-cidr-addressing.md`).
+`spec.vpcCidrSecondOctet` (N), com N=0 reservado para a Org ([`network/01-cidr-addressing.md`](../network/01-cidr-addressing.md)).
 Isso dá **15 blocos alocáveis**: N=1..15.
 
 Quinze parece confortável enquanto se conta *projetos*. Deixa de ser quando se conta
@@ -77,15 +77,15 @@ Alternativas quando a premissa cai:
 1. **PrivateLink por serviço** em vez de rota ampla — mantém o bloco repetido, expõe só o
    endpoint necessário. PrivateLink funciona com CIDR sobreposto.
 2. **VPC IPAM** com pools por região e por tier, em vez de octeto calculado em patch — é a
-   ferramenta certa para alocação em escala, e `../../../decisions.md` §7 já registra "IPAM cedo"
+   ferramenta certa para alocação em escala, e [`decisions.md`](../../../decisions.md) §7 já registra "IPAM cedo"
    como armadilha conhecida. **Armadilha de timing, não de mérito:** REL02-BP05 recomenda IPAM
    nominalmente e chama a tabela manual de anti-pattern. Mais importante para *esta* página, o
    **escopo** do IPAM é a primitiva do CIDR repetido — duas redes que não se falam podem ter o
    mesmo bloco sem que a ferramenta acuse conflito. Desenho completo e gatilhos de adoção em
-   [`../network/08-ipam.md`](../network/08-ipam.md).
+   [`network/08-ipam.md`](../network/08-ipam.md).
 3. **Alocação bidimensional** (N por tier/região, `/20` por tenant dentro do bloco do tier) —
    exige cálculo de IP, o que hoje demandaria `function-kcl`
-   (`../network/01-cidr-addressing.md`).
+   ([`network/01-cidr-addressing.md`](../network/01-cidr-addressing.md)).
 
 ## Decisão em aberto
 
@@ -97,7 +97,7 @@ e que a escolha entre os três caminhos depende de uma pergunta ainda não respo
 
 Enquanto isso não é decidido, não vale ampliar supernet nem migrar para IPAM — as duas são caras
 e uma delas seria desperdício. Ver a decisão registrada em
-[`CLAUDE.md`](CLAUDE.md) e em `../network/01-cidr-addressing.md`.
+[`CLAUDE.md`](CLAUDE.md) e em [`network/01-cidr-addressing.md`](../network/01-cidr-addressing.md).
 
 ## Well-Architected — porquê
 
@@ -110,4 +110,4 @@ e uma delas seria desperdício. Ver a decisão registrada em
 ## Próximo
 
 → Volta ao índice do domínio: [`CLAUDE.md`](CLAUDE.md). Para o plano de endereçamento em si,
-`../network/01-cidr-addressing.md`.
+[`network/01-cidr-addressing.md`](../network/01-cidr-addressing.md).

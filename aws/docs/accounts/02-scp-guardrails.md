@@ -57,11 +57,11 @@ aws organizations list-roots \
 > OU por variação. Enquanto todas as contas de workload compartilham a mesma lista de regiões
 > aprovadas, uma SCP única resolve. Quando houver clientes com exigências de jurisdição
 > diferentes, a lista deixa de ser global e as OUs de workload precisam ser particionadas por
-> **perfil de residência de dados** — desenho em `../tenancy/02-ou-per-geography.md`.
+> **perfil de residência de dados** — desenho em [`tenancy/02-ou-per-geography.md`](../tenancy/02-ou-per-geography.md).
 >
 > Essa mesma SCP é também a **primeira linha de contenção regional** para a automação: um control
 > plane regional que receba um XR com a região errada é barrado pela SCP da OU da conta-alvo,
-> antes de qualquer condição na role (`../security/08-control-plane-identity.md`).
+> antes de qualquer condição na role ([`security/08-control-plane-identity.md`](../security/08-control-plane-identity.md)).
 
 ## Exemplo de SCP — restringir região
 

@@ -90,12 +90,12 @@ Root
     in a **production environment**"*. Não existe `cicd-nonprod`: o Control Plane é produção
     mesmo quando provisiona ambientes de teste.
   - É onde vive a identidade mais privilegiada da Org depois da management
-    (`../security/08-control-plane-identity.md`), por isso SCP própria.
+    ([`security/08-control-plane-identity.md`](../security/08-control-plane-identity.md)), por isso SCP própria.
   - Classificada como *Advanced OU* no whitepaper — opcional, mas é a definição exata do papel.
   - **O nome `cicd` é convenção deste repo.** O whitepaper **não** prescreve nome de conta para
     esta OU — usa descrições (*"production deployment accounts"*, *"your CI/CD accounts"*).
     Escolhido por proximidade com esse vocabulário e para não colidir com `control-plane`, que
-    nomeia o **cluster** (ver `../../CLAUDE.md`, seção de vocabulário).
+    nomeia o **cluster** (ver [`CLAUDE.md`](../../CLAUDE.md), seção de vocabulário).
 - **OU Workloads**: onde os projetos vivem, **separada por SDLC stage** (`NonProd` e
   `Production`) — é a recomendação do whitepaper *Organizing Your AWS Environment Using
   Multiple Accounts*: uma conta por workload **e por ambiente**. Guardrails de baseline
@@ -116,7 +116,7 @@ propriedade da árvore.
 O agrupamento correto é por **perfil de residência de dados** (`Tenants-US`, `Tenants-EU`,
 `Tenants-BR`), não por cliente — agrupar por cliente faria o número de OUs crescer com as
 combinações de regiões vendidas, não com a base. Desenho completo, incluindo a armadilha dos
-serviços globais na SCP de região, em `../tenancy/02-ou-per-geography.md`.
+serviços globais na SCP de região, em [`tenancy/02-ou-per-geography.md`](../tenancy/02-ou-per-geography.md).
 
 ### Por que uma conta por ambiente, e não um ambiente por VPC
 

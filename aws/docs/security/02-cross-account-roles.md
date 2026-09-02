@@ -5,7 +5,7 @@
 ## O problema: N contas que precisam agir umas nas outras
 
 Num hub-and-spoke multi-account, ações cruzam fronteiras de conta o tempo todo: o Hub
-compartilha o TGW com a conta de projeto (`../network/03`), a automação de uma conta cria um
+compartilha o TGW com a conta de projeto ([`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md)), a automação de uma conta cria um
 attachment que a conta `network` precisa aceitar, uma pipeline central faz deploy em contas de
 workload. O antipadrão é **criar um IAM user em cada conta de destino** — N credenciais de
 longa duração a gerenciar e vazar. O padrão AWS é **uma role assumível**.
@@ -74,7 +74,7 @@ correto daquela relação.
 | Projeto → Hub | `<prefix>-hub-share` (Hub) | automação da conta de projeto | criar RAM share / aceitar attachment do TGW |
 | Hub → projeto (raro) | `<prefix>-hub-reader` (projeto) | automação do Hub | leitura de estado do spoke, se necessário |
 
-O provisionamento do spoke (descentralizado — `../network/03`) usa a role do lado Hub para
+O provisionamento do spoke (descentralizado — [`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md)) usa a role do lado Hub para
 criar o `ResourceShare` e o attachment accepter na conta `network`, assumindo-a a partir da conta
 de projeto. Sem IAM user duplicado no Hub.
 
@@ -82,8 +82,8 @@ de projeto. Sem IAM user duplicado no Hub.
 
 O PoC roda tudo numa conta só (`<account-id>`) — hub e spoke coincidem, então `AssumeRole`
 cross-account **não é exercido ainda** e o código o suprime automaticamente (RAM share e
-accepter viram no-op quando hub e spoke são a mesma conta — `../network/03`). As roles
-cross-account entram quando o template de account (`../accounts/`) separar Hub e projeto em
+accepter viram no-op quando hub e spoke são a mesma conta — [`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md)). As roles
+cross-account entram quando o template de account ([`accounts/`](../accounts/)) separar Hub e projeto em
 contas distintas. Documentar aqui é o mapa, não o estado atual.
 
 ## Well-Architected — porquê

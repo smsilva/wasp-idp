@@ -12,7 +12,7 @@ credencial AWS funciona mas o kubectl diz que não tenho permissão":
 2. AUTORIZAÇÃO K8s   — o que essa identidade pode no cluster? (RBAC)  → Access Entry → grupo/role K8s
 ```
 
-A primeira porta é IAM (`../security/`); a segunda é **RBAC do Kubernetes**, e o que liga uma à
+A primeira porta é IAM ([`security/`](../security/)); a segunda é **RBAC do Kubernetes**, e o que liga uma à
 outra no EKS moderno é a **Access Entry**.
 
 ## `authenticationMode: API` — Access Entries, não aws-auth
@@ -71,7 +71,7 @@ K8s), ele precisa de um **kubeconfig com RBAC**:
   aplicar `Release`/`Object` no EKS remoto.
 
 É o mecanismo que faz um Crossplane **fora** da AWS (no Control Plane (k3d)) gerenciar o **interior** de um
-cluster EKS — coerente com as roles cross-boundary de `../security/`.
+cluster EKS — coerente com as roles cross-boundary de [`security/`](../security/).
 
 ## Well-Architected — porquê
 

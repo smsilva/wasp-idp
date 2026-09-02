@@ -37,7 +37,7 @@ O hub-and-spoke tem métricas próprias, em CloudWatch, que alimentam os alarmes
 | **Transit Gateway** | `BytesIn/Out`, `PacketDropCount*` (blackhole/no-route) | attachment sem rota → isolamento quebrado ou tráfego caindo |
 | **NAT Gateway** | `BytesOutToDestination`, `ErrorPortAllocation` | NAT saturando (custo e falha de saída) |
 
-Essas métricas **só existem quando TGW/VPN existirem** (`../network/07`, Gap 2) — hoje são mapa;
+Essas métricas **só existem quando TGW/VPN existirem** ([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), Gap 2) — hoje são mapa;
 o que já dá para medir é o NAT do spoke atual e o cluster.
 
 ## Prometheus vs. CloudWatch — quando cada um

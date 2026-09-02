@@ -37,12 +37,12 @@ Identity Center, não de uma credencial IAM de longa duração — é o padrão 
 
 Para automação (o Crossplane hospedado no control plane k3d, por exemplo), o padrão é diferente:
 **IAM user dedicado com policy escopada**, não SSO (SSO é para humanos com sessão
-interativa). Ver `../../CLAUDE.md` para o padrão adotado nesta PoC — `crossplane-poc` é
+interativa). Ver [`CLAUDE.md`](../../CLAUDE.md) para o padrão adotado nesta PoC — `crossplane-poc` é
 esse exemplo concreto, incluindo o problema de bootstrap (a própria automação não pode se
 auto-conceder IAM).
 
 **Cross-account para automação:** quando a automação de uma conta precisa agir em outra
-(ex.: o Hub compartilhando o TGW via RAM com a conta de projeto — `../network/03-transit-gateway-isolation.md`),
+(ex.: o Hub compartilhando o TGW via RAM com a conta de projeto — [`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md)),
 o padrão é **IAM Role assumível cross-account** (`sts:AssumeRole` com trust policy
 escopada à conta de origem), não um segundo IAM user duplicado na conta de destino.
 

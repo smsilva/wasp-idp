@@ -23,7 +23,7 @@ Contra as métricas de `02`, os alarmes que valem a pena:
 | **NAT indisponível** | queda abrupta de `BytesOut` num spoke ativo | perda de saída à internet do spoke |
 
 Contexto: as métricas de VPN/TGW **só existem quando a rede de conectividade existir**
-(`../network/07`, Gap 2). Hoje são mapa; o NAT do spoke atual já é alarmável.
+([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), Gap 2). Hoje são mapa; o NAT do spoke atual já é alarmável.
 
 ## Severidade — o que acorda alguém
 
@@ -38,7 +38,7 @@ INFO (só registra)   flaps isolados que se recuperam sozinhos (BGP reconvergind
 ```
 
 Regra: **HA degradada é AVISO, HA perdida é CRÍTICO.** Um túnel caído com o outro de pé não é
-emergência (o BGP/ECMP — `../network/04` — já redistribuiu); os **dois** caídos é.
+emergência (o BGP/ECMP — [`network/04-vpn-access.md`](../network/04-vpn-access.md) — já redistribuiu); os **dois** caídos é.
 
 ## Do alarme à notificação
 
@@ -73,9 +73,9 @@ O alarme é o gatilho; os logs contam a história.
 Além da conectividade, o baseline inclui:
 
 - **Compute:** node `NotReady`, pod `CrashLoopBackOff` recorrente (o sintoma da race de Pod
-  Identity — `../compute/02`), memória de node perto do limite.
-- **DNS/cert:** falha de renovação de certificado (o desafio DNS-01 eterno — `../dns/04`),
-  spike anômalo de query (via query logging — `../dns/05`).
+  Identity — [`compute/02-addons-and-identity.md`](../compute/02-addons-and-identity.md)), memória de node perto do limite.
+- **DNS/cert:** falha de renovação de certificado (o desafio DNS-01 eterno — [`dns/04-automation-and-tls.md`](../dns/04-automation-and-tls.md)),
+  spike anômalo de query (via query logging — [`dns/05-security.md`](../dns/05-security.md)).
 
 ## Well-Architected — porquê
 

@@ -8,8 +8,8 @@ Um **cluster EKS pronto para receber deploy** dentro da conta e da rede de um pr
 plane, node groups, os add-ons que dão ao cluster identidade (Pod Identity), storage (EBS CSI),
 DNS (external-dns), ingress (LB Controller + Istio) e TLS (cert-manager), o modelo de acesso
 (RBAC via Access Entries) e a camada de entrega contínua (ArgoCD/GitOps). Cada cluster **é uma
-spoke** — sua VPC (`../network/`) attacha ao Hub, seu DNS (`../dns/`) é uma subzona delegada,
-sua identidade (`../security/`) usa Pod Identity.
+spoke** — sua VPC ([`network/`](../network/)) attacha ao Hub, seu DNS ([`dns/`](../dns/)) é uma subzona delegada,
+sua identidade ([`security/`](../security/)) usa Pod Identity.
 
 Este domínio é onde os anteriores convergem: rede, DNS, contas e segurança existem para que um
 cluster suba de forma reprodutível e isolada. É também o mais **maduro no PoC** — a maior parte

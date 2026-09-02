@@ -7,7 +7,7 @@
 Sair de uma **conta AWS vazia** (a primeira que você loga) e chegar a uma **AWS Organization**
 com a estrutura de contas que o hub-and-spoke exige: uma conta de gerência que só administra,
 uma **Hub/Connectivity Account** dedicada, e **uma conta por projeto** — cada uma podendo
-hospedar 1+ spokes (`../network/00-topology.md`).
+hospedar 1+ spokes ([`network/00-topology.md`](../network/00-topology.md)).
 
 ## Tópicos
 

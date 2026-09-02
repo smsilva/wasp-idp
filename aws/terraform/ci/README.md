@@ -161,7 +161,7 @@ meio. Roda `terraform force-unlock -force <lock_id>` e em seguida um `plan` para
 
 **Ler o plan é obrigatório**, e o workflow emite um `::notice::` dizendo isso: um plan propondo
 **criar** recurso que deveria existir significa que o apply morto deixou recurso fora do state — e
-aí a recuperação é `terraform import`, não `force-unlock`. Ver `../CLAUDE.md`, seção "State".
+aí a recuperação é `terraform import`, não `force-unlock`. Ver [`CLAUDE.md`](../CLAUDE.md), seção "State".
 
 > **Nunca foi executado, e tem dois defeitos conhecidos** — ver "Limitações conhecidas", abaixo.
 
@@ -293,7 +293,7 @@ sendo um valor sintético, e a asserção prova a referência sem depender do ov
 | Step novo no `aws/setup` (repo `wasp-gitops`) | A lista numerada dos quatro steps |
 | Workflow novo, ou mudança na flag que um script recebe | A seção do workflow **e** o exemplo de `gh` |
 | Recurso novo nesta raiz, ou mudança de trust/permissão | Passo a passo, e a seção de permissões |
-| Defeito encontrado e corrigido | Sai de "Limitações conhecidas"; a narrativa vai para `../../docs/lessons-learned/` |
+| Defeito encontrado e corrigido | Sai de "Limitações conhecidas"; a narrativa vai para [`docs/lessons-learned/`](../../docs/lessons-learned/) |
 
 Este é o documento **único** da automação — os dois lados moram aqui de propósito. A tentativa de
 separar em `terraform/github/README.md` durou um PR: ninguém lembra que existe um segundo arquivo,

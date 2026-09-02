@@ -14,11 +14,11 @@ Um cluster EKS tem duas metades com donos e ciclos de vida distintos:
 O control plane é o **gargalo de tempo** (~12-15 min para provisionar) e o custo fixo; o data
 plane é o que escala com a carga. Essa separação explica por que "recriar o cluster" custa
 caro em tempo (o control plane não tem atalho) — e por que a regra do PoC é **não destruir sem
-autorização** (`../../CLAUDE.md`).
+autorização** ([`CLAUDE.md`](../../CLAUDE.md)).
 
 ## Por que cada cluster é uma spoke
 
-Na topologia hub-and-spoke (`../network/00`), o cluster não é uma ilha — ele **é** uma spoke:
+Na topologia hub-and-spoke ([`network/00-topology.md`](../network/00-topology.md)), o cluster não é uma ilha — ele **é** uma spoke:
 
 ```text
 Hub (Connectivity Account)                    Conta do projeto
@@ -27,11 +27,11 @@ Hub (Connectivity Account)                    Conta do projeto
   VPN de acesso                            subzona DNS delegada (*.<spoke>.<root>)
 ```
 
-- **A VPC do cluster** é a VPC da spoke (`../network/02`) — subnets públicas (LB) e privadas
+- **A VPC do cluster** é a VPC da spoke ([`network/02-vpc-subnets.md`](../network/02-vpc-subnets.md)) — subnets públicas (LB) e privadas
   (nodes), attachada ao TGW do Hub quando o multi-account estiver de pé.
-- **O DNS do cluster** é a subzona delegada (`../dns/`) — o wildcard aponta ao NLB do cluster.
-- **A identidade do cluster** usa Pod Identity com roles escopadas (`../security/04`).
-- **O acesso** entra pela VPN que fecha no Hub (`../network/04`), nunca por exposição direta
+- **O DNS do cluster** é a subzona delegada ([`dns/`](../dns/)) — o wildcard aponta ao NLB do cluster.
+- **A identidade do cluster** usa Pod Identity com roles escopadas ([`security/04-workload-identity.md`](../security/04-workload-identity.md)).
+- **O acesso** entra pela VPN que fecha no Hub ([`network/04-vpn-access.md`](../network/04-vpn-access.md)), nunca por exposição direta
   do control plane.
 
 Modelar o cluster como spoke é o que dá **isolamento**: um cluster por conta/VPC/subzona, sem
@@ -54,7 +54,7 @@ Duas escolhas na criação definem a postura do cluster:
 - **Load balancers** — nas subnets **públicas** (internet-facing) ou privadas (internal),
   descobertas por tag (`kubernetes.io/role/elb`) — tópico 4.
 
-O plano de subnets vem de `../network/02`; o cluster só as **referencia** (por ID hoje, por
+O plano de subnets vem de [`network/02-vpc-subnets.md`](../network/02-vpc-subnets.md); o cluster só as **referencia** (por ID hoje, por
 `networkRef.name` no alvo — tópico 6).
 
 ## Well-Architected — porquê

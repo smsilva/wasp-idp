@@ -20,20 +20,20 @@
 ## Estado atual vs. alvo (resumo)
 
 - **Hoje no PoC:** um cluster EKS completo sobe via **chart faseado**
-  (`../../eks/chart/templates/`, fases 10→106) orquestrado pelo `provision-eks` — control
+  ([`eks/chart/templates/`](../../eks/chart/templates/), fases 10→106) orquestrado pelo `provision-eks` — control
   plane, node group, todos os add-ons com Pod Identity, RBAC via Access Entries, Istio+NLB,
   cert-manager, ArgoCD. Funciona fim-a-fim (validado end-to-end).
 - **Alvo desta referência:** o `Cluster` vira o **CR de topo** (sem `Environment`
   orquestrador), com `nodeGroups[]` como lista, compondo a `Network` (por nome) e o `DnsZone`
   (filho) — uma abstração componível, não uma sequência de fases.
 - **Gap central:** migrar do modelo faseado (imperativo-orquestrado) para o `Cluster`
-  componível é o Gap 4 de `../network/07` — tópico 6.
+  componível é o Gap 4 de [`network/07-crossplane-map.md`](../network/07-crossplane-map.md) — tópico 6.
 
 ## Relação com o resto do repo
 
-- **Consome** `../network/` (VPC/subnets da spoke), `../dns/` (subzona + wildcard),
-  `../accounts/` (a conta do projeto), `../security/` (Pod Identity, roles escopadas).
-- **Código:** `../../eks/chart/` (modelo faseado atual) e `../../eks/resources/` (abstrações
+- **Consome** [`network/`](../network/) (VPC/subnets da spoke), [`dns/`](../dns/) (subzona + wildcard),
+  [`accounts/`](../accounts/) (a conta do projeto), [`security/`](../security/) (Pod Identity, roles escopadas).
+- **Código:** [`eks/chart/`](../../eks/chart/) (modelo faseado atual) e [`eks/resources/`](../../eks/resources/) (abstrações
   `cluster/`, `argocd/`, alvo).
-- Regra herdada do PoC (`../../CLAUDE.md`): **nunca destruir o cluster sem autorização
+- Regra herdada do PoC ([`CLAUDE.md`](../../CLAUDE.md)): **nunca destruir o cluster sem autorização
   explícita** (EKS leva ~28-30 min p/ recriar) — vale para toda operação neste domínio.

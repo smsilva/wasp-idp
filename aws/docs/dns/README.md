@@ -6,12 +6,12 @@
 
 Um **nome estável e resolvível** para cada app de cada cluster, sem tocar na zona pai a cada
 deploy, e uma **resolução privada** para nomes internos que não devem sair da VPC. Onde
-`../network/05-dns.md` trata DNS como um **concern de rede** (a subzona por spoke dentro da
+[`network/05-dns.md`](../network/05-dns.md) trata DNS como um **concern de rede** (a subzona por spoke dentro da
 topologia), este domínio o trata como **peça de primeira classe**: a mecânica de delegação, o
 contrato de registros (alias/apex/wildcard), a resolução cross-account, a automação
 (external-dns) e a emissão de certificados (cert-manager/ACM) que depende do DNS.
 
-Não repete a topologia de subzona por spoke (isso é `../network/05`); parte dali e aprofunda o
+Não repete a topologia de subzona por spoke (isso é [`network/05-dns.md`](../network/05-dns.md)); parte dali e aprofunda o
 *como* e os gotchas reais de operar Route53 numa zona pai **compartilhada**.
 
 ## Tópicos

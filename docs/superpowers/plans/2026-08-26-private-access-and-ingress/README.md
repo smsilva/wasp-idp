@@ -1,7 +1,7 @@
 # Private access and centralized ingress
 
 Plano iterativo: cada passo é testável isolado, e as decisões ainda abertas caem o mais tarde
-possível. Substitui o desenho de `../2026-08-25-private-ingress-via-privatelink.md`, que continua
+possível. Substitui o desenho de [`specs/2026-08-25-private-ingress-via-privatelink.md`](../../specs/2026-08-25-private-ingress-via-privatelink.md), que continua
 válido na fundamentação (citações da AWS) mas cuja escolha PrivateLink-vs-TGW foi reaberta.
 
 **Um arquivo por fase** — ler só a do trabalho corrente. Este arquivo tem o que atravessa todas.

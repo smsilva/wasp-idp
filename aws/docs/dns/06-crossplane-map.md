@@ -62,7 +62,7 @@ Do `control-plane-config.yaml` (EnvironmentConfig na raiz de `resources/`, plane
 | Wildcard A-alias→NLB | ✅ criado (`canonicalNlbZoneId` `us-east-1`) | idem, `nlbHostname` opcional |
 | external-dns | ✅ roda escopado (`--zone-id-filter`/`--txt-owner-id`, `upsert-only`) | mantém — camada por-app, complementar ao wildcard |
 | cert-manager DNS-01 | ✅ issuer **por subzona** (fix do TXT na zona errada) | mantém; policy IAM inclui ARN da subzona |
-| **`DnsZone` como XR** | ❌ **não existe** — Gap 3 do `../network/07` | escrever o XRD + Composition |
+| **`DnsZone` como XR** | ❌ **não existe** — Gap 3 do [`network/07-crossplane-map.md`](../network/07-crossplane-map.md) | escrever o XRD + Composition |
 | Grupo de API | `platform.example.com` (a migrar) | `aws.example.com` (Network/Cluster/DnsZone) |
 
 ## Ordem de implementação sugerida
@@ -75,6 +75,6 @@ Do `control-plane-config.yaml` (EnvironmentConfig na raiz de `resources/`, plane
 4. Manter external-dns e o issuer por subzona como estão (complementares).
 5. Validar no Control Plane (k3d): dry-run → real (reusar a subzona/zona pai existentes).
 
-> Depende do refactor maior de `../network/07` (Cluster vira topo, `control-plane-config.yaml`, grupo de
+> Depende do refactor maior de [`network/07-crossplane-map.md`](../network/07-crossplane-map.md) (Cluster vira topo, `control-plane-config.yaml`, grupo de
 > API novo). O `DnsZone` é o Gap 3 daquele mapa — este domínio é a especificação de DNS que o
 > alimenta.

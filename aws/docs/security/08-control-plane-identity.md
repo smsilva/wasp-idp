@@ -7,7 +7,7 @@
 ## A pergunta
 
 Com **control planes regionais** — cada um uma spoke privilegiada rodando EKS + Crossplane, que
-provisiona as spokes de workload da sua região (`../../../decisions.md` §2) — quantas identidades
+provisiona as spokes de workload da sua região ([`decisions.md`](../../../decisions.md) §2) — quantas identidades
 IAM existem? Uma por control plane? Uma por cluster gerenciado? Uma por instância de Crossplane?
 
 Respostas curtas, antes do detalhe:
@@ -30,7 +30,7 @@ replicados em N clusters — o problema cresce linearmente e cada cópia é uma 
 
 Substituto: **EKS Pod Identity** (ou IRSA). O pod do provider recebe credencial temporária via
 token do próprio cluster; não existe segredo em lugar nenhum. Já é o alvo registrado em
-`../../../decisions.md` §7, com o trust criado pelo Terraform junto com a spoke.
+[`decisions.md`](../../../decisions.md) §7, com o trust criado pelo Terraform junto com a spoke.
 
 ## A granularidade: quem detém a credencial
 
@@ -69,7 +69,7 @@ crossplane-cp-use1 (network) ─┐
 crossplane-cp-euw1 (network) ─┘
 ```
 
-Ver `../accounts/00-strategy.md`, seção "Conta não tem região".
+Ver [`accounts/00-strategy.md`](../accounts/00-strategy.md), seção "Conta não tem região".
 
 ## O problema que isso cria: contenção regional
 
@@ -86,8 +86,8 @@ Três controles, em ordem de preferência:
 Crossplane — inclusive para um humano com `AdministratorAccess` naquela conta. É preventivo e não
 depende de o provider suportar nada.
 
-Já existe como guardrail baseline (`../accounts/02-scp-guardrails.md`), e é o eixo pelo qual as
-OUs de tenant devem ser particionadas (`../tenancy/02-ou-per-geography.md`). **Isto você deveria
+Já existe como guardrail baseline ([`accounts/02-scp-guardrails.md`](../accounts/02-scp-guardrails.md)), e é o eixo pelo qual as
+OUs de tenant devem ser particionadas ([`tenancy/02-ou-per-geography.md`](../tenancy/02-ou-per-geography.md)). **Isto você deveria
 ter de qualquer forma**, independentemente da decisão sobre roles.
 
 ### 2. Session tag na cadeia de assume
@@ -117,7 +117,7 @@ correta se (2) não funcionar.
 ação exige correlacionar horário de log com janela de deploy — atribuição por inferência, não por
 identidade. Com o nome regional, o `sts:AssumeRole` no CloudTrail já responde.
 
-Vale a regra de renomeação já registrada em `../../CLAUDE.md`: **IAM não renomeia in-place** —
+Vale a regra de renomeação já registrada em [`CLAUDE.md`](../../CLAUDE.md): **IAM não renomeia in-place** —
 trocar nome de role é criar nova, validar o assume com a credencial real do consumidor, e só então
 apagar a antiga.
 

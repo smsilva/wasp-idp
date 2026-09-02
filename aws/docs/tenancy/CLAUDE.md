@@ -26,12 +26,12 @@ passo restringe o seguinte:
 
 ## Relação com o resto do repo
 
-- **Consome** `../accounts/` (estrutura de OU, provisionamento de conta, SCP baseline) e
-  `../network/01-cidr-addressing.md` (o plano cujo teto este domínio calcula).
-- **Serve** `../security/08-control-plane-identity.md` (a SCP de OU é a primeira linha de
-  contenção regional) e o desenho de plataforma em `../../../decisions.md`.
+- **Consome** [`accounts/`](../accounts/) (estrutura de OU, provisionamento de conta, SCP baseline) e
+  [`network/01-cidr-addressing.md`](../network/01-cidr-addressing.md) (o plano cujo teto este domínio calcula).
+- **Serve** [`security/08-control-plane-identity.md`](../security/08-control-plane-identity.md) (a SCP de OU é a primeira linha de
+  contenção regional) e o desenho de plataforma em [`decisions.md`](../../../decisions.md).
 - **Vocabulário:** "hub" aqui é sempre **papel topológico** de rede, nunca nome de conta nem hub
-  de identidade — a distinção que `../CLAUDE.md` marca como a confusão mais cara da doc.
+  de identidade — a distinção que [`CLAUDE.md`](../CLAUDE.md) marca como a confusão mais cara da doc.
 - **Convergência com `decisions.md` §3:** os dois descrevem o mesmo desenho com vocabulários
   diferentes (silo/pool/bridge vs. célula/densidade). A tabela de reconciliação está em
   [`00-models.md`](00-models.md) — nenhum contradiz o outro.
@@ -40,11 +40,11 @@ passo restringe o seguinte:
 
 - **Hoje:** nada de tenancy implementado. Não há tenant, tier, OU de geografia nem conta de
   cliente. A Organization tem `Workloads/NonProd` e `Workloads/Production` genéricas
-  (`../accounts/CLAUDE.md`).
+  ([`accounts/CLAUDE.md`](../accounts/CLAUDE.md)).
 - **Alvo:** tiers definidos com modelo por tier; OUs por perfil de residência com SCP de região;
   conta por tenant só nos tiers que a economia sustenta; alocação de CIDR que não colapse em 15.
 - **Este domínio é o mais adiantado em relação ao código** — é desenho, não retrato. Diferente de
-  `../accounts/`, nada aqui foi aplicado numa conta real.
+  [`accounts/`](../accounts/), nada aqui foi aplicado numa conta real.
 
 ## Decisões em aberto
 
@@ -53,7 +53,7 @@ passo restringe o seguinte:
 | 1 | **Quais tiers o produto oferece** e qual modelo (pool/bridge/silo) em cada | Decisão comercial, não técnica | Bloqueia 2–4 abaixo; toda estimativa de custo por tenant fica sem base |
 | 2 | **Spoke de tenant participa do roteamento central?** | Depende de como o control plane alcança a spoke (API pública vs. rede privada) | Define se CIDR de tenant é único ou repetido — a única decisão irreversível da cadeia (`03-cidr.md`) |
 | 3 | **Perfis de residência oferecidos** (quais jurisdições) | Depende do mercado-alvo | Definir depois vira reorganização da árvore de OUs, com janela sem SCP durante o move |
-| 4 | **IPAM agora ou octeto calculado** | Só vale se 2 for "único"; hoje seria trabalho possivelmente descartável | `decisions.md` §7 registra "IPAM cedo" como armadilha — de **timing**, não de mérito: [REL02-BP05](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_non_overlap_ip.html) recomenda IPAM e chama tabela manual de anti-pattern. **Se 2 for "repetido", o IPAM vira o caminho natural** — escopo é a primitiva do CIDR repetido. Desenho e gatilhos: `../network/08-ipam.md` |
+| 4 | **IPAM agora ou octeto calculado** | Só vale se 2 for "único"; hoje seria trabalho possivelmente descartável | `decisions.md` §7 registra "IPAM cedo" como armadilha — de **timing**, não de mérito: [REL02-BP05](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_planning_network_topology_non_overlap_ip.html) recomenda IPAM e chama tabela manual de anti-pattern. **Se 2 for "repetido", o IPAM vira o caminho natural** — escopo é a primitiva do CIDR repetido. Desenho e gatilhos: [`network/08-ipam.md`](../network/08-ipam.md) |
 | 5 | **`04-crossplane-map.md` deste domínio** — não escrito de propósito | Depende do schema do registry de tenants (`decisions.md` §11, decisão 1) | Nenhum hoje; o mapa sem o registry seria especulação. **Ausência é deliberada, não esquecimento** |
 
 ## Fontes
@@ -64,4 +64,4 @@ passo restringe o seguinte:
   — os três modelos e suas definições.
 - [Tenant Isolation](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/tenant-isolation.html)
   — por que cruzar a fronteira de tenant é evento potencialmente irrecuperável.
-- `../../../decisions.md` §3 — o mesmo modelo pela lente de célula/densidade.
+- [`decisions.md`](../../../decisions.md) §3 — o mesmo modelo pela lente de célula/densidade.

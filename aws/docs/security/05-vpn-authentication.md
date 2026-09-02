@@ -4,7 +4,7 @@
 
 ## O recorte deste tópico
 
-`../network/04-vpn-access.md` cobre a **topologia** da VPN (fecha no Hub, BGP/ECMP, túneis
+[`network/04-vpn-access.md`](../network/04-vpn-access.md) cobre a **topologia** da VPN (fecha no Hub, BGP/ECMP, túneis
 IPSec). Este cobre a **identidade**: quem/o quê autentica em cada tipo de VPN, e o ciclo de
 vida da credencial. As duas se complementam — topologia decide por onde passa; autenticação
 decide quem entra.
@@ -30,7 +30,7 @@ tópico 0 (federar no Identity Center, não criar usuário local por túnel).
 - **Confidencialidade isolada do PSK não é o vetor crítico**: o túnel já usa IKEv2 + AES256, e
   o PSK só autentica o estabelecimento. O risco real é quem **lê o secret** — daí escopar o
   acesso, não cifrar o PSK além do que a AWS já faz.
-- Sem rotação automática nesta fase (débito conhecido — `../network/04`).
+- Sem rotação automática nesta fase (débito conhecido — [`network/04-vpn-access.md`](../network/04-vpn-access.md)).
 
 ## Client VPN: certificado mútuo + federação (futuro)
 
@@ -49,15 +49,15 @@ APIM/Front Door), o Client VPN Endpoint fecha no Hub e autentica em duas camadas
 - Revogar acesso = revogar no IdP (SSO) + CRL do certificado — sem tocar em IAM da conta.
 
 Mesma regra do site-to-site: **fecha no Hub**, nunca no spoke, e a identidade humana vem do
-Identity Center (`../accounts/04`), não de credencial local.
+Identity Center ([`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md)), não de credencial local.
 
 ## Onde a auth de VPN toca os outros domínios
 
 | Depende de | Para |
 |---|---|
-| `../accounts/04` (Identity Center) | federar o usuário do Client VPN — sem usuário local |
+| [`accounts/04-cross-account-access.md`](../accounts/04-cross-account-access.md) (Identity Center) | federar o usuário do Client VPN — sem usuário local |
 | tópico 4 (Secrets Manager/RBAC) | guardar o PSK e o material de certificado |
-| `../network/04` | a topologia que essa credencial autentica (túnel, Hub, BGP) |
+| [`network/04-vpn-access.md`](../network/04-vpn-access.md) | a topologia que essa credencial autentica (túnel, Hub, BGP) |
 
 ## Well-Architected — porquê
 

@@ -14,7 +14,7 @@ privilégio real (o inventário de ações de fato usadas), fechando o ciclo do 
 
 | Fonte | Responde | Sempre ligada? |
 |---|---|---|
-| **CloudTrail** | "o que foi chamado, por quem, quando" — trilha de toda API call | **sim** (protegido por SCP — `../accounts/02`) |
+| **CloudTrail** | "o que foi chamado, por quem, quando" — trilha de toda API call | **sim** (protegido por SCP — [`accounts/02-scp-guardrails.md`](../accounts/02-scp-guardrails.md)) |
 | **IAM Access Analyzer** | "que recurso é acessível de fora da minha zona de confiança" | sim, por conta/Organization |
 | **GuardDuty** | "há comportamento anômalo/malicioso" (threat intel, ML) | sim, recomendado |
 | **Credential/Access reports** | "que credenciais existem, quais nunca foram usadas" | sob demanda |
@@ -23,7 +23,7 @@ privilégio real (o inventário de ações de fato usadas), fechando o ciclo do 
 
 - Registra **cada** chamada de API (quem, qual ação, qual recurso, de qual IP, com sucesso ou
   `AccessDenied`). É a base forense e a resposta a "quem fez X?".
-- Protegido por SCP na Root (`ProtectCloudTrail` — `../accounts/02`): nem um admin de
+- Protegido por SCP na Root (`ProtectCloudTrail` — [`accounts/02-scp-guardrails.md`](../accounts/02-scp-guardrails.md)): nem um admin de
   conta-membro desabilita a trilha. Prevenção protegendo a detecção.
 - **Uso para menor privilégio:** filtrar os eventos de uma identidade por um período mostra as
   ações que ela **de fato** usou → é o inventário para enxugar `PowerUserAccess` numa
@@ -41,7 +41,7 @@ privilégio real (o inventário de ações de fato usadas), fechando o ciclo do 
 
 ## GuardDuty — anomalia e ameaça
 
-Detecção contínua baseada em CloudTrail, VPC Flow Logs (`../network/06`) e DNS logs, com threat
+Detecção contínua baseada em CloudTrail, VPC Flow Logs ([`network/06-security.md`](../network/06-security.md)) e DNS logs, com threat
 intel e ML: uso de credencial de uma região/IP incomum, exfiltração, reconhecimento. Não
 substitui os anteriores — é a camada de **comportamento** sobre a de **configuração**.
 
@@ -72,7 +72,7 @@ ou uma decisão consciente de aceitar o risco.
 
 | Best practice | Como atende |
 |---|---|
-| **[SEC04-BP01 — Configure service and application logging](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** | CloudTrail + VPC Flow Logs (`../network/06`) sempre ligados |
+| **[SEC04-BP01 — Configure service and application logging](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** | CloudTrail + VPC Flow Logs ([`network/06-security.md`](../network/06-security.md)) sempre ligados |
 | **[SEC04-BP02 — Capture logs, findings, and metrics in standardized locations](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_logs.html)** | Access Analyzer por Organization; GuardDuty agregado |
 | **[SEC04-BP03 — Correlate and enrich security alerts](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_security_alerts.html)** | finding → ajuste de policy (ciclo prevenção↔detecção) |
 | **[SEC03-BP04 — Reduce permissions continuously](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_permissions_continuous_reduction.html)** | Access Analyzer unused access + CloudTrail para inventário real |

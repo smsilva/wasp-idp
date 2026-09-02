@@ -14,8 +14,8 @@ Uma resposta a três perguntas operacionais, para toda a arquitetura hub-and-spo
 
 Este é o **último** domínio de propósito: os cinco anteriores constroem a plataforma;
 observabilidade é o que permite operá-la com confiança. Ele **não redefine** os sinais que já
-vivem em outros domínios (VPC Flow Logs em `../network/06`, CloudTrail em `../security/06`,
-Budgets em `../accounts/05`) — ele os **consolida** numa estratégia coerente e adiciona a
+vivem em outros domínios (VPC Flow Logs em [`network/06-security.md`](../network/06-security.md), CloudTrail em [`security/06-detection-and-audit.md`](../security/06-detection-and-audit.md),
+Budgets em [`accounts/05-billing-and-tags.md`](../accounts/05-billing-and-tags.md)) — ele os **consolida** numa estratégia coerente e adiciona a
 camada de compute (Container Insights) e a de conectividade.
 
 ## Tópicos

@@ -44,7 +44,7 @@ só padronizar/reportar.
 Configurar **AWS Budgets** por conta (ou por tag) com alerta em thresholds (ex.: 80%/100% do
 budget mensal) é a rede de segurança contra "esqueci um NAT Gateway rodando" — especialmente
 relevante nesta referência, onde TGW + VPN Connections + NAT têm custo por hora fixo
-(ver `../network/00-topology.md` e `04-vpn-access.md`).
+(ver [`network/00-topology.md`](../network/00-topology.md) e `04-vpn-access.md`).
 
 ## Well-Architected — porquê
 

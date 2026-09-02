@@ -7,7 +7,7 @@ custaram tempo e não são visíveis no código.
 ## Fronteira: o que é Terraform e o que não é
 
 Terraform entrega o que se cria uma vez por região e revisa com cuidado; GitOps entrega o que
-muda toda semana (`../../decisions.md` §7, cardinalidade × churn). O escopo fino está fechado em
+muda toda semana ([`decisions.md`](../../decisions.md) §7, cardinalidade × churn). O escopo fino está fechado em
 `docs/superpowers/specs/2026-08-25-terraform-bootstrap-module-design.md` — **não ampliar sem
 revisitar aquela decisão.**
 
@@ -516,8 +516,8 @@ o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem e
   usar uma raiz só alternando backend com `init -reconfigure`: esquecer de trocar mistura as
   regiões e nada no Terraform pega isso.
 - Região, CIDR e AZs ficam **inline** em cada `main.tf` — são decisões de desenho documentadas em
-  `../docs/network/01-cidr-addressing.md`, não segredo.
-- **Aprovar a região na SCP antes do `apply`** (`../docs/accounts/CLAUDE.md`). Sem isso o erro
+  [`docs/network/01-cidr-addressing.md`](../docs/network/01-cidr-addressing.md), não segredo.
+- **Aprovar a região na SCP antes do `apply`** ([`docs/accounts/CLAUDE.md`](../docs/accounts/CLAUDE.md)). Sem isso o erro
   aparece no `Create*`, parecendo bug de código.
 - CIDR é a **única decisão irreversível da cadeia**. Supernet `10.0.0.0/12`, um `/16` por VPC,
   teto de 15, e região multiplica.

@@ -47,7 +47,7 @@ tópico 6).
 ## AWS RAM — compartilhar recurso, não copiar
 
 O **Resource Access Manager** compartilha um recurso de uma conta com outras **sem duplicá-lo**.
-É o mecanismo pelo qual o TGW do Hub (`../network/03`) fica acessível às contas de projeto:
+É o mecanismo pelo qual o TGW do Hub ([`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md)) fica acessível às contas de projeto:
 
 | Objeto RAM | Papel |
 |---|---|
@@ -70,7 +70,7 @@ construção. Combina com o SCP e com o `aws:PrincipalOrgID`: mesmo perímetro, 
 
 ## Modelo descentralizado (herdado do network)
 
-Coerente com `../network/03`: o **próprio provisionamento do spoke** cria o RAM share na conta
+Coerente com [`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md): o **próprio provisionamento do spoke** cria o RAM share na conta
 Hub (via role cross-account do tópico 2), escopado à account daquele tenant. O Hub não mantém
 lista de tenants; remover o tenant remove o share. Vantagem de segurança: nenhum share
 "largo" pré-existente esperando um principal errado — cada share nasce já restrito a um
@@ -79,9 +79,9 @@ account ID.
 ## Nesta PoC (conta única)
 
 RAM não é exercido enquanto hub e spoke são a mesma conta — o share é suprimido
-automaticamente (`../network/03`, "cenário de conta única"). O perímetro de dados via
+automaticamente ([`network/03-transit-gateway-isolation.md`](../network/03-transit-gateway-isolation.md), "cenário de conta única"). O perímetro de dados via
 `aws:PrincipalOrgID` também só passa a valer quando existir uma Organization com mais de uma
-conta (`../accounts/`). Hoje: mapa; amanhã: código.
+conta ([`accounts/`](../accounts/)). Hoje: mapa; amanhã: código.
 
 ## Well-Architected — porquê
 

@@ -10,7 +10,7 @@ inesperado quase sempre significa algo errado (um recurso órfão, um NAT satura
 que ninguém destruiu). Tratar custo como métrica — com alarme — é parte da observabilidade,
 não um assunto separado de FinOps.
 
-Este tópico não redefine Budgets/tags (isso é `../accounts/05`) — mostra como usá-los **como
+Este tópico não redefine Budgets/tags (isso é [`accounts/05-billing-and-tags.md`](../accounts/05-billing-and-tags.md)) — mostra como usá-los **como
 sinal** e como o custo se correlaciona com os outros dados.
 
 ## Budgets como alarme (o baseline)
@@ -19,9 +19,9 @@ sinal** e como o custo se correlaciona com os outros dados.
 é a rede de segurança contra o custo silencioso:
 
 - **Por conta** — cada projeto tem seu teto; estourar avisa o dono (`owner` tag).
-- **Por tag** — granularidade dentro da conta (`environment`, `owner` — `../accounts/05`).
+- **Por tag** — granularidade dentro da conta (`environment`, `owner` — [`accounts/05-billing-and-tags.md`](../accounts/05-billing-and-tags.md)).
 - **Recursos de custo fixo** desta referência que justificam o alarme: NAT Gateway, control
-  plane EKS, TGW/VPN (quando existirem — `../network/00`,`04`), EIPs. "Esqueci um NAT rodando"
+  plane EKS, TGW/VPN (quando existirem — [`network/00-topology.md`](../network/00-topology.md),`04`), EIPs. "Esqueci um NAT rodando"
   é exatamente o que o Budget pega.
 
 ## Cost Anomaly Detection — o desvio que você não previu
@@ -45,12 +45,12 @@ Alarme: custo de NAT do spoke A subiu 3×
   → causa: bug de retry, não crescimento real. Custo foi o SINAL; o log deu a causa.
 ```
 
-Outro padrão: **VPC endpoints** (`../network/06`) reduzem custo de NAT — se o NAT sobe, pode
+Outro padrão: **VPC endpoints** ([`network/06-security.md`](../network/06-security.md)) reduzem custo de NAT — se o NAT sobe, pode
 ser sinal de que um serviço deveria estar indo por endpoint privado e não está.
 
 ## Custo por conta/tag — a visão que a estrutura já dá
 
-Coerente com `../accounts/05`: a **conta por projeto** já separa custo nativamente (Cost
+Coerente com [`accounts/05-billing-and-tags.md`](../accounts/05-billing-and-tags.md): a **conta por projeto** já separa custo nativamente (Cost
 Explorer por `linked account`); as **tags** (`project`, `environment`, `owner`, `managed-by`)
 dão granularidade abaixo da conta. Para observabilidade, o valor é poder responder "de quem é
 este custo?" na hora do alarme — a tag `owner` é o contato.
