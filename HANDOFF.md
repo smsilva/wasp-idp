@@ -307,14 +307,14 @@ dos objetos Kubernetes presos + reaplicar o `destroy`.
 **Continuar com as camadas de pé exige o túnel conectado** (a API do cluster só existe por ele):
 
 ```bash
-aws-vpn-client get-connection-status --profile-name hub-us-east-1   # tem de dizer "Connected"
-! aws-vpn-client connect --profile-name hub-us-east-1               # abre navegador; precisa ser o usuário
+aws-vpn-client get-connection-status --profile-name hub   # tem de dizer "Connected"
+! aws-vpn-client connect --profile-name hub               # abre navegador; precisa ser o usuário
 ```
 
 **Nada garante que sobrevive entre sessões/máquinas** — `aws-vpn-client --version` (6.0.1 esperado;
 `latest` entrega 5.4.1 sem CLI) e a existência de `saml-metadata.xml` precisam ser conferidos
-sempre, nunca presumidos. `~/trash/hub-<região>.ovpn` de sessões anteriores está sempre inválido
-(DNS name muda a cada recriação da 03) — reexportar sempre.
+sempre, nunca presumidos. `~/trash/hub.ovpn` de sessões anteriores está sempre inválido (DNS name
+muda a cada recriação da 03) — reexportar sempre.
 
 **Subir o ambiente** — a sequência completa (preencher `variables/values.tfvars` → `up-all` →
 exportar/importar `.ovpn` → conectar → `up-all --with-cell` → provar; sem passo de geração de
