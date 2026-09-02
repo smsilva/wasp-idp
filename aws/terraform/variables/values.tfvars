@@ -21,3 +21,10 @@ target_account_ids = ["832721568602"]
 # Admins do cluster (access entries). O criador (github-actions-provision) tem acesso
 # automatico; os ARNs aqui sao principals ADICIONAIS com cluster-admin.
 admin_principal_arns = ["arn:aws:iam::270222614208:role/OrganizationAccountAccessRole"]
+
+# Grupos do Identity Center com admin do cluster (issue #71). Bootstrap manual concluido
+# 2026-09-02: permission set + account assignment na conta cicd, role confirmada
+# (AWSReservedSSO_PlatformAdmin_b62cbad9a132c25c). Ver aws/docs/bootstrap/01-identity-center-eks-admin.md.
+admin_group_ids = {
+  PlatformAdmin = "3418c4d8-f051-7051-668e-da8de656357f" # grupo platform-admins
+}
