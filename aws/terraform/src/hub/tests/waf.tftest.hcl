@@ -348,3 +348,56 @@ run "promover_para_block_zera_os_overrides" {
     error_message = "o override_action do grupo e sempre none — o Count vem dos rule_action_override"
   }
 }
+
+# A ordem e a decisao de maior impacto num Web ACL, porque acao terminante para a avaliacao. Em
+# Count nada termina, entao esta assercao protege uma propriedade que ainda nao importa — e passa
+# a importar exatamente no dia da promocao, quando ninguem vai lembrar de conferir.
+#
+# A ordem segue a tabela recomendada pela AWS: rate-based antes de tudo ("stop volumetric abuse
+# early before it consumes capacity in more expensive downstream rules"), depois IP reputation,
+# depois os baseline, e por fim o use-case.
+run "a_ordem_das_regras_segue_a_recomendacao_da_aws" {
+  command = plan
+
+  assert {
+    condition = one([for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "rate-limit"]) < one([
+      for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-ip-reputation"
+    ])
+    error_message = "a rate rule tem de ser avaliada antes dos managed rule groups"
+  }
+
+  assert {
+    condition = one([for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-ip-reputation"]) < one([
+      for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-common-rule-set"
+    ])
+    error_message = "IP reputation e avaliacao barata: vem antes da inspecao de conteudo"
+  }
+
+  assert {
+    condition = one([for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-known-bad-inputs"]) < one([
+      for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-sqli"
+    ])
+    error_message = "os baseline (CRS, KnownBadInputs) vem antes do use-case (SQLi)"
+  }
+
+  # Prioridade duplicada e recusada pelo servico com uma mensagem que nao diz qual par colidiu.
+  assert {
+    condition     = length(toset([for r in aws_wafv2_web_acl.hub.rule : r.priority])) == length(aws_wafv2_web_acl.hub.rule)
+    error_message = "ha prioridade duplicada entre as regras do Web ACL"
+  }
+
+  # Os quatro grupos presentes, com o nome certo do servico.
+  assert {
+    condition = toset(flatten([
+      for r in aws_wafv2_web_acl.hub.rule : [
+        for s in r.statement[0].managed_rule_group_statement : s.name
+      ]
+    ])) == toset([
+      "AWSManagedRulesAmazonIpReputationList",
+      "AWSManagedRulesCommonRuleSet",
+      "AWSManagedRulesKnownBadInputsRuleSet",
+      "AWSManagedRulesSQLiRuleSet",
+    ])
+    error_message = "os quatro managed rule groups do desenho nao estao todos presentes"
+  }
+}
