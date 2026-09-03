@@ -11,6 +11,21 @@
 # them"), e este ALB ainda nao tem trafego de producao para tunar contra. A promocao para Block e
 # troca de variavel, e o criterio esta escrito na spec.
 
+# Os nomes das regras de cada grupo vem do proprio servico, nao de uma lista mantida a mao.
+#
+# Sao 46 regras nos quatro grupos, e uma lista fixa envelheceria em SILENCIO: quando a AWS
+# acrescentasse uma regra nova ao grupo, ela nasceria BLOQUEANDO sem ninguem ter decidido isso —
+# exatamente o modo de falha que a postura Count existe para evitar. O preco e que o plan passa a
+# chamar DescribeManagedRuleGroup (precisa de wafv2:DescribeManagedRuleGroup na role que planeja).
+#
+# O acoplamento tem prazo: com waf_managed_rules_action = "block" a lista de overrides zera e os
+# data sources deixam de influenciar o resultado.
+data "aws_wafv2_managed_rule_group" "common" {
+  name        = "AWSManagedRulesCommonRuleSet"
+  vendor_name = "AWS"
+  scope       = "REGIONAL"
+}
+
 resource "aws_wafv2_web_acl" "hub" {
   name  = "${var.name}-ingress-waf"
   scope = "REGIONAL"
@@ -61,6 +76,53 @@ resource "aws_wafv2_web_acl" "hub" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.name}-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Core Rule Set — a cobertura mais ampla (XSS, LFI, RFI, anomalias) e, segundo a propria AWS,
+  # "the rule group most likely to produce false positives". As suspeitas de sempre estao
+  # nomeadas na spec: SizeRestrictions_BODY (corta body > 8 KB) e CrossSiteScripting_BODY
+  # (dispara em .docx/.xml/.svg).
+  rule {
+    name     = "aws-common-rule-set"
+    priority = 80
+
+    # SEMPRE none. Quem observa e o rule_action_override por regra, abaixo: a doc da AWS diz que
+    # o override do grupo inteiro "is not a good option for testing the rules in a rule group",
+    # porque devolve um contador so e esconde QUAL regra casou.
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+
+        # `version` fica sem fixar de proposito: a AWS atualiza o grupo com protecoes novas, e em
+        # postura Count uma regra nova entra contando, sem bloquear nada por surpresa. Fixar
+        # traria previsibilidade e a armadilha de rotacao — mesma familia do thumbprint do OIDC.
+
+        dynamic "rule_action_override" {
+          for_each = var.waf_managed_rules_action == "count" ? toset([
+            for managed_rule in data.aws_wafv2_managed_rule_group.common.rules : managed_rule.name
+          ]) : toset([])
+
+          content {
+            name = rule_action_override.value
+
+            action_to_use {
+              count {}
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name}-common-rule-set"
       sampled_requests_enabled   = true
     }
   }

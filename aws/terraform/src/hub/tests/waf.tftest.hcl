@@ -209,3 +209,142 @@ run "a_associacao_acompanha_o_alb_e_nao_um_arn_fixo" {
     error_message = "o arn da associacao esta fixo no codigo em vez de vir do ALB"
   }
 }
+
+# --------------------------------------------------------------------------------------
+# Managed rule groups
+# --------------------------------------------------------------------------------------
+
+# ATENCAO: sob mock_provider o data source devolve `rules = []` (verificado em spike). Sem o
+# override_data abaixo, o dynamic gera ZERO overrides e qualquer assercao sobre eles passa verde
+# e vazia — a armadilha `alltrue([])` que este repo ja catalogou. O override injeta uma lista
+# conhecida; e ela que da conteudo a assercao.
+run "o_common_rule_set_nasce_inteiro_em_count" {
+  command = plan
+
+  override_data {
+    target = data.aws_wafv2_managed_rule_group.common
+
+    values = {
+      rules = [
+        { name = "SizeRestrictions_BODY" },
+        { name = "CrossSiteScripting_BODY" },
+        { name = "GenericLFI_URIPATH" },
+      ]
+    }
+  }
+
+  assert {
+    condition = one([
+      for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].name
+      if r.name == "aws-common-rule-set"
+    ]) == "AWSManagedRulesCommonRuleSet"
+    error_message = "o grupo tem de ser o AWSManagedRulesCommonRuleSet"
+  }
+
+  assert {
+    condition = one([
+      for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].vendor_name
+      if r.name == "aws-common-rule-set"
+    ]) == "AWS"
+    error_message = "vendor_name tem de ser AWS"
+  }
+
+  # Uma entrada de override por regra do grupo — o mecanismo que a AWS recomenda para observar,
+  # porque da metrica e label POR REGRA. O override_action no grupo inteiro daria um contador so
+  # e nao diria QUAL regra casou, que e justamente a informacao que decide a promocao.
+  assert {
+    condition = length(one([
+      for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].rule_action_override
+      if r.name == "aws-common-rule-set"
+    ])) == 3
+    error_message = "esperado um rule_action_override por regra do grupo (3 na lista injetada)"
+  }
+
+  assert {
+    condition = alltrue([
+      for o in one([
+        for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].rule_action_override
+        if r.name == "aws-common-rule-set"
+      ]) : length(o.action_to_use[0].count) == 1
+    ])
+    error_message = "todo override tem de usar a acao count"
+  }
+
+  # Os nomes vem do data source, nao de uma lista colada no codigo.
+  assert {
+    condition = toset([
+      for o in one([
+        for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].rule_action_override
+        if r.name == "aws-common-rule-set"
+      ]) : o.name
+    ]) == toset(["SizeRestrictions_BODY", "CrossSiteScripting_BODY", "GenericLFI_URIPATH"])
+    error_message = "os nomes dos overrides nao vieram do data source"
+  }
+}
+
+# Segundo override_data com TAMANHO diferente: um override prova o valor, dois provam a ligacao.
+# Nenhuma lista fixa no codigo satisfaz os dois runs.
+run "os_overrides_acompanham_o_data_source" {
+  command = plan
+
+  override_data {
+    target = data.aws_wafv2_managed_rule_group.common
+
+    values = {
+      rules = [
+        { name = "NoUserAgent_HEADER" },
+        { name = "UserAgent_BadBots_HEADER" },
+      ]
+    }
+  }
+
+  assert {
+    condition = toset([
+      for o in one([
+        for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].rule_action_override
+        if r.name == "aws-common-rule-set"
+      ]) : o.name
+    ]) == toset(["NoUserAgent_HEADER", "UserAgent_BadBots_HEADER"])
+    error_message = "a lista de overrides esta fixa no codigo em vez de vir do data source"
+  }
+}
+
+# A promocao: com block, a lista de overrides ZERA e cada regra do grupo volta a aplicar a acao
+# nativa dela. E este o mecanismo da promocao — nao ha nada mais a mudar.
+run "promover_para_block_zera_os_overrides" {
+  command = plan
+
+  variables {
+    waf_managed_rules_action = "block"
+  }
+
+  override_data {
+    target = data.aws_wafv2_managed_rule_group.common
+
+    values = {
+      rules = [
+        { name = "SizeRestrictions_BODY" },
+        { name = "CrossSiteScripting_BODY" },
+        { name = "GenericLFI_URIPATH" },
+      ]
+    }
+  }
+
+  assert {
+    condition = length(one([
+      for r in aws_wafv2_web_acl.hub.rule : r.statement[0].managed_rule_group_statement[0].rule_action_override
+      if r.name == "aws-common-rule-set"
+    ])) == 0
+    error_message = "com waf_managed_rules_action=block nenhum override pode sobrar"
+  }
+
+  # O override_action fica `none` nas duas posturas: quem faz o Count e o rule_action_override
+  # por regra, nao o override do grupo inteiro (que a AWS desaconselha para este fim).
+  assert {
+    condition = length(one([
+      for r in aws_wafv2_web_acl.hub.rule : r.override_action[0].none
+      if r.name == "aws-common-rule-set"
+    ])) == 1
+    error_message = "o override_action do grupo e sempre none — o Count vem dos rule_action_override"
+  }
+}
