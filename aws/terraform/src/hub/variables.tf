@@ -134,3 +134,47 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "waf_managed_rules_action" {
+  description = <<-EOT
+    Postura dos managed rule groups do WAF: `count` observa e deixa passar, `block` deixa cada
+    grupo aplicar a acao nativa das suas regras.
+
+    Nasce em `count` porque o guia prescritivo da AWS manda tunar com trafego de producao antes
+    de bloquear, e este ALB ainda nao tem esse trafego. `block` e o estado-alvo — o criterio de
+    promocao esta em docs/superpowers/specs/2026-09-02-waf-web-acl-hub-alb-design.md.
+  EOT
+  type        = string
+  default     = "count"
+
+  validation {
+    condition     = contains(["count", "block"], var.waf_managed_rules_action)
+    error_message = "waf_managed_rules_action tem de ser count ou block, recebido ${var.waf_managed_rules_action}."
+  }
+}
+
+variable "waf_rate_limit_action" {
+  description = <<-EOT
+    Postura da rate-based rule, SEPARADA da dos managed rule groups de proposito: e a regra de
+    falso positivo mais previsivel e a unica que mitiga DoS de camada 7, entao sera provavelmente
+    a primeira a ser promovida a block. Uma variavel so forcaria promover tudo junto.
+  EOT
+  type        = string
+  default     = "count"
+
+  validation {
+    condition     = contains(["count", "block"], var.waf_rate_limit_action)
+    error_message = "waf_rate_limit_action tem de ser count ou block, recebido ${var.waf_rate_limit_action}."
+  }
+}
+
+variable "waf_rate_limit" {
+  description = "Requests por IP de origem na janela de 300s antes de a rate-based rule agir. O piso que a AWS aceita e 10."
+  type        = number
+  default     = 2000
+
+  validation {
+    condition     = var.waf_rate_limit >= 10
+    error_message = "waf_rate_limit tem de ser no minimo 10 (piso da AWS), recebido ${var.waf_rate_limit}."
+  }
+}
