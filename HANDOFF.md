@@ -154,8 +154,13 @@ reexportar depois de reaplicar.
 
 ## Em progresso agora
 
-**Nenhuma frente ativa.** A #67 foi fechada em 2026-09-01 (branch `feat/67-remove-default-vpcs`,
-commit `33e61f5`) — próxima frente sai do board, ver "Next Steps".
+**Série SEC-EDGE (decomposta de #83), issues #84-#89, board #6.** #84 (WAF Web ACL no ALB do hub)
+implementada via `superpowers:subagent-driven-development`, branch `feat/84-waf-web-acl-hub-alb`,
+**PR #90 aberto contra `main`, ainda não mergeado nem aplicado na AWS** — decisão explícita de não
+rodar `terraform apply` agora para não fazer crescer o custo antes de fechar #85 também. Issue #84
+deixada em `Todo` no board de propósito (fecha só quando o PR mergear). Próxima da série: **#85**
+(access logs do ALB do hub para S3) — sem dependência pendente, #86 (logging do WAF cross-account)
+depende do padrão de bucket que #85 vai estabelecer.
 
 **Backlog completo e priorização: GitHub Project.**
 
@@ -431,23 +436,25 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-1. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
+1. **#85** — access logs do ALB do hub para S3. Próxima da série SEC-EDGE, sem apply de #84 antes
+   (ver "Em progresso agora").
+3. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
    asserção cruzada, não só a asserção. `aws/terraform/variables/values.tfvars` **é versionado** e é
    lugar viável para a tabela única de alocação.
-2. **#69** — declarative policy de EC2 (VPC Block Public Access) para neutralizar as VPCs default das
+4. **#69** — declarative policy de EC2 (VPC Block Public Access) para neutralizar as VPCs default das
    15 regiões negadas pela SCP, que a #67 não alcançou. **Não aplicar em target que contenha o hub
    antes de medir** se a policy se restringe por região: modo `ingress-only` preserva a saída por NAT
    mas mata o ALB público da célula. Critério de aceite inclui o `curl` sem `-k` em
    `services.<célula>.<subzona>` justamente por isso.
-3. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
+5. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
    arquivos movidos.
-4. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
+6. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
    e a Pod Identity dele, eliminando a race junto) tem de ser considerada primeiro, não descartada
    por reflexo. Se precisar, o valor real está no smoke test: um PVC + pod que monte volume, senão a
    próxima regressão de Pod Identity volta a ser invisível.
-5. **#56** — admins declaráveis. Fecha a lacuna de não haver como entrar num cluster novo.
-6. **#65** — site MkDocs, depois de #64 e #23.
-7. **#40** segue no backlog do board #6, sem trabalho iniciado.
+7. **#56** — admins declaráveis. Fecha a lacuna de não haver como entrar num cluster novo.
+8. **#65** — site MkDocs, depois de #64 e #23.
+9. **#40** segue no backlog do board #6, sem trabalho iniciado.
 
 ## Completed Work
 
