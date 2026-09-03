@@ -11,10 +11,33 @@ sozinho: tráfego pode chegar por caminhos não previstos. Empilhe camadas:
 ```text
 1. Conta (blast radius)          ← tópico 3
 2. TGW route table por spoke     ← tópico 3  (o que um spoke pode ROTEAR)
-3. Security Group (stateful)     ← este tópico (o que um recurso ACEITA)
-4. NACL (stateless, por subnet)  ← este tópico (guarda grossa por subnet)
-5. VPC Flow Logs (detecção)      ← este tópico (o que de fato TRAFEGOU)
+3. WAF no ALB do hub (L7)        ← este tópico (o que o CONTEÚDO da request revela)
+4. Security Group (stateful)     ← este tópico (o que um recurso ACEITA)
+5. NACL (stateless, por subnet)  ← este tópico (guarda grossa por subnet)
+6. VPC Flow Logs (detecção)      ← este tópico (o que de fato TRAFEGOU)
 ```
+
+## AWS WAF (camada 7 — o que o conteúdo da request revela)
+
+Security Group e NACL decidem por endereço e porta; nenhum dos dois abre a request. O ALB do hub é o único ponto de entrada público do desenho, e é onde a inspeção de conteúdo faz sentido — um `aws_wafv2_web_acl` regional associado a ele ([SEC05-BP03 — Implement inspection-based protection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_inspection.html)).
+
+Quatro managed rule groups da AWS, mais uma rate-based rule, nesta ordem de avaliação — a [recomendada pela AWS](https://aws.github.io/aws-security-services-best-practices/guides/waf/), cujo princípio é "block the most traffic, at the lowest cost, as early as possible":
+
+| Priority | Regra | O que cobre |
+|---|---|---|
+| `50` | Rate-based (por IP, janela de 300s) | Abuso volumétrico e DoS de camada 7 |
+| `70` | `AWSManagedRulesAmazonIpReputationList` | Origens sabidamente maliciosas ou ofuscadas |
+| `80` | `AWSManagedRulesCommonRuleSet` | XSS, LFI, RFI, anomalias de request |
+| `81` | `AWSManagedRulesKnownBadInputsRuleSet` | Exploits conhecidos (Log4j, desserialização Java) |
+| `90` | `AWSManagedRulesSQLiRuleSet` | SQL injection |
+
+**Tudo nasce em `Count`, e isso é uma decisão com prazo, não o estado desejado.** A AWS manda tunar com tráfego de produção antes de bloquear, e este ALB ainda não tem esse tráfego. A promoção é uma troca de parâmetro (`waf_managed_rules_action = "block"`); o critério está em [`docs/superpowers/specs/2026-09-02-waf-web-acl-hub-alb-design.md`](../../../docs/superpowers/specs/2026-09-02-waf-web-acl-hub-alb-design.md).
+
+Enquanto a postura for `Count`, a observação vem de `rule_action_override` **por regra** (métrica e label individuais), não do override do grupo inteiro — a AWS é explícita que o segundo *"is not a good option for testing the rules in a rule group"*, porque devolve um contador só e esconde qual regra casou.
+
+**O que o WAF não faz:** o `default_action` é `allow`. Request que não casa nenhuma regra passa — o WAF filtra o que reconhece como malicioso, não autoriza o que conhece. Autorização continua sendo do Security Group (rede) e do Istio/aplicação (identidade).
+
+**Custo e capacidade:** US$ 5/mês pelo Web ACL, US$ 1/mês por rule group ou rule (cinco aqui) e US$ 0,60 por milhão de requests — prorateado por hora, e esta camada é destruída todo dia. Os grupos consomem 1.125 WCU dos 1.500 inclusos no preço básico, o que deixa pouca folga para um segundo grupo grande.
 
 ## Security Groups (stateful — a camada primária)
 
@@ -58,7 +81,7 @@ sozinho: tráfego pode chegar por caminhos não previstos. Empilhe camadas:
 |---|---|
 | **[SEC05-BP01 — Create network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_create_layers.html)** | conta → TGW RT → SG → NACL |
 | **[SEC05-BP02 — Control traffic flow within your network layers](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_layered.html)** | SG stateful + NACL stateless + rotas |
-| **[SEC05-BP03 — Implement inspection-based protection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_inspection.html)** | Gateway/Interface endpoints evitam exposição pública |
+| **[SEC05-BP03 — Implement inspection-based protection](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_network_protection_inspection.html)** | WAF no ALB do hub inspeciona L7; Gateway/Interface endpoints evitam exposição pública |
 | **[SEC04-BP01 — Configure service and application logging](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/sec_detect_investigate_events_app_service_logging.html)** | VPC Flow Logs em todos os spokes |
 | **COST** | Gateway endpoints reduzem tráfego NAT (cobrado por GB) |
 
