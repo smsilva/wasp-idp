@@ -26,6 +26,24 @@ data "aws_wafv2_managed_rule_group" "common" {
   scope       = "REGIONAL"
 }
 
+data "aws_wafv2_managed_rule_group" "ip_reputation" {
+  name        = "AWSManagedRulesAmazonIpReputationList"
+  vendor_name = "AWS"
+  scope       = "REGIONAL"
+}
+
+data "aws_wafv2_managed_rule_group" "known_bad_inputs" {
+  name        = "AWSManagedRulesKnownBadInputsRuleSet"
+  vendor_name = "AWS"
+  scope       = "REGIONAL"
+}
+
+data "aws_wafv2_managed_rule_group" "sqli" {
+  name        = "AWSManagedRulesSQLiRuleSet"
+  vendor_name = "AWS"
+  scope       = "REGIONAL"
+}
+
 resource "aws_wafv2_web_acl" "hub" {
   name  = "${var.name}-ingress-waf"
   scope = "REGIONAL"
@@ -80,6 +98,44 @@ resource "aws_wafv2_web_acl" "hub" {
     }
   }
 
+  # Origens sabidamente maliciosas ou ofuscadas. Avaliacao barata, e por isso vem antes da
+  # inspecao de conteudo: derruba volume que nao precisa chegar aos grupos caros.
+  rule {
+    name     = "aws-ip-reputation"
+    priority = 70
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesAmazonIpReputationList"
+        vendor_name = "AWS"
+
+        dynamic "rule_action_override" {
+          for_each = var.waf_managed_rules_action == "count" ? toset([
+            for managed_rule in data.aws_wafv2_managed_rule_group.ip_reputation.rules : managed_rule.name
+          ]) : toset([])
+
+          content {
+            name = rule_action_override.value
+
+            action_to_use {
+              count {}
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name}-ip-reputation"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # Core Rule Set — a cobertura mais ampla (XSS, LFI, RFI, anomalias) e, segundo a propria AWS,
   # "the rule group most likely to produce false positives". As suspeitas de sempre estao
   # nomeadas na spec: SizeRestrictions_BODY (corta body > 8 KB) e CrossSiteScripting_BODY
@@ -123,6 +179,84 @@ resource "aws_wafv2_web_acl" "hub" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.name}-common-rule-set"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Exploits conhecidos (Log4j, desserializacao Java, path traversal). Segundo a AWS, "frequently
+  # has a low false positive rate and low WCU cost, making it a good candidate to enforce early in
+  # a deployment" — sera provavelmente o primeiro grupo a ser promovido a block.
+  rule {
+    name     = "aws-known-bad-inputs"
+    priority = 81
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+
+        dynamic "rule_action_override" {
+          for_each = var.waf_managed_rules_action == "count" ? toset([
+            for managed_rule in data.aws_wafv2_managed_rule_group.known_bad_inputs.rules : managed_rule.name
+          ]) : toset([])
+
+          content {
+            name = rule_action_override.value
+
+            action_to_use {
+              count {}
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name}-known-bad-inputs"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Use-case, nao baseline: so se paga se houver SQL atras do ALB. Fica porque a #83 o pediu
+  # explicitamente e os 200 WCU cabem no tier basico — mas e o primeiro candidato a sair se a
+  # capacidade apertar (a #89 pode querer regras por tenant).
+  rule {
+    name     = "aws-sqli"
+    priority = 90
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+
+        dynamic "rule_action_override" {
+          for_each = var.waf_managed_rules_action == "count" ? toset([
+            for managed_rule in data.aws_wafv2_managed_rule_group.sqli.rules : managed_rule.name
+          ]) : toset([])
+
+          content {
+            name = rule_action_override.value
+
+            action_to_use {
+              count {}
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name}-sqli"
       sampled_requests_enabled   = true
     }
   }
