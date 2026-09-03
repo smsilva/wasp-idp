@@ -374,6 +374,13 @@ run "a_ordem_das_regras_segue_a_recomendacao_da_aws" {
   }
 
   assert {
+    condition = one([for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-common-rule-set"]) < one([
+      for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-known-bad-inputs"
+    ])
+    error_message = "os dois baseline sao avaliados em ordem: CRS antes de KnownBadInputs"
+  }
+
+  assert {
     condition = one([for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-known-bad-inputs"]) < one([
       for r in aws_wafv2_web_acl.hub.rule : r.priority if r.name == "aws-sqli"
     ])
@@ -392,7 +399,7 @@ run "a_ordem_das_regras_segue_a_recomendacao_da_aws" {
       for r in aws_wafv2_web_acl.hub.rule : [
         for s in r.statement[0].managed_rule_group_statement : s.name
       ]
-    ])) == toset([
+      ])) == toset([
       "AWSManagedRulesAmazonIpReputationList",
       "AWSManagedRulesCommonRuleSet",
       "AWSManagedRulesKnownBadInputsRuleSet",
