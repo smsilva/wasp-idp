@@ -407,4 +407,21 @@ run "a_ordem_das_regras_segue_a_recomendacao_da_aws" {
     ])
     error_message = "os quatro managed rule groups do desenho nao estao todos presentes"
   }
+
+  # Guarda de nao-vacuidade da assercao seguinte: alltrue sobre lista vazia devolve true, entao a
+  # assercao de visibility_config so vale se a contagem de regras estiver garantida aqui.
+  assert {
+    condition     = length(aws_wafv2_web_acl.hub.rule) == 5
+    error_message = "o web acl tem exatamente cinco regras: rate limit mais os quatro managed groups"
+  }
+
+  # Cada regra emite metrica e amostra de request, nao so o Web ACL no topo. E o
+  # sampled_requests_enabled por regra que decide se aquela regra pode ser promovida de Count para
+  # Block.
+  assert {
+    condition = alltrue([
+      for r in aws_wafv2_web_acl.hub.rule : r.visibility_config[0].sampled_requests_enabled && r.visibility_config[0].cloudwatch_metrics_enabled
+    ])
+    error_message = "toda regra emite metrica e amostra de request: e o que permite tunar a postura antes de promover para block"
+  }
 }
