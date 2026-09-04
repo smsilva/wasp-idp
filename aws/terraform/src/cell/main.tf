@@ -421,6 +421,13 @@ resource "aws_eks_addon" "ebs_csi" {
   depends_on = [
     module.pod_identity_ebs_csi,
     module.nodegroup,
+
+    # module.cluster inteiro, não só o output cluster_name: o addon eks-pod-identity-agent e as
+    # access entries do caller moram lá e ficam FORA do caminho de cluster_name (que depende só de
+    # aws_eks_cluster.this). Sem esta aresta os dois ficam sem dependência de entrada e o destroy os
+    # apaga na PRIMEIRA onda — pod sem credencial de Pod Identity para liberar finalizer, provider
+    # sem RBAC no API server. Ver issue #92; coberto por scripts/check-graph.
+    module.cluster,
   ]
 }
 
@@ -486,6 +493,15 @@ module "aws_load_balancer_controller" {
     module.pod_identity_lbc,
     aws_vpc_security_group_ingress_rule.api_from_hub,
 
+    # module.cluster inteiro, não só o output cluster_name: o addon eks-pod-identity-agent e as
+    # access entries do caller moram lá e ficam FORA do caminho de cluster_name (que depende só de
+    # aws_eks_cluster.this). Sem esta aresta os dois ficam sem dependência de entrada e o destroy os
+    # apaga na PRIMEIRA onda. Foi exatamente o que matou o teardown da run 33654015254 (02/09/2026):
+    # o agent caiu às 16:20:11, o LBC ficou sem credencial para chamar DeregisterTargets, o
+    # finalizer do TargetGroupBinding nunca saiu e o helm uninstall estourou os 300s de timeout.
+    # Ver issue #92; coberto por scripts/check-graph.
+    module.cluster,
+
     module.network,
     aws_ec2_transit_gateway_vpc_attachment.this,
     aws_ec2_transit_gateway_vpc_attachment_accepter.this,
@@ -518,6 +534,12 @@ module "ingress_istio" {
   depends_on = [
     module.nodegroup,
     aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    # module.cluster inteiro, não só o output cluster_name: as access entries do caller moram lá e
+    # ficam FORA do caminho de cluster_name (que depende só de aws_eks_cluster.this). Sem esta aresta
+    # o destroy apaga o RBAC na PRIMEIRA onda e o provider helm perde autorização no API server com
+    # releases ainda por desinstalar. Ver issue #92; coberto por scripts/check-graph.
+    module.cluster,
 
     module.network,
     aws_ec2_transit_gateway_vpc_attachment.this,
@@ -598,6 +620,15 @@ module "external_secrets" {
     module.pod_identity_eso,
     aws_vpc_security_group_ingress_rule.api_from_hub,
 
+    # module.cluster inteiro, não só o output cluster_name: o addon eks-pod-identity-agent e as
+    # access entries do caller moram lá e ficam FORA do caminho de cluster_name (que depende só de
+    # aws_eks_cluster.this). Sem esta aresta os dois ficam sem dependência de entrada e o destroy os
+    # apaga na PRIMEIRA onda — pod sem credencial de Pod Identity para liberar finalizer, provider
+    # sem RBAC no API server. Ver issue #92; coberto por scripts/check-graph.
+    #
+    # module.argo_cd herda esta aresta por transitividade, pelo mesmo motivo que herda a de rede.
+    module.cluster,
+
     # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
     # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
     #
@@ -639,6 +670,15 @@ module "crossplane" {
     module.nodegroup,
     module.pod_identity_crossplane,
     aws_vpc_security_group_ingress_rule.api_from_hub,
+
+    # module.cluster inteiro, não só o output cluster_name: o addon eks-pod-identity-agent e as
+    # access entries do caller moram lá e ficam FORA do caminho de cluster_name (que depende só de
+    # aws_eks_cluster.this). Sem esta aresta os dois ficam sem dependência de entrada e o destroy os
+    # apaga na PRIMEIRA onda — pod sem credencial de Pod Identity para liberar finalizer, provider
+    # sem RBAC no API server. Ver issue #92; coberto por scripts/check-graph.
+    #
+    # kubernetes_config_map_v1.platform_bootstrap herda esta aresta por transitividade.
+    module.cluster,
 
     # O caminho de rede até o endpoint privado, nas duas direções: o apply espera a rede, e o
     # destroy (que percorre o grafo ao contrário) apaga este consumidor antes de cortá-la.
