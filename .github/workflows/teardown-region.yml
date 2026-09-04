@@ -43,13 +43,48 @@ jobs:
           role_session_name: gha-teardown-region
           saml_metadata_xml: ${{ secrets.SAML_METADATA_XML }}
 
+      # continue-on-error, e nao um `if: failure()` no passo seguinte: sem ele o job inteiro fica
+      # marcado como `failure` mesmo quando a segunda tentativa funciona, e um sucesso reportado
+      # como falha treina a ignorar o alerta — o oposto do que este teardown precisa.
       - name: Teardown cell
+        id: teardown
+        continue-on-error: true
         working-directory: aws/terraform
         env:
           REGION: ${{ inputs.region }}
           EGRESS_IP: ${{ steps.setup.outputs.egress_ip }}
           STATE_BUCKET: ${{ vars.STATE_BUCKET }}
         run: |
+          ./scripts/down-cell \
+            --region "${REGION}" \
+            --public-cidr "${EGRESS_IP}/32" \
+            --state-bucket "${STATE_BUCKET}" \
+            --yes
+
+      # Um `terraform destroy` que morre no meio e retomavel: o que ja foi destruido some do state e
+      # a segunda passada continua de onde parou. down-cell nao tenta de novo sozinho (roda sob
+      # `set -e` e chama `fail` no primeiro erro), e foi isso que transformou UM helm uninstall
+      # travado nos 84 recursos da regiao ligados por dois dias — run 33654015254, 02/09/2026.
+      #
+      # Este passo vem ANTES do fechamento do endpoint de proposito: o `--public-cidr` do passo
+      # anterior deixou a API do EKS alcancavel, e e por ela que os providers helm/kubernetes falam.
+      # Fechar primeiro e tentar depois seria tentar pela porta que acabamos de trancar.
+      #
+      # PRE-REQUISITO desta tentativa ser util: a aresta com module.cluster (issue #92). Sem ela o
+      # destroy apaga o eks-pod-identity-agent e as access entries do caller na PRIMEIRA onda, e ai
+      # a segunda tentativa nem chega a um timeout — morre em Unauthorized, porque o proprio caller
+      # perdeu o RBAC no API server. Com a aresta, module.cluster morre por ultimo e uma falha de
+      # consumidor deixa credencial e RBAC de pe, que e a condicao em que retentar resolve.
+      - name: Teardown cell (retry)
+        if: steps.teardown.outcome == 'failure'
+        working-directory: aws/terraform
+        env:
+          REGION: ${{ inputs.region }}
+          EGRESS_IP: ${{ steps.setup.outputs.egress_ip }}
+          STATE_BUCKET: ${{ vars.STATE_BUCKET }}
+        run: |
+          echo "A primeira tentativa falhou. Retomando o destroy do que restou no state." >&2
+
           ./scripts/down-cell \
             --region "${REGION}" \
             --public-cidr "${EGRESS_IP}/32" \
