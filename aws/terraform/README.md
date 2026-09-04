@@ -393,6 +393,35 @@ si**. Um typo no CIDR é irreversível depois de aplicado.
 Assertion nova sobre propriedade que importa merece **teste de mutação**: quebre a
 implementação de propósito e confirme que o teste falha.
 
+### Ordenação não é valor: o que o `terraform test` não pega, o `check-graph` pega
+
+`terraform test` assere **valores**, e ordenação não é um valor — é aresta do grafo. Se `A`
+referencia `B.attr` só para nascer depois de `B`, nenhuma assertion distingue essa referência de
+uma para `C.attr` de mesmo valor. Por isso um `depends_on` faltando passa verde na regressão
+inteira e só aparece num apply ou num destroy real.
+
+`terraform graph` **assere o grafo**, e sem custo: não faz chamada à AWS, não lê state e roda com
+credencial inválida — só precisa que os profiles nomeados pelos providers existam no config e que
+a raiz esteja inicializada. É o que `scripts/check-graph` usa:
+
+```bash
+cd aws/terraform
+./scripts/check-graph                        # us-east-1 por default
+./scripts/check-graph --region us-west-2
+```
+
+Ele verifica **alcançabilidade**, não aresta direta: se `A` alcança `B` por qualquer caminho, o
+Terraform cria `B` primeiro e o destrói por último, que é exatamente a garantia desejada. Isso deixa
+a transitividade deliberada do `src/cell` (o `argo_cd` herdando a aresta do `external_secrets`, o
+`httpbin` herdando a do `ingress_istio`) passar verde sem afrouxar a verificação — a mutação que
+remove a aresta do `external_secrets` derruba o `argo_cd` junto, como deve.
+
+Rodar depois de mexer em `depends_on` de qualquer consumidor da API do Kubernetes. O que ele
+protege está em [issue #92](https://github.com/smsilva/wasp-idp/issues/92): os 9 consumidores não
+tinham aresta nenhuma com `module.cluster` — só com o output `cluster_name` —, então o addon
+`eks-pod-identity-agent` e as access entries do caller ficavam com zero dependências de entrada e o
+destroy os apagava na primeira onda. Custou um teardown inteiro e dois dias de recurso ligado.
+
 ## Custo
 
 O hub (`module.hub`) custa **~US$ 110/mês**: TGW isolado por default (~zero até algo anexar) + Client

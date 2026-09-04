@@ -148,6 +148,15 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   valor distingue as duas referências — a mutação passa verde. Comprovado com
   `aws_acm_certificate_validation` vs `aws_acm_certificate`. Escrever isso no teste em vez de
   esconder atrás de asserção que passaria de qualquer jeito.
+- **Mas `terraform graph` ASSERE o grafo, e de graça — a conclusão "só apply+destroy real valida
+  `depends_on`" era mais forte que o necessário.** `graph` não faz chamada à AWS, não lê state e roda
+  com credencial inválida (comprovado: saída byte-a-byte idêntica com `AWS_ACCESS_KEY_ID=bogus`); só
+  exige que os profiles nomeados pelos providers existam no config e que a raiz esteja inicializada.
+  `scripts/check-graph` usa isso para asserir **alcançabilidade** (não aresta direta: se `A` alcança
+  `B` por qualquer caminho, `B` nasce antes e morre depois — a garantia que se quer), o que preserva
+  a transitividade deliberada do `src/cell` sem afrouxar nada. Rodar depois de mexer em `depends_on`
+  de consumidor da API do Kubernetes. O apply+destroy real continua sendo a prova final, mas deixou
+  de ser a PRIMEIRA linha de defesa para uma classe de bug que agora custa segundos.
 - **`mock_provider "helm"` NÃO simula a key de releases: colisão de nome entre dois releases passa
   verde offline e só explode no apply real** com `cannot re-use a name that is still in use`. Helm
   identifica release por `(namespace, name)`, e o mock só devolve os atributos escritos no `values` —
@@ -328,9 +337,27 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   — `module.hub` ficou de pé (43 recursos) e `module.cell` chegou a zero, confirmado por
   `terraform state list`. A ordenação por `depends_on` no `module.network` (não enumerar recursos)
   se sustentou depois do `git mv` de `control-plane/` para `src/cell/`.
-  **Regra que sai daqui:** ordenação por referência não é testável offline, então mudança de
-  `depends_on` só se dá por boa depois de um apply E um destroy reais — e a direção se confere lendo
-  quem declara o quê, não o comentário que diz o que o autor pretendia.
+  **Regra que sai daqui:** a direção se confere lendo quem declara o quê, não o comentário que diz o
+  que o autor pretendia. E a validação tem duas camadas: `scripts/check-graph` (offline, segundos —
+  ver a seção de testes acima) primeiro, apply E destroy reais como prova final.
+
+- **Depender do output de um módulo NÃO cria aresta com os recursos irmãos dentro dele — e esse buraco
+  derrubou um teardown inteiro (run `33654015254`, 02/09/2026).** Os 9 consumidores da API do
+  Kubernetes em `src/cell` alcançavam `module.cluster` só pelo output `cluster_name`, que depende
+  apenas de `aws_eks_cluster.this`. O addon `eks-pod-identity-agent` e as `aws_eks_access_entry`/
+  `aws_eks_access_policy_association` moram no mesmo módulo mas ficavam **com zero dependências de
+  entrada** — `terraform graph | grep '-> "…aws_eks_addon.this"'` devolvia vazio. Consequência no
+  destroy: os três foram apagados na PRIMEIRA onda (16:20:11), o pod do LBC perdeu a credencial de
+  Pod Identity antes de liberar o finalizer `elbv2.k8s.aws/resources` do `TargetGroupBinding`, o CR
+  não deixou o etcd e o `helm uninstall` estourou o `timeout = 300` com *"context deadline exceeded"*
+  — exatamente 300s depois, aritmética fechada. Como `down-cell` roda sob `set -e` e chama `fail` no
+  primeiro erro, **o destroy morreu inteiro** e os 84 recursos da região ficaram ligados por 2 dias.
+  A mesma aresta faltando é uma race de apply latente: os env vars de Pod Identity são injetados por
+  webhook na ADMISSÃO, uma vez, e pod spec é imutável — pod admitido antes do agent nunca recupera
+  (é a race do EBS CSI de `aws/CLAUDE.md`, com o agent no lugar da association). **Fix:** os 5 nós
+  raiz das cadeias declaram `module.cluster` inteiro no `depends_on`; os outros 4 herdam por
+  transitividade. Mesma lição do `module.network`: **depender do MÓDULO, não enumerar recursos** — e
+  o corolário que faltava, *depender de um OUTPUT não é depender do módulo*.
 
 ## Load balancer: quem é dono do quê
 
