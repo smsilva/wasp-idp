@@ -152,7 +152,51 @@ Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
 nome porque cada região tem o próprio endpoint). Com o hub derrubado, o endpoint não existe mais —
 reexportar depois de reaplicar.
 
+**2026-09-04 — `us-east-1` está VAZIA, hub incluso.** Invalida qualquer afirmação anterior deste
+arquivo sobre "o hub está de pé (43 recursos)". 76 recursos destruídos, `terraform state list` = 0
+nas duas raízes de região, ~13 min. Custo da Organization agora **abaixo de US$ 1/mês** (só hosted
+zone, bucket de state, CloudTrail no `log-archive` e Secrets Manager). Auditoria de órfão feita nas
+contas `network` e `cicd`: zero NAT, EIP, ELB, target group, VPC, ENI, certificado ACM, endpoint de
+Client VPN e cluster EKS; TGW em `deleted`; subzona Route 53 com apenas `NS`+`SOA` — nenhum record
+órfão do external-dns, que era o risco real por rodar `policy: upsert-only`.
+
+**Decomposição do custo do resting state**, medida no Cost Explorer e útil para a frente do Client
+VPN (abaixo). O que o hub custava parado:
+
+| Item | Cobrança | Mês |
+|---|---|---|
+| Client VPN — **2 subnet associations** | US$ 0,10/h **cada** | **~US$ 146** (73% do total) |
+| TGW — attachment do hub | US$ 0,05/h | ~US$ 37 |
+| ALB do hub | ~US$ 0,0225/h + LCU | ~US$ 18 |
+
+A cobrança do Client VPN é **por associação, não por endpoint** — endpoint parado custa zero. Esse
+detalhe é o que abre a opção cirúrgica descrita em Open Questions. A célula, quando de pé, soma
+~US$ 165/mês por cima.
+
 ## Em progresso agora
+
+**Frente ativa: custo e robustez do teardown (#92, #94).** Começou como a pergunta "quais custos
+estão contando nas contas atuais?" e virou investigação: a região estava de pé porque um teardown
+falhou 2 dias antes, em silêncio.
+
+**#92 — implementada, ainda não integrada nem exercitada na AWS.** Os 9 consumidores da API do
+Kubernetes em `src/cell` não tinham aresta nenhuma com `module.cluster` — só com o output
+`cluster_name`, que depende apenas de `aws_eks_cluster.this`. O addon `eks-pod-identity-agent` e as
+access entries do caller ficavam com **zero dependências de entrada** e o destroy os apagava na
+primeira onda. Fix: 5 nós raiz declaram `module.cluster` inteiro; os outros 4 herdam por
+transitividade. Guard novo `aws/terraform/scripts/check-graph` assere as arestas via `terraform
+graph`, offline. Validado com regressão verde nos 6 diretórios e **duas mutações confirmadas**;
+**não** validado por apply+destroy real — decisão explícita, a região foi destruída justamente para
+parar de gastar, e o próximo ciclo exercita de graça.
+
+**#94 — achado 1 fechado, achados 3/4/5 abertos.** `teardown-region.yml` ganhou um step
+`Teardown cell (retry)` entre a tentativa e o fechamento do endpoint. Também não exercitado num run
+real (exige célula de pé). Segue aberto: não há `schedule`/`cron` em nenhum workflow apesar de
+`down-cell` e `README.md` se descreverem como "nightly"/"todo dia" (achado 3); falha de teardown não
+notifica ninguém (achado 4); a receita de recuperação por `state rm` não é subcomando (achado 5).
+
+**A frente do Client VPN NÃO foi iniciada** — era o pedido original e ficou para depois. Ver Open
+Questions.
 
 **Série SEC-EDGE (decomposta de #83), issues #84-#89, board #6.** #84 (WAF Web ACL no ALB do hub)
 implementada via `superpowers:subagent-driven-development`, branch `feat/84-waf-web-acl-hub-alb`,
@@ -254,15 +298,24 @@ com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` 
 
 ## How to Resume
 
-**Primeiro comando** — abrir a branch da frente ativa e conferir credencial:
+**Primeiro comando** — confirmar que a região continua vazia e que os profiles respondem:
 
 ```bash
-git checkout -b feat/67-remove-default-vpcs
-gh issue view 67 --repo smsilva/wasp-idp          # ids das VPCs, contas e critérios já apurados
-for p in personal network cicd wasp-nonprod; do
-  echo "=== ${p} ==="
-  aws sts get-caller-identity --profile "${p}" --output json
+cd aws/terraform
+for m in state-backend dns regions/us-east-1 regions/us-west-2; do
+  printf '%-24s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
 done
+for p in personal network cicd; do aws sts get-caller-identity --profile "${p}" --output json; done
+```
+
+Esperado em 2026-09-04: `regions/*` em **0**. Qualquer coisa diferente de zero ali significa que
+alguém subiu a região — checar o custo antes de continuar.
+
+O guard de grafo roda sem credencial válida e é o preflight barato de qualquer mexida em
+`depends_on`:
+
+```bash
+cd aws/terraform && ./scripts/check-graph          # us-east-1 por default
 ```
 
 **O SSO cai sozinho, e nem sempre leva os três profiles juntos.** `network` e `cicd` assumem role a
@@ -277,8 +330,9 @@ e ler o `Account`/`Arn` inteiro. Erro de profile inexistente ou ARN vazio ⟹
 `! aws sso login --profile personal` (abre navegador; o agente não roda). A sessão do `az` expira
 **independentemente** — conferir com `az account show`.
 
-**O hub de `us-east-1` está de pé (43 recursos); a célula, não** — conferir com o comando de "Estado
-atual" acima antes de presumir. Subir a célula por CI é o caminho provado e não exige túnel:
+**`us-east-1` está vazia desde 2026-09-04 — nem hub nem célula.** Subir a região por CI é o caminho
+provado e não exige túnel. Atenção ao custo: o hub sozinho volta a ~US$ 200/mês, dos quais ~US$ 146
+são as duas subnet associations do Client VPN:
 
 ```bash
 gh workflow run provision-region.yml --ref main -f region=us-east-1
@@ -308,6 +362,13 @@ cd aws/terraform/scripts && ./down-cell --region us-east-1 --yes
 script próprio de propósito. Se o destroy morrer com `dial tcp <ip-privado>:443: i/o timeout`, a
 aresta de `depends_on` está errada, não é falha de credencial — recuperação: `terraform state rm`
 dos objetos Kubernetes presos + reaplicar o `destroy`.
+
+**Se o destroy travar num `helm uninstall`** (sintoma: `context deadline exceeded`, e não o timeout
+de rede acima), a receita que funcionou em 04/09 está em `aws/terraform/CLAUDE.md`, seção State:
+`state pull` para backup, `state rm` de **todos** os `helm_release`/`kubernetes_*` de uma vez, e o
+destroy vira 100% API da AWS — dispensa túnel e endpoint público aberto, que é o que trava a
+recuperação depois de o cleanup do workflow ter fechado o endpoint. Auditar órfão depois é parte da
+receita, não zelo.
 
 **Continuar com as camadas de pé exige o túnel conectado** (a API do cluster só existe por ele):
 
@@ -400,6 +461,26 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
+- **O que deve virar efêmero no hub, para o Client VPN parar de custar ~US$ 146/mês parado?** Esta é
+  a frente pedida e não iniciada — o brainstorming foi interrompido antes da decisão. Três opções já
+  levantadas, com o trade-off apurado; **não rederivar**:
+
+  | Opção | Custo parado | `.ovpn` entre sessões | Ressalva |
+  |---|---|---|---|
+  | Só as 2 `aws_ec2_client_vpn_network_association` (+ as 2 rotas) | ~US$ 55 | **estável** — o `dns_name` do endpoint não muda | endpoint, certificado ACM, SAML provider e authorization rules sobrevivem |
+  | O Client VPN inteiro | ~US$ 55 | reexportar sempre | certificado revalida por DNS a cada subida |
+  | O hub inteiro | US$ 0 | reexportar sempre | inverte a premissa do [ADR 0014](docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md) de que o hub é o resting state |
+
+  A opção cirúrgica existe porque **a cobrança é por associação, não por endpoint**. Ela também
+  derruba a nota de `aws/terraform/CLAUDE.md` de que "o `.ovpn` nunca se reaproveita entre applies do
+  hub" — isso vale quando o endpoint é recriado, não quando só as associações vão e voltam.
+  **Armadilha já documentada, não tentar:** `transit_gateway_configuration` no endpoint parece o
+  caminho mais direto e não é — o attachment que ele cria leva *"several hours"* para deletar, o
+  provider não espera, e isso **impede deletar o TGW**.
+- **Um retry de teardown é suficiente, ou o caminho é `state rm` automático?** O retry de #94 cobre
+  erro transitório. Não cobre finalizer preso por controller sem credencial — nesse caso a segunda
+  tentativa falha igual. Com a aresta de #92 o cenário deixa de acontecer por essa causa, mas a
+  pergunta continua de pé para outras.
 - **Vale abrir exceção na SCP baseline para limpar as VPCs default das 15 regiões negadas?**
   Continua em aberto, mas **deixou de ser o único caminho**: a issue **#69** propõe neutralizá-las com
   *declarative policy* de EC2 (VPC Block Public Access), sem tocar na SCP. O item bloqueante lá é
@@ -420,6 +501,17 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken.md). Desta sessão:
 
+- **Teardown não é agendado nem notifica** — *unexpected*, #94 achados 3 e 4. `down-cell` se diz
+  "nightly" e o `README.md` diz "todo dia", mas os três workflows são `workflow_dispatch` puro. E
+  falha de teardown não avisa ninguém: o run de 02/09 ficou `failure` em silêncio por 2 dias. É o
+  único modo de falha do repo que **gasta dinheiro continuamente**.
+- **#92 e #94 não foram exercitados na AWS** — *intentional*. Ambos validados só offline; exigem uma
+  célula de pé, e a região foi destruída de propósito. O caminho de retry só aparece numa falha real.
+- **A ordem de integração de #92 e #94 importa** — *intentional*. O retry de #94 só é útil com a
+  aresta de #92: sem ela o destroy apaga o agent e as access entries na primeira onda, e a segunda
+  tentativa morre em `Unauthorized` em vez de chegar a um timeout. Integrar #94 sozinho entrega um
+  retry que falha junto.
+
 - **`recover-lock.yml` nunca foi executado e não roda** — *unexpected*, item 25. Dois defeitos:
   referencia o composite action do repositório privado direto (a correção do App token tocou só os
   outros dois workflows), e cria apenas o symlink de `values.auto.tfvars`, sem o de
@@ -436,7 +528,18 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-1. **#85** — access logs do ALB do hub para S3. Próxima da série SEC-EDGE, sem apply de #84 antes
+1. **Integrar #92 antes de #94** — a ordem não é cosmética (ver Known Broken). Depois, o próximo
+   ciclo `provision-region` + `teardown-region` exercita as duas correções de graça, e é o aceite
+   que falta nas duas.
+2. **Decidir a efemeridade do Client VPN** (Open Questions) — a decisão é sua; as três opções e o
+   trade-off já estão apurados. É a maior alavanca de custo do repo: ~73% do resting state do hub.
+3. **#94 achados 3, 4 e 5** — agendar o teardown (ou parar de chamá-lo "nightly"), notificar falha,
+   e transformar a recuperação por `state rm` em subcomando. O achado 4 é o de maior retorno: sem
+   notificação, qualquer falha futura repete o padrão de descoberta por fatura.
+4. **#14** — atualizar a tabela de custo do Client VPN. O número real (~US$ 146/mês, 2 associações) já
+   está medido e registrado aqui e na issue; falta refletir em `aws/terraform/README.md`, que ainda
+   diz ~US$ 110/mês para o hub.
+5. **#85** — access logs do ALB do hub para S3. Próxima da série SEC-EDGE, sem apply de #84 antes
    (ver "Em progresso agora").
 3. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
    asserção cruzada, não só a asserção. `aws/terraform/variables/values.tfvars` **é versionado** e é
@@ -461,6 +564,14 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-09-04 — região `us-east-1` destruída por inteiro e custo zerado.** Investigação de custo
+  achou hub e célula de pé por falha silenciosa de teardown; 76 recursos removidos, órfãos auditados,
+  Organization abaixo de US$ 1/mês.
+- **2026-09-04 — #92, aresta faltando entre os consumidores da API do Kubernetes e `module.cluster`.**
+  Causa raiz do teardown que falhou. Inclui o guard `scripts/check-graph`, que assere grafo offline —
+  classe de bug que antes só um apply+destroy real pegava.
+- **2026-09-04 — #94 achado 1, retry no `teardown-region.yml`.** Segundo step antes do fechamento do
+  endpoint, com `continue-on-error` no primeiro para o job não reportar falha quando o retry funciona.
 - **2026-09-01 — #67, VPCs default removidas da Organization** (`feat/67-remove-default-vpcs`,
   `33e61f5`). Eram **8**, não 6: a `log-archive` também tinha as duas, e a
   `OrganizationAccountAccessRole` a alcança sem profile local. `scripts/remove-default-vpcs` é

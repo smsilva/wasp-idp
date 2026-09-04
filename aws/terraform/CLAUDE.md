@@ -35,6 +35,20 @@ As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro 
   vivo), `terraform import` de cada recurso órfão, e então um `plan` — que tem de vir **sem
   duplicata**, provando a adoção. Aconteceu com o cluster EKS e o NAT Gateway; os dois voltaram
   ao state sem recriar nada.
+- **`destroy` travado num `helm_release`/`kubernetes_*`: tirar TODOS eles do state de uma vez
+  transforma o destroy em 100% API da AWS — e aí ele não precisa nem de túnel nem de endpoint
+  público aberto.** É a generalização da recuperação pontual de 2026-08-27 (dois recursos presos),
+  e o que destravou a região inteira em 04/09/2026, quando o teardown de 02/09 morreu no finalizer
+  do `TargetGroupBinding` e deixou 41 recursos no state com o endpoint já fechado atrás de si.
+  Esses objetos são só recursos da API do Kubernetes **sem contraparte AWS própria** — o destroy do
+  cluster os leva junto —, então removê-los não gera órfão. Receita, nesta ordem: `terraform state
+  pull > backup.tfstate` (rede de segurança antes de qualquer `state rm`), `state rm` de cada
+  `helm_release`, `kubernetes_namespace_v1` e afins, `destroy` normal, e **auditoria de órfão
+  depois** — não por zelo: é o que prova que a análise estava certa. Conferir NAT, EIP (inclusive
+  soltos), ELB, target groups, VPC, ENI, ACM, Client VPN endpoints, TGW e clusters EKS nas contas
+  `network` E `cicd`, mais os records da subzona Route 53: o external-dns roda com
+  `policy: upsert-only` e **nunca** apaga o que criou, então record órfão ali é o resíduo mais
+  provável e o único que o Terraform não reporta.
 
 ## Testes
 
