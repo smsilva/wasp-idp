@@ -130,11 +130,27 @@ cd aws/terraform/scripts
 assimetria é intencional.
 
 **Via GitHub Actions:** `.github/workflows/teardown-region.yml` dispara `down-cell
---public-cidr <runner-egress-ip>/32` (abre o endpoint para o refresh alcançar a API) seguido de
-`down-cell --close-public-access` com `if: always()`. Esse caminho não sofre da armadilha de RBAC
-(item 2 abaixo): a role `github-actions-provision` é quem criou o cluster, então já tem
-`AccessEntry`. Ver `ci/README.md` para o bootstrap OIDC e `bootstrap-checklist.md` para a sequência
-completa do zero.
+--public-cidr <runner-egress-ip>/32` (abre o endpoint para o refresh alcançar a API), **repete essa
+mesma chamada se ela falhar**, e só então roda `down-cell --close-public-access` com `if: always()`.
+Esse caminho não sofre da armadilha de RBAC (item 2 abaixo): a role `github-actions-provision` é
+quem criou o cluster, então já tem `AccessEntry`. Ver `ci/README.md` para o bootstrap OIDC e
+`bootstrap-checklist.md` para a sequência completa do zero.
+
+A segunda tentativa existe porque `down-cell` roda sob `set -e` e desiste no primeiro erro, e um
+`terraform destroy` que morre no meio é **retomável** — o que já foi destruído sai do state e a
+passada seguinte continua de onde parou. Foi a ausência disso que transformou um `helm uninstall`
+travado nos 84 recursos da região ligados por dois dias
+([#94](https://github.com/smsilva/wasp-idp/issues/94)). Três detalhes do desenho, cada um por um
+motivo:
+
+| Detalhe | Por quê |
+|---|---|
+| `continue-on-error: true` na primeira tentativa | Sem ele o job fica `failure` mesmo quando a segunda funciona, e sucesso reportado como falha treina a ignorar o alerta |
+| O retry vem **antes** do fechamento do endpoint | O `--public-cidr` deixou a API alcançável; fechar primeiro seria tentar pela porta recém-trancada |
+| Só é útil com a aresta de [#92](https://github.com/smsilva/wasp-idp/issues/92) | Sem ela o destroy apaga o `eks-pod-identity-agent` e as access entries na primeira onda, e a segunda tentativa morre em `Unauthorized` — o caller perdeu o próprio RBAC. Com ela, `module.cluster` morre por último e a falha de um consumidor deixa credencial e RBAC de pé |
+
+O caminho local (`./down-cell` direto) **não** tem retry — reexecutar o comando é o equivalente
+manual, e a mensagem de erro do script já diz para conferir o `terraform state list`.
 
 ```bash
 cd aws/terraform/regions/<região>

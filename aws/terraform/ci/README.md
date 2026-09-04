@@ -151,6 +151,25 @@ Destrói `module.cell` com `-target=module.cell`; **o hub fica de pé**. Chama `
 que abre o endpoint público antes do destroy (o refresh precisa alcançar a API) e o fecha no step
 final, também com `if: always()` e o mesmo guard de state.
 
+São **três** steps de `down-cell`, nesta ordem: a tentativa, o retry e o fechamento.
+
+| Step | Condição | Papel |
+|---|---|---|
+| `Teardown cell` | `continue-on-error: true` | A tentativa. O `continue-on-error` existe para o job não ficar `failure` quando o retry funciona — sucesso reportado como falha treina a ignorar o alerta |
+| `Teardown cell (retry)` | `steps.teardown.outcome == 'failure'` | Retoma o destroy. Vem antes do fechamento porque o `--public-cidr` da tentativa deixou a API alcançável |
+| `Close public endpoint` | `always()` | Cleanup, inclusive no caminho de falha |
+
+O retry existe porque `down-cell` roda sob `set -e` e desiste no primeiro erro, enquanto um
+`terraform destroy` interrompido é **retomável** — o já destruído sai do state e a passada seguinte
+continua. Sem isso, um `helm uninstall` travado deixou os 84 recursos da região ligados por dois
+dias na run `33654015254` ([#94](https://github.com/smsilva/wasp-idp/issues/94)).
+
+**Ele só é útil junto com a aresta de [#92](https://github.com/smsilva/wasp-idp/issues/92).** Sem
+ela o destroy apaga o addon `eks-pod-identity-agent` e as access entries do caller na primeira onda,
+e a segunda tentativa não chega a um timeout: morre em `Unauthorized`, porque o próprio caller
+perdeu o RBAC no API server. Com ela, `module.cluster` é destruído por último e a falha de um
+consumidor deixa credencial e RBAC de pé — a condição em que retentar resolve.
+
 O corte é `hub | célula`, nunca `rede | cluster`: Terraform destrói em ordem reversa só dentro do
 mesmo state, e esse corte sobrevive ao TGW — a AWS recusa deletar TGW com attachment vivo.
 
