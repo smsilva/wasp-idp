@@ -1,0 +1,232 @@
+#!/bin/bash
+this_script_path="$(realpath ${0})"
+this_script_name="${this_script_path##*/}"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${PATH}"
+
+source "${this_script_directory}/lib"
+
+show_usage() {
+  cat <<EOF
+
+  Asserts the dependency edges this repo cannot afford to lose, by reading
+  'terraform graph' — offline, without valid credentials and without touching
+  the state. It only needs the profiles to EXIST in the AWS config (the
+  providers name them) and the root to be initialized; graph makes no API call.
+
+  Why a script instead of a terraform test: 'terraform test' cannot assert the
+  graph. If A references B.attr only to be created after B, and B.attr holds
+  the same value as C.attr, no value assertion tells the two references apart —
+  a mutation passes green. 'terraform graph' does assert it, so the class of bug
+  that used to need a real apply AND a real destroy (~40 min, real money) is
+  caught here in seconds.
+
+  What it checks: every consumer of the Kubernetes API in module.cell must
+  REACH module.cluster, so that
+
+    apply    the Pod Identity agent and the caller's access entries exist
+             before any pod that needs them is admitted. Pod Identity env vars
+             are injected by a webhook at ADMISSION, once, and pod spec is
+             immutable — a pod admitted too early never recovers.
+    destroy  the same graph walked backwards: consumers die BEFORE the agent
+             and the RBAC, so finalizers still have credentials to be released.
+
+  Reachability, not a direct edge: if A reaches B through any path, Terraform
+  creates B first and destroys it last, which is exactly the guarantee wanted.
+  Consumers are matched by ADDRESS PREFIX, so a resource added to any of these
+  modules is covered without editing this list.
+
+  Regression this encodes (issue #92): none of these consumers had any edge to
+  module.cluster — only to its cluster_name output, which depends on
+  aws_eks_cluster.this alone. The agent addon and the access policy
+  associations were left with zero incoming edges, so the destroy removed them
+  in its FIRST wave. The LBC then had no credentials to call DeregisterTargets,
+  the TargetGroupBinding finalizer never cleared, and 'helm uninstall' hit its
+  300s timeout with 'context deadline exceeded' (run 33654015254, 02/09/2026).
+  The whole teardown aborted there, leaving 84 resources up for two days.
+
+    Options:
+
+      -h,  --help      Show this help
+      -r,  --region    Region root under regions/ (default: us-east-1)
+
+    Examples:
+
+      ${this_script_name}
+
+      ${this_script_name} --region us-west-2
+
+EOF
+}
+
+region="us-east-1"
+
+while [[ "${1}" =~ ^- && ! "${1}" == "--" ]]; do
+  case $1 in
+    -h | --help )
+      show_usage
+      exit 1
+      ;;
+
+    -r | --region )
+      shift
+      region="${1}"
+      ;;
+
+    * )
+      echo "Invalid option: ${1}" >&2
+      show_usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+set -e
+
+require_tools terraform python3
+
+root="${terraform_directory}/regions/${region}"
+[ -d "${root}" ] || fail "missing root: ${root}"
+
+# graph reads the provider and module wiring from .terraform, so an uninitialized root fails with
+# a message about the provider, not about the missing init. Say it here instead.
+[ -d "${root}/.terraform" ] || \
+  fail "${root} is not initialized. Run terraform init there first (this script never inits: '-backend=false' on a root already bound to S3 still demands a valid credential)."
+
+# Every consumer of the Kubernetes API in module.cell. Matched by address prefix, so resources
+# added inside these modules are covered without touching this list.
+consumers="module.cell.aws_eks_addon.ebs_csi
+module.cell.kubernetes_config_map_v1.platform_bootstrap
+module.cell.module.aws_load_balancer_controller
+module.cell.module.ingress_istio
+module.cell.module.target_group_binding
+module.cell.module.httpbin
+module.cell.module.external_secrets
+module.cell.module.argo_cd
+module.cell.module.crossplane"
+
+# What they must reach, and why each one matters on its own:
+#   aws_eks_addon.this                  the eks-pod-identity-agent DaemonSet, which serves
+#                                       credentials over AWS_CONTAINER_CREDENTIALS_FULL_URI
+#   aws_eks_access_policy_association   the caller's RBAC on the API server, without which the
+#                                       helm and kubernetes providers are unauthorized
+targets="module.cell.module.cluster.aws_eks_addon.this
+module.cell.module.cluster.aws_eks_access_policy_association.this"
+
+step "check-graph — region ${region}"
+
+graph_file="$(mktemp)"
+trap 'rm --force "${graph_file}"' EXIT
+
+(cd "${root}" && terraform graph) > "${graph_file}" \
+  || fail "terraform graph failed in ${root}. A profile named by a provider may be missing from the AWS config."
+
+log "graph: $(grep --count ' -> ' "${graph_file}") edges"
+
+CONSUMERS="${consumers}" TARGETS="${targets}" python3 - "${graph_file}" <<'PYTHON'
+import os
+import re
+import sys
+from collections import deque
+
+dot = open(sys.argv[1]).read()
+
+successors = {}
+for match in re.finditer(r'"([^"]+)"\s*->\s*"([^"]+)"', dot):
+    successors.setdefault(match.group(1), set()).add(match.group(2))
+
+nodes = set(re.findall(r'"([^"]+)"\s*\[label=', dot))
+nodes.update(successors)
+for children in successors.values():
+    nodes.update(children)
+
+
+def reaches(source, destination):
+    seen = {source}
+    queue = deque([source])
+    while queue:
+        node = queue.popleft()
+        if node == destination:
+            return True
+        for child in successors.get(node, ()):
+            if child not in seen:
+                seen.add(child)
+                queue.append(child)
+    return False
+
+
+def find_cycle():
+    WHITE, GREY, BLACK = 0, 1, 2
+    color = {}
+    for root in sorted(nodes):
+        if color.get(root, WHITE) != WHITE:
+            continue
+        stack = [(root, iter(sorted(successors.get(root, ()))))]
+        color[root] = GREY
+        path = [root]
+        while stack:
+            node, children = stack[-1]
+            advanced = False
+            for child in children:
+                state = color.get(child, WHITE)
+                if state == GREY:
+                    return path[path.index(child):] + [child]
+                if state == WHITE:
+                    color[child] = GREY
+                    path.append(child)
+                    stack.append((child, iter(sorted(successors.get(child, ())))))
+                    advanced = True
+                    break
+            if not advanced:
+                color[node] = BLACK
+                path.pop()
+                stack.pop()
+    return None
+
+
+consumers = [line for line in os.environ["CONSUMERS"].splitlines() if line]
+targets = [line for line in os.environ["TARGETS"].splitlines() if line]
+
+failures = []
+checked = 0
+
+for target in targets:
+    if target not in nodes:
+        failures.append(f"target absent from the graph: {target}")
+        continue
+
+    for consumer in consumers:
+        # A module address matches the expander node AND every resource under it. Requiring the
+        # expander too would be wrong: depends_on lands on the resources, and an expander with no
+        # outgoing edge of its own is normal.
+        members = sorted(n for n in nodes if n == consumer or n.startswith(consumer + "."))
+        members = [n for n in members if n in successors or n == consumer]
+        resources = [n for n in members if n != consumer or consumer in successors]
+
+        if not resources:
+            failures.append(f"consumer absent from the graph: {consumer}")
+            continue
+
+        for resource in resources:
+            checked += 1
+            if not reaches(resource, target):
+                failures.append(f"{resource}\n      does NOT reach {target}")
+
+cycle = find_cycle()
+if cycle:
+    failures.append("dependency cycle: " + " -> ".join(cycle))
+
+print(f"  {checked} reachability check(s) over {len(nodes)} nodes", file=sys.stderr)
+
+if failures:
+    print("", file=sys.stderr)
+    for failure in failures:
+        print(f"  MISSING  {failure}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print(f"ERROR: {len(failures)} required edge(s) missing — see issue #92 for why each matters.", file=sys.stderr)
+    sys.exit(1)
+
+print("  all required edges present, no cycles", file=sys.stderr)
+PYTHON
