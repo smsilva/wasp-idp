@@ -67,7 +67,7 @@ k3d (cluster-zero)
 | `idp/app-config.yaml` | `kubernetes.serviceLocatorMethod: { type: multiTenant }` e `clusterLocatorMethods: [{ type: config, clusters: [{ name: cluster-zero, url: https://127.0.0.1:6550, authProvider: serviceAccount, serviceAccountToken: ${K8S_CLUSTER_ZERO_TOKEN}, caData: ${K8S_CLUSTER_ZERO_CA} }] }]` |
 | `idp/app-config.yaml` | `catalog.locations` ganha `../../catalog/org.yaml` (rules `User`, `Group`) e `../../templates/python-service/template.yaml` (rules `Template`) |
 | `idp/catalog/org.yaml` | `Group` `team-alpha` e `team-beta` (`spec.type: team`, `children: []`) |
-| `idp/.gitignore` | `github-app-*-credentials.yaml` |
+| `idp/.gitignore` | Sem mudança: já ignora `*-credentials.yaml` (linha 47) |
 
 Backend e frontend não mudam: `publish:github:pull-request` já vem no módulo GitHub instalado, e a aba Kubernetes aparece na entidade que tem a anotação `backstage.io/kubernetes-id`.
 
@@ -96,7 +96,7 @@ Backend e frontend não mudam: `publish:github:pull-request` já vem no módulo 
 - `requirements.txt` — `fastapi` e `uvicorn` com versão fixada.
 - `Dockerfile` — `python:3.13-slim`, usuário não-root, `EXPOSE 8000`, `CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]`. Label `org.opencontainers.image.source` apontando para o repo.
 - `catalog-info.yaml` — `kind: Component`, `spec.type: service`, `spec.lifecycle: experimental`, `spec.owner: ${{ values.owner }}`, anotações `github.com/project-slug: wasp-foundry/${{ values.name }}` e `backstage.io/kubernetes-id: ${{ values.name }}`.
-- `.github/workflows/ci.yaml` — descrito abaixo.
+- `.github/workflows/ci.yaml` — descrito abaixo. Listado em `copyWithoutTemplating`: as expressões `${{ github.* }}` do Actions usam a mesma sintaxe do `fetch:template` e seriam renderizadas (ou quebrariam) pelo scaffolder. Por isso o workflow não recebe valores do template — obtém o nome do repo de `github.event.repository.name`.
 
 **`gitops/`** (vira `apps/<name>/` no repo `gitops`):
 
@@ -145,7 +145,7 @@ Criado uma vez (`gh repo create wasp-foundry/gitops --public`) com `README.md` e
 ## Riscos a validar primeiro
 
 1. **Visibilidade inicial do pacote GHCR.** Pacote novo numa org pode nascer privado mesmo vindo de repo público, e não há API para mudar a visibilidade. Validar com um repo descartável na `wasp-foundry` antes de escrever o template. Se nascer privado: tornar público pela UI na primeira publicação de cada app não escala — o fallback é um `imagePullSecret` com PAT `read:packages` no namespace, criado pelo ApplicationSet via `ExternalSecret` ou à mão no PoC.
-2. **Output `commitHash` do `publish:github`.** Confirmar na versão instalada após #100. Se não existir, o passo 3 grava `newTag: bootstrap` e o primeiro CI substitui; o pod fica em `ImagePullBackOff` até lá.
+2. **Output `commitHash` do `publish:github`** — resolvido: existe na v1.55.3 (`plugins/scaffolder-backend-module-github/src/actions/github.ts:246`, `ctx.output('commitHash', ...)`). `publish:github:pull-request` aceita `sourcePath` + `targetPath` e devolve `remoteUrl`, `pullRequestNumber`, `targetBranchName`.
 
 ## Limitações aceitas (registrar em `aws/docs/known-broken.md`)
 
