@@ -175,7 +175,25 @@ detalhe é o que abre a opção cirúrgica descrita em Open Questions. A célula
 
 ## Em progresso agora
 
-**Frente ativa: custo e robustez do teardown (#92, #94).** Começou como a pergunta "quais custos
+**Frente ativa mais recente: IDP — criar aplicação por time e fazer deploy (#100, #101).** Backstage
+em `idp/` cria repo público na org GitHub `wasp-foundry` (template `python-service`, FastAPI), abre
+PR com manifestos em `wasp-foundry/gitops` (`apps/<app>/`), CI publica no GHCR e faz bump de tag por
+commit direto; `ApplicationSet foundry-apps` no k3d do cluster-zero faz o deploy; aba Kubernetes do
+Backstage lê o cluster. Decisões e alternativas descartadas (EKS, `deploy/` por repo, commit direto
+do template, Image Updater, repos privados, GitHub Teams, um App só) no spec
+`docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md` — **não rediscutir**.
+
+- **Parado em:** brainstorming, spec e planos concluídos na branch `feat/101-foundry-app-scaffolding`
+  (sem push). Nenhum código escrito. #100 em `Todo`, #101 em `In Progress` no board #6.
+- **Próximo:** executar os planos **nesta ordem, inline (`superpowers:executing-plans`), um por
+  vez**: `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/` → `00` (upgrade Backstage
+  1.49.0→1.55.3, branch própria `feat/100-backstage-upgrade` a partir de `main`), `01`, `02`, depois
+  `03` e `04` (independentes), `05`. Índice e convenções em `README.md` da pasta.
+- **Precisa do usuário:** criar os dois GitHub Apps (`wasp-foundry-backstage`, `wasp-foundry-ci`) e
+  ajustar permissões pela UI (plano 01, Tasks 3–4); merge dos PRs; login Google no smoke do 00.
+- `smsilva/wasp-idp` **não** vai para a org: transferir quebra a trust OIDC da role de CI (owner id).
+
+**Frente anterior: custo e robustez do teardown (#92, #94).** Começou como a pergunta "quais custos
 estão contando nas contas atuais?" e virou investigação: a região estava de pé porque um teardown
 falhou 2 dias antes, em silêncio.
 
@@ -298,7 +316,16 @@ com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` 
 
 ## How to Resume
 
-**Primeiro comando** — confirmar que a região continua vazia e que os profiles respondem:
+**Frente IDP (#100/#101)** — primeiro comando:
+
+```bash
+git switch feat/101-foundry-app-scaffolding && git push --set-upstream origin feat/101-foundry-app-scaffolding
+cat docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/README.md docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/00-backstage-upgrade.md
+```
+
+Depois seguir `00-backstage-upgrade.md` Task 1 (começa em `git switch main`).
+
+**Frente AWS** — primeiro comando — confirmar que a região continua vazia e que os profiles respondem:
 
 ```bash
 cd aws/terraform
@@ -461,6 +488,9 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
+- **Pacote GHCR novo na org `wasp-foundry` nasce público ou privado?** Hipótese: privado mesmo
+  vindo de repo público, e sem API para mudar. Se for, o k3d não baixa a imagem sem pull secret.
+  Respondido pelo spike descartável do plano 01, Task 1 — **decisão do fallback é do usuário**.
 - **O que deve virar efêmero no hub, para o Client VPN parar de custar ~US$ 146/mês parado?** Esta é
   a frente pedida e não iniciada — o brainstorming foi interrompido antes da decisão. Três opções já
   levantadas, com o trade-off apurado; **não rederivar**:
@@ -528,6 +558,8 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
+0. **#100 → #101** — executar os planos de
+   `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/` na ordem do `README.md` da pasta.
 1. **Integrar #92 antes de #94** — a ordem não é cosmética (ver Known Broken). Depois, o próximo
    ciclo `provision-region` + `teardown-region` exercita as duas correções de graça, e é o aceite
    que falta nas duas.

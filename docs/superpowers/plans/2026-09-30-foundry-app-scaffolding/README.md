@@ -22,4 +22,4 @@ Um arquivo por plano para que cada execução carregue só o contexto que precis
 - Commits em Conventional Commits com escopo da issue (`feat(#101): ...`), terminando com `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Ferramentas ausentes nesta máquina rodam via Docker: `shellcheck` → `koalaman/shellcheck:stable`, `actionlint` → `rhysd/actionlint:latest`.
 - `gh pr edit` / `gh issue edit` falham neste repo — usar `gh api --method PATCH` (ver `CLAUDE.md`).
-- Board #6: project id **`PVT_kwHOAARkfs4Bh2xz`** (o valor em `CLAUDE.md` está errado), field Status `PVTSSF_lAHOAARkfs4Bh2xzzhgw8QM`, `Done` = `1168c952`.
+- Board #6: project id `PVT_kwHOAARkfs4Bh2xz`, field Status `PVTSSF_lAHOAARkfs4Bh2xzzhgw8QM`, `Done` = `1168c952`.
