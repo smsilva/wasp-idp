@@ -90,6 +90,13 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - **Ingress: ALB no hub → NLB interno na spoke → gateway Istio (decidido 2026-08-26):** o NLB é do Terraform e o `istio-ingressgateway` vira `ClusterIP` com `TargetGroupBinding` — cardinalidade 1 por cluster, e se o LBC criasse o NLB o ARN só existiria depois do workload, quebrando o apply único. Nada cruza conta em tempo de execução.
 - **Sequência de provisionamento — dois pares de specs, um só autoritativo (2026-08-27):** `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` + `-resource-dictionary.md` (61 recursos, um arquivo cada) descrevem a sequência **deste** repo, de `00 · accounts` a `08 · provas de isolamento`. O par `2026-08-20-*` é retrato histórico do monólito Crossplane da trilha corporativa — consultar como referência, não como estado. Ao acrescentar camada ou recurso, atualizar os três: sequência, índice e arquivo do recurso.
 
+- **Apps criadas pelo Backstage vivem na org `wasp-foundry`, não em `smsilva` (decidido 2026-09-30):** o `wasp-idp` fica em `smsilva/wasp-idp` — transferi-lo muda owner e owner id e quebra a trust OIDC da role de CI (`aws/terraform/ci/main.tf`, `repo:${github_org}@${github_owner_id}/...`). Desenho em `docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md`.
+
+## Software Templates — gotchas
+
+- Liste `.github/workflows/*` em `copyWithoutTemplating` no `fetch:template`: o Actions usa a mesma sintaxe `${{ }}` do scaffolder, e o template quebraria ou renderizaria `${{ github.* }}`. Workflow gerado não recebe `values.*` — derive nomes de `github.event.repository.name`.
+- `yarn backstage-cli create-github-app <org>` cria o App só com leitura; permissões de escrita (inclusive **Workflows**, necessária para enviar `.github/workflows/`) são ajustadas à mão nas settings do App.
+
 ## Security TODOs (PoC hardening, deferred)
 
 Flagged by automated security review — intentional PoC shortcuts, to revisit before any real deployment:
