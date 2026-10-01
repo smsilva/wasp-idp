@@ -84,6 +84,8 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 | `scripts/configure.sh` | Installs PostgreSQL 18 and configures the production DB |
 | `scripts/cluster-zero/up` | Stands up a local k3d cluster (3 servers) with ArgoCD + Crossplane (Azure providers) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
 | `scripts/cluster-zero/verify` | Checks health of the cluster, ArgoCD, and Crossplane |
+| `scripts/cluster-zero/install-foundry-appset` | Applies the `foundry-apps` ApplicationSet: one ArgoCD `Application` per `apps/*` directory of `wasp-foundry/gitops` |
+| `scripts/cluster-zero/backstage-reader` | Creates a read-only ServiceAccount and prints `K8S_CLUSTER_ZERO_TOKEN`/`K8S_CLUSTER_ZERO_CA` for the Backstage kubernetes plugin — `eval "$(scripts/cluster-zero/backstage-reader)"` before `yarn start` |
 | `scripts/cluster-zero/cluster-delete` | Tears down the cluster |
 
 ## Architecture decisions (recorded)
