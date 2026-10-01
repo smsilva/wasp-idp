@@ -1,5 +1,7 @@
 # HANDOFF
 
+Visão geral e estado do repo. Progresso de qualquer tarefa em andamento (parado em, próximo passo, ambiente local) vive em `HANDOFF.local.md` (gitignored) de quem está trabalhando — ver `CLAUDE.md`.
+
 ## Why
 
 Exercitar a PoC AWS EKS-via-Crossplane (arquitetura de referência hub-and-spoke) na conta AWS
@@ -48,117 +50,9 @@ zero OUs**; o **whitepaper** nomeia OUs (`Security`, `Infrastructure`, `Workload
 
 ## Estado atual
 
-Não presumir o que está de pé pelo handoff — conferir sempre:
+Não presumir o que está de pé pelo handoff — conferir sempre (comando em **Operação**).
 
-```bash
-cd aws/terraform
-for m in state-backend dns regions/us-east-1 regions/us-west-2; do
-  printf '%-32s %s\n' "${m}" "$( (cd "${m}" && terraform state list 2>/dev/null | grep -vc '^data\.') )"
-done
-k3d cluster list
-```
-
-**2026-08-30 (fase 4):** as raízes antigas (`network-foundation/`, `connectivity/`, `control-plane/`)
-e os scripts `up-01`/`up-03`/`up-04` foram apagados do disco e do bucket de state — o conteúdo vive
-em `src/hub`/`src/cell`, consumidos por `regions/<região>/`. `regions/us-west-2/` existe (`plan`
-verde, sem recursos aplicados). Scripts renumerados: `up-00-state-backend`, `up-01-dns`,
-`up-02-region`. `aws/terraform/README.md` reflete a sequência — fonte de verdade para custo/ordem.
-
-**2026-08-31 (run 8 do `provision-region.yml`):** `regions/us-east-1/` esteve **de pé de verdade**
-por algumas horas — 123 recursos aplicados (hub + célula: EKS, TGW, Client VPN, os 6 helm
-releases), provisionados pelo próprio workflow de CI, não por uma sessão manual. Validou o
-workflow de ponta a ponta (fecha a #41).
-
-**2026-08-31 (mesma sessão, depois): região inteira derrubada** — `terraform destroy` sem
-`-target` na raiz, 120 recursos destruídos, `terraform state list` confirma 0. Custo parou. Duas
-lacunas descobertas nessa destroy manual (nenhuma delas presente no `provision-region.yml`, que já
-resolve as duas via `--public-cidr`/CI role bootstradora do cluster):
-endpoint público fechado bloqueando o *refresh* do `destroy` sem VPN (mesma classe de bug do run 7,
-mas local) e RBAC do EKS (`Unauthorized`) porque só a role `github-actions-provision` — quem
-bootstrapou o cluster — tinha `AccessEntry`; concedido um `AccessEntry` temporário de
-cluster-admin à `OrganizationAccountAccessRole` local só para a destroy conseguir apagar os
-objetos Kubernetes, destruído junto com o cluster. Issue **#52** criada para revalidar
-`provision-region.yml` do zero (região já vazia) — board #6, label `private-access-ingress`.
-
-**2026-09-01 (#52 fechada, os dois critérios):** `provision-region.yml` provado **do zero num único
-apply** (78 recursos, `0 changed, 0 destroyed`) e `teardown-region.yml` provado (78 destruídos, zero
-recriados). Estado ao fim da sessão: **`regions/us-east-1` com 43 recursos de `module.hub` de pé e
-`module.cell` em zero** — o hub fica de pé por desenho (~US$ 110/mês); a célula (~US$ 165/mês) foi
-derrubada.
-
-Cinco bugs corrigidos no caminho, nenhum deles pego por regressão offline:
-
-- **Race de Pod Identity do EBS CSI (bug de produto, não de CI).** `aws_eks_addon` em `src/cluster` e
-  `module.pod_identity_ebs_csi` em `src/cell` não se referenciavam, então nasciam em paralelo — numa
-  run o addon começou 7s **antes** da association e morreu `DEGRADED` 20 min depois. Os env vars de
-  Pod Identity são injetados por webhook na **admissão** do pod: pod spec é imutável, restart nunca
-  recupera, e aumentar timeout só adia. O addon virou recurso próprio em `src/cell` com
-  `depends_on = [module.pod_identity_ebs_csi, module.nodegroup]` — mesmo split 65→68 do lado
-  Crossplane. Agora sobe `ACTIVE` em 35s. `aws/docs/lessons-learned/terraform-layers.md` afirmava
-  que essa race "não existe no Terraform, o grafo já ordena" — riscado e corrigido lá.
-- `down-cell` não criava os symlinks de runtime (`values.auto.tfvars`, `saml-metadata.xml`): num
-  runner limpo morria com `No value for required variable` antes de tocar a AWS.
-- Bloco `moved` derruba **todo** plan com `-target`, e os dois scripts abrem o endpoint com apply
-  direcionado como primeira ação. Removido — `moved` é incompatível com esta árvore.
-- `--close-public-access` do `down-cell` rodava `apply -target` no cluster **depois** do destroy;
-  `-target` em recurso ausente **cria**, e o estado desejado da região inclui a célula. Uma run
-  destruiu 78 e recriou 8 (VPC, 4 subnets, IAM role e um control plane EKS inteiro). Guard de state
-  nos dois scripts.
-- `up-02-region` fragmentava o apply do zero pelo mesmo `-target` auxiliar, e seu
-  `--close-public-access` era apply **completo** — no caminho de falha (`if: always()`) tentaria
-  terminar a célula com o endpoint fechado. Ambos guardados por state.
-
-**2026-09-01 (#15, branch `feat/15-ipam-scope-evaluation`): IPAM avaliado e decidido — adiar**
-([ADR 0015](docs/adr/0015-defer-ipam-adoption.md)). Nenhum dos cinco gatilhos disparou; o custo
-medido seria US$ 1,38/mês (7 IPs ativos na Organization inteira, com só o hub de pé) e REL02-BP05
-declara o risco como **Medium**. Dois fatos do `aws/docs/network/08-ipam.md` estavam **errados** e
-foram corrigidos: não existe recorte Free Tier (pool no escopo privado é Advanced, sempre), e
-`auto_import` não substitui alocação explícita — a allocation reserva espaço sem vincular VPC.
-**`us-west-2` foi realocada de `10.3`/`10.4` para `10.4`/`10.5`**: a alocação passou a ser por
-região em `/14` contíguos, porque pool regional exige `locale` e locale é imutável — feito enquanto
-aquela raiz tinha 0 recursos, custo de duas linhas. Issue **#66** aberta para o risco real que sobrou: nada impede colisão de CIDR **entre regiões** —
-os CIDRs são literais por raiz e a única asserção compara hub vs célula dentro da mesma raiz. Issue
-**#67** para as VPCs default `172.31.0.0/16`, sobrepostas entre si por construção; a management já
-não tem nenhuma, o que prova que remover é seguro. (A #67 estimou 6; eram **8** — ver Completed Work.)
-
-**O spike foi aplicado de verdade, duas vezes, e achou um defeito** —
-`aws/terraform/spikes/ipam/README.md` tem as sete provas com resultado real, incluindo as não
-executadas marcadas como tal. **Em `us-east-1` (brownfield) o IPAM entregou `10.1.0.0/24`, dentro
-da VPC hub `10.1.0.0/16` que estava de pé**: `auto_import` é assíncrono e a alocação não espera por
-ele, e uma alocação prematura **envenena o pool** (VPC que cobre uma alocação existente não pode
-mais ser importada). **Em `us-west-2` (greenfield) o mesmo código devolveu `10.4.0.0/24`, sem
-sobreposição** — o defeito é exclusivo de brownfield. Consequência registrada na ADR: o custo de
-adotar IPAM **salta** quando a primeira VPC nasce fora do pool, o que é o melhor argumento *contra*
-adiar. Por isso a **ADR 0015 está `Proposto`, não `Aceito`** — a decisão é sua.
-
-**Decisão: adiar** — ADR 0015 **Aceita**. `aws/docs/network/08-ipam.md` foi reescrita com todos os
-achados medidos; ler de lá, não daqui. Nada permanece na AWS: `describe-ipams` = 0 nas duas regiões,
-`list-delegated-administrators` = 0, state do spike vazio.
-
-Números que valem para qualquer trabalho futuro com IPAM: VPC alocada por pool leva **~4 min para
-criar e 18–27 min para destruir**; todo o resto (IPAM, pools, RAM, delegação) sai em **~1 min**. O
-provider espera a **desalocação assíncrona**: a VPC some da AWS muito antes, e a alocação fica
-retida no pool apontando para a VPC morta — logo **CIDR alocado por IPAM não é estável entre
-recriações**. Ao diagnosticar um destroy que parece travado, conferir `pgrep -af terraform` **sem
-truncar** — um `| head -3` nesta sessão escondeu o processo vivo e levou a um diagnóstico errado.
-
-**Documentação do CI consolidada:** `aws/terraform/ci/README.md` é o documento único da automação
-(trust OIDC, variables/secrets com o motivo de cada um, GitHub App, composite action `aws/setup`,
-os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `## Raízes` do
-`aws/terraform/README.md` — ela não estava lá, e é por isso que o README dela era indescobrível.
-
-Túnel do Client VPN conecta com o `.ovpn` exportado do endpoint corrente
-(`aws-vpn-client get-connection-status --profile-name hub-<região>` — o profile leva a região no
-nome porque cada região tem o próprio endpoint). Com o hub derrubado, o endpoint não existe mais —
-reexportar depois de reaplicar.
-
-**2026-09-04 — `us-east-1` está VAZIA, hub incluso.** Invalida qualquer afirmação anterior deste
-arquivo sobre "o hub está de pé (43 recursos)". 76 recursos destruídos, `terraform state list` = 0
-nas duas raízes de região, ~13 min. Custo da Organization agora **abaixo de US$ 1/mês** (só hosted
-zone, bucket de state, CloudTrail no `log-archive` e Secrets Manager). Auditoria de órfão feita nas
-contas `network` e `cicd`: zero NAT, EIP, ELB, target group, VPC, ENI, certificado ACM, endpoint de
-Client VPN e cluster EKS; TGW em `deleted`; subzona Route 53 com apenas `NS`+`SOA` — nenhum record
-órfão do external-dns, que era o risco real por rodar `policy: upsert-only`.
+**AWS: `regions/us-east-1` e `regions/us-west-2` vazias desde 2026-09-04** (nem hub nem célula). Custo da Organization abaixo de US$ 1/mês (hosted zone, bucket de state, CloudTrail no `log-archive`, Secrets Manager). Raízes: `state-backend`, `dns`, `regions/<região>` (compõe `src/hub` + `src/cell`), `ci`; sequência, custo e ordem em `aws/terraform/README.md` — fonte de verdade.
 
 **Decomposição do custo do resting state**, medida no Cost Explorer e útil para a frente do Client
 VPN (abaixo). O que o hub custava parado:
@@ -173,123 +67,34 @@ A cobrança do Client VPN é **por associação, não por endpoint** — endpoin
 detalhe é o que abre a opção cirúrgica descrita em Open Questions. A célula, quando de pé, soma
 ~US$ 165/mês por cima.
 
-## Em progresso agora
+**IPAM: adiado** ([ADR 0015](docs/adr/0015-defer-ipam-adoption.md)); achados medidos em `aws/docs/network/08-ipam.md`. Alocação de CIDR por região em `/14` contíguos (`us-west-2` em `10.4`/`10.5`).
 
-**Frente IDP (#100, #101) concluída em 2026-10-01** — ver Completed Work. Para operar o fluxo
-(subir k3d, `yarn start` com credenciais do cluster, criar app): `docs/idp/CLAUDE.md`. Comandos
-interativos (`backstage-cli create-github-app`, `gh auth refresh`) não rodam via `!` — usar outra
-window do tmux. `yarn` não está no `PATH`: `node .yarn/releases/yarn-4.4.1.cjs <cmd>` em `idp/`.
-`smsilva/wasp-idp` **não** vai para a org `wasp-foundry`: transferir quebra a trust OIDC da role de
-CI (owner id).
+Números que valem para qualquer trabalho futuro com IPAM: VPC alocada por pool leva **~4 min para
+criar e 18–27 min para destruir**; todo o resto (IPAM, pools, RAM, delegação) sai em **~1 min**. O
+provider espera a **desalocação assíncrona**: a VPC some da AWS muito antes, e a alocação fica
+retida no pool apontando para a VPC morta — logo **CIDR alocado por IPAM não é estável entre
+recriações**. Ao diagnosticar um destroy que parece travado, conferir `pgrep -af terraform` **sem
+truncar** — um `| head -3` já escondeu o processo vivo e levou a um diagnóstico errado.
 
-**Frente anterior: custo e robustez do teardown (#92, #94).** Começou como a pergunta "quais custos
-estão contando nas contas atuais?" e virou investigação: a região estava de pé porque um teardown
-falhou 2 dias antes, em silêncio.
+**Documentação do CI consolidada:** `aws/terraform/ci/README.md` é o documento único da automação
+(trust OIDC, variables/secrets com o motivo de cada um, GitHub App, composite action `aws/setup`,
+os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `## Raízes` do
+`aws/terraform/README.md` — ela não estava lá, e é por isso que o README dela era indescobrível.
 
-**#92 — implementada, ainda não integrada nem exercitada na AWS.** Os 9 consumidores da API do
-Kubernetes em `src/cell` não tinham aresta nenhuma com `module.cluster` — só com o output
-`cluster_name`, que depende apenas de `aws_eks_cluster.this`. O addon `eks-pod-identity-agent` e as
-access entries do caller ficavam com **zero dependências de entrada** e o destroy os apagava na
-primeira onda. Fix: 5 nós raiz declaram `module.cluster` inteiro; os outros 4 herdam por
-transitividade. Guard novo `aws/terraform/scripts/check-graph` assere as arestas via `terraform
-graph`, offline. Validado com regressão verde nos 6 diretórios e **duas mutações confirmadas**;
-**não** validado por apply+destroy real — decisão explícita, a região foi destruída justamente para
-parar de gastar, e o próximo ciclo exercita de graça.
+**IDP:** Backstage em `idp/` (1.55.3, roda só local via `yarn start`), integrado à org GitHub `wasp-foundry` pelo App `wasp-foundry-backstage`. Template `python-service` cria app (repo + PR em `wasp-foundry/gitops`); CI das apps publica no GHCR e faz bump pelo App `wasp-foundry-ci`. Exemplo vivo: `wasp-foundry/hello-alpha`. Clusters k3d são locais a cada máquina — não fazem parte do estado compartilhado. Operação em `docs/idp/CLAUDE.md`.
 
-**#94 — achado 1 fechado, achados 3/4/5 abertos.** `teardown-region.yml` ganhou um step
-`Teardown cell (retry)` entre a tentativa e o fechamento do endpoint. Também não exercitado num run
-real (exige célula de pé). Segue aberto: não há `schedule`/`cron` em nenhum workflow apesar de
-`down-cell` e `README.md` se descreverem como "nightly"/"todo dia" (achado 3); falha de teardown não
-notifica ninguém (achado 4); a receita de recuperação por `state rm` não é subcomando (achado 5).
+## Frentes
 
-**A frente do Client VPN NÃO foi iniciada** — era o pedido original e ficou para depois. Ver Open
-Questions.
+| Frente | Estado |
+|---|---|
+| IDP: criação de app por time (#100, #101) | Entregue em 2026-10-01 |
+| IDP: Bookinfo no catalog + clusters `development`/`production` (#105) | Em andamento — spec `docs/superpowers/specs/2026-10-01-bookinfo-catalog-multi-cluster-design.md` |
+| Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
+| Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
+| Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
+| SEC-EDGE (#84–#89) | #84 (WAF no ALB do hub) mergeado e **não aplicado**; próxima #85 (access logs do ALB para S3), da qual #86 depende |
 
-**Série SEC-EDGE (decomposta de #83), issues #84-#89, board #6.** #84 (WAF Web ACL no ALB do hub)
-implementada via `superpowers:subagent-driven-development`, branch `feat/84-waf-web-acl-hub-alb`,
-**PR #90 aberto contra `main`, ainda não mergeado nem aplicado na AWS** — decisão explícita de não
-rodar `terraform apply` agora para não fazer crescer o custo antes de fechar #85 também. Issue #84
-deixada em `Todo` no board de propósito (fecha só quando o PR mergear). Próxima da série: **#85**
-(access logs do ALB do hub para S3) — sem dependência pendente, #86 (logging do WAF cross-account)
-depende do padrão de bucket que #85 vai estabelecer.
-
-**Backlog completo e priorização: GitHub Project.**
-
-```bash
-gh project item-list 6 --owner smsilva --limit 100 --format json   # board inteiro
-gh issue list -R smsilva/wasp-idp --label network-foundation --state open
-```
-
-`--limit 100` é obrigatório: o default de 30 já não cobre o board, e uma auditoria sem ele acusa
-issues como "fora do board" que já estão nele.
-
-Board: https://github.com/users/smsilva/projects/6
-
-**Convenção de branch: uma por FASE**, `feat/private-access-phase-<n>` — não por passo. A issue
-**#41** (workflow GitHub Actions para provisionar hub e célula) está **fechada**: as três fatias
-(design, workflow, validação real) implementadas, mergeadas em `main` e validadas por
-`workflow_dispatch` real (run 8, verde de ponta a ponta) em 2026-08-31 — narrativa em
-[`docs/archived/index.md`](docs/archived/index.md), tema "GitHub Actions CI". Issue #47 (teto de
-1h nas sessões de CI) fechada junto, pela causa raiz e não por aceitação do limite.
-
-#37 fechada e movida para `Done` no board em 2026-08-31 (critério satisfeito pelo clone limpo da
-fase 4); #36 fechada em 2026-08-30.
-
-**Plano de execução da fase corrente:**
-`docs/superpowers/plans/2026-08-29-regional-root-hub-and-cell-modules/` — um arquivo por fase
-(`README.md` + `01`–`05`). Fases 1-3 fechadas — `module.cell` compõe com `module.hub` na raiz
-regional, apply e destroy reais provados. Fase 4 (`04-cleanup-and-docs.md`) **fechada**: raízes
-antigas apagadas (Task 1), `regions/us-west-2/` criada e o invariante provado (Task 2), scripts
-renumerados (Task 3), `README.md`/`HANDOFF.md` reescritos, regressão offline completa (14 módulos,
-`Success!` em todos) (Task 4). #21 fechada (absorvida por #36/ADR 0014); #36 já fechada em sessão
-anterior. **Clone limpo rodado e achou dois bugs reais, corrigidos nesta sessão:**
-`state-backend/terraform.tfvars` faltava nos Pré-requisitos do README (corrigido — documentado);
-`up-01-dns` tinha um `generate-tfvars` residual (escrevia `dns/terraform.tfvars` próprio e checava
-colisão de NS no Azure ANTES do `init`) que travava um clone/máquina nova mesmo com a delegação já
-aplicada e tracked no state remoto — removido, `dns/` passou a ler só de `values.auto.tfvars` como
-qualquer outra raiz desde a ADR 0014. Os scripts `up-01-dns`/`up-02-region` agora criam os symlinks
-`values.auto.tfvars`/`saml-metadata.xml` sozinhos (`ensure_symlink` em `scripts/lib`) — antes o
-README só documentava criá-los à mão na seção "Nova região", nada cobria clone/máquina nova de uma
-região já existente. Critério de aceite da #37 ("árvore final aplica do zero seguindo só o
-README") **satisfeito** — clone limpo chegou ao `plan` verde em `dns/` e aplicou/destruiu
-`module.hub` de `us-east-1` de ponta a ponta sem consultar mais nada.
-
-**Cuidado ao repetir o teste de clone limpo:** `up-02-region --region <r> --yes` **sem**
-`--with-cell` já é um `apply` real (`-target=module.hub -auto-approve`), não um `plan` — um erro
-desta sessão foi rodar esse comando pensando estar só testando o script, e ele recriou o hub
-`us-east-1` de verdade (42 recursos, destruído de volta na sequência). Para testar só o `plan` do
-comportamento de um script, usar `terraform plan` direto na raiz, nunca o script `up-*` com
-`--yes`.
-
-**#40** (acesso administrativo único a qualquer hub regional — hoje é preciso trocar de túnel Client
-VPN por região) segue no backlog, sem trabalho iniciado. A #41 **não** ficou bloqueada por ela: a
-spec de 2026-08-31 resolveu o acesso do runner pelo break-glass do endpoint público restrito a CIDR,
-sem depender do desenho da #40. Ambas com label `private-access-ingress`, no board #6.
-
-A frente `regional-root-hub-and-cell-modules` (branch `feat/regional-root-hub-cell`) está pronta
-para revisão/integração em `main`.
-
-A frente anterior, `docs/superpowers/plans/2026-08-26-private-access-and-ingress/`, está concluída
-— ver `docs/archived/index.md`.
-
-**Issues abertas nesta sessão, nenhuma com trabalho iniciado:**
-
-| Issue | O que é | Depende de |
-|---|---|---|
-| **#56** | Declarar admins do cluster (access entries) opcionalmente, por grupo | — |
-| **#62** | Nenhuma StorageClass usa `ebs.csi.aws.com`; só existe a `gp2` in-tree, e nenhum PVC exercita o addon | — |
-| **#64** | Reorganizar a documentação — **primeira atividade é brainstorming, não mover arquivo** | — |
-| **#65** | Publicar a doc como site MkDocs Material | #64 e #23 |
-
-**#64 e #65 têm orientação explícita de não ler os 247 `.md` de uma vez** — taxonomia se decide por
-metadados e cabeçalhos (`git ls-files … | xargs wc -l`, `grep -H '^#'`), não pelo corpo dos
-documentos; leitura integral só dos índices; amostragem para o resto; delegação em lote quando a
-varredura completa for inevitável.
-
-**Board #6 estava incompleto:** seis issues (#38, #39, #56, #62, #64, #65) nunca entraram, porque
-`gh issue create` não adiciona ao Project v2 e o board não tem workflow "Auto-add". Corrigido, todas
-com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` do `Status`) está em
-`CLAUDE.md` — sem o segundo passo o item cai numa coluna "No Status" que ninguém olha.
+Backlog e priorização: GitHub Project #6 — https://github.com/users/smsilva/projects/6 (`gh project item-list 6 --owner smsilva --limit 100 --format json`; sem `--limit 100` o default de 30 omite itens).
 
 ## Referências (ler sob demanda, não de uma vez)
 
@@ -303,9 +108,9 @@ com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` 
 | O que falta fazer, priorizado | GitHub Project #6 (link acima) |
 | Sequência de provisionamento e dicionário de recursos | `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` |
 
-## How to Resume
+## Operação
 
-**Frente AWS** — primeiro comando — confirmar que a região continua vazia e que os profiles respondem:
+Conferir estado e credenciais antes de qualquer coisa na AWS:
 
 ```bash
 cd aws/terraform
@@ -506,7 +311,7 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Known Broken
 
-Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken.md). Desta sessão:
+Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken.md). Itens com contexto que vale ter à mão:
 
 - **Teardown não é agendado nem notifica** — *unexpected*, #94 achados 3 e 4. `down-cell` se diz
   "nightly" e o `README.md` diz "todo dia", mas os três workflows são `workflow_dispatch` puro. E
@@ -514,10 +319,6 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
   único modo de falha do repo que **gasta dinheiro continuamente**.
 - **#92 e #94 não foram exercitados na AWS** — *intentional*. Ambos validados só offline; exigem uma
   célula de pé, e a região foi destruída de propósito. O caminho de retry só aparece numa falha real.
-- **A ordem de integração de #92 e #94 importa** — *intentional*. O retry de #94 só é útil com a
-  aresta de #92: sem ela o destroy apaga o agent e as access entries na primeira onda, e a segunda
-  tentativa morre em `Unauthorized` em vez de chegar a um timeout. Integrar #94 sozinho entrega um
-  retry que falha junto.
 
 - **`recover-lock.yml` nunca foi executado e não roda** — *unexpected*, item 25. Dois defeitos:
   referencia o composite action do repositório privado direto (a correção do App token tocou só os
@@ -531,40 +332,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
   pré-existente (confirmado por `git stash` + reexecução): resíduo de estado de teste com o provider
   aliasado `aws.network`. A checagem que vale é o `plan` na raiz regional.
 - **`aws_iam_saml_provider.client_vpn` tem drift** entre o XML local e o que está na AWS —
-  *unexpected*, não aplicado nesta sessão para não mexer em config compartilhada do Client VPN.
-
-## Next Steps
-
-1. **Integrar #92 antes de #94** — a ordem não é cosmética (ver Known Broken). Depois, o próximo
-   ciclo `provision-region` + `teardown-region` exercita as duas correções de graça, e é o aceite
-   que falta nas duas.
-2. **Decidir a efemeridade do Client VPN** (Open Questions) — a decisão é sua; as três opções e o
-   trade-off já estão apurados. É a maior alavanca de custo do repo: ~73% do resting state do hub.
-3. **#94 achados 3, 4 e 5** — agendar o teardown (ou parar de chamá-lo "nightly"), notificar falha,
-   e transformar a recuperação por `state rm` em subcomando. O achado 4 é o de maior retorno: sem
-   notificação, qualquer falha futura repete o padrão de descoberta por fatura.
-4. **#14** — atualizar a tabela de custo do Client VPN. O número real (~US$ 146/mês, 2 associações) já
-   está medido e registrado aqui e na issue; falta refletir em `aws/terraform/README.md`, que ainda
-   diz ~US$ 110/mês para o hub.
-5. **#85** — access logs do ALB do hub para S3. Próxima da série SEC-EDGE, sem apply de #84 antes
-   (ver "Em progresso agora").
-3. **#66** — colisão de CIDR entre regiões. Critério de aceite exige **teste de mutação** da
-   asserção cruzada, não só a asserção. `aws/terraform/variables/values.tfvars` **é versionado** e é
-   lugar viável para a tabela única de alocação.
-4. **#69** — declarative policy de EC2 (VPC Block Public Access) para neutralizar as VPCs default das
-   15 regiões negadas pela SCP, que a #67 não alcançou. **Não aplicar em target que contenha o hub
-   antes de medir** se a policy se restringe por região: modo `ingress-only` preserva a saída por NAT
-   mas mata o ALB público da célula. Critério de aceite inclui o `curl` sem `-k` em
-   `services.<célula>.<subzona>` justamente por isso.
-5. **#64** — brainstorming da estrutura de documentação. Entregável é a proposta discutida, não
-   arquivos movidos.
-6. **#62** — decidir se o cluster precisa de storage stateful. A opção mais barata (remover o addon
-   e a Pod Identity dele, eliminando a race junto) tem de ser considerada primeiro, não descartada
-   por reflexo. Se precisar, o valor real está no smoke test: um PVC + pod que monte volume, senão a
-   próxima regressão de Pod Identity volta a ser invisível.
-7. **#56** — admins declaráveis. Fecha a lacuna de não haver como entrar num cluster novo.
-8. **#65** — site MkDocs, depois de #64 e #23.
-9. **#40** segue no backlog do board #6, sem trabalho iniciado.
+  *unexpected*, não aplicado de propósito, para não mexer em config compartilhada do Client VPN.
 
 ## Completed Work
 
@@ -591,5 +359,10 @@ em [`docs/archived/index.md`](docs/archived/index.md).
   é chamado pelo `create-account`. **Não existe forma nativa de impedir a criação** — só Control
   Tower/AFT apagam, e o AFT não cobre as contas que ele provisiona; fontes e limites em
   `aws/docs/accounts/03-provisioning.md`.
+
+- **2026-09-01 — #15, IPAM avaliado: adiar** (ADR 0015). Spike aplicado em `us-east-1` (brownfield: alocação dentro da VPC existente) e `us-west-2` (greenfield: sem sobreposição); `us-west-2` realocada para `10.4`/`10.5`. Abriu #66 e #67.
+- **2026-09-01 — #52, `provision-region.yml` e `teardown-region.yml` provados do zero** (78 recursos num apply; 78 destruídos, zero recriados). Cinco bugs corrigidos no caminho, entre eles a race de Pod Identity do EBS CSI (addon agora com `depends_on` na association).
+- **2026-08-31 — #41, workflow de CI provisiona hub e célula** (run 8 verde ponta a ponta); #47 fechada pela causa raiz.
+- **2026-08-30 — fase 4 da raiz regional única** (ADR 0014): raízes antigas apagadas, `regions/us-west-2/` criada, scripts renumerados `up-00`/`up-01`/`up-02`, clone limpo aplica seguindo só o README (#37).
 
 > Before trusting anything time-sensitive above, run `git status`, `git diff`, and `git log` against the base branch.
