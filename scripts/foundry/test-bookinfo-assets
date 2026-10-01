@@ -1,0 +1,93 @@
+#!/bin/bash
+# Validate the Bookinfo seed assets offline: catalog entities and their
+# references, OpenAPI definitions, gitops overlays and the CI workflow.
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+assets_directory="${this_script_directory}/assets/bookinfo"
+services=(productpage details reviews ratings)
+api_providers=(details reviews ratings)
+
+echo "Catalog entities:"
+
+python3 - "${assets_directory}" "${services[@]}" <<'PYTHON'
+import pathlib
+import sys
+
+import yaml
+
+assets = pathlib.Path(sys.argv[1])
+services = sys.argv[2:]
+expected_owner = {"productpage": "group:default/team-alpha"}
+expected_provides = {"details": ["details-api"], "reviews": ["reviews-api"], "ratings": ["ratings-api"]}
+expected_consumes = {"productpage": ["details-api", "reviews-api"], "reviews": ["ratings-api"]}
+depends_on = ["resource:default/development", "resource:default/production"]
+failed = False
+
+
+def fail(message):
+    global failed
+    print(f"FAIL: {message}", file=sys.stderr)
+    failed = True
+
+
+for service in services:
+    path = assets / service / "catalog-info.yaml"
+    if not path.exists():
+        fail(f"{path} missing")
+        continue
+    documents = [document for document in yaml.safe_load_all(path.read_text()) if document]
+    components = [d for d in documents if d["kind"] == "Component"]
+    apis = [d for d in documents if d["kind"] == "API"]
+    if len(components) != 1:
+        fail(f"{service}: expected one Component, got {len(components)}")
+        continue
+    component = components[0]
+    spec = component["spec"]
+    annotations = component["metadata"].get("annotations", {})
+    checks = {
+        "name": component["metadata"]["name"] == service,
+        "system": spec.get("system") == "bookinfo",
+        "owner": spec.get("owner") == expected_owner.get(service, "group:default/team-beta"),
+        "providesApis": spec.get("providesApis", []) == expected_provides.get(service, []),
+        "consumesApis": spec.get("consumesApis", []) == expected_consumes.get(service, []),
+        "dependsOn": spec.get("dependsOn") == depends_on,
+        "project-slug": annotations.get("github.com/project-slug") == f"wasp-foundry/{service}",
+        "kubernetes-id": annotations.get("backstage.io/kubernetes-id") == service,
+    }
+    for check, ok in checks.items():
+        if not ok:
+            fail(f"{service}: Component {check}")
+    if [api["metadata"]["name"] for api in apis] != expected_provides.get(service, []):
+        fail(f"{service}: API entities {[api['metadata']['name'] for api in apis]}")
+    for api in apis:
+        api_spec = api["spec"]
+        if api_spec.get("type") != "openapi" or api_spec.get("system") != "bookinfo":
+            fail(f"{service}: API {api['metadata']['name']} type/system")
+        if api_spec.get("owner") != spec.get("owner"):
+            fail(f"{service}: API owner differs from Component owner")
+        if api_spec.get("definition") != {"$text": "./openapi.yaml"}:
+            fail(f"{service}: API definition must be $text ./openapi.yaml")
+        if not (assets / service / "openapi.yaml").exists():
+            fail(f"{service}: openapi.yaml missing")
+    if not failed:
+        print(f"ok: {service}")
+
+sys.exit(1 if failed else 0)
+PYTHON
+
+echo ""
+echo "OpenAPI definitions:"
+
+for service in "${api_providers[@]}"; do
+  docker run \
+    --rm \
+    --volume "${assets_directory}/${service}:/spec" \
+    redocly/cli:latest \
+    lint \
+    --extends minimal \
+    /spec/openapi.yaml > /dev/null
+  echo "ok: ${service}/openapi.yaml"
+done

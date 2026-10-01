@@ -1,0 +1,36 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: reviews
+  description: Bookinfo reviews service (Java/Open Liberty) — v1 without ratings, v2 black stars, v3 red stars
+  annotations:
+    github.com/project-slug: wasp-foundry/reviews
+    backstage.io/kubernetes-id: reviews
+  tags:
+    - java
+    - open-liberty
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/team-beta
+  system: bookinfo
+  providesApis:
+    - reviews-api
+  consumesApis:
+    - ratings-api
+  dependsOn:
+    - resource:default/development
+    - resource:default/production
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: reviews-api
+  description: Book reviews by product id, with star ratings in v2 and v3
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: group:default/team-beta
+  system: bookinfo
+  definition:
+    $text: ./openapi.yaml
