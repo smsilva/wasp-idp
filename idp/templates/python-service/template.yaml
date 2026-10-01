@@ -81,7 +81,7 @@ spec:
         branchName: add-${{ parameters.name }}
         title: 'apps: add ${{ parameters.name }}'
         description: |
-          Deploys `${{ parameters.name }}` (owner `${{ parameters.owner }}`) to cluster-zero.
+          Deploys `${{ parameters.name }}` (owner `${{ parameters.owner }}`) to the development and production clusters.
           Created by the Backstage template `python-service`.
 
     - id: register
