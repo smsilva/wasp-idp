@@ -26,6 +26,8 @@ export const SidebarContent = NavContentBlueprint.make({
       ));
       // Skipped items
       nav.take('page:search');
+      nav.take('page:user-settings');
+      nav.take('page:notifications');
       return compatWrapper(
         <Sidebar>
           <SidebarLogo />
