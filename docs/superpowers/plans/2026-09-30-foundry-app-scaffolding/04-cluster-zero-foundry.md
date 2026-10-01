@@ -28,7 +28,7 @@
 - Create: `scripts/cluster-zero/assets/foundry-appset.yaml`
 - Create: `scripts/cluster-zero/install-foundry-appset`
 
-- [ ] **Step 1: Cluster no ar**
+- [x] **Step 1: Cluster no ar**
 
 ```bash
 scripts/cluster-zero/check-prereqs
@@ -38,12 +38,12 @@ scripts/cluster-zero/install-argocd
 
 (Crossplane não é necessário para este fluxo.)
 
-- [ ] **Step 2: Teste que falha**
+- [x] **Step 2: Teste que falha**
 
 Run: `kubectl --namespace argocd get applicationset foundry-apps`
 Expected: `Error from server (NotFound)`.
 
-- [ ] **Step 3: `assets/foundry-appset.yaml`**
+- [x] **Step 3: `assets/foundry-appset.yaml`**
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -82,7 +82,7 @@ spec:
           - CreateNamespace=true
 ```
 
-- [ ] **Step 4: `install-foundry-appset`**
+- [x] **Step 4: `install-foundry-appset`**
 
 ```bash
 #!/bin/bash
@@ -118,7 +118,7 @@ kubectl \
 chmod +x scripts/cluster-zero/install-foundry-appset
 ```
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 ```bash
 scripts/cluster-zero/install-foundry-appset
@@ -129,7 +129,7 @@ Expected: script conclui; condição `ErrorOccurred` = `False`. Com `apps/` vazi
 
 Se o `kubectl wait` expirar porque a condição `ResourcesUpToDate` não existe nesta versão do controller, trocar a espera por `ErrorOccurred`=False e registrar a troca na mensagem de commit.
 
-- [ ] **Step 6: Prova com um diretório real** (throwaway, desfeito no fim)
+- [x] **Step 6: Prova com um diretório real** (throwaway, desfeito no fim)
 
 ```bash
 probe_dir="$(mktemp --directory)"
@@ -178,13 +178,13 @@ rm --recursive --force "${probe_dir}"
 
 Expected: `Application probe` some (finalizer apagou o ConfigMap); namespace removido à mão — comportamento documentado no spec.
 
-- [ ] **Step 7: shellcheck**
+- [x] **Step 7: shellcheck**
 
 ```bash
 docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck:stable scripts/cluster-zero/install-foundry-appset
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add scripts/cluster-zero/assets/foundry-appset.yaml scripts/cluster-zero/install-foundry-appset
@@ -199,12 +199,12 @@ git commit --message "feat(#101): ApplicationSet foundry-apps no cluster-zero"
 **Interfaces:**
 - Produces: stdout com duas linhas `export K8S_CLUSTER_ZERO_TOKEN=...` e `export K8S_CLUSTER_ZERO_CA=...` — consumidas por `eval "$(scripts/cluster-zero/backstage-reader)"` antes do `yarn start`. Mensagens de progresso vão para stderr, para o `eval` não as executar.
 
-- [ ] **Step 1: Teste que falha**
+- [x] **Step 1: Teste que falha**
 
 Run: `kubectl auth can-i list pods --all-namespaces --as system:serviceaccount:kube-system:backstage-reader`
 Expected: `no`.
 
-- [ ] **Step 2: `backstage-reader`**
+- [x] **Step 2: `backstage-reader`**
 
 ```bash
 #!/bin/bash
@@ -279,7 +279,7 @@ Nota: `ca.crt` fica em base64 (formato que o `caData` do Backstage espera); o to
 chmod +x scripts/cluster-zero/backstage-reader
 ```
 
-- [ ] **Step 3: Rodar e ver passar**
+- [x] **Step 3: Rodar e ver passar**
 
 ```bash
 eval "$(scripts/cluster-zero/backstage-reader)"
@@ -290,13 +290,13 @@ kubectl auth can-i delete pods --all-namespaces --as system:serviceaccount:kube-
 
 Expected: prefixos não vazios; `yes` para list; `no` para delete. Rodar o script uma segunda vez não deve falhar (idempotente).
 
-- [ ] **Step 4: shellcheck**
+- [x] **Step 4: shellcheck**
 
 ```bash
 docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck:stable scripts/cluster-zero/backstage-reader
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/cluster-zero/backstage-reader
@@ -308,7 +308,7 @@ git commit --message "feat(#101): ServiceAccount read-only do Backstage no clust
 **Files:**
 - Modify: `idp/app-config.yaml` (bloco `kubernetes:`, hoje só com um comentário)
 
-- [ ] **Step 1: Editar** — substituir o bloco `kubernetes:` por:
+- [x] **Step 1: Editar** — substituir o bloco `kubernetes:` por:
 
 ```yaml
 kubernetes:
@@ -326,7 +326,7 @@ kubernetes:
           caData: ${K8S_CLUSTER_ZERO_CA}
 ```
 
-- [ ] **Step 2: Prova com uma entidade existente** — anotar temporariamente o exemplo `example-website` e criar um pod com a mesma label (desfeito no Step 4):
+- [x] **Step 2: Prova com uma entidade existente** — anotar temporariamente o exemplo `example-website` e criar um pod com a mesma label (desfeito no Step 4):
 
 Em `idp/examples/entities.yaml`, no `Component` `example-website`, acrescentar em `metadata`:
 
@@ -340,7 +340,7 @@ kubectl create namespace k8s-probe
 kubectl --namespace k8s-probe run example-website --image=nginx:stable --labels=backstage.io/kubernetes-id=example-website
 ```
 
-- [ ] **Step 3: Verificar na UI**
+- [x] **Step 3: Verificar na UI**
 
 ```bash
 eval "$(scripts/cluster-zero/backstage-reader)"
@@ -349,21 +349,21 @@ cd idp && yarn start
 
 Login guest → catalog → `example-website` → aba **Kubernetes**: cluster `cluster-zero`, pod `example-website` Running. Log do backend sem erros `kubernetes` de TLS/401.
 
-- [ ] **Step 4: Desfazer a prova**
+- [x] **Step 4: Desfazer a prova**
 
 ```bash
 git checkout idp/examples/entities.yaml
 kubectl delete namespace k8s-probe
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add idp/app-config.yaml
 git commit --message "feat(#101): Backstage lê o cluster-zero pelo plugin kubernetes"
 ```
 
-- [ ] **Step 6: Doc** — em `docs/idp/CLAUDE.md`, tabela da seção `## Scripts`, acrescentar duas linhas após `scripts/cluster-zero/verify`:
+- [x] **Step 6: Doc** — em `docs/idp/CLAUDE.md`, tabela da seção `## Scripts`, acrescentar duas linhas após `scripts/cluster-zero/verify`:
 
 ```markdown
 | `scripts/cluster-zero/install-foundry-appset` | Applies the `foundry-apps` ApplicationSet: one ArgoCD `Application` per `apps/*` directory of `wasp-foundry/gitops` |
