@@ -5,8 +5,11 @@
 # full list in a single run.
 
 required_tools="k3d kubectl helm docker"
+minimum_inotify_instances=1024
+inotify_file="${INOTIFY_MAX_INSTANCES_FILE:-/proc/sys/fs/inotify/max_user_instances}"
 
 missing=""
+low_inotify="false"
 
 version_for() {
   local tool="${1?}"
@@ -39,7 +42,24 @@ for tool in ${required_tools}; do
   fi
 done
 
+# Five k3d nodes exhaust the default limit (128) and containerd never starts.
+inotify_instances="$(cat "${inotify_file}" 2> /dev/null || echo 0)"
+if [ "${inotify_instances}" -lt "${minimum_inotify_instances}" ]; then
+  printf '  LOW     %-8s fs.inotify.max_user_instances=%s (need >= %s)\n' \
+    "inotify" "${inotify_instances}" "${minimum_inotify_instances}"
+  low_inotify="true"
+else
+  printf '  ok      %-8s fs.inotify.max_user_instances=%s\n' "inotify" "${inotify_instances}"
+fi
+
 echo ""
+
+if [ "${low_inotify}" = "true" ]; then
+  echo "Raise it before creating clusters:"
+  echo "  sudo sysctl --write fs.inotify.max_user_instances=${minimum_inotify_instances} fs.inotify.max_user_watches=524288"
+  echo "and persist it in /etc/sysctl.d/99-inotify.conf."
+  exit 1
+fi
 
 if [ -n "${missing}" ]; then
   echo "Missing required tools:${missing}"

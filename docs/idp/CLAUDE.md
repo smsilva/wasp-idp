@@ -82,6 +82,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 |--------|---------|
 | `scripts/install.sh` | Installs nvm, Node v24, Yarn, creates the Backstage app |
 | `scripts/configure.sh` | Installs PostgreSQL 18 and configures the production DB |
+| `scripts/cluster-zero/check-prereqs` | Checks the CLI tools and `fs.inotify.max_user_instances` ≥ 1024 (the default 128 keeps containerd from starting with five k3d nodes) |
 | `scripts/cluster-zero/up` | Stands up three local k3d clusters on the `k3d-idp` network — `idp-cluster-zero` (3 servers, ArgoCD + Crossplane + the `foundry-apps` ApplicationSet), `development` and `production` (1 server each, registered as ArgoCD destinations) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
 | `scripts/cluster-zero/verify` | Checks health of the cluster, ArgoCD, and Crossplane |
 | `scripts/cluster-zero/install-foundry-appset` | Applies the `foundry-apps` ApplicationSet: a matrix of the `development`/`production` clusters × the `apps/*` directories of `wasp-foundry/gitops`, one `<app>-<env>` ArgoCD `Application` each (`apps/<app>/overlays/<env>`) |
@@ -89,6 +90,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 | `scripts/cluster-zero/cluster-create` | Creates one k3d cluster: `--name`, `--api-port` (required), `--servers`, `--network` (default `k3d-idp`), `--app-port` |
 | `scripts/cluster-zero/register-clusters` | Registers `development` and `production` as ArgoCD destinations in `idp-cluster-zero` (ServiceAccount `argocd-manager` + cluster Secret with label `env`) — idempotent |
 | `scripts/foundry/seed-bookinfo` | Imports the Istio Bookinfo services into `wasp-foundry` (one repo per service + one gitops PR) — idempotent; `--dry-run` builds everything locally |
+| `scripts/foundry/test-seed-bookinfo` | Tests the seed's recovery paths with a stubbed `gh`: empty/unprotected existing repo, gitops PR already open |
 | `scripts/foundry/test-bookinfo-assets` | Validates the seed assets offline: catalog entities, OpenAPI, gitops overlays, CI |
 | `scripts/cluster-zero/cluster-delete` | Tears down the clusters; no argument deletes `idp-cluster-zero`, `development` and `production` |
 

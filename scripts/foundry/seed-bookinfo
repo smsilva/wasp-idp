@@ -25,6 +25,51 @@ Usage: ${0##*/} [--istio-tag <tag>] [--dry-run]
 USAGE
 }
 
+apply_branch_protection() {
+  local service="${1?}"
+
+  printf '%s\n' '{"required_status_checks":null,"enforce_admins":true,"required_pull_request_reviews":{"required_approving_review_count":0},"restrictions":null}' \
+    | gh api --method PUT "repos/${organization}/${service}/branches/main/protection" --input - > /dev/null
+}
+
+# A repo left by an interrupted run is either empty (died before the push) or
+# unprotected (died before the protection call): fail on the first, repair the second.
+ensure_existing_repository() {
+  local service="${1?}"
+
+  if ! gh api "repos/${organization}/${service}/commits?per_page=1" --jq 'length' > /dev/null 2>&1; then
+    echo "Repository ${organization}/${service} exists but has no commits (interrupted run?)." >&2
+    echo "Delete it with: gh repo delete ${organization}/${service} --yes, then run the seed again." >&2
+    return 1
+  fi
+
+  apply_branch_protection "${service}"
+}
+
+open_gitops_pull_request() {
+  local title="${1?}"
+  local body="${2?}"
+  local open_count
+
+  open_count="$(gh pr list --repo "${organization}/gitops" --head add-bookinfo --state open --json number --jq 'length')"
+  if [[ "${open_count}" -gt 0 ]]; then
+    echo "Pull request add-bookinfo already open in ${organization}/gitops; branch updated."
+    return 0
+  fi
+
+  gh pr create \
+    --repo "${organization}/gitops" \
+    --base main \
+    --head add-bookinfo \
+    --title "${title}" \
+    --body "${body}"
+}
+
+if [[ "${SEED_BOOKINFO_SOURCE_ONLY:-}" == "true" ]]; then
+  # shellcheck disable=SC2317
+  return 0 2> /dev/null || exit 0
+fi
+
 while [[ "$#" -gt 0 ]]; do
   case "${1}" in
     --istio-tag) istio_tag="${2?}"; shift 2 ;;
@@ -62,6 +107,7 @@ for service in "${services[@]}"; do
   repository_directory="${work_directory}/repos/${service}"
 
   if [[ "${dry_run}" == "false" ]] && gh repo view "${organization}/${service}" > /dev/null 2>&1; then
+    ensure_existing_repository "${service}"
     initial_commits["${service}"]="$(gh api "repos/${organization}/${service}/commits?sha=main&per_page=100" --jq '.[-1].sha')"
     echo "Repository ${organization}/${service} already exists, skipping (initial commit ${initial_commits[${service}]:0:7})"
     continue
@@ -99,8 +145,7 @@ for service in "${services[@]}"; do
   git -C "${repository_directory}" remote add origin "git@github.com:${organization}/${service}.git"
   git -C "${repository_directory}" push --quiet --set-upstream origin main
 
-  printf '%s\n' '{"required_status_checks":null,"enforce_admins":true,"required_pull_request_reviews":{"required_approving_review_count":0},"restrictions":null}' \
-    | gh api --method PUT "repos/${organization}/${service}/branches/main/protection" --input - > /dev/null
+  apply_branch_protection "${service}"
   echo "Repository ${organization}/${service} created and main protected"
 done
 
@@ -148,9 +193,6 @@ git -C "${gitops_directory}" commit \
   --message "feat: add bookinfo (${added_services[*]})"
 git -C "${gitops_directory}" push --quiet --force --set-upstream origin add-bookinfo
 
-gh pr create \
-  --repo "${organization}/gitops" \
-  --base main \
-  --head add-bookinfo \
-  --title "feat: add bookinfo" \
-  --body "Adds ${added_services[*]} (Istio Bookinfo ${istio_tag}) to development and production, pinned to each repo's first commit. Created by wasp-idp scripts/foundry/seed-bookinfo."
+open_gitops_pull_request \
+  "feat: add bookinfo" \
+  "Adds ${added_services[*]} (Istio Bookinfo ${istio_tag}) to development and production, pinned to each repo's first commit. Created by wasp-idp scripts/foundry/seed-bookinfo."
