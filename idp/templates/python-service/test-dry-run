@@ -80,6 +80,28 @@ def catalog_info_is_intact(result, values):
     )
 
 
+def overlays_receive_the_tag(backend_url, token, template, contents):
+    values = {"name": "overlay-test", "description": "ok", "owner": "group:default/team-alpha"}
+    result, status = dry_run(backend_url, token, template, contents, values)
+    if status is not None:
+        return False
+    files = {item["path"]: base64.b64decode(item["base64Content"]).decode() for item in result["directoryContents"]}
+    tags = []
+    for environment in ("development", "production"):
+        path = f"gitops-pr/overlays/{environment}/kustomization.yaml"
+        if path not in files:
+            return False
+        image = yaml.safe_load(files[path])["images"][0]
+        if image["newName"] != "ghcr.io/wasp-foundry/overlay-test":
+            return False
+        tags.append(image["newTag"])
+    catalog_info = yaml.safe_load(files["catalog-info.yaml"])
+    return tags[0] == tags[1] and catalog_info["spec"].get("dependsOn") == [
+        "resource:default/development",
+        "resource:default/production",
+    ]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--backend-url", default="http://localhost:7007")
@@ -99,6 +121,11 @@ def main():
         else:
             print(f"FAIL: {label}", file=sys.stderr)
             failed = True
+    if overlays_receive_the_tag(arguments.backend_url, token, template, contents):
+        print("ok: both overlays receive the image tag; catalog-info depends on both clusters")
+    else:
+        print("FAIL: overlays or dependsOn", file=sys.stderr)
+        failed = True
     sys.exit(1 if failed else 0)
 
 

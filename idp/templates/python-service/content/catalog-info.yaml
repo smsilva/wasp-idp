@@ -10,3 +10,6 @@ spec:
   type: service
   lifecycle: experimental
   owner: ${{ values.owner | dump }}
+  dependsOn:
+    - resource:default/development
+    - resource:default/production

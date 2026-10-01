@@ -38,17 +38,32 @@ render() {
   fi
 }
 
-mkdir --parents "${render_directory}/gitops"
-
-for file in "${this_script_directory}"/gitops/*.yaml; do
-  render "${file}" "${render_directory}/gitops/${file##*/}"
-done
+while IFS= read -r file; do
+  relative_path="${file#"${this_script_directory}/gitops/"}"
+  mkdir --parents "$(dirname "${render_directory}/gitops/${relative_path}")"
+  render "${file}" "${render_directory}/gitops/${relative_path}"
+done < <(find "${this_script_directory}/gitops" -type f -name '*.yaml')
 
 render \
   "${this_script_directory}/content/catalog-info.yaml" \
   "${render_directory}/catalog-info.yaml"
 
-manifests="$(kubectl kustomize "${render_directory}/gitops")"
+for environment in development production; do
+  if [[ ! -f "${render_directory}/gitops/overlays/${environment}/kustomization.yaml" ]]; then
+    echo "FAIL: missing overlays/${environment}/kustomization.yaml" >&2
+    exit 1
+  fi
+done
+
+manifests="$(kubectl kustomize "${render_directory}/gitops/overlays/development")"
+production_manifests="$(kubectl kustomize "${render_directory}/gitops/overlays/production")"
+
+if [[ "${manifests}" != "${production_manifests}" ]]; then
+  echo "FAIL: development and production overlays must render the same manifests at creation" >&2
+  diff <(echo "${manifests}") <(echo "${production_manifests}") >&2
+  exit 1
+fi
+echo "ok: development and production overlays render the same manifests"
 
 check() {
   local description="${1?}"
@@ -82,4 +97,6 @@ fi
 grep --quiet "owner: \"${owner}\"" "${render_directory}/catalog-info.yaml"
 grep --quiet "backstage.io/kubernetes-id: ${name}" "${render_directory}/catalog-info.yaml"
 grep --quiet "github.com/project-slug: wasp-foundry/${name}" "${render_directory}/catalog-info.yaml"
+grep --quiet "resource:default/development" "${render_directory}/catalog-info.yaml"
+grep --quiet "resource:default/production" "${render_directory}/catalog-info.yaml"
 echo "ok: catalog-info.yaml"
