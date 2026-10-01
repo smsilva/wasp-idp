@@ -70,6 +70,10 @@ SSO via Google OAuth 2.0 alongside Guest.
    cd idp && yarn start
    ```
 
+### GitHub integration
+
+The backend authenticates to GitHub as the App `wasp-foundry-backstage` (org `wasp-foundry`), not a PAT. `idp/app-config.yaml` includes `idp/github-app-wasp-foundry-backstage-credentials.yaml`, which is gitignored and must exist locally before `yarn start`. To recreate it: `yarn backstage-cli create-github-app wasp-foundry`, then raise the permissions to Administration/Contents/Pull requests/Workflows RW in the App settings (the CLI creates it read-only).
+
 ## Scripts
 
 One-time setup utilities in `scripts/` (not part of daily workflow):
