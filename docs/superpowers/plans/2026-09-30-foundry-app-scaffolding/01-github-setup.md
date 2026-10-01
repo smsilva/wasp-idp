@@ -31,10 +31,10 @@ Responde o risco 1 do spec. Tudo criado aqui é apagado no fim.
 - [ ] **Step 1: Escopos do `gh`**
 
 ```bash
-gh auth refresh --scopes read:packages,delete_packages,delete_repo,admin:org
+gh auth refresh --hostname github.com --scopes read:packages,delete:packages,delete_repo,admin:org
 ```
 
-(interativo — se o harness não permitir, pedir ao usuário: `! gh auth refresh --scopes read:packages,delete_packages,delete_repo,admin:org`)
+(interativo — se o harness não permitir, pedir ao usuário: `! gh auth refresh --hostname github.com --scopes read:packages,delete:packages,delete_repo,admin:org`)
 
 - [ ] **Step 2: Repo descartável com workflow de publish**
 
