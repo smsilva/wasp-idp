@@ -91,3 +91,67 @@ for service in "${api_providers[@]}"; do
     /spec/openapi.yaml > /dev/null
   echo "ok: ${service}/openapi.yaml"
 done
+
+echo ""
+echo "GitOps overlays:"
+
+render_directory="$(mktemp --directory)"
+trap 'rm --recursive --force "${render_directory}"' EXIT
+
+image_tag="0123456789abcdef0123456789abcdef01234567"
+
+for service in "${services[@]}"; do
+  cp --recursive "${assets_directory}/gitops/${service}" "${render_directory}/${service}"
+  for environment in development production; do
+    overlay="${render_directory}/${service}/overlays/${environment}"
+    sed --in-place "s|__IMAGE_TAG__|${image_tag}|" "${overlay}/kustomization.yaml"
+    manifests="$(kubectl kustomize "${overlay}")"
+    expected_image="image: ghcr.io/wasp-foundry/${service}:${image_tag}"
+    if [[ "$(grep --count --fixed-strings "${expected_image}" <<< "${manifests}")" -lt 1 ]]; then
+      echo "FAIL: ${service}/${environment}: missing ${expected_image}" >&2
+      exit 1
+    fi
+    if grep --quiet 'image: app$' <<< "${manifests}"; then
+      echo "FAIL: ${service}/${environment}: image not rewritten" >&2
+      exit 1
+    fi
+    if kubectl --context "k3d-${environment}" version --request-timeout=3s > /dev/null 2>&1; then
+      kubectl --context "k3d-${environment}" apply --dry-run=server --filename - <<< "${manifests}" > /dev/null
+    fi
+  done
+  label_count="$(grep --count "backstage.io/kubernetes-id: ${service}" <<< "${manifests}")"
+  echo "ok: ${service} (${label_count} kubernetes-id labels)"
+done
+
+manifests="$(kubectl kustomize "${render_directory}/reviews/overlays/development")"
+if [[ "$(grep --count '^kind: Deployment' <<< "${manifests}")" -ne 3 ]]; then
+  echo "FAIL: reviews must have 3 Deployments" >&2
+  exit 1
+fi
+if [[ "$(grep --count 'value: red' <<< "${manifests}")" -ne 1 ]]; then
+  echo "FAIL: exactly one reviews version must use red stars" >&2
+  exit 1
+fi
+echo "ok: reviews v1/v2/v3"
+
+if ! grep --quiet 'type: LoadBalancer' "${assets_directory}/gitops/productpage/base/service.yaml"; then
+  echo "FAIL: productpage Service must be LoadBalancer" >&2
+  exit 1
+fi
+echo "ok: productpage Service is LoadBalancer"
+
+echo ""
+echo "CI workflow:"
+
+docker run \
+  --rm \
+  --volume "${assets_directory}:/repo" \
+  --workdir /repo \
+  rhysd/actionlint:latest \
+  -color \
+  ci.yaml
+if [[ "$(grep --count 'overlays/development' "${assets_directory}/ci.yaml")" -ne 3 ]]; then
+  echo "FAIL: ci.yaml must bump apps/<app>/overlays/development" >&2
+  exit 1
+fi
+echo "ok: ci.yaml"
