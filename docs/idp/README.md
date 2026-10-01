@@ -19,6 +19,8 @@ idp/
 │   ├── app/        # React frontend — UI shell, plugins, themes, nav
 │   └── backend/    # Node.js backend — plugins, DB, auth
 ├── plugins/        # Custom plugins (currently empty)
+├── catalog/        # Catalog data owned by the platform (teams)
+├── templates/      # Software Templates (python-service → wasp-foundry)
 └── examples/       # Sample catalog entities and software templates
 ```
 

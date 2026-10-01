@@ -82,6 +82,7 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     falha por arquivo ausente (mesma causa da run `33512301706`, corrigida no `down-cell` pelo
     PR #58). Ele também duplica `ln`/`init` em vez de usar `scripts/lib`. Detalhe em
     [`terraform/ci/README.md`](../terraform/ci/README.md).
+26. **Fluxo foundry (#101): CI de qualquer app escreve qualquer caminho do `wasp-foundry/gitops`** — *intentional*. O App `wasp-foundry-ci` tem Contents RW no repo inteiro e sua chave é secret de org; um workflow de uma aplicação pode alterar os manifestos de outra e, via ArgoCD, fazer deploy de qualquer coisa no k3d. Aplicações usam `project: default` (sem isolamento entre times no ArgoCD), e qualquer usuário do Backstage — inclusive guest, com as permissões em `allow-all` — pode criar repo público na org pelo template. Correção futura: `AppProject` por time com `sourceRepos`/`destinations` restritos + ruleset de path no `gitops` + política de permissão no scaffolder. Ver [ADR 0018](../../docs/adr/0018-separate-github-apps-per-role.md).
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e
