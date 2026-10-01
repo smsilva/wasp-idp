@@ -168,7 +168,7 @@ Um commit direto no `gitops` converte `apps/hello-alpha/` para base + overlays c
 
 ## Riscos a validar primeiro
 
-1. **ArgoCD alcança a API dos clusters de destino pela rede `k3d-idp`** com o certificado do k3s (SAN inclui `k3d-<nome>-server-0`?). Validar com um cluster descartável antes de reescrever `cluster-create`. Fallback: `insecure: true` no Secret de cluster (registrar em known-broken).
+1. **ArgoCD alcança a API dos clusters de destino pela rede `k3d-idp`** com o certificado do k3s (SAN inclui `k3d-<nome>-server-0`?). Validar com um cluster descartável antes de reescrever `cluster-create`. Fallback: `insecure: true` no Secret de cluster (registrar em known-broken). — **resultado (2026-10-01):** `https://k3d-<nome>-server-0:6443`, `insecure: false` com `caData`; SAN do k3s: `kubernetes`, `kubernetes.default[.svc[.cluster.local]]`, `k3d-<nome>-serverlb`, `localhost`, `k3d-<nome>-server-0`, `127.0.0.1`, `::1`, IP do container, `10.43.0.1`. Confirmado com Applications de prova `Synced` em `development` e `production` (plano 01, Task 2). Pré-requisito do host: `fs.inotify.max_user_instances` ≥ 1024 (o default 128 impede o containerd de subir com 5 nós k3d — registrar no README de `scripts/cluster-zero`).
 2. **Build do `reviews` no runner do GitHub** (gradle + Liberty, multi-stage) cabe no tempo e na memória do `ubuntu-24.04`. Validar no primeiro push do seed.
 3. **Memória da máquina** com 5 nós k3d + 3 JVMs Liberty × 2 clusters. Medir com `docker stats` na aceitação; se apertar, `production` roda só `reviews-v1` (overlay remove v2/v3).
 

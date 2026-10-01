@@ -1,0 +1,100 @@
+#!/bin/bash
+# Register the development and production k3d clusters as ArgoCD destinations
+# in idp-cluster-zero. Idempotent: re-running refreshes the cluster Secrets.
+set -e
+
+management_context="k3d-idp-cluster-zero"
+namespace="kube-system"
+account="argocd-manager"
+
+for cluster in development production; do
+  context="k3d-${cluster}"
+
+  if ! kubectl config get-contexts "${context}" > /dev/null 2>&1; then
+    echo "kubectl context ${context} not found; create the cluster first" >&2
+    exit 1
+  fi
+
+  echo ""
+  echo "Ensuring ServiceAccount ${namespace}/${account} in ${cluster}..."
+
+  kubectl --context "${context}" apply --filename - > /dev/null <<MANIFEST
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${account}
+  namespace: ${namespace}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ${account}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: ${account}
+    namespace: ${namespace}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${account}-token
+  namespace: ${namespace}
+  annotations:
+    kubernetes.io/service-account.name: ${account}
+type: kubernetes.io/service-account-token
+MANIFEST
+
+  kubectl wait \
+    --context "${context}" \
+    --namespace "${namespace}" \
+    --for jsonpath='{.data.token}' \
+    --timeout=60s \
+    "secret/${account}-token" > /dev/null
+
+  token="$(
+    kubectl get secret "${account}-token" \
+      --context "${context}" \
+      --namespace "${namespace}" \
+      --output jsonpath='{.data.token}' \
+    | base64 --decode
+  )"
+
+  ca="$(
+    kubectl get secret "${account}-token" \
+      --context "${context}" \
+      --namespace "${namespace}" \
+      --output jsonpath='{.data.ca\.crt}'
+  )"
+
+  echo "Registering ${cluster} in ArgoCD (token ${token:0:3}...)..."
+
+  kubectl --context "${management_context}" apply --filename - > /dev/null <<MANIFEST
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-${cluster}
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: cluster
+    env: ${cluster}
+type: Opaque
+stringData:
+  name: ${cluster}
+  server: https://k3d-${cluster}-server-0:6443
+  config: |
+    {"bearerToken": "${token}", "tlsClientConfig": {"insecure": false, "caData": "${ca}"}}
+MANIFEST
+done
+
+echo ""
+echo "Registered clusters:"
+kubectl \
+  --context "${management_context}" \
+  --namespace argocd \
+  get secret \
+  --selector argocd.argoproj.io/secret-type=cluster \
+  --output custom-columns=NAME:.metadata.name,ENV:.metadata.labels.env
