@@ -135,6 +135,17 @@ catalog:
 
 kubernetes:
   # see https://backstage.io/docs/features/kubernetes/configuration for kubernetes configuration options
+  # Local k3d from scripts/cluster-zero. Credentials: eval "$(scripts/cluster-zero/backstage-reader)"
+  serviceLocatorMethod:
+    type: multiTenant
+  clusterLocatorMethods:
+    - type: config
+      clusters:
+        - name: cluster-zero
+          url: https://127.0.0.1:6550
+          authProvider: serviceAccount
+          serviceAccountToken: ${K8S_CLUSTER_ZERO_TOKEN}
+          caData: ${K8S_CLUSTER_ZERO_CA}
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
