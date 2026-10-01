@@ -183,20 +183,15 @@ Backstage lê o cluster. Decisões e alternativas descartadas (EKS, `deploy/` po
 do template, Image Updater, repos privados, GitHub Teams, um App só) no spec
 `docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md` — **não rediscutir**.
 
-- **Parado em:** planos `00`–`04` concluídos. k3d `idp-cluster-zero` de pé com ArgoCD e o
-  ApplicationSet `foundry-apps` (`scripts/cluster-zero/install-foundry-appset`); Backstage lê o
-  cluster com `eval "$(scripts/cluster-zero/backstage-reader)"` antes do `yarn start`. Template `python-service` em
-  `idp/templates/python-service/` (dry-run verde, `test-render` verde; nada publicado ainda —
-  o primeiro uso real é a aceitação do plano 05). Backstage autentica pelo App, times
-  `team-alpha`/`team-beta` no catalog. Org `wasp-foundry` pronta: pacote GHCR novo nasce
-  `public` (exigiu marcar Public em "Package creation", só pela UI); repo `wasp-foundry/gitops`
-  criado; App `wasp-foundry-backstage` (todos os repos, credenciais em
-  `idp/github-app-wasp-foundry-backstage-credentials.yaml`, gitignored) e App `wasp-foundry-ci`
-  (só `gitops`, chave só no secret de org `FOUNDRY_CI_APP_PRIVATE_KEY`, id na variável
-  `FOUNDRY_CI_APP_ID`). #101 em `In Progress` no board #6.
-- **Próximo:** plano `05` (aceitação ponta a ponta, ADRs, known-broken, PR) — inline
-  (`superpowers:executing-plans`), um por vez, em
-  `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/`. Índice no `README.md` da pasta.
+- **Parado em:** planos `00`–`05` concluídos; PR da #101 aberto contra `main`, aguardando merge.
+  Aceitação ponta a ponta verde com `hello-alpha` (mantida como exemplo vivo em
+  `wasp-foundry/hello-alpha`). k3d `idp-cluster-zero` de pé com ArgoCD e o ApplicationSet
+  `foundry-apps`; Backstage lê o cluster com `eval "$(scripts/cluster-zero/backstage-reader)"`
+  antes do `yarn start`. Credenciais do App `wasp-foundry-backstage` em
+  `idp/github-app-wasp-foundry-backstage-credentials.yaml` (gitignored); chave do App
+  `wasp-foundry-ci` só no secret de org `FOUNDRY_CI_APP_PRIVATE_KEY`.
+- **Próximo:** depois do merge, mover #101 para `Done` no board #6 (plano 05, Task 4, Step 3).
+  Mudança nos repos de app é só por PR (`main` protegida, sem aprovação obrigatória — ADR 0017).
 - **Precisa do usuário:** merge dos PRs. Comandos interativos (`backstage-cli create-github-app`,
   `gh auth refresh`) não rodam via `!` — usar outra window do tmux.
 - `yarn` não está no `PATH` desta máquina: `node .yarn/releases/yarn-4.4.1.cjs <cmd>` a partir de

@@ -24,7 +24,7 @@
 
 **Files:** nenhum (se algo falhar, a correção volta para o plano de origem, com commit próprio).
 
-- [ ] **Step 1: Ambiente**
+- [x] **Step 1: Ambiente**
 
 ```bash
 k3d cluster list | grep idp-cluster-zero || {
@@ -37,9 +37,9 @@ unset GITHUB_TOKEN
 cd idp && yarn start
 ```
 
-- [ ] **Step 2: Criar pela UI** — login guest → `/create` → "Python service (FastAPI)" → `name: hello-alpha`, descrição "Acceptance test app", owner `team-alpha` → Create. Anotar os três links do output.
+- [x] **Step 2: Criar pela UI** — login guest → `/create` → "Python service (FastAPI)" → `name: hello-alpha`, descrição "Acceptance test app", owner `team-alpha` → Create. Anotar os três links do output.
 
-- [ ] **Step 3: Checklist** — conferir em ordem, marcando cada item; parar no primeiro que falhar e diagnosticar (skill `superpowers:systematic-debugging`).
+- [x] **Step 3: Checklist** — conferir em ordem, marcando cada item; parar no primeiro que falhar e diagnosticar (skill `superpowers:systematic-debugging`).
 
 1. Repo público:
    ```bash
@@ -98,7 +98,7 @@ cd idp && yarn start
    ```
    Expected: commit `apps(hello-alpha): deploy <7 chars de new_sha>`; imagem `ghcr.io/wasp-foundry/hello-alpha:${new_sha}`; `curl /` (port-forward de novo) → `"hello again"`.
 
-- [ ] **Step 4: Manter `hello-alpha`** como exemplo vivo (não apagar). Remover o clone: `rm --recursive --force "${work_dir}"`.
+- [x] **Step 4: Manter `hello-alpha`** como exemplo vivo (não apagar). Remover o clone: `rm --recursive --force "${work_dir}"`.
 
 ### Task 2: ADRs
 
@@ -107,7 +107,7 @@ cd idp && yarn start
 - Create: `docs/adr/0018-separate-github-apps-per-role.md`
 - Modify: `docs/adr/README.md` (tabela — duas linhas no fim)
 
-- [ ] **Step 1: `0017-central-gitops-repo-for-foundry-apps.md`**
+- [x] **Step 1: `0017-central-gitops-repo-for-foundry-apps.md`**
 
 ```markdown
 # Central GitOps repository for foundry apps
@@ -130,7 +130,7 @@ Aplicações criadas pelo template Backstage `python-service` precisam chegar a 
 - O `smsilva/wasp-gitops` (infra das células) não é usado: aplicação e infraestrutura ficam em repositórios separados.
 ```
 
-- [ ] **Step 2: `0018-separate-github-apps-per-role.md`**
+- [x] **Step 2: `0018-separate-github-apps-per-role.md`**
 
 ```markdown
 # Separate GitHub Apps per role in wasp-foundry
@@ -152,14 +152,14 @@ Dois atores escrevem na org `wasp-foundry`: o Backstage (cria repos, envia workf
 - Duas chaves para rotacionar em vez de uma.
 ```
 
-- [ ] **Step 3: `docs/adr/README.md`** — acrescentar à tabela:
+- [x] **Step 3: `docs/adr/README.md`** — acrescentar à tabela:
 
 ```markdown
 | [0017](0017-central-gitops-repo-for-foundry-apps.md) | Repositório GitOps central `wasp-foundry/gitops`: criação por PR, bump de tag por commit direto do CI |
 | [0018](0018-separate-github-apps-per-role.md) | Dois GitHub Apps na `wasp-foundry`, um por papel (scaffolding vs. bump de tag) |
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/adr/
@@ -173,26 +173,26 @@ git commit --message "docs(#101): ADRs 0017 e 0018 do fluxo foundry"
 - Modify: `docs/idp/README.md` (bloco "Monorepo structure")
 - Modify: `HANDOFF.md` (seção "## Completed Work", uma linha)
 
-- [ ] **Step 1: known-broken** — acrescentar ao fim da lista, com o próximo número:
+- [x] **Step 1: known-broken** — acrescentar ao fim da lista, com o próximo número:
 
 ```markdown
 N. **Fluxo foundry (#101): CI de qualquer app escreve qualquer caminho do `wasp-foundry/gitops`** — o App `wasp-foundry-ci` tem Contents RW no repo inteiro e sua chave é secret de org; um workflow de uma aplicação pode alterar os manifestos de outra e, via ArgoCD, fazer deploy de qualquer coisa no k3d. Aplicações usam `project: default` (sem isolamento entre times no ArgoCD). Correção futura: `AppProject` por time com `sourceRepos`/`destinations` restritos + ruleset de path no `gitops`. Ver ADR 0018.
 ```
 
-- [ ] **Step 2: `docs/idp/README.md`** — no bloco de árvore "Monorepo structure", acrescentar as duas pastas novas:
+- [x] **Step 2: `docs/idp/README.md`** — no bloco de árvore "Monorepo structure", acrescentar as duas pastas novas:
 
 ```
 ├── catalog/        # Catalog data owned by the platform (teams)
 ├── templates/      # Software Templates (python-service → wasp-foundry)
 ```
 
-- [ ] **Step 3: `HANDOFF.md`** — no topo da lista da seção "## Completed Work", no formato das entradas existentes (negrito com data e título, depois uma frase):
+- [x] **Step 3: `HANDOFF.md`** — no topo da lista da seção "## Completed Work", no formato das entradas existentes (negrito com data e título, depois uma frase):
 
 ```markdown
 - **2026-MM-DD — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero. Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aws/docs/known-broken.md docs/idp/README.md HANDOFF.md
@@ -201,9 +201,9 @@ git commit --message "docs(#101): known-broken, estrutura do idp e HANDOFF"
 
 ### Task 4: PR da #101
 
-- [ ] **Step 1: Descrição** em `/tmp/feat-101-foundry-app-scaffolding-pr.txt` (markdown, caminhos relativos ao repo): objetivo, diagrama do spec, lista de arquivos por área (template, cluster-zero, config, docs), resultado do spike GHCR, checklist de aceitação da Task 1 com os resultados, links das ADRs, `Closes #101`, terminando com `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+- [x] **Step 1: Descrição** em `/tmp/feat-101-foundry-app-scaffolding-pr.txt` (markdown, caminhos relativos ao repo): objetivo, diagrama do spec, lista de arquivos por área (template, cluster-zero, config, docs), resultado do spike GHCR, checklist de aceitação da Task 1 com os resultados, links das ADRs, `Closes #101`, terminando com `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
 
-- [ ] **Step 2: Push e PR**
+- [x] **Step 2: Push e PR**
 
 ```bash
 git push --set-upstream origin feat/101-foundry-app-scaffolding
