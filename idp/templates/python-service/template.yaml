@@ -57,6 +57,9 @@ spec:
         description: ${{ parameters.description }}
         repoVisibility: public
         defaultBranch: main
+        # main is protected (changes by pull request, CI runs on it), but with no required
+        # approval: the wasp-foundry org may have a single member, who cannot approve their own PR.
+        requiredApprovingReviewCount: 0
 
     - id: fetch-gitops
       name: Render GitOps manifests
