@@ -145,12 +145,12 @@ fi
 git -C "${gitops_directory}" add apps
 git -C "${gitops_directory}" commit \
   --quiet \
-  --message "apps: add bookinfo (${added_services[*]})"
+  --message "feat: add bookinfo (${added_services[*]})"
 git -C "${gitops_directory}" push --quiet --force --set-upstream origin add-bookinfo
 
 gh pr create \
   --repo "${organization}/gitops" \
   --base main \
   --head add-bookinfo \
-  --title "apps: add bookinfo" \
+  --title "feat: add bookinfo" \
   --body "Adds ${added_services[*]} (Istio Bookinfo ${istio_tag}) to development and production, pinned to each repo's first commit. Created by wasp-idp scripts/foundry/seed-bookinfo."
