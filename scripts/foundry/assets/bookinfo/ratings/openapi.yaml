@@ -1,0 +1,74 @@
+openapi: 3.0.3
+info:
+  title: ratings-api
+  version: 1.31.1
+  description: Star ratings served by the Bookinfo ratings service (in-memory data, no database). Derived from ratings/ratings.js at istio/istio 1.31.1.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: http://ratings.ratings:9080
+paths:
+  /ratings/{productId}:
+    get:
+      operationId: getRatings
+      summary: Ratings of a book
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Ratings per reviewer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ratings'
+        '400':
+          description: The product id is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      responses:
+        '200':
+          description: The service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    Ratings:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 0
+        ratings:
+          type: object
+          properties:
+            Reviewer1:
+              type: integer
+              example: 5
+            Reviewer2:
+              type: integer
+              example: 4
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: please provide numeric product ID
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          example: Ratings is healthy

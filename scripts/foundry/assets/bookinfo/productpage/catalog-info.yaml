@@ -1,0 +1,27 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: productpage
+  description: Bookinfo product page (Python/Flask) — renders a book with its details and reviews
+  annotations:
+    github.com/project-slug: wasp-foundry/productpage
+    backstage.io/kubernetes-id: productpage
+  tags:
+    - python
+    - flask
+  links:
+    - url: http://localhost:9081/productpage
+      title: development
+    - url: http://localhost:9082/productpage
+      title: production
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/team-alpha
+  system: bookinfo
+  consumesApis:
+    - details-api
+    - reviews-api
+  dependsOn:
+    - resource:default/development
+    - resource:default/production

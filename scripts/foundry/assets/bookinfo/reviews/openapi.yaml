@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: reviews-api
+  version: 1.31.1
+  description: Book reviews served by the Bookinfo reviews service. Derived from reviews-application/src/main/java/application/rest/LibertyRestEndpoint.java at istio/istio 1.31.1. The rating object is present only when ENABLE_RATINGS is true (v2, v3).
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: http://reviews.reviews:9080
+paths:
+  /reviews/{productId}:
+    get:
+      operationId: getReviews
+      summary: Reviews of a book
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Reviews, with ratings when enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reviews'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      responses:
+        '200':
+          description: The service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    Reviews:
+      type: object
+      properties:
+        id:
+          type: string
+          example: '0'
+        podname:
+          type: string
+          example: reviews-v3-6dc9897554-8xrqf
+        clustername:
+          type: string
+          description: Value of CLUSTER_NAME, or the string "null" when unset
+          example: 'null'
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/Review'
+    Review:
+      type: object
+      properties:
+        reviewer:
+          type: string
+          example: Reviewer1
+        text:
+          type: string
+          example: An extremely entertaining play by Shakespeare. The slapstick humour is refreshing!
+        rating:
+          $ref: '#/components/schemas/Rating'
+    Rating:
+      type: object
+      description: Stars and color, or an error when the ratings service is unavailable
+      properties:
+        stars:
+          type: integer
+          example: 5
+        color:
+          type: string
+          enum:
+            - black
+            - red
+        error:
+          type: string
+          example: Ratings service is currently unavailable
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          example: Reviews is healthy

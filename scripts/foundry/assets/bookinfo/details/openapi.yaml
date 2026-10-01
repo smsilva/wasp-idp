@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: details-api
+  version: 1.31.1
+  description: Book details served by the Bookinfo details service. Derived from details/details.rb at istio/istio 1.31.1.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: http://details.details:9080
+paths:
+  /details/{id}:
+    get:
+      operationId: getDetails
+      summary: Details of a book
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Book details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetails'
+        '400':
+          description: The id is not numeric
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      responses:
+        '200':
+          description: The service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    BookDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 0
+        author:
+          type: string
+          example: William Shakespeare
+        year:
+          type: integer
+          example: 1595
+        type:
+          type: string
+          example: paperback
+        pages:
+          type: integer
+          example: 200
+        publisher:
+          type: string
+          example: PublisherA
+        language:
+          type: string
+          example: English
+        ISBN-10:
+          type: string
+          example: '1234567890'
+        ISBN-13:
+          type: string
+          example: 123-1234567890
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: please provide numeric product id
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          example: Details is healthy

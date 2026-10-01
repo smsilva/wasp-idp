@@ -1,0 +1,33 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ratings
+  description: Bookinfo ratings service (Node.js) — star ratings per reviewer
+  annotations:
+    github.com/project-slug: wasp-foundry/ratings
+    backstage.io/kubernetes-id: ratings
+  tags:
+    - nodejs
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/team-beta
+  system: bookinfo
+  providesApis:
+    - ratings-api
+  dependsOn:
+    - resource:default/development
+    - resource:default/production
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: ratings-api
+  description: Star ratings by product id
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: group:default/team-beta
+  system: bookinfo
+  definition:
+    $text: ./openapi.yaml
