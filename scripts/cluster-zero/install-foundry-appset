@@ -7,7 +7,7 @@ this_script_directory="${this_script_path%/*}"
 assets_directory="${this_script_directory}/assets"
 
 echo ""
-echo "Applying ApplicationSet foundry-apps (wasp-foundry/gitops apps/*)..."
+echo "Applying ApplicationSet foundry-apps (wasp-foundry/gitops apps/* x development, production)..."
 
 kubectl apply \
   --filename "${assets_directory}/foundry-appset.yaml"

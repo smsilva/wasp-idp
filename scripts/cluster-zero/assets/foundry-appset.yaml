@@ -7,14 +7,24 @@ spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
   generators:
-    - git:
-        repoURL: https://github.com/wasp-foundry/gitops.git
-        revision: main
-        directories:
-          - path: apps/*
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchExpressions:
+                  - key: env
+                    operator: In
+                    values:
+                      - development
+                      - production
+          - git:
+              repoURL: https://github.com/wasp-foundry/gitops.git
+              revision: main
+              directories:
+                - path: apps/*
   template:
     metadata:
-      name: '{{ .path.basename }}'
+      name: '{{ .path.basename }}-{{ .name }}'
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
@@ -22,9 +32,9 @@ spec:
       source:
         repoURL: https://github.com/wasp-foundry/gitops.git
         targetRevision: main
-        path: '{{ .path.path }}'
+        path: '{{ .path.path }}/overlays/{{ .name }}'
       destination:
-        server: https://kubernetes.default.svc
+        server: '{{ .server }}'
         namespace: '{{ .path.basename }}'
       syncPolicy:
         automated:
