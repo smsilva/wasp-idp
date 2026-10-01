@@ -140,7 +140,7 @@ Bash, opções longas (`--istio-tag`, default `1.31.1`; `--dry-run` não cria na
 
 ### CI dos repos Bookinfo (`scripts/foundry/assets/bookinfo/ci.yaml`)
 
-Igual ao `ci.yaml` do template `python-service` sem o job `test` (os testes do `productpage` rodam dentro do `docker build` upstream; os outros três não têm testes upstream), com o `bump` apontando para `apps/<app>/overlays/development`.
+Igual ao `ci.yaml` do template `python-service` sem o job `test` (os testes do `productpage` rodam dentro do `docker build` upstream; os outros três não têm testes upstream), com o `bump` apontando para `apps/<app>/overlays/development`. Em `pull_request` o `build` roda sem push, para o `docker build` (e os testes do `productpage` dentro dele) falhar antes do merge.
 
 ### Template `python-service` (migração)
 
