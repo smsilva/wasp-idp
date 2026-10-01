@@ -92,6 +92,11 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 
 - **Apps criadas pelo Backstage vivem na org `wasp-foundry`, não em `smsilva` (decidido 2026-09-30):** o `wasp-idp` fica em `smsilva/wasp-idp` — transferi-lo muda owner e owner id e quebra a trust OIDC da role de CI (`aws/terraform/ci/main.tf`, `repo:${github_org}@${github_owner_id}/...`). Desenho em `docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md`.
 
+## Upgrades — gotchas
+
+- Since 1.55 every `page:*` extension becomes a nav item on its own; anything `Sidebar.tsx` renders by hand (search, user-settings, notifications) must be removed with `nav.take('page:<id>')`, otherwise it shows up again in `nav.rest` — `nav-item:*: false` keys in `app-config.yaml` no longer apply.
+- After `versions:bump`, a `TS2344` on `DateValue` in `node_modules/@backstage/ui` means two copies of `@internationalized/date`: run `yarn dedupe '@internationalized/*' '@react-aria/*' 'react-aria*' '@react-stately/*' 'react-stately' '@react-types/*'`.
+
 ## Software Templates — gotchas
 
 - Liste `.github/workflows/*` em `copyWithoutTemplating` no `fetch:template`: o Actions usa a mesma sintaxe `${{ }}` do scaffolder, e o template quebraria ou renderizaria `${{ github.* }}`. Workflow gerado não recebe `values.*` — derive nomes de `github.event.repository.name`.
