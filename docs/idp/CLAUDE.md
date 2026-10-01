@@ -108,6 +108,15 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - Liste `.github/workflows/*` em `copyWithoutTemplating` no `fetch:template`: o Actions usa a mesma sintaxe `${{ }}` do scaffolder, e o template quebraria ou renderizaria `${{ github.* }}`. Workflow gerado não recebe `values.*` — derive nomes de `github.event.repository.name`.
 - `yarn backstage-cli create-github-app <org>` cria o App só com leitura; permissões de escrita (inclusive **Workflows**, necessária para enviar `.github/workflows/`) são ajustadas à mão nas settings do App.
 
+- Render free-text parameters in YAML with `${{ values.x | dump }}` (JSON string): unquoted interpolation lets a description with newlines inject keys into `catalog-info.yaml`. Validate entity refs with a `pattern` — `OwnerPicker` only constrains the UI, the scaffolder API accepts any string.
+- `publish:github` protects the default branch with 1 required approval + `enforce_admins` by default, which freezes repos in a one-member org; set `requiredApprovingReviewCount: 0`.
+- Test a template without publishing via `POST /api/scaffolder/v2/dry-run` (guest token from `GET /api/auth/guest/refresh`); `idp/templates/python-service/test-dry-run` is the reference.
+
+## Local backend — gotchas
+
+- The local DB is SQLite `:memory:`: entities added by `catalog:register` vanish on every backend restart.
+- New `catalog.locations` in `app-config.yaml` are not hot-reloaded — restart `yarn start`.
+
 ## Security TODOs (PoC hardening, deferred)
 
 Flagged by automated security review — intentional PoC shortcuts, to revisit before any real deployment:
