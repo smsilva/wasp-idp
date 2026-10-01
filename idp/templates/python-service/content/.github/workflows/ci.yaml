@@ -58,12 +58,12 @@ jobs:
           APP: ${{ github.event.repository.name }}
           IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
         run: |
-          if [[ ! -d "gitops/apps/${APP}" ]]; then
+          if [[ ! -d "gitops/apps/${APP}/overlays/development" ]]; then
             echo "apps/${APP} is not in gitops yet (creation PR not merged); the PR already pins this commit's tag"
             echo "skip=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
-          cd "gitops/apps/${APP}"
+          cd "gitops/apps/${APP}/overlays/development"
           kustomize edit set image "app=${IMAGE}"
       - name: Commit and push
         if: steps.set-image.outputs.skip != 'true'
@@ -74,7 +74,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "apps/${APP}/kustomization.yaml"
+          git add "apps/${APP}/overlays/development/kustomization.yaml"
           if git diff --cached --quiet; then
             echo "Tag already set, nothing to commit"
             exit 0
