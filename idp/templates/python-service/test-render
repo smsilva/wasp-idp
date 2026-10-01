@@ -1,0 +1,83 @@
+#!/bin/bash
+# Render the python-service template files with fixed values and validate them.
+# Fails if Kustomize cannot build apps/<name>/ or if required fields are missing.
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+name="render-test"
+image_tag="0123456789abcdef0123456789abcdef01234567"
+owner="group:default/team-alpha"
+description="Render test"
+
+# Literal scaffolder expression marker, searched for in rendered output.
+# shellcheck disable=SC2016
+unrendered_marker='${{'
+
+render_directory="$(mktemp --directory)"
+trap 'rm --recursive --force "${render_directory}"' EXIT
+
+render() {
+  local source_file="${1?}"
+  local target_file="${2?}"
+
+  sed \
+    --expression "s|\${{ values.name }}|${name}|g" \
+    --expression "s|\${{ values.imageTag }}|${image_tag}|g" \
+    --expression "s|\${{ values.owner }}|${owner}|g" \
+    --expression "s|\${{ values.description }}|${description}|g" \
+    "${source_file}" > "${target_file}"
+
+  if grep --quiet --fixed-strings "${unrendered_marker}" "${target_file}"; then
+    echo "Unrendered expression left in ${target_file}:" >&2
+    grep --line-number --fixed-strings "${unrendered_marker}" "${target_file}" >&2
+    exit 1
+  fi
+}
+
+mkdir --parents "${render_directory}/gitops"
+
+for file in "${this_script_directory}"/gitops/*.yaml; do
+  render "${file}" "${render_directory}/gitops/${file##*/}"
+done
+
+render \
+  "${this_script_directory}/content/catalog-info.yaml" \
+  "${render_directory}/catalog-info.yaml"
+
+manifests="$(kubectl kustomize "${render_directory}/gitops")"
+
+check() {
+  local description="${1?}"
+  local pattern="${2?}"
+
+  if ! grep --quiet --fixed-strings -- "${pattern}" <<< "${manifests}"; then
+    echo "FAIL: ${description} (missing: ${pattern})" >&2
+    exit 1
+  fi
+  echo "ok: ${description}"
+}
+
+check "image rewritten by kustomize" "image: ghcr.io/wasp-foundry/${name}:${image_tag}"
+check "backstage kubernetes-id label" "backstage.io/kubernetes-id: ${name}"
+check "APP_NAME env" "value: ${name}"
+check "service targets named port" "targetPort: http"
+
+if [[ "$(grep --count "backstage.io/kubernetes-id: ${name}" <<< "${manifests}")" -lt 3 ]]; then
+  echo "FAIL: kubernetes-id label must be on Deployment, Pod template and Service" >&2
+  exit 1
+fi
+echo "ok: kubernetes-id label on Deployment, Pod template and Service"
+
+if kubectl version --request-timeout=3s > /dev/null 2>&1; then
+  kubectl apply --dry-run=server --filename - <<< "${manifests}" > /dev/null
+  echo "ok: server-side dry-run"
+else
+  echo "skip: server-side dry-run (no reachable cluster)"
+fi
+
+grep --quiet "owner: ${owner}" "${render_directory}/catalog-info.yaml"
+grep --quiet "backstage.io/kubernetes-id: ${name}" "${render_directory}/catalog-info.yaml"
+grep --quiet "github.com/project-slug: wasp-foundry/${name}" "${render_directory}/catalog-info.yaml"
+echo "ok: catalog-info.yaml"
