@@ -175,28 +175,12 @@ detalhe é o que abre a opção cirúrgica descrita em Open Questions. A célula
 
 ## Em progresso agora
 
-**Frente ativa mais recente: IDP — criar aplicação por time e fazer deploy (#100, #101).** Backstage
-em `idp/` cria repo público na org GitHub `wasp-foundry` (template `python-service`, FastAPI), abre
-PR com manifestos em `wasp-foundry/gitops` (`apps/<app>/`), CI publica no GHCR e faz bump de tag por
-commit direto; `ApplicationSet foundry-apps` no k3d do cluster-zero faz o deploy; aba Kubernetes do
-Backstage lê o cluster. Decisões e alternativas descartadas (EKS, `deploy/` por repo, commit direto
-do template, Image Updater, repos privados, GitHub Teams, um App só) no spec
-`docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md` — **não rediscutir**.
-
-- **Parado em:** planos `00`–`05` concluídos; PR da #101 aberto contra `main`, aguardando merge.
-  Aceitação ponta a ponta verde com `hello-alpha` (mantida como exemplo vivo em
-  `wasp-foundry/hello-alpha`). k3d `idp-cluster-zero` de pé com ArgoCD e o ApplicationSet
-  `foundry-apps`; Backstage lê o cluster com `eval "$(scripts/cluster-zero/backstage-reader)"`
-  antes do `yarn start`. Credenciais do App `wasp-foundry-backstage` em
-  `idp/github-app-wasp-foundry-backstage-credentials.yaml` (gitignored); chave do App
-  `wasp-foundry-ci` só no secret de org `FOUNDRY_CI_APP_PRIVATE_KEY`.
-- **Próximo:** depois do merge, mover #101 para `Done` no board #6 (plano 05, Task 4, Step 3).
-  Mudança nos repos de app é só por PR (`main` protegida, sem aprovação obrigatória — ADR 0017).
-- **Precisa do usuário:** merge dos PRs. Comandos interativos (`backstage-cli create-github-app`,
-  `gh auth refresh`) não rodam via `!` — usar outra window do tmux.
-- `yarn` não está no `PATH` desta máquina: `node .yarn/releases/yarn-4.4.1.cjs <cmd>` a partir de
-  `idp/`. Credenciais Google OAuth para `yarn start`: `source ~/.config/wasp-idp-google.env`.
-- `smsilva/wasp-idp` **não** vai para a org: transferir quebra a trust OIDC da role de CI (owner id).
+**Frente IDP (#100, #101) concluída em 2026-10-01** — ver Completed Work. Para operar o fluxo
+(subir k3d, `yarn start` com credenciais do cluster, criar app): `docs/idp/CLAUDE.md`. Comandos
+interativos (`backstage-cli create-github-app`, `gh auth refresh`) não rodam via `!` — usar outra
+window do tmux. `yarn` não está no `PATH`: `node .yarn/releases/yarn-4.4.1.cjs <cmd>` em `idp/`.
+`smsilva/wasp-idp` **não** vai para a org `wasp-foundry`: transferir quebra a trust OIDC da role de
+CI (owner id).
 
 **Frente anterior: custo e robustez do teardown (#92, #94).** Começou como a pergunta "quais custos
 estão contando nas contas atuais?" e virou investigação: a região estava de pé porque um teardown
@@ -320,15 +304,6 @@ com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` 
 | Sequência de provisionamento e dicionário de recursos | `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` |
 
 ## How to Resume
-
-**Frente IDP (#100/#101)** — primeiro comando:
-
-```bash
-git switch feat/101-foundry-app-scaffolding && git push --set-upstream origin feat/101-foundry-app-scaffolding
-cat docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/README.md docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/01-github-setup.md
-```
-
-Depois seguir `01-github-setup.md` Task 1 (spike GHCR).
 
 **Frente AWS** — primeiro comando — confirmar que a região continua vazia e que os profiles respondem:
 
@@ -493,9 +468,6 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
-- **Pacote GHCR novo na org `wasp-foundry` nasce público ou privado?** Hipótese: privado mesmo
-  vindo de repo público, e sem API para mudar. Se for, o k3d não baixa a imagem sem pull secret.
-  Respondido pelo spike descartável do plano 01, Task 1 — **decisão do fallback é do usuário**.
 - **O que deve virar efêmero no hub, para o Client VPN parar de custar ~US$ 146/mês parado?** Esta é
   a frente pedida e não iniciada — o brainstorming foi interrompido antes da decisão. Três opções já
   levantadas, com o trade-off apurado; **não rederivar**:
@@ -563,8 +535,6 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-0. **#101** — executar os planos `01`–`05` de
-   `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/` na ordem do `README.md` da pasta.
 1. **Integrar #92 antes de #94** — a ordem não é cosmética (ver Known Broken). Depois, o próximo
    ciclo `provision-region` + `teardown-region` exercita as duas correções de graça, e é o aceite
    que falta nas duas.
@@ -601,14 +571,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
-- **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo). Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
-- **2026-10-01 — #101 plano 04:** ApplicationSet `foundry-apps` no k3d (provado com app
-  descartável: gera, sincroniza, finalizer limpa) e aba Kubernetes do Backstage via SA read-only.
-  Também `fix(#101)` de injeção de YAML no template (`test-dry-run`).
-- **2026-09-30 — #101 planos 02–03:** Backstage via App `wasp-foundry-backstage`, times no catalog,
-  template `python-service` (FastAPI, Dockerfile, CI test→build→bump, manifestos gitops).
-- **2026-09-30 — #101 plano 01, setup GitHub da org `wasp-foundry`** (spike GHCR, `gitops`, dois
-  Apps, variável/secret de org). Resultado do spike no spec, risco 1.
+- **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo). PR #103. Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
 - **2026-09-30 — #100, Backstage 1.49.0 → 1.55.3** (PR #102). Exigiu fixar `@yarnpkg/core` em
   `4.9.1` (a `4.9.2` saiu quebrada), `yarn dedupe` de `@internationalized/date` e `nav.take` de
   `page:user-settings`/`page:notifications` no `Sidebar.tsx`. Login guest e Google validados.
