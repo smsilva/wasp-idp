@@ -38,6 +38,10 @@ backend.add(
 // See https://backstage.io/docs/features/software-catalog/configuration#subscribing-to-catalog-errors
 backend.add(import('@backstage/plugin-catalog-backend-module-logs'));
 
+// Discovers catalog-info.yaml in every repo of the wasp-foundry GitHub org
+// (catalog.providers.github in app-config.yaml)
+backend.add(import('@backstage/plugin-catalog-backend-module-github'));
+
 // permission plugin
 backend.add(import('@backstage/plugin-permission-backend'));
 // See https://backstage.io/docs/permissions/getting-started for how to create your own permission policy
