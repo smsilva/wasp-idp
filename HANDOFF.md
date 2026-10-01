@@ -183,14 +183,16 @@ Backstage lê o cluster. Decisões e alternativas descartadas (EKS, `deploy/` po
 do template, Image Updater, repos privados, GitHub Teams, um App só) no spec
 `docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md` — **não rediscutir**.
 
-- **Parado em:** brainstorming, spec e planos concluídos na branch `feat/101-foundry-app-scaffolding`
-  (sem push). Nenhum código escrito. #100 em `Todo`, #101 em `In Progress` no board #6.
+- **Parado em:** plano `00` concluído (#100, PR #102 mergeado — Backstage 1.55.3 na `main`).
+  `feat/101-foundry-app-scaffolding` rebaseada sobre a `main`; nenhum código da #101 escrito.
+  #101 em `In Progress` no board #6.
 - **Próximo:** executar os planos **nesta ordem, inline (`superpowers:executing-plans`), um por
-  vez**: `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/` → `00` (upgrade Backstage
-  1.49.0→1.55.3, branch própria `feat/100-backstage-upgrade` a partir de `main`), `01`, `02`, depois
-  `03` e `04` (independentes), `05`. Índice e convenções em `README.md` da pasta.
+  vez**: `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/` → `01`, `02`, depois `03` e
+  `04` (independentes), `05`. Índice e convenções em `README.md` da pasta.
 - **Precisa do usuário:** criar os dois GitHub Apps (`wasp-foundry-backstage`, `wasp-foundry-ci`) e
-  ajustar permissões pela UI (plano 01, Tasks 3–4); merge dos PRs; login Google no smoke do 00.
+  ajustar permissões pela UI (plano 01, Tasks 3–4); merge dos PRs.
+- `yarn` não está no `PATH` desta máquina: `node .yarn/releases/yarn-4.4.1.cjs <cmd>` a partir de
+  `idp/`. Credenciais Google OAuth para `yarn start`: `source ~/.config/wasp-idp-google.env`.
 - `smsilva/wasp-idp` **não** vai para a org: transferir quebra a trust OIDC da role de CI (owner id).
 
 **Frente anterior: custo e robustez do teardown (#92, #94).** Começou como a pergunta "quais custos
@@ -320,10 +322,10 @@ com `Status = Backlog`. O procedimento de dois passos (`item-add` + `item-edit` 
 
 ```bash
 git switch feat/101-foundry-app-scaffolding && git push --set-upstream origin feat/101-foundry-app-scaffolding
-cat docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/README.md docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/00-backstage-upgrade.md
+cat docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/README.md docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/01-github-setup.md
 ```
 
-Depois seguir `00-backstage-upgrade.md` Task 1 (começa em `git switch main`).
+Depois seguir `01-github-setup.md` Task 1 (spike GHCR).
 
 **Frente AWS** — primeiro comando — confirmar que a região continua vazia e que os profiles respondem:
 
@@ -558,7 +560,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 ## Next Steps
 
-0. **#100 → #101** — executar os planos de
+0. **#101** — executar os planos `01`–`05` de
    `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/` na ordem do `README.md` da pasta.
 1. **Integrar #92 antes de #94** — a ordem não é cosmética (ver Known Broken). Depois, o próximo
    ciclo `provision-region` + `teardown-region` exercita as duas correções de graça, e é o aceite
@@ -595,6 +597,10 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
+
+- **2026-09-30 — #100, Backstage 1.49.0 → 1.55.3** (PR #102). Exigiu fixar `@yarnpkg/core` em
+  `4.9.1` (a `4.9.2` saiu quebrada), `yarn dedupe` de `@internationalized/date` e `nav.take` de
+  `page:user-settings`/`page:notifications` no `Sidebar.tsx`. Login guest e Google validados.
 
 - **2026-09-04 — região `us-east-1` destruída por inteiro e custo zerado.** Investigação de custo
   achou hub e célula de pé por falha silenciosa de teardown; 76 recursos removidos, órfãos auditados,
