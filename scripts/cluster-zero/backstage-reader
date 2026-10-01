@@ -1,0 +1,64 @@
+#!/bin/bash
+# Create (idempotently) a read-only ServiceAccount for the Backstage kubernetes
+# plugin and print the environment variables it needs. Usage:
+#   eval "$(scripts/cluster-zero/backstage-reader)"
+set -e
+
+namespace="kube-system"
+account="backstage-reader"
+
+echo "Ensuring ServiceAccount ${namespace}/${account} with ClusterRole view..." >&2
+
+kubectl apply --filename - > /dev/null <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${account}
+  namespace: ${namespace}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ${account}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: ${account}
+    namespace: ${namespace}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${account}-token
+  namespace: ${namespace}
+  annotations:
+    kubernetes.io/service-account.name: ${account}
+type: kubernetes.io/service-account-token
+EOF
+
+kubectl wait \
+  --namespace "${namespace}" \
+  --for jsonpath='{.data.token}' \
+  --timeout=60s \
+  "secret/${account}-token" > /dev/null
+
+token="$(
+  kubectl get secret "${account}-token" \
+    --namespace "${namespace}" \
+    --output jsonpath='{.data.token}' \
+  | base64 --decode
+)"
+
+ca="$(
+  kubectl get secret "${account}-token" \
+    --namespace "${namespace}" \
+    --output jsonpath='{.data.ca\.crt}'
+)"
+
+echo "Token: ${token:0:3}... (export it with eval)" >&2
+
+echo "export K8S_CLUSTER_ZERO_TOKEN='${token}'"
+echo "export K8S_CLUSTER_ZERO_CA='${ca}'"
