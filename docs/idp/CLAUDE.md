@@ -82,13 +82,17 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 |--------|---------|
 | `scripts/install.sh` | Installs nvm, Node v24, Yarn, creates the Backstage app |
 | `scripts/configure.sh` | Installs PostgreSQL 18 and configures the production DB |
-| `scripts/cluster-zero/up` | Stands up a local k3d cluster (3 servers) with ArgoCD + Crossplane (Azure providers) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
+| `scripts/cluster-zero/up` | Stands up three local k3d clusters on the `k3d-idp` network — `idp-cluster-zero` (3 servers, ArgoCD + Crossplane + the `foundry-apps` ApplicationSet), `development` and `production` (1 server each, registered as ArgoCD destinations) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
 | `scripts/cluster-zero/verify` | Checks health of the cluster, ArgoCD, and Crossplane |
-| `scripts/cluster-zero/install-foundry-appset` | Applies the `foundry-apps` ApplicationSet: one ArgoCD `Application` per `apps/*` directory of `wasp-foundry/gitops` |
+| `scripts/cluster-zero/install-foundry-appset` | Applies the `foundry-apps` ApplicationSet: a matrix of the `development`/`production` clusters × the `apps/*` directories of `wasp-foundry/gitops`, one `<app>-<env>` ArgoCD `Application` each (`apps/<app>/overlays/<env>`) |
 | `scripts/cluster-zero/backstage-reader` | Creates a read-only ServiceAccount in one cluster and prints `K8S_<NAME>_TOKEN`/`K8S_<NAME>_CA` for the Backstage kubernetes plugin — `eval "$(scripts/cluster-zero/backstage-reader --cluster development)"` (and `production`) before `yarn start` |
 | `scripts/cluster-zero/cluster-create` | Creates one k3d cluster: `--name`, `--api-port` (required), `--servers`, `--network` (default `k3d-idp`), `--app-port` |
 | `scripts/cluster-zero/register-clusters` | Registers `development` and `production` as ArgoCD destinations in `idp-cluster-zero` (ServiceAccount `argocd-manager` + cluster Secret with label `env`) — idempotent |
+| `scripts/foundry/seed-bookinfo` | Imports the Istio Bookinfo services into `wasp-foundry` (one repo per service + one gitops PR) — idempotent; `--dry-run` builds everything locally |
+| `scripts/foundry/test-bookinfo-assets` | Validates the seed assets offline: catalog entities, OpenAPI, gitops overlays, CI |
 | `scripts/cluster-zero/cluster-delete` | Tears down the clusters; no argument deletes `idp-cluster-zero`, `development` and `production` |
+
+**Promotion to production:** each app's CI bumps only `apps/<app>/overlays/development`. To promote: `gh workflow run promote.yaml --repo wasp-foundry/gitops -f app=<app>`, then merge the pull request it opens; the `<app>-production` Application syncs the new tag. The host needs `fs.inotify.max_user_instances` ≥ 1024 (the default 128 keeps containerd from starting with five k3d nodes) and the org setting "Allow GitHub Actions to create and approve pull requests" on.
 
 ## Architecture decisions (recorded)
 
