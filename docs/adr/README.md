@@ -24,3 +24,5 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0014](0014-single-regional-root-composing-hub-and-cell-modules.md) | Raiz única `regions/<região>` compondo `module.hub` + `module.cell`; revisa 0007 |
 | [0015](0015-defer-ipam-adoption.md) | Adiar a adoção do IPAM; supernet passa a ser alocada por região em `/14`; amenda 0003 |
 | [0016](0016-documentation-navigation-structure.md) | Estrutura de navegação da documentação: `README.md`/`CLAUDE.md` divididos, portão de entrada na raiz |
+| [0017](0017-central-gitops-repo-for-foundry-apps.md) | Repositório GitOps central `wasp-foundry/gitops`: criação por PR, bump de tag por commit direto do CI |
+| [0018](0018-separate-github-apps-per-role.md) | Dois GitHub Apps na `wasp-foundry`, um por papel (scaffolding vs. bump de tag) |
