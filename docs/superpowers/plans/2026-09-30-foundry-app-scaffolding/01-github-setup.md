@@ -28,7 +28,7 @@ Responde o risco 1 do spec. Tudo criado aqui é apagado no fim.
 
 **Files:** nenhum no repo (trabalho em scratchpad).
 
-- [ ] **Step 1: Escopos do `gh`**
+- [x] **Step 1: Escopos do `gh`**
 
 ```bash
 gh auth refresh --hostname github.com --scopes read:packages,delete:packages,delete_repo,admin:org
@@ -36,7 +36,7 @@ gh auth refresh --hostname github.com --scopes read:packages,delete:packages,del
 
 (interativo — se o harness não permitir, pedir ao usuário: `! gh auth refresh --hostname github.com --scopes read:packages,delete:packages,delete_repo,admin:org`)
 
-- [ ] **Step 2: Repo descartável com workflow de publish**
+- [x] **Step 2: Repo descartável com workflow de publish**
 
 ```bash
 spike_dir="$(mktemp --directory)"
@@ -70,7 +70,7 @@ git add . && git commit --message "spike"
 gh repo create wasp-foundry/ghcr-spike --public --source . --push
 ```
 
-- [ ] **Step 3: Esperar o workflow**
+- [x] **Step 3: Esperar o workflow**
 
 ```bash
 gh run watch --repo wasp-foundry/ghcr-spike "$(gh run list --repo wasp-foundry/ghcr-spike --limit 1 --json databaseId --jq '.[0].databaseId')"
@@ -78,7 +78,7 @@ gh run watch --repo wasp-foundry/ghcr-spike "$(gh run list --repo wasp-foundry/g
 
 Expected: sucesso.
 
-- [ ] **Step 4: Medir visibilidade e pull anônimo**
+- [x] **Step 4: Medir visibilidade e pull anônimo**
 
 ```bash
 gh api orgs/wasp-foundry/packages/container/ghcr-spike --jq '.visibility'
@@ -89,7 +89,7 @@ docker pull ghcr.io/wasp-foundry/ghcr-spike:latest
 Resultado A: `public` e pull OK → risco 1 some.
 Resultado B: `private` e pull `denied` → antes de decidir, conferir se a org permite pacotes públicos: `https://github.com/organizations/wasp-foundry/settings/packages` → "Package creation" com **Public** marcado. Marcar, apagar o pacote (Step 5), re-rodar o workflow (`gh run rerun`) e medir de novo. Se continuar `private`, **parar e reportar ao usuário** — a decisão entre "tornar público pela UI a cada app" e "pull secret com PAT `read:packages`" é dele.
 
-- [ ] **Step 5: Limpeza**
+- [x] **Step 5: Limpeza**
 
 ```bash
 gh api --method DELETE orgs/wasp-foundry/packages/container/ghcr-spike
@@ -97,7 +97,7 @@ gh repo delete wasp-foundry/ghcr-spike --yes
 rm --recursive --force "${spike_dir}"
 ```
 
-- [ ] **Step 6: Registrar no spec**
+- [x] **Step 6: Registrar no spec**
 
 Em `docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md`, seção "Riscos a validar primeiro", item 1: acrescentar ao fim `— **resultado (2026-MM-DD):** <public|private>, <o que foi preciso fazer>`.
 
@@ -110,7 +110,7 @@ git commit --message "docs(#101): resultado do spike de visibilidade do GHCR"
 
 **Files:** nenhum no repo `wasp-idp`.
 
-- [ ] **Step 1: Criar e popular**
+- [x] **Step 1: Criar e popular**
 
 ```bash
 gitops_dir="$(mktemp --directory)"
@@ -130,7 +130,7 @@ gh repo create wasp-foundry/gitops --public --source . --push --description "Git
 rm --recursive --force "${gitops_dir}"
 ```
 
-- [ ] **Step 2: Verificar**
+- [x] **Step 2: Verificar**
 
 Run: `gh api repos/wasp-foundry/gitops --jq '.visibility, .default_branch'`
 Expected: `public` / `main`.
@@ -139,7 +139,7 @@ Expected: `public` / `main`.
 
 Criação via fluxo de manifest (abre browser) — precisa do usuário.
 
-- [ ] **Step 1: Criar**
+- [x] **Step 1: Criar**
 
 Pedir ao usuário para rodar:
 
@@ -149,7 +149,7 @@ Pedir ao usuário para rodar:
 
 Na tela do GitHub, o nome do App deve ser `wasp-foundry-backstage`. A CLI grava um `*-credentials.yaml` em `idp/`.
 
-- [ ] **Step 2: Conferir o arquivo e que está ignorado**
+- [x] **Step 2: Conferir o arquivo e que está ignorado**
 
 ```bash
 ls idp/*-credentials.yaml
@@ -164,15 +164,15 @@ Conferir que tem as chaves `appId`, `clientId`, `clientSecret`, `webhookSecret`,
 grep --only-matching --extended-regexp '^[a-zA-Z]+:' idp/github-app-wasp-foundry-backstage-credentials.yaml
 ```
 
-- [ ] **Step 3: Permissões** (a CLI cria só com leitura)
+- [x] **Step 3: Permissões** (a CLI cria só com leitura)
 
 Usuário abre `https://github.com/organizations/wasp-foundry/settings/apps/wasp-foundry-backstage/permissions` e define em **Repository permissions**: Administration **Read and write**, Contents **Read and write**, Pull requests **Read and write**, Workflows **Read and write**, Metadata **Read-only**. Todo o resto: No access. Salvar.
 
-- [ ] **Step 4: Instalar**
+- [x] **Step 4: Instalar**
 
 `https://github.com/organizations/wasp-foundry/settings/apps/wasp-foundry-backstage/installations` → Install em `wasp-foundry` → **All repositories**. Se já instalado pela CLI, aceitar as novas permissões em `https://github.com/organizations/wasp-foundry/settings/installations`.
 
-- [ ] **Step 5: Verificar**
+- [x] **Step 5: Verificar**
 
 ```bash
 gh api orgs/wasp-foundry/installations --jq '.installations[] | select(.app_slug=="wasp-foundry-backstage") | {repository_selection, permissions}'
@@ -182,7 +182,7 @@ Expected: `repository_selection: "all"` e as cinco permissões com `write`/`read
 
 ### Task 4: App `wasp-foundry-ci`
 
-- [ ] **Step 1: Criar (usuário, UI)**
+- [x] **Step 1: Criar (usuário, UI)**
 
 `https://github.com/organizations/wasp-foundry/settings/apps/new`:
 - GitHub App name: `wasp-foundry-ci`
@@ -193,7 +193,7 @@ Expected: `repository_selection: "all"` e as cinco permissões com `write`/`read
 
 Depois: **Generate a private key** (baixa um `.pem`) e anotar o **App ID**.
 
-- [ ] **Step 2: Instalar só no `gitops`**
+- [x] **Step 2: Instalar só no `gitops`**
 
 Install App → `wasp-foundry` → **Only select repositories** → `gitops`.
 
@@ -205,14 +205,14 @@ gh api orgs/wasp-foundry/installations --jq '.installations[] | select(.app_slug
 
 Expected: `repository_selection: "selected"`, `contents: "write"`, `metadata: "read"`.
 
-- [ ] **Step 3: Variável e secret de org**
+- [x] **Step 3: Variável e secret de org**
 
 ```bash
 gh variable set FOUNDRY_CI_APP_ID --org wasp-foundry --visibility all --body "<app-id>"
 gh secret set FOUNDRY_CI_APP_PRIVATE_KEY --org wasp-foundry --visibility all < "<caminho-do-pem>"
 ```
 
-- [ ] **Step 4: Apagar o `.pem` local**
+- [x] **Step 4: Apagar o `.pem` local**
 
 ```bash
 shred --remove "<caminho-do-pem>"
@@ -220,7 +220,7 @@ shred --remove "<caminho-do-pem>"
 
 A chave vive só no secret; para rotacionar, gerar outra na página do App.
 
-- [ ] **Step 5: Verificar**
+- [x] **Step 5: Verificar**
 
 ```bash
 gh variable list --org wasp-foundry
