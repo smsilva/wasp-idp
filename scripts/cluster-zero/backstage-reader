@@ -1,15 +1,39 @@
 #!/bin/bash
 # Create (idempotently) a read-only ServiceAccount for the Backstage kubernetes
-# plugin and print the environment variables it needs. Usage:
-#   eval "$(scripts/cluster-zero/backstage-reader)"
+# plugin in one k3d cluster and print the environment variables it needs. Usage:
+#   eval "$(scripts/cluster-zero/backstage-reader --cluster development)"
 set -e
+
+cluster=""
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --cluster) cluster="${2?}"; shift 2 ;;
+    *) echo "Unknown option: ${1}" >&2; exit 1 ;;
+  esac
+done
+
+if [[ -z "${cluster}" ]]; then
+  echo "Usage: ${0##*/} --cluster <name>" >&2
+  exit 1
+fi
+
+context="k3d-${cluster}"
+
+if ! kubectl config get-contexts "${context}" > /dev/null 2>&1; then
+  echo "kubectl context ${context} not found" >&2
+  exit 1
+fi
+
+variable_prefix="K8S_${cluster^^}"
+variable_prefix="${variable_prefix//-/_}"
 
 namespace="kube-system"
 account="backstage-reader"
 
-echo "Ensuring ServiceAccount ${namespace}/${account} with ClusterRole view..." >&2
+echo "Ensuring ServiceAccount ${namespace}/${account} with ClusterRole view in ${cluster}..." >&2
 
-kubectl apply --filename - > /dev/null <<EOF
+kubectl --context "${context}" apply --filename - > /dev/null <<EOF
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -40,6 +64,7 @@ type: kubernetes.io/service-account-token
 EOF
 
 kubectl wait \
+  --context "${context}" \
   --namespace "${namespace}" \
   --for jsonpath='{.data.token}' \
   --timeout=60s \
@@ -47,6 +72,7 @@ kubectl wait \
 
 token="$(
   kubectl get secret "${account}-token" \
+    --context "${context}" \
     --namespace "${namespace}" \
     --output jsonpath='{.data.token}' \
   | base64 --decode
@@ -54,11 +80,12 @@ token="$(
 
 ca="$(
   kubectl get secret "${account}-token" \
+    --context "${context}" \
     --namespace "${namespace}" \
     --output jsonpath='{.data.ca\.crt}'
 )"
 
 echo "Token: ${token:0:3}... (export it with eval)" >&2
 
-echo "export K8S_CLUSTER_ZERO_TOKEN='${token}'"
-echo "export K8S_CLUSTER_ZERO_CA='${ca}'"
+echo "export ${variable_prefix}_TOKEN='${token}'"
+echo "export ${variable_prefix}_CA='${ca}'"
