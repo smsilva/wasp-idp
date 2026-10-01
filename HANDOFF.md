@@ -183,13 +183,16 @@ Backstage lê o cluster. Decisões e alternativas descartadas (EKS, `deploy/` po
 do template, Image Updater, repos privados, GitHub Teams, um App só) no spec
 `docs/superpowers/specs/2026-09-30-foundry-app-scaffolding-design.md` — **não rediscutir**.
 
-- **Parado em:** planos `00` e `01` concluídos. Org `wasp-foundry` pronta: pacote GHCR novo nasce
+- **Parado em:** planos `00`–`03` concluídos. Template `python-service` em
+  `idp/templates/python-service/` (dry-run verde, `test-render` verde; nada publicado ainda —
+  o primeiro uso real é a aceitação do plano 05). Backstage autentica pelo App, times
+  `team-alpha`/`team-beta` no catalog. Org `wasp-foundry` pronta: pacote GHCR novo nasce
   `public` (exigiu marcar Public em "Package creation", só pela UI); repo `wasp-foundry/gitops`
   criado; App `wasp-foundry-backstage` (todos os repos, credenciais em
   `idp/github-app-wasp-foundry-backstage-credentials.yaml`, gitignored) e App `wasp-foundry-ci`
   (só `gitops`, chave só no secret de org `FOUNDRY_CI_APP_PRIVATE_KEY`, id na variável
-  `FOUNDRY_CI_APP_ID`). Nenhum código da #101 escrito. #101 em `In Progress` no board #6.
-- **Próximo:** plano `02`, depois `03` e `04` (independentes), `05` — inline
+  `FOUNDRY_CI_APP_ID`). #101 em `In Progress` no board #6.
+- **Próximo:** plano `04` (cluster-zero/ApplicationSet), depois `05` — inline
   (`superpowers:executing-plans`), um por vez, em
   `docs/superpowers/plans/2026-09-30-foundry-app-scaffolding/`. Índice no `README.md` da pasta.
 - **Precisa do usuário:** merge dos PRs. Comandos interativos (`backstage-cli create-github-app`,
@@ -601,6 +604,8 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-09-30 — #101 planos 02–03:** Backstage via App `wasp-foundry-backstage`, times no catalog,
+  template `python-service` (FastAPI, Dockerfile, CI test→build→bump, manifestos gitops).
 - **2026-09-30 — #101 plano 01, setup GitHub da org `wasp-foundry`** (spike GHCR, `gitops`, dois
   Apps, variável/secret de org). Resultado do spike no spec, risco 1.
 - **2026-09-30 — #100, Backstage 1.49.0 → 1.55.3** (PR #102). Exigiu fixar `@yarnpkg/core` em

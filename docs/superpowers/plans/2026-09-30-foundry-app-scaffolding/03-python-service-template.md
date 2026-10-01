@@ -59,7 +59,7 @@ idp/templates/python-service/
 **Interfaces:**
 - Produces: módulo `app.main` com objeto ASGI `app` (usado pelo `Dockerfile`: `uvicorn app.main:app`); env var `APP_NAME` (definida pelo `deployment.yaml` da Task 3).
 
-- [ ] **Step 1: Resolver versões atuais**
+- [x] **Step 1: Resolver versões atuais**
 
 ```bash
 for package in fastapi uvicorn pytest httpx; do
@@ -69,7 +69,7 @@ done
 
 Usar as versões mais recentes exibidas nos arquivos abaixo (substituindo `X.Y.Z`).
 
-- [ ] **Step 2: Dependências**
+- [x] **Step 2: Dependências**
 
 `requirements.txt`:
 
@@ -85,7 +85,7 @@ pytest==X.Y.Z
 httpx==X.Y.Z
 ```
 
-- [ ] **Step 3: Teste que falha** — `tests/test_main.py`:
+- [x] **Step 3: Teste que falha** — `tests/test_main.py`:
 
 ```python
 import importlib
@@ -122,7 +122,7 @@ def test_root_falls_back_to_default_name(monkeypatch):
     assert client.get("/").json()["app"] == "python-service"
 ```
 
-- [ ] **Step 4: Rodar e ver falhar**
+- [x] **Step 4: Rodar e ver falhar**
 
 ```bash
 cd idp/templates/python-service/content
@@ -134,7 +134,7 @@ pytest
 
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.main'`.
 
-- [ ] **Step 5: Implementação** — `app/main.py`:
+- [x] **Step 5: Implementação** — `app/main.py`:
 
 ```python
 import os
@@ -156,12 +156,12 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 ```
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 Run: `pytest`
 Expected: `3 passed`.
 
-- [ ] **Step 7: Não versionar o venv** — confirmar `git status --short idp/templates/` sem `.venv/`; se aparecer, criar `idp/templates/python-service/content/.gitignore` com:
+- [x] **Step 7: Não versionar o venv** — confirmar `git status --short idp/templates/` sem `.venv/`; se aparecer, criar `idp/templates/python-service/content/.gitignore` com:
 
 ```
 .venv/
@@ -171,7 +171,7 @@ __pycache__/
 
 (esse `.gitignore` também vai para o repo gerado, o que é desejável.)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add idp/templates/python-service/content
@@ -184,7 +184,7 @@ git commit --message "feat(#101): aplicação FastAPI do template python-service
 - Create: `idp/templates/python-service/content/Dockerfile`
 - Create: `idp/templates/python-service/content/.dockerignore`
 
-- [ ] **Step 1: `Dockerfile`**
+- [x] **Step 1: `Dockerfile`**
 
 ```dockerfile
 FROM python:3.13-slim
@@ -206,7 +206,7 @@ EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-- [ ] **Step 2: `.dockerignore`**
+- [x] **Step 2: `.dockerignore`**
 
 ```
 .git
@@ -217,7 +217,7 @@ __pycache__
 tests
 ```
 
-- [ ] **Step 3: Build e run**
+- [x] **Step 3: Build e run**
 
 ```bash
 cd idp/templates/python-service/content
@@ -231,7 +231,7 @@ docker stop python-service-test
 
 Expected: `{"status":"ok"}` e `{"app":"docker-test","message":"hello"}`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add idp/templates/python-service/content/Dockerfile idp/templates/python-service/content/.dockerignore
@@ -252,7 +252,7 @@ git commit --message "feat(#101): Dockerfile do template python-service"
 - Consumes: `APP_NAME` e porta `8000` (Task 1/2).
 - Produces: valores de template `values.name`, `values.description`, `values.owner` (content) e `values.name`, `values.imageTag` (gitops) — preenchidos pelo `template.yaml` da Task 5.
 
-- [ ] **Step 1: Teste que falha — `test-render`**
+- [x] **Step 1: Teste que falha — `test-render`**
 
 ```bash
 #!/bin/bash
@@ -340,12 +340,12 @@ echo "ok: catalog-info.yaml"
 chmod +x idp/templates/python-service/test-render
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `idp/templates/python-service/test-render`
 Expected: FAIL — `sed: can't read .../gitops/*.yaml` (arquivos ainda não existem).
 
-- [ ] **Step 3: `gitops/deployment.yaml`**
+- [x] **Step 3: `gitops/deployment.yaml`**
 
 ```yaml
 apiVersion: apps/v1
@@ -393,7 +393,7 @@ spec:
               memory: 128Mi
 ```
 
-- [ ] **Step 4: `gitops/service.yaml`**
+- [x] **Step 4: `gitops/service.yaml`**
 
 ```yaml
 apiVersion: v1
@@ -413,7 +413,7 @@ spec:
       targetPort: http
 ```
 
-- [ ] **Step 5: `gitops/kustomization.yaml`**
+- [x] **Step 5: `gitops/kustomization.yaml`**
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -427,7 +427,7 @@ images:
     newTag: ${{ values.imageTag }}
 ```
 
-- [ ] **Step 6: `content/catalog-info.yaml`**
+- [x] **Step 6: `content/catalog-info.yaml`**
 
 ```yaml
 apiVersion: backstage.io/v1alpha1
@@ -444,7 +444,7 @@ spec:
   owner: ${{ values.owner }}
 ```
 
-- [ ] **Step 7: `content/README.md`**
+- [x] **Step 7: `content/README.md`**
 
 ```markdown
 # ${{ values.name }}
@@ -466,12 +466,12 @@ Every push to `main` runs the tests, publishes `ghcr.io/wasp-foundry/${{ values.
     uvicorn app.main:app --reload
 ```
 
-- [ ] **Step 8: Rodar e ver passar**
+- [x] **Step 8: Rodar e ver passar**
 
 Run: `idp/templates/python-service/test-render`
 Expected: todas as linhas `ok:`; `skip: server-side dry-run` se não houver k3d no ar (aceitável — o plano 05 roda com cluster).
 
-- [ ] **Step 9: shellcheck**
+- [x] **Step 9: shellcheck**
 
 ```bash
 docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck:stable idp/templates/python-service/test-render
@@ -479,7 +479,7 @@ docker run --rm --volume "${PWD}:/mnt" --workdir /mnt koalaman/shellcheck:stable
 
 Expected: sem saída.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add idp/templates/python-service/gitops idp/templates/python-service/content/catalog-info.yaml idp/templates/python-service/content/README.md idp/templates/python-service/test-render
@@ -491,7 +491,7 @@ git commit --message "feat(#101): manifestos gitops e catalog-info do template p
 **Files:**
 - Create: `idp/templates/python-service/content/.github/workflows/ci.yaml`
 
-- [ ] **Step 1: Resolver majors atuais das actions**
+- [x] **Step 1: Resolver majors atuais das actions**
 
 ```bash
 for action in actions/checkout actions/setup-python docker/login-action docker/build-push-action actions/create-github-app-token; do
@@ -501,7 +501,7 @@ done
 
 Usar o major de cada uma (`vN`) no arquivo abaixo, substituindo os `@vN` se forem diferentes.
 
-- [ ] **Step 2: `ci.yaml`**
+- [x] **Step 2: `ci.yaml`**
 
 ```yaml
 name: ci
@@ -599,7 +599,7 @@ jobs:
 
 Nota: `kustomize` vem pré-instalado na imagem `ubuntu-24.04` dos runners. Se o job falhar com `kustomize: command not found`, adicionar antes de "Set image tag" o passo `- uses: imranismail/setup-kustomize@v2`.
 
-- [ ] **Step 3: actionlint**
+- [x] **Step 3: actionlint**
 
 ```bash
 docker run --rm --volume "${PWD}/idp/templates/python-service/content:/repo" --workdir /repo rhysd/actionlint:latest -color
@@ -607,7 +607,7 @@ docker run --rm --volume "${PWD}/idp/templates/python-service/content:/repo" --w
 
 Expected: sem erros.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add idp/templates/python-service/content/.github
@@ -623,7 +623,7 @@ git commit --message "feat(#101): CI do template python-service (test, build, bu
 **Interfaces:**
 - Consumes: `content/` (values `name`, `description`, `owner`), `gitops/` (values `name`, `imageTag`), `Group`s do plano 02.
 
-- [ ] **Step 1: `template.yaml`**
+- [x] **Step 1: `template.yaml`**
 
 ```yaml
 apiVersion: scaffolder.backstage.io/v1beta3
@@ -726,7 +726,7 @@ spec:
         entityRef: ${{ steps['register'].output.entityRef }}
 ```
 
-- [ ] **Step 2: Location** — em `idp/app-config.yaml`, logo após a location do template de exemplo (`../../examples/template/template.yaml`):
+- [x] **Step 2: Location** — em `idp/app-config.yaml`, logo após a location do template de exemplo (`../../examples/template/template.yaml`):
 
 ```yaml
     # Foundry templates (apps created in the wasp-foundry GitHub org)
@@ -736,7 +736,7 @@ spec:
         - allow: [Template]
 ```
 
-- [ ] **Step 3: Dry-run no Template Editor**
+- [x] **Step 3: Dry-run no Template Editor**
 
 `cd idp && yarn start`, login guest, `http://localhost:3000/create/edit` → "Load Template Directory" → selecionar `idp/templates/python-service/` → preencher `name: dry-run-test`, uma descrição, owner `team-alpha` → **Create** (modo dry-run).
 
@@ -747,11 +747,11 @@ Expected:
 
 Confirmar que nada foi criado: `gh api repos/wasp-foundry/dry-run-test` → 404.
 
-- [ ] **Step 4: Aparece em `/create`**
+- [x] **Step 4: Aparece em `/create`**
 
 `http://localhost:3000/create` lista "Python service (FastAPI)".
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add idp/templates/python-service/template.yaml idp/app-config.yaml
