@@ -118,6 +118,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 
 - Render free-text parameters in YAML with `${{ values.x | dump }}` (JSON string): unquoted interpolation lets a description with newlines inject keys into `catalog-info.yaml`. Validate entity refs with a `pattern` — `OwnerPicker` only constrains the UI, the scaffolder API accepts any string.
 - `publish:github` protects the default branch with 1 required approval + `enforce_admins` by default, which freezes repos in a one-member org; set `requiredApprovingReviewCount: 0`.
+- Run a template for real without the UI: `POST /api/scaffolder/v2/tasks` with `{"templateRef": "template:default/python-service", "values": {...}}` and the guest token, then poll `GET /api/scaffolder/v2/tasks/<id>` until `status` is `completed`/`failed` (errors are in `/tasks/<id>/events`). Used to create `hello-beta` in the #105 acceptance.
 - Test a template without publishing via `POST /api/scaffolder/v2/dry-run` (guest token from `GET /api/auth/guest/refresh`); `idp/templates/python-service/test-dry-run` is the reference.
 
 ## Local backend — gotchas

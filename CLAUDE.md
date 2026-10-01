@@ -23,7 +23,7 @@
     --single-select-option-id 2841e349
   ```
 
-  Simpler, and works right after `item-add` (when `item-list` may not show the new item yet): `gh project item-edit 6 --owner smsilva --url <issue-url> --field Status --value Backlog`.
+  Simpler, and works right after `item-add` (when `item-list` may not show the new item yet): `gh project item-edit 6 --owner smsilva --url <issue-url> --field Status --value Backlog`. Most reliable (verified 2026-10-01): `item-add ... --format json --jq .id` already returns the itemId, so pass it to `item-edit --id`; then confirm with `gh api graphql -f query='query{node(id:"<itemId>"){... on ProjectV2Item{fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'` — `item-list` (even with `--limit 100`) did not show items added minutes earlier.
 
   Option ids: `Backlog` `2841e349`, `Todo` `1346028c`, `In Progress` `d9b40b84`, `Done` `1168c952`. Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `item-list` — an open issue off the board is work lost from sight. **Pass `--limit 100` to both:** `item-list` defaults to 30 items and the board already has more than that, so the default silently omits items and an audit run without it reports issues as "missing from the board" that are already on it. `item-add` is idempotent — calling it twice does not duplicate the item, so re-running after an unclear result is safe.
 
