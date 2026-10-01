@@ -1,12 +1,13 @@
 #!/bin/bash
 
-cluster_name="${1:-idp-cluster-zero}"
+if [[ "$#" -eq 0 ]]; then
+  set -- idp-cluster-zero development production
+fi
 
 echo ""
-echo "Deleting k3d cluster '${cluster_name}'..."
+echo "Deleting k3d clusters: $*..."
 
-k3d cluster delete \
-  "${cluster_name}"
+k3d cluster delete "$@"
 
 echo ""
 

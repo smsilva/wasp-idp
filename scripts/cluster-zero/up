@@ -7,7 +7,11 @@ this_script_directory="${this_script_path%/*}"
 PATH="${this_script_directory}:${PATH}"
 
 check-prereqs
-cluster-create "${1:-idp-cluster-zero}"
+cluster-create --name development --api-port 6551 --app-port 9081
+cluster-create --name production --api-port 6552 --app-port 9082
+cluster-create --name idp-cluster-zero --api-port 6550 --servers 3
+kubectl config use-context k3d-idp-cluster-zero
 install-argocd
 install-crossplane
+register-clusters
 verify
