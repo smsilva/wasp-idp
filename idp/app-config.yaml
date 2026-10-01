@@ -92,6 +92,17 @@ catalog:
   import:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
+  providers:
+    github:
+      waspFoundry:
+        organization: wasp-foundry
+        catalogPath: /catalog-info.yaml
+        filters:
+          branch: main
+        schedule:
+          frequency: { minutes: 5 }
+          timeout: { minutes: 3 }
+          initialDelay: { seconds: 15 }
   rules:
     - allow: [Component, System, API, Resource, Location]
   locations:
@@ -122,6 +133,12 @@ catalog:
       target: ../../catalog/org.yaml
       rules:
         - allow: [Group]
+
+    # Bookinfo domain, system and the k3d clusters as resources
+    - type: file
+      target: ../../catalog/bookinfo.yaml
+      rules:
+        - allow: [Domain, System, Resource]
 
     ## Uncomment these lines to add more example data
     # - type: url

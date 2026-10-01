@@ -116,7 +116,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 
 ## Local backend — gotchas
 
-- The local DB is SQLite `:memory:`: entities added by `catalog:register` vanish on every backend restart.
+- The local DB is SQLite `:memory:`, but repos of the `wasp-foundry` org come back on their own: the GitHub entity provider (`catalog.providers.github.waspFoundry`) rescans `/catalog-info.yaml` on `main` every 5 min (first run 15 s after start). Only entities registered by hand from elsewhere vanish on restart.
 - New `catalog.locations` in `app-config.yaml` are not hot-reloaded — restart `yarn start`.
 
 ## Security TODOs (PoC hardening, deferred)

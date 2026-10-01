@@ -1,0 +1,43 @@
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-domain
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: bookstore
+  description: Selling books online — catalogue, product pages, reviews and ratings
+spec:
+  owner: group:default/team-alpha
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-system
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: bookinfo
+  description: Istio Bookinfo sample (productpage, details, reviews, ratings), one repo per service in the wasp-foundry org
+  links:
+    - url: https://github.com/istio/istio/tree/1.31.1/samples/bookinfo
+      title: Upstream source (istio/istio 1.31.1)
+spec:
+  owner: group:default/team-alpha
+  domain: bookstore
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-resource
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: development
+  description: k3d cluster "development" (API 127.0.0.1:6551, apps on localhost:9081), deployed by the cluster-zero ArgoCD
+spec:
+  type: kubernetes-cluster
+  owner: group:default/team-alpha
+  system: bookinfo
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: production
+  description: k3d cluster "production" (API 127.0.0.1:6552, apps on localhost:9082), deployed by the cluster-zero ArgoCD
+spec:
+  type: kubernetes-cluster
+  owner: group:default/team-alpha
+  system: bookinfo
