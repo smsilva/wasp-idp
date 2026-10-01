@@ -26,3 +26,5 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0016](0016-documentation-navigation-structure.md) | Estrutura de navegação da documentação: `README.md`/`CLAUDE.md` divididos, portão de entrada na raiz |
 | [0017](0017-central-gitops-repo-for-foundry-apps.md) | Repositório GitOps central `wasp-foundry/gitops`: criação por PR, bump de tag por commit direto do CI |
 | [0018](0018-separate-github-apps-per-role.md) | Dois GitHub Apps na `wasp-foundry`, um por papel (scaffolding vs. bump de tag) |
+| [0019](0019-environment-clusters-managed-by-central-argocd.md) | Clusters `development` e `production` gerenciados pelo ArgoCD do cluster-zero: matrix generator, overlays por ambiente, promoção por PR |
+| [0020](0020-catalog-discovery-from-github-org.md) | Catalog descobre os repos da org `wasp-foundry` pelo entity provider do GitHub |
