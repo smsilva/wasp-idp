@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: python-service
   title: Python service (FastAPI)
-  description: Creates a FastAPI service in the wasp-foundry GitHub org, with CI to GHCR and deployment to the cluster-zero k3d via GitOps.
+  description: Creates a FastAPI service in the wasp-foundry GitHub org, with CI to GHCR and deployment to the development and production k3d clusters via GitOps.
   tags:
     - python
     - fastapi
