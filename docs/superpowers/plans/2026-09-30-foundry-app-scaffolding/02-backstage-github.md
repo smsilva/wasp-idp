@@ -26,7 +26,7 @@
 - Create: `idp/catalog/org.yaml`
 - Modify: `idp/app-config.yaml` (bloco `catalog.locations`)
 
-- [ ] **Step 1: Criar `idp/catalog/org.yaml`**
+- [x] **Step 1: Criar `idp/catalog/org.yaml`**
 
 ```yaml
 ---
@@ -50,7 +50,7 @@ spec:
   children: []
 ```
 
-- [ ] **Step 2: Registrar a location** — em `idp/app-config.yaml`, logo após a location de `../../examples/org.yaml`, acrescentar:
+- [x] **Step 2: Registrar a location** — em `idp/app-config.yaml`, logo após a location de `../../examples/org.yaml`, acrescentar:
 
 ```yaml
     # Product teams (owners in the python-service template)
@@ -60,7 +60,7 @@ spec:
         - allow: [Group]
 ```
 
-- [ ] **Step 3: Verificar**
+- [x] **Step 3: Verificar**
 
 ```bash
 cd idp && yarn start
@@ -68,7 +68,7 @@ cd idp && yarn start
 
 Em `http://localhost:3000/catalog?filters[kind]=group` (login guest): `team-alpha`, `team-beta` e `guests` listados.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add idp/catalog/org.yaml idp/app-config.yaml
@@ -80,7 +80,7 @@ git commit --message "feat(#101): grupos team-alpha e team-beta no catalog"
 **Files:**
 - Modify: `idp/app-config.yaml` (bloco `integrations.github`)
 
-- [ ] **Step 1: Editar** — substituir o item `github.com` inteiro (inclusive o comentário do PAT e a linha `token: ${GITHUB_TOKEN}`) por:
+- [x] **Step 1: Editar** — substituir o item `github.com` inteiro (inclusive o comentário do PAT e a linha `token: ${GITHUB_TOKEN}`) por:
 
 ```yaml
 integrations:
@@ -94,7 +94,7 @@ integrations:
 
 Manter o bloco comentado de exemplo do GitHub Enterprise que vem abaixo.
 
-- [ ] **Step 2: Validar a config**
+- [x] **Step 2: Validar a config**
 
 ```bash
 cd idp && yarn backstage-cli config:check --lax
@@ -102,7 +102,7 @@ cd idp && yarn backstage-cli config:check --lax
 
 Expected: sem erro. (`--lax` porque `GOOGLE_CLIENT_*` podem não estar no ambiente.)
 
-- [ ] **Step 3: Smoke — App cria repo na org**
+- [x] **Step 3: Smoke — App cria repo na org**
 
 Sem `GITHUB_TOKEN` no ambiente (`unset GITHUB_TOKEN`), `yarn start`, login guest, `/create` → "Example Node.js Template":
 - Name: `app-smoke`
@@ -112,7 +112,7 @@ Expected: task conclui; `gh api repos/wasp-foundry/app-smoke --jq .full_name` �
 
 Se falhar com `Resource not accessible by integration`, a permissão correspondente não foi aceita na instalação — voltar ao plano 01, Task 3, Steps 3–5.
 
-- [ ] **Step 4: Limpeza do smoke**
+- [x] **Step 4: Limpeza do smoke**
 
 ```bash
 gh repo delete wasp-foundry/app-smoke --yes
@@ -120,14 +120,14 @@ gh repo delete wasp-foundry/app-smoke --yes
 
 Remover a entidade `app-smoke` do catalog: na página da entidade → menu ⋮ → "Unregister entity".
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add idp/app-config.yaml
 git commit --message "feat(#101): integração GitHub via App wasp-foundry-backstage"
 ```
 
-- [ ] **Step 6: Atualizar a doc de execução local** — em `docs/idp/CLAUDE.md`, acrescentar ao fim da seção `## Authentication` (antes de `## Scripts`):
+- [x] **Step 6: Atualizar a doc de execução local** — em `docs/idp/CLAUDE.md`, acrescentar ao fim da seção `## Authentication` (antes de `## Scripts`):
 
 ```markdown
 ### GitHub integration
