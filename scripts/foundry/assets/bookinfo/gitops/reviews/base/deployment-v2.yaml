@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reviews-v2
+  labels:
+    app.kubernetes.io/name: reviews
+    app.kubernetes.io/version: v2
+    backstage.io/kubernetes-id: reviews
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: reviews
+      app.kubernetes.io/version: v2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: reviews
+        app.kubernetes.io/version: v2
+        backstage.io/kubernetes-id: reviews
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: reviews
+          image: app
+          ports:
+            - name: http
+              containerPort: 9080
+          env:
+            - name: SERVICE_VERSION
+              value: v2
+            - name: ENABLE_RATINGS
+              value: "true"
+            - name: STAR_COLOR
+              value: black
+            - name: RATINGS_HOSTNAME
+              value: ratings.ratings
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: wlp-output
+              mountPath: /opt/ol/wlp/output
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: wlp-output
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

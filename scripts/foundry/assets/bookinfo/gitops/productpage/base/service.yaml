@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: productpage
+  labels:
+    app.kubernetes.io/name: productpage
+    backstage.io/kubernetes-id: productpage
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: productpage
+  ports:
+    - name: http
+      port: 9080
+      targetPort: http

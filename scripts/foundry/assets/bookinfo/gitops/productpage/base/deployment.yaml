@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: productpage
+  labels:
+    app.kubernetes.io/name: productpage
+    backstage.io/kubernetes-id: productpage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: productpage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: productpage
+        backstage.io/kubernetes-id: productpage
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: productpage
+          image: app
+          ports:
+            - name: http
+              containerPort: 9080
+          env:
+            - name: DETAILS_HOSTNAME
+              value: details.details
+            - name: REVIEWS_HOSTNAME
+              value: reviews.reviews
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
