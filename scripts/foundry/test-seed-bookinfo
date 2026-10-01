@@ -1,0 +1,71 @@
+#!/bin/bash
+# Test the recovery paths of seed-bookinfo with a stubbed `gh`: an existing repo
+# that is empty, an existing repo whose main lost its protection, and a gitops
+# pull request that is already open.
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+SEED_BOOKINFO_SOURCE_ONLY="true"
+export SEED_BOOKINFO_SOURCE_ONLY
+
+# shellcheck source=seed-bookinfo
+source "${this_script_directory}/seed-bookinfo"
+
+calls_file="$(mktemp)"
+trap 'rm --force "${calls_file}"' EXIT
+
+repository_state="empty"
+open_pull_requests="0"
+
+gh() {
+  echo "gh $*" >> "${calls_file}"
+  case "${1} ${2}" in
+    "api repos/wasp-foundry/details/commits?per_page=1")
+      [[ "${repository_state}" == "empty" ]] && return 1
+      echo "1"
+      ;;
+    "pr list")
+      echo "${open_pull_requests}"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+fail() {
+  echo "FAIL: ${1}" >&2
+  exit 1
+}
+
+repository_state="empty"
+if (ensure_existing_repository details > /dev/null 2>&1); then
+  fail "empty existing repository must be rejected"
+fi
+echo "ok: empty existing repository is rejected"
+
+repository_state="populated"
+: > "${calls_file}"
+ensure_existing_repository details > /dev/null
+if ! grep --quiet 'branches/main/protection' "${calls_file}"; then
+  fail "branch protection must be re-applied to an existing repository"
+fi
+echo "ok: protection re-applied to an existing repository"
+
+open_pull_requests="1"
+: > "${calls_file}"
+open_gitops_pull_request "feat: add bookinfo" "body" > /dev/null
+if grep --quiet 'pr create' "${calls_file}"; then
+  fail "must not create a second pull request"
+fi
+echo "ok: existing open pull request is reused"
+
+open_pull_requests="0"
+: > "${calls_file}"
+open_gitops_pull_request "feat: add bookinfo" "body" > /dev/null
+if ! grep --quiet 'pr create' "${calls_file}"; then
+  fail "must create the pull request when none is open"
+fi
+echo "ok: pull request is created when none is open"
