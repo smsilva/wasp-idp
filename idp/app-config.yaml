@@ -110,6 +110,12 @@ catalog:
       rules:
         - allow: [User, Group]
 
+    # Product teams (owners in the python-service template)
+    - type: file
+      target: ../../catalog/org.yaml
+      rules:
+        - allow: [Group]
+
     ## Uncomment these lines to add more example data
     # - type: url
     #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
