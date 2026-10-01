@@ -1,0 +1,156 @@
+#!/bin/bash
+# Import the Istio Bookinfo services into the wasp-foundry GitHub org: one public
+# repo per service (upstream code + CI + catalog-info.yaml + openapi.yaml), then
+# one pull request in wasp-foundry/gitops adding their base and overlays.
+# Idempotent: existing repos and existing apps/<service> directories are skipped.
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+assets_directory="${this_script_directory}/assets/bookinfo"
+organization="wasp-foundry"
+services=(productpage details reviews ratings)
+
+istio_tag="1.31.1"
+dry_run="false"
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} [--istio-tag <tag>] [--dry-run]
+
+  --istio-tag  istio/istio tag to import samples/bookinfo/src from (default: 1.31.1)
+  --dry-run    build the repos and the gitops directory locally, docker build each
+               service, and touch nothing on GitHub
+USAGE
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --istio-tag) istio_tag="${2?}"; shift 2 ;;
+    --dry-run) dry_run="true"; shift ;;
+    --help) show_usage; exit 0 ;;
+    *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+  esac
+done
+
+work_directory="$(mktemp --directory)"
+if [[ "${dry_run}" == "false" ]]; then
+  trap 'rm --recursive --force "${work_directory}"' EXIT
+fi
+
+echo "Fetching samples/bookinfo/src from istio/istio ${istio_tag}..."
+
+if ! git clone \
+  --quiet \
+  --depth 1 \
+  --branch "${istio_tag}" \
+  --filter blob:none \
+  --sparse \
+  https://github.com/istio/istio.git \
+  "${work_directory}/istio" 2> "${work_directory}/clone.log"; then
+  echo "Could not clone istio/istio at tag ${istio_tag}:" >&2
+  cat "${work_directory}/clone.log" >&2
+  exit 1
+fi
+
+git -C "${work_directory}/istio" sparse-checkout set samples/bookinfo/src
+
+declare -A initial_commits
+
+for service in "${services[@]}"; do
+  repository_directory="${work_directory}/repos/${service}"
+
+  if [[ "${dry_run}" == "false" ]] && gh repo view "${organization}/${service}" > /dev/null 2>&1; then
+    initial_commits["${service}"]="$(gh api "repos/${organization}/${service}/commits?sha=main&per_page=100" --jq '.[-1].sha')"
+    echo "Repository ${organization}/${service} already exists, skipping (initial commit ${initial_commits[${service}]:0:7})"
+    continue
+  fi
+
+  echo ""
+  echo "Building repository ${service}..."
+
+  mkdir --parents "${repository_directory}/.github/workflows"
+  cp --recursive "${work_directory}/istio/samples/bookinfo/src/${service}/." "${repository_directory}/"
+  cp "${work_directory}/istio/LICENSE" "${repository_directory}/LICENSE"
+  cp "${assets_directory}/${service}/catalog-info.yaml" "${repository_directory}/"
+  if [[ -f "${assets_directory}/${service}/openapi.yaml" ]]; then
+    cp "${assets_directory}/${service}/openapi.yaml" "${repository_directory}/"
+  fi
+  cp "${assets_directory}/ci.yaml" "${repository_directory}/.github/workflows/ci.yaml"
+
+  git -C "${repository_directory}" init --quiet --initial-branch main
+  git -C "${repository_directory}" add --all
+  git -C "${repository_directory}" commit \
+    --quiet \
+    --message "chore: import ${service} from istio/istio ${istio_tag}"
+  initial_commits["${service}"]="$(git -C "${repository_directory}" rev-parse HEAD)"
+
+  if [[ "${dry_run}" == "true" ]]; then
+    echo "Dry run: docker build ${service}..."
+    docker build --quiet --tag "bookinfo-${service}:dry-run" "${repository_directory}" > /dev/null
+    echo "ok: ${service} image builds"
+    continue
+  fi
+
+  gh repo create "${organization}/${service}" \
+    --public \
+    --description "Bookinfo ${service} (istio/istio ${istio_tag} samples), imported by wasp-idp scripts/foundry/seed-bookinfo"
+  git -C "${repository_directory}" remote add origin "git@github.com:${organization}/${service}.git"
+  git -C "${repository_directory}" push --quiet --set-upstream origin main
+
+  printf '%s\n' '{"required_status_checks":null,"enforce_admins":true,"required_pull_request_reviews":{"required_approving_review_count":0},"restrictions":null}' \
+    | gh api --method PUT "repos/${organization}/${service}/branches/main/protection" --input - > /dev/null
+  echo "Repository ${organization}/${service} created and main protected"
+done
+
+echo ""
+echo "Preparing gitops changes..."
+
+gitops_directory="${work_directory}/gitops"
+if [[ "${dry_run}" == "true" ]]; then
+  mkdir --parents "${gitops_directory}/apps"
+else
+  git clone --quiet "git@github.com:${organization}/gitops.git" "${gitops_directory}"
+  git -C "${gitops_directory}" switch --quiet --create add-bookinfo
+fi
+
+added_services=()
+
+for service in "${services[@]}"; do
+  if [[ -d "${gitops_directory}/apps/${service}" ]]; then
+    echo "apps/${service} already in gitops, skipping"
+    continue
+  fi
+  cp --recursive "${assets_directory}/gitops/${service}" "${gitops_directory}/apps/${service}"
+  for environment in development production; do
+    overlay="${gitops_directory}/apps/${service}/overlays/${environment}"
+    sed --in-place "s|__IMAGE_TAG__|${initial_commits[${service}]}|" "${overlay}/kustomization.yaml"
+    kubectl kustomize "${overlay}" > /dev/null
+  done
+  added_services+=("${service}")
+done
+
+if [[ "${#added_services[@]}" -eq 0 ]]; then
+  echo "Nothing to add to gitops."
+  exit 0
+fi
+
+if [[ "${dry_run}" == "true" ]]; then
+  echo ""
+  echo "Dry run complete. Repositories and gitops tree kept in ${work_directory}"
+  exit 0
+fi
+
+git -C "${gitops_directory}" add apps
+git -C "${gitops_directory}" commit \
+  --quiet \
+  --message "apps: add bookinfo (${added_services[*]})"
+git -C "${gitops_directory}" push --quiet --force --set-upstream origin add-bookinfo
+
+gh pr create \
+  --repo "${organization}/gitops" \
+  --base main \
+  --head add-bookinfo \
+  --title "apps: add bookinfo" \
+  --body "Adds ${added_services[*]} (Istio Bookinfo ${istio_tag}) to development and production, pinned to each repo's first commit. Created by wasp-idp scripts/foundry/seed-bookinfo."
