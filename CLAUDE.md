@@ -2,7 +2,9 @@
 
 ## Handoff conventions
 
-- `HANDOFF.md` (root) is the single, versioned session handoff — no `HANDOFF.local.md` counterpart. Never generate one; if it reappears, fold it into `HANDOFF.md` and delete it.
+- Two handoff files, split by scope:
+  - `HANDOFF.local.md` (root, gitignored) — task progress: the active front, last step, next step, state of the local environment (clusters, running processes). Every in-flight task lives here.
+  - `HANDOFF.md` (root, versioned) — broad, general state of the repo: what exists and is live, fronts delivered (one line + date), cross-cutting gotchas, pointers to ADRs/known-broken/board. Never task progress ("parado em", "próximo passo" of a specific task).
 
 - PII (emails) and anything identifying a person/company go in `CLAUDE.local.md` (gitignored), never in `HANDOFF.md` — the repo is public.
 
