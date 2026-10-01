@@ -606,6 +606,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo). Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
 - **2026-10-01 — #101 plano 04:** ApplicationSet `foundry-apps` no k3d (provado com app
   descartável: gera, sincroniza, finalizer limpa) e aba Kubernetes do Backstage via SA read-only.
   Também `fix(#101)` de injeção de YAML no template (`test-dry-run`).
