@@ -27,6 +27,8 @@ render() {
     --expression "s|\${{ values.imageTag }}|${image_tag}|g" \
     --expression "s|\${{ values.owner }}|${owner}|g" \
     --expression "s|\${{ values.description }}|${description}|g" \
+    --expression "s#\${{ values.owner | dump }}#\"${owner}\"#g" \
+    --expression "s#\${{ values.description | dump }}#\"${description}\"#g" \
     "${source_file}" > "${target_file}"
 
   if grep --quiet --fixed-strings "${unrendered_marker}" "${target_file}"; then
@@ -77,7 +79,7 @@ else
   echo "skip: server-side dry-run (no reachable cluster)"
 fi
 
-grep --quiet "owner: ${owner}" "${render_directory}/catalog-info.yaml"
+grep --quiet "owner: \"${owner}\"" "${render_directory}/catalog-info.yaml"
 grep --quiet "backstage.io/kubernetes-id: ${name}" "${render_directory}/catalog-info.yaml"
 grep --quiet "github.com/project-slug: wasp-foundry/${name}" "${render_directory}/catalog-info.yaml"
 echo "ok: catalog-info.yaml"
