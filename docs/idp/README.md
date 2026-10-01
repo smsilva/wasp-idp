@@ -33,7 +33,7 @@ Production DB env vars: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POST
 
 ### Backstage version
 
-**v1.49.0** (`idp/backstage.json`). Toolchain: `@backstage/cli` 0.36.0, Yarn 4.4.1, Node.js 24.
+**v1.55.3** (`idp/backstage.json`). Toolchain: `@backstage/cli` 0.36.6, Yarn 4.4.1, Node.js 24.
 
 ## UI Customisations
 

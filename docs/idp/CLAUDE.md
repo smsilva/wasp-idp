@@ -5,16 +5,13 @@ Rules and conventions for the Backstage app. Overview and reading index in
 
 ## Branches
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Stable base — scripts and repo config only |
-| `dev`  | Active development — full Backstage app with UI customisations |
-
-Always branch from `dev` for feature work on the IDP.
+The Backstage app lives on `main`. Feature work follows the repo convention: `feat/<issue>-<short-description>` from `main`.
 
 ## Commands
 
-All commands must be run from the `idp/` directory.
+All commands must be run from the `idp/` directory. If `yarn` is not on `PATH`, use the vendored release: `node .yarn/releases/yarn-4.4.1.cjs <command>`.
+
+`resolutions` pins `@yarnpkg/core` to `4.9.1`: `4.9.2` was published with `got` pointing to a patch file that only exists in the Yarn monorepo, which breaks `yarn install` (`ENOENT .yarn/patches/got-npm-11.8.2-*.patch`). Drop the pin once a fixed release is out.
 
 ```bash
 # Development
