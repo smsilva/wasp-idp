@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Dry-run the python-service template against a running Backstage backend.
+
+Checks that free-text parameters cannot inject keys into catalog-info.yaml.
+Needs `yarn start` running and PyYAML installed. Publishes nothing.
+"""
+import argparse
+import base64
+import json
+import pathlib
+import sys
+import urllib.error
+import urllib.request
+
+import yaml
+
+TEMPLATE_DIRECTORY = pathlib.Path(__file__).resolve().parent
+SKIPPED = {"test-render", "test-dry-run", ".venv", "__pycache__", ".pytest_cache"}
+
+CASES = [
+    (
+        "description with newline cannot add keys",
+        {
+            "name": "inj-test",
+            "description": "x\n  annotations:\n    evil: yes\nspec:\n  owner: group:default/team-beta",
+            "owner": "group:default/team-alpha",
+        },
+    ),
+    (
+        "description with colon stays valid YAML",
+        {"name": "inj-test", "description": "a: b # c", "owner": "group:default/team-alpha"},
+    ),
+    (
+        "owner outside group:default/<name> is rejected",
+        {"name": "inj-test", "description": "ok", "owner": "group:default/team-alpha\n  lifecycle: production"},
+    ),
+]
+
+
+def guest_token(backend_url):
+    with urllib.request.urlopen(f"{backend_url}/api/auth/guest/refresh") as response:
+        return json.load(response)["backstageIdentity"]["token"]
+
+
+def directory_contents():
+    contents = []
+    for path in sorted(TEMPLATE_DIRECTORY.rglob("*")):
+        relative = path.relative_to(TEMPLATE_DIRECTORY)
+        if path.is_dir() or SKIPPED.intersection(relative.parts):
+            continue
+        contents.append({"path": str(relative), "base64Content": base64.b64encode(path.read_bytes()).decode()})
+    return contents
+
+
+def dry_run(backend_url, token, template, contents, values):
+    body = {"template": template, "values": values, "secrets": {}, "directoryContents": contents}
+    request = urllib.request.Request(
+        f"{backend_url}/api/scaffolder/v2/dry-run",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
+            return json.load(response), None
+    except urllib.error.HTTPError as error:
+        return None, error.code
+
+
+def catalog_info_is_intact(result, values):
+    files = {item["path"]: base64.b64decode(item["base64Content"]).decode() for item in result["directoryContents"]}
+    try:
+        document = yaml.safe_load(files["catalog-info.yaml"])
+    except yaml.YAMLError:
+        return False
+    return (
+        document["metadata"].get("description") == values["description"]
+        and document["spec"]["owner"] == values["owner"]
+        and set(document["metadata"]["annotations"]) == {"github.com/project-slug", "backstage.io/kubernetes-id"}
+        and document["spec"]["lifecycle"] == "experimental"
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--backend-url", default="http://localhost:7007")
+    arguments = parser.parse_args()
+
+    token = guest_token(arguments.backend_url)
+    template = yaml.safe_load((TEMPLATE_DIRECTORY / "template.yaml").read_text())
+    contents = directory_contents()
+
+    failed = False
+    for label, values in CASES:
+        result, status = dry_run(arguments.backend_url, token, template, contents, values)
+        if status is not None:
+            print(f"ok (rejected {status}): {label}")
+        elif catalog_info_is_intact(result, values):
+            print(f"ok: {label}")
+        else:
+            print(f"FAIL: {label}", file=sys.stderr)
+            failed = True
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
