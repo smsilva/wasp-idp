@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+assets_directory="${this_script_directory}/assets"
+
+echo ""
+echo "Applying ApplicationSet foundry-apps (wasp-foundry/gitops apps/*)..."
+
+kubectl apply \
+  --filename "${assets_directory}/foundry-appset.yaml"
+
+kubectl wait \
+  --namespace argocd \
+  --for jsonpath='{.status.conditions[?(@.type=="ResourcesUpToDate")].status}'=True \
+  --timeout=120s \
+  applicationset/foundry-apps
+
+echo ""
+echo "ApplicationSet foundry-apps installed."
+echo "Applications generated so far:"
+kubectl \
+  --namespace argocd \
+  get applications \
+  --output name
