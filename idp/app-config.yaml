@@ -105,6 +105,12 @@ catalog:
       rules:
         - allow: [Template]
 
+    # Foundry templates (apps created in the wasp-foundry GitHub org)
+    - type: file
+      target: ../../templates/python-service/template.yaml
+      rules:
+        - allow: [Template]
+
     # Local example organizational data
     - type: file
       target: ../../examples/org.yaml

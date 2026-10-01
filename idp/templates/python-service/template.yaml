@@ -1,0 +1,98 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: python-service
+  title: Python service (FastAPI)
+  description: Creates a FastAPI service in the wasp-foundry GitHub org, with CI to GHCR and deployment to the cluster-zero k3d via GitOps.
+  tags:
+    - python
+    - fastapi
+spec:
+  owner: group:default/guests
+  type: service
+
+  parameters:
+    - title: Service
+      required:
+        - name
+        - description
+        - owner
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Repository, namespace and image name. Lowercase letters, digits and hyphens.
+          pattern: '^[a-z]([-a-z0-9]{0,38}[a-z0-9])?$'
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+        owner:
+          title: Owner team
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+
+  steps:
+    - id: fetch-app
+      name: Render application
+      action: fetch:template
+      input:
+        url: ./content
+        copyWithoutTemplating:
+          - .github/workflows/*
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+
+    - id: publish
+      name: Create repository
+      action: publish:github
+      input:
+        repoUrl: github.com?owner=wasp-foundry&repo=${{ parameters.name }}
+        description: ${{ parameters.description }}
+        repoVisibility: public
+        defaultBranch: main
+
+    - id: fetch-gitops
+      name: Render GitOps manifests
+      action: fetch:template
+      input:
+        url: ./gitops
+        targetPath: ./gitops-pr
+        values:
+          name: ${{ parameters.name }}
+          imageTag: ${{ steps['publish'].output.commitHash }}
+
+    - id: gitops-pr
+      name: Open GitOps pull request
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=wasp-foundry&repo=gitops
+        sourcePath: ./gitops-pr
+        targetPath: apps/${{ parameters.name }}
+        branchName: add-${{ parameters.name }}
+        title: 'apps: add ${{ parameters.name }}'
+        description: |
+          Deploys `${{ parameters.name }}` (owner `${{ parameters.owner }}`) to cluster-zero.
+          Created by the Backstage template `python-service`.
+
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: GitOps pull request
+        url: ${{ steps['gitops-pr'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
