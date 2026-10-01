@@ -85,8 +85,10 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 | `scripts/cluster-zero/up` | Stands up a local k3d cluster (3 servers) with ArgoCD + Crossplane (Azure providers) — disposable exercise for the "cluster zero" bootstrap described in `docs/superpowers/specs/2026-08-07-multi-tenant-idp-design.md` |
 | `scripts/cluster-zero/verify` | Checks health of the cluster, ArgoCD, and Crossplane |
 | `scripts/cluster-zero/install-foundry-appset` | Applies the `foundry-apps` ApplicationSet: one ArgoCD `Application` per `apps/*` directory of `wasp-foundry/gitops` |
-| `scripts/cluster-zero/backstage-reader` | Creates a read-only ServiceAccount and prints `K8S_CLUSTER_ZERO_TOKEN`/`K8S_CLUSTER_ZERO_CA` for the Backstage kubernetes plugin — `eval "$(scripts/cluster-zero/backstage-reader)"` before `yarn start` |
-| `scripts/cluster-zero/cluster-delete` | Tears down the cluster |
+| `scripts/cluster-zero/backstage-reader` | Creates a read-only ServiceAccount in one cluster and prints `K8S_<NAME>_TOKEN`/`K8S_<NAME>_CA` for the Backstage kubernetes plugin — `eval "$(scripts/cluster-zero/backstage-reader --cluster development)"` (and `production`) before `yarn start` |
+| `scripts/cluster-zero/cluster-create` | Creates one k3d cluster: `--name`, `--api-port` (required), `--servers`, `--network` (default `k3d-idp`), `--app-port` |
+| `scripts/cluster-zero/register-clusters` | Registers `development` and `production` as ArgoCD destinations in `idp-cluster-zero` (ServiceAccount `argocd-manager` + cluster Secret with label `env`) — idempotent |
+| `scripts/cluster-zero/cluster-delete` | Tears down the clusters; no argument deletes `idp-cluster-zero`, `development` and `production` |
 
 ## Architecture decisions (recorded)
 
