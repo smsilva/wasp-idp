@@ -135,17 +135,24 @@ catalog:
 
 kubernetes:
   # see https://backstage.io/docs/features/kubernetes/configuration for kubernetes configuration options
-  # Local k3d from scripts/cluster-zero. Credentials: eval "$(scripts/cluster-zero/backstage-reader)"
+  # Local k3d clusters from scripts/cluster-zero. Credentials, before yarn start:
+  #   eval "$(scripts/cluster-zero/backstage-reader --cluster development)"
+  #   eval "$(scripts/cluster-zero/backstage-reader --cluster production)"
   serviceLocatorMethod:
     type: multiTenant
   clusterLocatorMethods:
     - type: config
       clusters:
-        - name: cluster-zero
-          url: https://127.0.0.1:6550
+        - name: development
+          url: https://127.0.0.1:6551
           authProvider: serviceAccount
-          serviceAccountToken: ${K8S_CLUSTER_ZERO_TOKEN}
-          caData: ${K8S_CLUSTER_ZERO_CA}
+          serviceAccountToken: ${K8S_DEVELOPMENT_TOKEN}
+          caData: ${K8S_DEVELOPMENT_CA}
+        - name: production
+          url: https://127.0.0.1:6552
+          authProvider: serviceAccount
+          serviceAccountToken: ${K8S_PRODUCTION_TOKEN}
+          caData: ${K8S_PRODUCTION_CA}
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
