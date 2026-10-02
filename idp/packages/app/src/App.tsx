@@ -3,7 +3,14 @@ import catalogPlugin from '@backstage/plugin-catalog/alpha';
 import { navModule } from './modules/nav';
 import { blueThemeModule } from './themes/blueTheme';
 import { authModule } from './modules/auth/SignInPage';
+import { entityPresentationModule } from './modules/entityPresentation';
 
 export default createApp({
-  features: [catalogPlugin, navModule, blueThemeModule, authModule],
+  features: [
+    catalogPlugin,
+    navModule,
+    blueThemeModule,
+    authModule,
+    entityPresentationModule,
+  ],
 });
