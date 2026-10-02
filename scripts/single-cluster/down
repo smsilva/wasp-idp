@@ -1,0 +1,12 @@
+#!/bin/bash
+
+cluster_name="${SINGLE_CLUSTER_NAME:-idp-single}"
+
+echo ""
+echo "Deleting k3d cluster: ${cluster_name}..."
+
+k3d cluster delete "${cluster_name}"
+
+echo ""
+
+k3d cluster list

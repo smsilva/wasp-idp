@@ -1,0 +1,74 @@
+#!/bin/bash
+# Lightweight alternative to scripts/cluster-zero/up: one k3d cluster with a
+# namespace per environment (development, production) and every app of
+# wasp-foundry/gitops applied straight from its overlay — no ArgoCD.
+set -e
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+
+PATH="${this_script_directory}:${this_script_directory}/../cluster-zero:${PATH}"
+
+cluster_name="${SINGLE_CLUSTER_NAME:-idp-single}"
+api_port="${SINGLE_CLUSTER_API_PORT:-6553}"
+gitops_repository="${GITOPS_REPOSITORY:-https://github.com/wasp-foundry/gitops.git}"
+environments=(development production)
+
+context="k3d-${cluster_name}"
+
+if k3d cluster get "${cluster_name}" > /dev/null 2>&1; then
+  echo "k3d cluster '${cluster_name}' already exists, reusing it."
+else
+  cluster-create \
+    --name "${cluster_name}" \
+    --api-port "${api_port}" \
+    --app-port 9083
+fi
+
+gitops_directory="$(mktemp --directory)"
+trap 'rm -rf "${gitops_directory}"' EXIT
+
+echo ""
+echo "Cloning ${gitops_repository}..."
+
+git clone \
+  --quiet \
+  --depth 1 \
+  "${gitops_repository}" \
+  "${gitops_directory}"
+
+for environment in "${environments[@]}"; do
+  kubectl create namespace "${environment}" \
+    --context "${context}" \
+    --dry-run=client \
+    --output yaml \
+  | kubectl apply --context "${context}" --filename - > /dev/null
+
+  for overlay in "${gitops_directory}"/apps/*/overlays/"${environment}"; do
+    app="${overlay%/overlays/*}"
+    app="${app##*/}"
+
+    echo "Applying ${app} to namespace ${environment}..."
+
+    kubectl apply \
+      --context "${context}" \
+      --namespace "${environment}" \
+      --kustomize "${overlay}"
+  done
+done
+
+echo ""
+echo "Waiting for deployments..."
+
+for environment in "${environments[@]}"; do
+  kubectl wait deployment \
+    --context "${context}" \
+    --namespace "${environment}" \
+    --all \
+    --for condition=Available \
+    --timeout=300s
+done
+
+echo ""
+echo "Cluster '${cluster_name}' ready. Backstage credentials:"
+echo "  eval \"\$(scripts/single-cluster/backstage-reader)\""

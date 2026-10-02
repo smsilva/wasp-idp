@@ -1,0 +1,81 @@
+#!/bin/bash
+# Create (idempotently) one read-only ServiceAccount per environment namespace
+# of the single k3d cluster and print the environment variables that
+# idp/app-config.single-cluster.yaml needs. Usage:
+#   eval "$(scripts/single-cluster/backstage-reader)"
+set -e
+
+cluster_name="${SINGLE_CLUSTER_NAME:-idp-single}"
+environments=(development production)
+
+context="k3d-${cluster_name}"
+account="backstage-reader"
+
+if ! kubectl config get-contexts "${context}" > /dev/null 2>&1; then
+  echo "kubectl context ${context} not found" >&2
+  exit 1
+fi
+
+for namespace in "${environments[@]}"; do
+  echo "Ensuring ServiceAccount ${namespace}/${account} with Role view in ${namespace}..." >&2
+
+  kubectl --context "${context}" apply --filename - > /dev/null <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${account}
+  namespace: ${namespace}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${account}
+  namespace: ${namespace}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: ${account}
+    namespace: ${namespace}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${account}-token
+  namespace: ${namespace}
+  annotations:
+    kubernetes.io/service-account.name: ${account}
+type: kubernetes.io/service-account-token
+EOF
+
+  kubectl wait \
+    --context "${context}" \
+    --namespace "${namespace}" \
+    --for jsonpath='{.data.token}' \
+    --timeout=60s \
+    "secret/${account}-token" > /dev/null
+
+  token="$(
+    kubectl get secret "${account}-token" \
+      --context "${context}" \
+      --namespace "${namespace}" \
+      --output jsonpath='{.data.token}' \
+    | base64 --decode
+  )"
+
+  ca="$(
+    kubectl get secret "${account}-token" \
+      --context "${context}" \
+      --namespace "${namespace}" \
+      --output jsonpath='{.data.ca\.crt}'
+  )"
+
+  variable_prefix="K8S_SINGLE_${namespace^^}"
+
+  echo "Token ${namespace}: ${token:0:3}... (export it with eval)" >&2
+
+  echo "export ${variable_prefix}_TOKEN='${token}'"
+  echo "export ${variable_prefix}_CA='${ca}'"
+done
