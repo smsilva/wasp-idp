@@ -1,0 +1,22 @@
+# Lightweight mode: one k3d cluster (scripts/single-cluster/up) with a
+# namespace per environment. Both entries point at the same API server; the
+# `namespace` key is read by packages/backend/src/namespaceScopedFetcherModule.ts
+# so each card only shows its own environment. Credentials, before yarn start:
+#   eval "$(scripts/single-cluster/backstage-reader)"
+#   yarn start --config app-config.yaml --config app-config.single-cluster.yaml
+kubernetes:
+  clusterLocatorMethods:
+    - type: config
+      clusters:
+        - name: development
+          url: https://127.0.0.1:6553
+          namespace: development
+          authProvider: serviceAccount
+          serviceAccountToken: ${K8S_SINGLE_DEVELOPMENT_TOKEN}
+          caData: ${K8S_SINGLE_DEVELOPMENT_CA}
+        - name: production
+          url: https://127.0.0.1:6553
+          namespace: production
+          authProvider: serviceAccount
+          serviceAccountToken: ${K8S_SINGLE_PRODUCTION_TOKEN}
+          caData: ${K8S_SINGLE_PRODUCTION_CA}
