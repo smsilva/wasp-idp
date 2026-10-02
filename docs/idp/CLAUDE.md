@@ -72,7 +72,20 @@ SSO via Google OAuth 2.0 alongside Guest.
 
 ### GitHub integration
 
-The backend authenticates to GitHub as the App `wasp-foundry-backstage` (org `wasp-foundry`), not a PAT. `idp/app-config.yaml` includes `idp/github-app-wasp-foundry-backstage-credentials.yaml`, which is gitignored and must exist locally before `yarn start`. To recreate it: `yarn backstage-cli create-github-app wasp-foundry`, then raise the permissions to Administration/Contents/Pull requests/Workflows RW in the App settings (the CLI creates it read-only).
+The backend authenticates to GitHub as the App `wasp-foundry-backstage` (org `wasp-foundry`, App ID `5142977`, Client ID `Iv23liH08qVKNLmjORO7`), not a PAT. `idp/app-config.yaml` includes `idp/github-app-wasp-foundry-backstage-credentials.yaml`, which is gitignored, lives only on each machine (not in Secrets Manager) and must exist before `yarn start`.
+
+**New machine:** the App already exists — do not run `create-github-app` again. In `https://github.com/organizations/wasp-foundry/settings/apps/wasp-foundry-backstage`, click **Generate a new client secret** and **Generate a private key** (GitHub never re-downloads an existing key; each machine gets its own, and the others stay valid). Write the file with mode `600` and delete the downloaded `.pem`:
+
+```yaml
+appId: 5142977
+clientId: Iv23liH08qVKNLmjORO7
+clientSecret: <client secret>
+privateKey: |
+  -----BEGIN RSA PRIVATE KEY-----
+  ...
+```
+
+To recreate the App from scratch: `yarn backstage-cli create-github-app wasp-foundry`, then raise the permissions to Administration/Contents/Pull requests/Workflows RW in the App settings (the CLI creates it read-only). The CI App `wasp-foundry-ci` is not needed by Backstage — its key is the org secret `FOUNDRY_CI_APP_PRIVATE_KEY` ([ADR 0018](../adr/0018-separate-github-apps-per-role.md)).
 
 ## Scripts
 
@@ -94,7 +107,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 | `scripts/foundry/test-bookinfo-assets` | Validates the seed assets offline: catalog entities, OpenAPI, gitops overlays, CI |
 | `scripts/cluster-zero/cluster-delete` | Tears down the clusters; no argument deletes `idp-cluster-zero`, `development` and `production` |
 | `scripts/single-cluster/up` | Lightweight alternative to `cluster-zero/up`: one k3d `idp-single` (API `:6553`) with namespaces `development` and `production`, every `apps/*/overlays/<env>` of `wasp-foundry/gitops` applied with `kubectl apply -k` — no ArgoCD, no Crossplane |
-| `scripts/single-cluster/backstage-reader` | One read-only ServiceAccount per namespace (`RoleBinding` to `view`) in `idp-single`; prints `K8S_SINGLE_<ENV>_TOKEN`/`_CA` — `eval "$(scripts/single-cluster/backstage-reader)"`, then `yarn start --config app-config.yaml --config app-config.single-cluster.yaml` |
+| `scripts/single-cluster/backstage-reader` | One read-only ServiceAccount per namespace (`RoleBinding` to `view`) in `idp-single`; prints `K8S_SINGLE_<ENV>_TOKEN`/`_CA` — `eval "$(scripts/single-cluster/backstage-reader)"`, then `yarn start --config "$PWD/app-config.yaml" --config "$PWD/app-config.single-cluster.yaml"` from `idp/` (`repo start` resolves relative `--config` paths against `packages/backend`) |
 | `scripts/single-cluster/down` | Deletes `idp-single` |
 
 **Promotion to production:** each app's CI bumps only `apps/<app>/overlays/development`. To promote: `gh workflow run promote.yaml --repo wasp-foundry/gitops -f app=<app>`, then merge the pull request it opens; the `<app>-production` Application syncs the new tag. The host needs `fs.inotify.max_user_instances` ≥ 1024 (the default 128 keeps containerd from starting with five k3d nodes) and the org setting "Allow GitHub Actions to create and approve pull requests" on.

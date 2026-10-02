@@ -3,7 +3,8 @@
 # `namespace` key is read by packages/backend/src/namespaceScopedFetcherModule.ts
 # so each card only shows its own environment. Credentials, before yarn start:
 #   eval "$(scripts/single-cluster/backstage-reader)"
-#   yarn start --config app-config.yaml --config app-config.single-cluster.yaml
+#   yarn start --config "$PWD/app-config.yaml" --config "$PWD/app-config.single-cluster.yaml"
+# (absolute paths: repo start resolves relative ones against packages/backend)
 kubernetes:
   clusterLocatorMethods:
     - type: config
