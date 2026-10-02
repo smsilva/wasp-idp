@@ -93,6 +93,9 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 | `scripts/foundry/test-seed-bookinfo` | Tests the seed's recovery paths with a stubbed `gh`: empty/unprotected existing repo, gitops PR already open |
 | `scripts/foundry/test-bookinfo-assets` | Validates the seed assets offline: catalog entities, OpenAPI, gitops overlays, CI |
 | `scripts/cluster-zero/cluster-delete` | Tears down the clusters; no argument deletes `idp-cluster-zero`, `development` and `production` |
+| `scripts/single-cluster/up` | Lightweight alternative to `cluster-zero/up`: one k3d `idp-single` (API `:6553`) with namespaces `development` and `production`, every `apps/*/overlays/<env>` of `wasp-foundry/gitops` applied with `kubectl apply -k` — no ArgoCD, no Crossplane |
+| `scripts/single-cluster/backstage-reader` | One read-only ServiceAccount per namespace (`RoleBinding` to `view`) in `idp-single`; prints `K8S_SINGLE_<ENV>_TOKEN`/`_CA` — `eval "$(scripts/single-cluster/backstage-reader)"`, then `yarn start --config app-config.yaml --config app-config.single-cluster.yaml` |
+| `scripts/single-cluster/down` | Deletes `idp-single` |
 
 **Promotion to production:** each app's CI bumps only `apps/<app>/overlays/development`. To promote: `gh workflow run promote.yaml --repo wasp-foundry/gitops -f app=<app>`, then merge the pull request it opens; the `<app>-production` Application syncs the new tag. The host needs `fs.inotify.max_user_instances` ≥ 1024 (the default 128 keeps containerd from starting with five k3d nodes) and the org setting "Allow GitHub Actions to create and approve pull requests" on.
 
@@ -125,6 +128,7 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 
 - The local DB is SQLite `:memory:`, but repos of the `wasp-foundry` org come back on their own: the GitHub entity provider (`catalog.providers.github.waspFoundry`) rescans `/catalog-info.yaml` on `main` every 5 min (first run 15 s after start). Only entities registered by hand from elsewhere vanish on restart.
 - New `catalog.locations` in `app-config.yaml` are not hot-reloaded — restart `yarn start`.
+- The Kubernetes tab groups by cluster entry, never by namespace, and the backend lists by `backstage.io/kubernetes-id` across all namespaces. To show namespaces as environments, `app-config.single-cluster.yaml` declares the same API server twice with a `namespace` key, which `packages/backend/src/namespaceScopedFetcherModule.ts` turns into a namespaced fetch — without it a ServiceAccount bound to one namespace gets 403 on the cluster-wide list.
 
 ## Security TODOs (PoC hardening, deferred)
 
