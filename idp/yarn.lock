@@ -14433,6 +14433,7 @@ __metadata:
     "@backstage/plugin-catalog": "npm:^2.0.9"
     "@backstage/plugin-catalog-graph": "npm:^0.6.8"
     "@backstage/plugin-catalog-import": "npm:^0.13.18"
+    "@backstage/plugin-catalog-react": "npm:^3.2.3"
     "@backstage/plugin-kubernetes": "npm:^0.12.23"
     "@backstage/plugin-notifications": "npm:^0.6.0"
     "@backstage/plugin-org": "npm:^0.7.9"
@@ -14455,6 +14456,7 @@ __metadata:
     cross-env: "npm:^7.0.0"
     react: "npm:^18.0.2"
     react-dom: "npm:^18.0.2"
+    react-icons: "npm:^5.7.0"
     react-router: "npm:^6.30.2"
     react-router-dom: "npm:^6.30.2"
   languageName: unknown
@@ -28208,6 +28210,15 @@ __metadata:
   peerDependencies:
     react: ^16.8.0 || ^17 || ^18 || ^19
   checksum: 10c0/bff61c229f5f2516e650325e0c450146cb8a08dc323e5e9aa0753eb937be0b66fe17f40a7b4be9aabc2b5cb770d03de07db7f4912c6c9452a86924072cc1cb46
+  languageName: node
+  linkType: hard
+
+"react-icons@npm:^5.7.0":
+  version: 5.7.0
+  resolution: "react-icons@npm:5.7.0"
+  peerDependencies:
+    react: "*"
+  checksum: 10c0/cc5ae92e61ef9d8fc83cb3f3ac2710deab9174c5831bdaf2a94b099acfc91074a60d4b3adfd3165dcb9b21799ca6c760b3f4f6596d75198c1ed2ea44240818c8
   languageName: node
   linkType: hard
 
