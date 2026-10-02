@@ -62,6 +62,9 @@ backend.add(import('@backstage/plugin-search-backend-module-techdocs'));
 
 // kubernetes plugin
 backend.add(import('@backstage/plugin-kubernetes-backend'));
+// Scopes clusters with a `namespace` key to that namespace
+// (app-config.single-cluster.yaml)
+backend.add(import('./namespaceScopedFetcherModule'));
 
 // notifications and signals plugins
 backend.add(import('@backstage/plugin-notifications-backend'));
