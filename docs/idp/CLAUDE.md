@@ -143,6 +143,11 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - New `catalog.locations` in `app-config.yaml` are not hot-reloaded — restart `yarn start`.
 - The Kubernetes tab groups by cluster entry, never by namespace, and the backend lists by `backstage.io/kubernetes-id` across all namespaces. To show namespaces as environments, `app-config.single-cluster.yaml` declares the same API server twice with a `namespace` key, which `packages/backend/src/namespaceScopedFetcherModule.ts` turns into a namespaced fetch — without it a ServiceAccount bound to one namespace gets 403 on the cluster-wide list.
 
+## Catalog examples and TechDocs
+
+- `idp/catalog/communication/` is the example of a richer model (#114): Domain `communication` with subdomains `messaging`/`notifications` (`spec.subdomainOf`, shown as `partOf`/`hasPart`), Systems `greeter`/`notifier`, and database/topic/queue/bucket Resources attached to `hello-alpha`/`hello-beta` with `dependencyOf` — so the Components' repos only carry `spec.system`. The Resources are descriptive; nothing provisions them.
+- TechDocs in both patterns: next to the catalog file in this repo (`backstage.io/techdocs-ref: dir:.` on the Domain, `dir:./greeter` on the System) and in the service repo (`mkdocs.yml` + `docs/` in `wasp-foundry/hello-alpha`/`hello-beta`). Docs are built on first view with the `spotify/techdocs:v1.2.8` image (`generator.runIn: docker`); check a site offline with `docker run --rm --volume "$PWD":/content --workdir /content spotify/techdocs:v1.2.8 build --strict`. No mermaid addon is installed — use text diagrams.
+
 ## Security TODOs (PoC hardening, deferred)
 
 Flagged by automated security review — intentional PoC shortcuts, to revisit before any real deployment:

@@ -140,6 +140,12 @@ catalog:
       rules:
         - allow: [Domain, System, Resource]
 
+    # Communication domain: subdomains, systems and resources around hello-alpha/hello-beta (#114)
+    - type: file
+      target: ../../catalog/communication/catalog-info.yaml
+      rules:
+        - allow: [Domain, System, Resource]
+
     ## Uncomment these lines to add more example data
     # - type: url
     #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml

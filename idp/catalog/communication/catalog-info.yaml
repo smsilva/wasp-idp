@@ -1,0 +1,135 @@
+# Example domain with subdomains around hello-alpha and hello-beta (#114).
+# The resources are descriptive only: nothing here provisions a database,
+# queue, topic or bucket. The Components live in their own repos
+# (wasp-foundry/hello-alpha, wasp-foundry/hello-beta) and point back here via
+# spec.system; the Resources attach to them with dependencyOf.
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-domain
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: communication
+  description: Everything that sends a message to someone — greetings and the notifications they trigger
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+spec:
+  owner: group:default/team-alpha
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: messaging
+  description: Producing greetings and publishing an event for each one
+spec:
+  owner: group:default/team-alpha
+  subdomainOf: communication
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: notifications
+  description: Reacting to greeting events and producing reports
+spec:
+  owner: group:default/team-beta
+  subdomainOf: communication
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-system
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: greeter
+  description: Greets callers, stores each greeting and publishes a greeting event
+  annotations:
+    backstage.io/techdocs-ref: dir:./greeter
+spec:
+  owner: group:default/team-alpha
+  domain: messaging
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: notifier
+  description: Consumes greeting events from a queue and writes periodic reports
+spec:
+  owner: group:default/team-beta
+  domain: notifications
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-resource
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: hello-alpha-db
+  description: PostgreSQL database with the greetings table
+  tags: [postgresql]
+spec:
+  type: database
+  owner: group:default/team-alpha
+  system: greeter
+  dependencyOf:
+    - component:default/hello-alpha
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: hello-alpha-events
+  description: SNS topic with one greeting.created event per greeting
+  tags: [sns]
+spec:
+  type: topic
+  owner: group:default/team-alpha
+  system: greeter
+  dependencyOf:
+    - component:default/hello-alpha
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: hello-alpha-uploads
+  description: S3 bucket for avatar images attached to greetings
+  tags: [s3]
+spec:
+  type: s3-bucket
+  owner: group:default/team-alpha
+  system: greeter
+  dependencyOf:
+    - component:default/hello-alpha
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: hello-beta-db
+  description: PostgreSQL database with delivered notifications
+  tags: [postgresql]
+spec:
+  type: database
+  owner: group:default/team-beta
+  system: notifier
+  dependencyOf:
+    - component:default/hello-beta
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: hello-beta-jobs
+  description: SQS queue subscribed to hello-alpha-events (SNS → SQS fan-out)
+  tags: [sqs]
+spec:
+  type: queue
+  owner: group:default/team-beta
+  system: notifier
+  dependsOn:
+    - resource:default/hello-alpha-events
+  dependencyOf:
+    - component:default/hello-beta
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: hello-beta-reports
+  description: S3 bucket with the daily notification reports
+  tags: [s3]
+spec:
+  type: s3-bucket
+  owner: group:default/team-beta
+  system: notifier
+  dependencyOf:
+    - component:default/hello-beta
