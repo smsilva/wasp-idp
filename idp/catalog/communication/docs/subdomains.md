@@ -6,10 +6,10 @@ A subdomain is a `Domain` with `spec.subdomainOf`. Backstage draws it under its 
 
 Owned by `team-alpha`. Produces greetings and publishes one `greeting.created` event per greeting.
 
-- System `greeter`: `hello-alpha`, `hello-alpha-db` (database), `hello-alpha-events` (topic), `hello-alpha-uploads` (bucket)
+- System `greeter`: `greeting-api`, `greeting-db` (database), `greeting-events` (topic), `greeting-avatars` (bucket)
 
 ## notifications
 
 Owned by `team-beta`. Reacts to greeting events and writes reports.
 
-- System `notifier`: `hello-beta`, `hello-beta-db` (database), `hello-beta-jobs` (queue), `hello-beta-reports` (bucket)
+- System `notifier`: `notification-api`, `notification-db` (database), `notification-jobs` (queue), `notification-reports` (bucket)

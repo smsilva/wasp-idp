@@ -81,7 +81,7 @@ truncar** — um `| head -3` já escondeu o processo vivo e levou a um diagnóst
 os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `## Raízes` do
 `aws/terraform/README.md` — ela não estava lá, e é por isso que o README dela era indescobrível.
 
-**IDP:** Backstage em `idp/` (1.55.3, roda só local via `yarn start`), integrado à org GitHub `wasp-foundry` pelo App `wasp-foundry-backstage`. Template `python-service` cria app (repo + PR em `wasp-foundry/gitops`); CI das apps publica no GHCR e faz bump pelo App `wasp-foundry-ci`. Exemplos vivos: `wasp-foundry/hello-alpha` e `hello-beta`. Exemplo de catalog completo: Domain `bookstore` / System `bookinfo` (4 serviços do Bookinfo, repos próprios na org). Deploy em dois ambientes (`development`, `production`) gerenciados pelo ArgoCD do cluster-zero — [ADR 0019](docs/adr/0019-environment-clusters-managed-by-central-argocd.md). Clusters k3d são locais a cada máquina — não fazem parte do estado compartilhado. Operação em `docs/idp/CLAUDE.md`.
+**IDP:** Backstage em `idp/` (1.55.3, roda só local via `yarn start`), integrado à org GitHub `wasp-foundry` pelo App `wasp-foundry-backstage`. Template `python-service` cria app (repo + PR em `wasp-foundry/gitops`); CI das apps publica no GHCR e faz bump pelo App `wasp-foundry-ci`. Exemplos vivos: `wasp-foundry/greeting-api` e `notification-api` (ex-`hello-alpha`/`hello-beta`, #116). Exemplos de catalog completo: Domain `bookstore` / System `bookinfo` (4 serviços do Bookinfo, repos próprios na org) e Domain `communication` com subdomínios, Resources e TechDocs (#114). Deploy em dois ambientes (`development`, `production`) gerenciados pelo ArgoCD do cluster-zero — [ADR 0019](docs/adr/0019-environment-clusters-managed-by-central-argocd.md). Clusters k3d são locais a cada máquina — não fazem parte do estado compartilhado. Operação em `docs/idp/CLAUDE.md`.
 
 ## Frentes
 
@@ -90,6 +90,7 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: criação de app por time (#100, #101) | Entregue em 2026-10-01 |
 | IDP: Bookinfo no catalog + clusters `development`/`production` (#105) | Entregue em 2026-10-01 |
 | IDP: domínio `communication` com subdomínios, resources e TechDocs (#114) | Entregue em 2026-10-03 |
+| IDP: `hello-alpha`/`hello-beta` renomeados para `greeting-api`/`notification-api` (#116) | Entregue em 2026-10-03 |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
 | Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
 | Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
@@ -341,7 +342,7 @@ Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<pa
 em [`docs/archived/index.md`](docs/archived/index.md).
 
 - **2026-10-01 — #105, Bookinfo no catalog com deploy em development e production.** Quatro serviços do Istio Bookinfo em repos próprios da `wasp-foundry`, Domain/System/APIs/Resources no catalog com descoberta automática da org, ArgoCD do cluster-zero gerenciando dois clusters de ambiente com promoção por PR. Spec e planos em `docs/superpowers/{specs,plans}/2026-10-01-bookinfo-catalog-multi-cluster*`.
-- **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo). PR #103. Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
+- **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo, hoje `greeting-api`). PR #103. Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
 - **2026-09-30 — #100, Backstage 1.49.0 → 1.55.3** (PR #102). Exigiu fixar `@yarnpkg/core` em
   `4.9.1` (a `4.9.2` saiu quebrada), `yarn dedupe` de `@internationalized/date` e `nav.take` de
   `page:user-settings`/`page:notifications` no `Sidebar.tsx`. Login guest e Google validados.

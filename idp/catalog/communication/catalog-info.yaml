@@ -1,7 +1,7 @@
-# Example domain with subdomains around hello-alpha and hello-beta (#114).
+# Example domain with subdomains around greeting-api and notification-api (#114).
 # The resources are descriptive only: nothing here provisions a database,
 # queue, topic or bucket. The Components live in their own repos
-# (wasp-foundry/hello-alpha, wasp-foundry/hello-beta) and point back here via
+# (wasp-foundry/greeting-api, wasp-foundry/notification-api) and point back here via
 # spec.system; the Resources attach to them with dependencyOf.
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-domain
 apiVersion: backstage.io/v1alpha1
@@ -57,7 +57,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: hello-alpha-db
+  name: greeting-db
   description: PostgreSQL database with the greetings table
   tags: [postgresql]
 spec:
@@ -65,12 +65,12 @@ spec:
   owner: group:default/team-alpha
   system: greeter
   dependencyOf:
-    - component:default/hello-alpha
+    - component:default/greeting-api
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: hello-alpha-events
+  name: greeting-events
   description: SNS topic with one greeting.created event per greeting
   tags: [sns]
 spec:
@@ -78,12 +78,12 @@ spec:
   owner: group:default/team-alpha
   system: greeter
   dependencyOf:
-    - component:default/hello-alpha
+    - component:default/greeting-api
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: hello-alpha-uploads
+  name: greeting-avatars
   description: S3 bucket for avatar images attached to greetings
   tags: [s3]
 spec:
@@ -91,12 +91,12 @@ spec:
   owner: group:default/team-alpha
   system: greeter
   dependencyOf:
-    - component:default/hello-alpha
+    - component:default/greeting-api
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: hello-beta-db
+  name: notification-db
   description: PostgreSQL database with delivered notifications
   tags: [postgresql]
 spec:
@@ -104,27 +104,27 @@ spec:
   owner: group:default/team-beta
   system: notifier
   dependencyOf:
-    - component:default/hello-beta
+    - component:default/notification-api
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: hello-beta-jobs
-  description: SQS queue subscribed to hello-alpha-events (SNS → SQS fan-out)
+  name: notification-jobs
+  description: SQS queue subscribed to greeting-events (SNS → SQS fan-out)
   tags: [sqs]
 spec:
   type: queue
   owner: group:default/team-beta
   system: notifier
   dependsOn:
-    - resource:default/hello-alpha-events
+    - resource:default/greeting-events
   dependencyOf:
-    - component:default/hello-beta
+    - component:default/notification-api
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
-  name: hello-beta-reports
+  name: notification-reports
   description: S3 bucket with the daily notification reports
   tags: [s3]
 spec:
@@ -132,4 +132,4 @@ spec:
   owner: group:default/team-beta
   system: notifier
   dependencyOf:
-    - component:default/hello-beta
+    - component:default/notification-api

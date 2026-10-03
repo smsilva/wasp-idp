@@ -140,7 +140,7 @@ catalog:
       rules:
         - allow: [Domain, System, Resource]
 
-    # Communication domain: subdomains, systems and resources around hello-alpha/hello-beta (#114)
+    # Communication domain: subdomains, systems and resources around greeting-api/notification-api (#114)
     - type: file
       target: ../../catalog/communication/catalog-info.yaml
       rules:
