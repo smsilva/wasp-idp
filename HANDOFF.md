@@ -93,6 +93,9 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: `hello-alpha`/`hello-beta` renomeados para `greeting-api`/`notification-api` (#116) | Entregue em 2026-10-03 |
 | IDP: clusters `development`/`production` no System `platform` (owner `team-platform`) (#118) | Entregue em 2026-10-03 |
 | IDP: sidebar recolhida por padrão com botão de pin/unpin (#120) | Entregue em 2026-10-03 |
+| IDP: escala tipográfica compacta e temas Graphite/Midnight (#122) | Entregue em 2026-10-03 |
+| IDP: aba Dependencies para Components e cards de API fora do Overview (#123) | Entregue em 2026-10-03 |
+| IDP: header de entidade com Source/Docs e card Description no lugar do About (#124) — `modules/entityHeader/EntityHeader.tsx` replica o `EntityHeaderBui` nativo, revisar em upgrades do Backstage | Entregue em 2026-10-03 |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
 | Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
 | Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
