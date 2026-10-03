@@ -91,6 +91,8 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: Bookinfo no catalog + clusters `development`/`production` (#105) | Entregue em 2026-10-01 |
 | IDP: domínio `communication` com subdomínios, resources e TechDocs (#114) | Entregue em 2026-10-03 |
 | IDP: `hello-alpha`/`hello-beta` renomeados para `greeting-api`/`notification-api` (#116) | Entregue em 2026-10-03 |
+| IDP: clusters `development`/`production` no System `platform` (owner `team-platform`) (#118) | Entregue em 2026-10-03 |
+| IDP: sidebar recolhida por padrão com botão de pin/unpin (#120) | Entregue em 2026-10-03 |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
 | Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
 | Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
