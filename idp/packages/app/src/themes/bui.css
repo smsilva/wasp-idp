@@ -1,0 +1,63 @@
+/*
+ * Overrides for @backstage/ui (BUI) tokens. BUI components (entity page header,
+ * cards, page header) ignore the Material UI theme and read --bui-* CSS variables
+ * instead. BUI declares them inside @layer tokens, so these unlayered rules win.
+ * data-theme-name is the theme id passed to UnifiedThemeProvider in blueTheme.ts.
+ */
+
+/* Compact type scale, matching compactTypography in blueTheme.ts */
+:root,
+[data-theme-mode] {
+  --bui-font-size-4: 0.875rem; /* 16px → 14px: body text */
+  --bui-font-size-5: 1.125rem; /* 20px → 18px */
+  --bui-font-size-6: 1.25rem; /* 24px → 20px */
+  --bui-font-size-7: 1.625rem; /* 32px → 26px */
+}
+
+[data-theme-name='graphite-dark'] {
+  --bui-bg-app: #0d1117;
+  --bui-bg-neutral-1: #161b22;
+  --bui-bg-neutral-1-hover: #1c2128;
+  --bui-bg-neutral-1-pressed: #21262d;
+  --bui-bg-neutral-2: #1c2128;
+  --bui-bg-neutral-2-hover: #21262d;
+  --bui-bg-neutral-2-pressed: #262c36;
+  --bui-bg-neutral-3: #262c36;
+  --bui-bg-neutral-3-hover: #2d333b;
+  --bui-bg-neutral-3-pressed: #30363d;
+  --bui-bg-neutral-4: #30363d;
+  --bui-bg-neutral-4-hover: #373e47;
+  --bui-bg-neutral-4-pressed: #3d444d;
+  --bui-border-1: #30363d;
+  --bui-border-2: #21262d;
+  --bui-fg-primary: #e6edf3;
+  --bui-fg-secondary: #8b949e;
+  --bui-accent-bg: #58a6ff;
+  --bui-accent-bg-hover: #79c0ff;
+  --bui-accent-fg: #0d1117;
+  --bui-ring: #1f6feb;
+}
+
+[data-theme-name='midnight-dark'] {
+  --bui-bg-app: #05070d;
+  --bui-bg-neutral-1: #0b1a2e;
+  --bui-bg-neutral-1-hover: #10223a;
+  --bui-bg-neutral-1-pressed: #132741;
+  --bui-bg-neutral-2: #10223a;
+  --bui-bg-neutral-2-hover: #132741;
+  --bui-bg-neutral-2-pressed: #162c48;
+  --bui-bg-neutral-3: #162c48;
+  --bui-bg-neutral-3-hover: #1a3250;
+  --bui-bg-neutral-3-pressed: #1d3757;
+  --bui-bg-neutral-4: #1d3757;
+  --bui-bg-neutral-4-hover: #213d60;
+  --bui-bg-neutral-4-pressed: #254469;
+  --bui-border-1: #16314f;
+  --bui-border-2: #0f2540;
+  --bui-fg-primary: #e2f1fb;
+  --bui-fg-secondary: #94a3b8;
+  --bui-accent-bg: #22d3ee;
+  --bui-accent-bg-hover: #67e8f9;
+  --bui-accent-fg: #04121a;
+  --bui-ring: #0891b2;
+}
