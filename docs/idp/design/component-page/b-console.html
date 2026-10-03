@@ -1,0 +1,456 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>greeting-api · Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: dark-first console. Sticky identity column (who/what/where) on the left,
+   work area on the right: status line, delivery track (commit → image → dev → prod),
+   topology, then views switched by a segmented control with keyboard shortcuts. */
+:root {
+  --bg: #0c1016;
+  --panel: #121821;
+  --panel-2: #18202b;
+  --line: #222c3a;
+  --line-2: #2c3949;
+  --fg: #e6ecf4;
+  --fg-2: #9aa8bb;
+  --fg-3: #66758a;
+  --accent: #7aa7ff;
+  --accent-ink: #0b1220;
+  --accent-soft: rgba(122, 167, 255, .12);
+  --ok: #5fd39a;
+  --ok-soft: rgba(95, 211, 154, .12);
+  --warn: #f0b45c;
+  --warn-soft: rgba(240, 180, 92, .13);
+  --grid: rgba(122, 167, 255, .05);
+  --font-sans: "Geist", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f1f3f7; --line: #e3e7ee; --line-2: #d4dae4;
+    --fg: #111827; --fg-2: #4b5768; --fg-3: #8691a3;
+    --accent: #2457d6; --accent-ink: #ffffff; --accent-soft: rgba(36, 87, 214, .08);
+    --ok: #138a52; --ok-soft: rgba(19, 138, 82, .1); --warn: #a8640c; --warn-soft: rgba(168, 100, 12, .1);
+    --grid: rgba(36, 87, 214, .045);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f1f3f7; --line: #e3e7ee; --line-2: #d4dae4;
+  --fg: #111827; --fg-2: #4b5768; --fg-3: #8691a3;
+  --accent: #2457d6; --accent-ink: #ffffff; --accent-soft: rgba(36, 87, 214, .08);
+  --ok: #138a52; --ok-soft: rgba(19, 138, 82, .1); --warn: #a8640c; --warn-soft: rgba(168, 100, 12, .1);
+  --grid: rgba(36, 87, 214, .045);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.num { font-variant-numeric: tabular-nums; }
+.dim { color: var(--fg-3); }
+
+.wrap { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0; max-width: 1360px; margin: 0 auto; min-height: 100vh; }
+
+/* identity column */
+.id { position: sticky; top: env(safe-area-inset-top, 0px); align-self: start; height: 100vh; overflow-y: auto; padding: 22px 22px 40px; border-right: 1px solid var(--line); display: grid; gap: 22px; align-content: start; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--fg-2); font-size: 13px; }
+.brand i { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: block; }
+.brand kbd { margin-left: auto; }
+kbd { font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--panel); }
+.kind { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .04em; color: var(--fg-3); text-transform: uppercase; }
+h1 { font-size: 28px; line-height: 1.1; font-weight: 600; letter-spacing: -.025em; margin: 6px 0 10px; overflow-wrap: anywhere; }
+.desc { color: var(--fg-2); margin: 0; }
+.life { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 3px 8px; margin-top: 14px; }
+.life::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: currentColor; }
+.props { display: grid; gap: 0; margin: 0; }
+.props div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.props dt { color: var(--fg-3); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; }
+.props dd { margin: 0; overflow-wrap: anywhere; }
+.side-h { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); margin: 0 0 8px; }
+.links { display: grid; gap: 2px; }
+.links a { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--fg); padding: 7px 10px; margin-inline: -10px; border-radius: 7px; font-size: 13px; }
+.links a:hover { background: var(--panel-2); text-decoration: none; }
+.links a span:last-child { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; }
+.actions { display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel); color: var(--fg); font: 500 13px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); flex: 1; }
+
+/* work area */
+.work { min-width: 0; padding: 22px 32px 64px; display: grid; gap: 22px; align-content: start; }
+.statusline { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 13px; color: var(--fg-2); padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.statusline b { color: var(--fg); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 6px; box-shadow: 0 0 0 3px var(--ok-soft); }
+.statusline .sep { width: 1px; height: 14px; background: var(--line-2); }
+
+.seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.seg button { appearance: none; border: 0; background: none; color: var(--fg-2); font: 500 13px var(--font-sans); padding: 7px 12px; border-radius: 7px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-selected="true"] { background: var(--panel-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-2); }
+.seg .n { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); }
+.seg kbd { display: none; }
+@media (hover: hover) and (min-width: 900px) { .seg kbd { display: inline; } }
+
+.view { display: none; gap: 22px; }
+.view.on { display: grid; animation: fade .2s ease-out; }
+@keyframes fade { from { opacity: .5; } to { opacity: 1; } }
+
+.box { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.box > h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.box > h2 small { font-weight: 400; color: var(--fg-3); font-family: var(--font-mono); font-size: 11.5px; }
+.box .in { padding: 18px; }
+
+/* delivery track */
+.track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative; }
+.stage { position: relative; padding: 18px 18px 18px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.stage + .stage { border-left: 1px dashed var(--line-2); }
+.stage .lab { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); display: flex; align-items: center; gap: 8px; }
+.stage .lab::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fg-3); }
+.stage.ok .lab::before { border-color: var(--ok); background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.stage .big { font-family: var(--font-mono); font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
+.stage .sm { font-size: 12.5px; color: var(--fg-2); overflow-wrap: anywhere; }
+.stage .arrow { position: absolute; right: -9px; top: 19px; width: 16px; height: 16px; color: var(--fg-3); background: var(--panel); z-index: 1; }
+.track-foot { border-top: 1px solid var(--line); padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--fg-2); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ok); background: var(--ok-soft); border-radius: 6px; padding: 2px 8px; }
+
+/* topology */
+.topo { width: 100%; height: auto; display: block; }
+.topo text { font-family: var(--font-sans); font-size: 12.5px; fill: var(--fg); }
+.topo .cap { font-family: var(--font-mono); font-size: 10.5px; fill: var(--fg-3); letter-spacing: .06em; }
+.topo .sub { font-family: var(--font-mono); font-size: 10.5px; fill: var(--fg-3); }
+.topo .n { fill: var(--panel-2); stroke: var(--line-2); }
+.topo .me { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.topo .met { font-weight: 600; fill: var(--fg); font-size: 14px; }
+.topo .e { stroke: var(--line-2); stroke-width: 1.2; fill: none; }
+.topo .e.hot { stroke: var(--accent); stroke-dasharray: 3 4; }
+.topo-scroll { overflow-x: auto; }
+
+/* two-up */
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.rows li:first-child { border-top: 0; }
+.rows .t { font-weight: 500; }
+.rows .ty { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-3); text-align: right; white-space: nowrap; }
+.rows .d { grid-column: 1 / -1; color: var(--fg-2); font-size: 13px; }
+
+/* empty */
+.void { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: center; padding: 26px; }
+.void h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.void p { margin: 0 0 16px; color: var(--fg-2); max-width: 52ch; }
+pre.code { margin: 0; background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.65 var(--font-mono); }
+pre.code .c { color: var(--fg-3); }
+pre.code .k { color: var(--accent); }
+
+/* k8s */
+.pods { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pods th { text-align: left; font-family: var(--font-mono); font-weight: 400; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-3); padding: 10px 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pods td { padding: 12px 18px; border-top: 1px solid var(--line); white-space: nowrap; }
+.pods tr:first-child td { border-top: 0; }
+.tbl { overflow-x: auto; }
+.run { color: var(--ok); }
+
+/* docs */
+.doc { display: grid; grid-template-columns: 180px minmax(0, 1fr); }
+.doc nav { padding: 16px 10px; border-right: 1px solid var(--line); display: grid; gap: 2px; align-content: start; }
+.doc nav a { color: var(--fg-2); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.doc nav a.on { color: var(--fg); background: var(--panel-2); }
+.doc article { padding: 22px 30px 30px; max-width: 740px; min-width: 0; }
+.doc h3 { font-size: 22px; letter-spacing: -.015em; margin: 0 0 8px; font-weight: 600; }
+.doc h4 { font-size: 15px; margin: 22px 0 6px; }
+.doc p { color: var(--fg-2); }
+.doc code { font-family: var(--font-mono); font-size: 12px; background: var(--panel-2); border: 1px solid var(--line); padding: 0 5px; border-radius: 4px; color: var(--fg); }
+
+.notes { border: 1px dashed var(--line-2); border-radius: 12px; padding: 14px 18px; }
+.notes summary { cursor: pointer; font-weight: 600; color: var(--fg-2); }
+.notes ul { margin: 10px 0 0; padding-left: 18px; color: var(--fg-2); display: grid; gap: 4px; }
+.theme { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10; }
+
+@media (max-width: 1100px) {
+  .track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stage:nth-child(3) { border-left: 0; border-top: 1px dashed var(--line-2); }
+  .stage:nth-child(4) { border-top: 1px dashed var(--line-2); }
+  .stage:nth-child(2) .arrow { display: none; }
+}
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); }
+  .id { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 18px 16px 22px; }
+  .work { padding: 18px 16px 72px; }
+  .two, .void { grid-template-columns: minmax(0, 1fr); }
+  .doc { grid-template-columns: minmax(0, 1fr); }
+  .doc nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; }
+  .doc article { padding: 18px 16px; }
+}
+@media (max-width: 520px) {
+  .track { grid-template-columns: minmax(0, 1fr); }
+  .stage + .stage { border-left: 0; border-top: 1px dashed var(--line-2); }
+  .stage .arrow { display: none; }
+  .statusline .sep { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .view.on { animation: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="arr" viewBox="0 0 16 16"><path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <aside class="id">
+    <div class="brand"><i></i>wasp idp <span class="dim">/ catalog</span><kbd>⌘K</kbd></div>
+
+    <div>
+      <div class="kind">component · service</div>
+      <h1>greeting-api</h1>
+      <p class="desc">Greets callers, stores each greeting and publishes a greeting event</p>
+      <span class="life">experimental</span>
+    </div>
+
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/wasp-foundry/greeting-api">Open source</a>
+      <a class="btn" href="#docs" data-go="docs">Docs</a>
+      <button class="btn" aria-label="More actions">···</button>
+    </div>
+
+    <dl class="props">
+      <div><dt>owner</dt><dd><a href="#">team-alpha</a></dd></div>
+      <div><dt>system</dt><dd><a href="#">greeter</a></dd></div>
+      <div><dt>domain</dt><dd><a href="#">communication</a> <span class="dim">›</span> <a href="#">messaging</a></dd></div>
+      <div><dt>language</dt><dd>Python · FastAPI</dd></div>
+      <div><dt>tags</dt><dd class="dim">none</dd></div>
+      <div><dt>ref</dt><dd class="mono">component:default/greeting-api</dd></div>
+    </dl>
+
+    <div>
+      <h3 class="side-h">Links</h3>
+      <div class="links">
+        <a href="https://github.com/wasp-foundry/greeting-api"><span>wasp-foundry/greeting-api</span><span>github</span></a>
+        <a href="https://github.com/wasp-foundry/gitops/tree/main/apps/greeting-api"><span>gitops overlays</span><span>github</span></a>
+        <a href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml"><span>Edit catalog-info.yaml</span><span>yaml</span></a>
+      </div>
+    </div>
+  </aside>
+
+  <main class="work">
+    <div class="statusline">
+      <span><span class="dot"></span><b>2/2</b> environments running</span>
+      <span class="sep"></span>
+      <span><b class="mono">07f0d3f</b> everywhere</span>
+      <span class="sep"></span>
+      <span><b>5</b> dependencies</span>
+      <span class="sep"></span>
+      <span><b>0</b> APIs</span>
+    </div>
+
+    <div class="seg" role="tablist">
+      <button role="tab" data-v="overview" aria-selected="true">Overview <kbd>g o</kbd></button>
+      <button role="tab" data-v="apis">APIs <span class="n">0</span> <kbd>g a</kbd></button>
+      <button role="tab" data-v="deps">Dependencies <span class="n">5</span> <kbd>g d</kbd></button>
+      <button role="tab" data-v="k8s">Kubernetes <span class="n">2</span> <kbd>g k</kbd></button>
+      <button role="tab" data-v="docs">Docs <kbd>g t</kbd></button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <section class="view on" id="v-overview" role="tabpanel">
+      <div class="box">
+        <h2>Delivery <small>main → ghcr → gitops → clusters</small></h2>
+        <div class="track">
+          <div class="stage ok">
+            <span class="lab">commit</span>
+            <span class="big">07f0d3f</span>
+            <span class="sm">feat: renomeia para greeting-api (#4)</span>
+            <span class="sm dim">Oct 3, 12:43</span>
+            <svg class="arrow"><use href="#arr"/></svg>
+          </div>
+          <div class="stage ok">
+            <span class="lab">image</span>
+            <span class="big">ghcr</span>
+            <span class="sm mono">wasp-foundry/greeting-api:07f0d3f</span>
+            <svg class="arrow"><use href="#arr"/></svg>
+          </div>
+          <div class="stage ok">
+            <span class="lab">development</span>
+            <span class="big num">1/1</span>
+            <span class="sm">pod ready · 0 restarts</span>
+            <span class="sm dim mono">ns development</span>
+            <svg class="arrow"><use href="#arr"/></svg>
+          </div>
+          <div class="stage ok">
+            <span class="lab">production</span>
+            <span class="big num">1/1</span>
+            <span class="sm">pod ready · 0 restarts</span>
+            <span class="sm dim mono">ns production</span>
+          </div>
+        </div>
+        <div class="track-foot">
+          <span class="badge">in sync</span>
+          <span>Production matches development. Next promotion: <span class="mono">gh workflow run promote.yaml -f app=greeting-api</span></span>
+        </div>
+      </div>
+
+      <div class="box">
+        <h2>Topology <small>owner · system · resources</small></h2>
+        <div class="in topo-scroll">
+          <svg class="topo" viewBox="0 0 760 230" role="img" aria-label="greeting-api in system greeter, owned by team-alpha, with data resources and clusters" style="min-width:560px">
+            <text class="cap" x="20" y="18">CONTEXT</text>
+            <text class="cap" x="300" y="18">COMPONENT</text>
+            <text class="cap" x="520" y="18">DATA</text>
+            <text class="cap" x="520" y="164">RUNS ON</text>
+
+            <path class="e" d="M180 62 C 240 62, 250 112, 290 112"/>
+            <path class="e" d="M180 112 L 290 112"/>
+            <path class="e" d="M180 162 C 240 162, 250 112, 290 112"/>
+            <path class="e hot" d="M450 112 C 490 112, 480 46, 520 46"/>
+            <path class="e hot" d="M450 112 C 490 112, 490 84, 520 84"/>
+            <path class="e hot" d="M450 112 C 490 112, 490 122, 520 122"/>
+            <path class="e" d="M450 112 C 490 112, 480 190, 520 190"/>
+
+            <rect class="n" x="20" y="44" width="160" height="36" rx="8"/><text x="34" y="66">messaging</text><text class="sub" x="166" y="66" text-anchor="end">domain</text>
+            <rect class="n" x="20" y="94" width="160" height="36" rx="8"/><text x="34" y="116">greeter</text><text class="sub" x="166" y="116" text-anchor="end">system</text>
+            <rect class="n" x="20" y="144" width="160" height="36" rx="8"/><text x="34" y="166">team-alpha</text><text class="sub" x="166" y="166" text-anchor="end">owner</text>
+
+            <rect class="me" x="290" y="88" width="160" height="48" rx="10"/><text class="met" x="370" y="117" text-anchor="middle">greeting-api</text>
+
+            <rect class="n" x="520" y="30" width="160" height="32" rx="8"/><text x="534" y="50">greeting-db</text><text class="sub" x="668" y="50" text-anchor="end">postgres</text>
+            <rect class="n" x="520" y="68" width="160" height="32" rx="8"/><text x="534" y="88">greeting-events</text><text class="sub" x="668" y="88" text-anchor="end">sns</text>
+            <rect class="n" x="520" y="106" width="160" height="32" rx="8"/><text x="534" y="126">greeting-avatars</text><text class="sub" x="668" y="126" text-anchor="end">s3</text>
+            <rect class="n" x="520" y="174" width="160" height="32" rx="8"/><text x="534" y="194">development · production</text>
+            <text class="sub" x="690" y="88">→ notifier</text>
+          </svg>
+        </div>
+      </div>
+
+      <details class="notes">
+        <summary>Notas de design (proposta B — Console)</summary>
+        <ul>
+          <li>Identidade fixa à esquerda: nome, descrição, owner, system, domain e links ficam visíveis em qualquer aba.</li>
+          <li>Linha de status no topo resume o que importa em uma leitura: ambientes, versão, dependências, APIs.</li>
+          <li>A trilha Delivery mostra o caminho real do repo (commit → imagem no ghcr → overlay do gitops → pods) e diz se produção está atrás.</li>
+          <li>Topologia em colunas fixas (contexto · componente · dados · runtime) no lugar do grafo radial; a seta "→ notifier" mostra que greeting-events alimenta outro System.</li>
+          <li>Abas viram controle segmentado com atalhos de teclado (g o, g d, g k…), no estilo de ferramentas de devops.</li>
+          <li>Dark-first com grade sutil de fundo; o modo claro usa os mesmos tokens.</li>
+          <li>Exige dados além do catálogo: commit e mensagem (GitHub), comparação dev × prod (overlays do gitops ou imagem dos pods).</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- APIS -->
+    <section class="view" id="v-apis" role="tabpanel">
+      <div class="box void">
+        <div>
+          <h3>No API entity yet</h3>
+          <p>greeting-api answers <span class="mono">GET /</span> and <span class="mono">GET /healthz</span>, but nothing in the catalog describes them. Add an API entity and its OpenAPI definition will render here, together with every component that consumes it.</p>
+          <a class="btn primary" style="flex:none" href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml">Edit catalog-info.yaml</a>
+        </div>
+        <pre class="code"><span class="c"># catalog-info.yaml</span>
+<span class="k">spec</span>:
+  <span class="k">providesApis</span>: [greeting-api]
+<span class="c">---</span>
+<span class="k">kind</span>: API
+<span class="k">metadata</span>: { name: greeting-api }
+<span class="k">spec</span>:
+  type: openapi
+  definition: { $text: ./openapi.yaml }</pre>
+      </div>
+    </section>
+
+    <!-- DEPENDENCIES -->
+    <section class="view" id="v-deps" role="tabpanel">
+      <div class="two">
+        <div class="box">
+          <h2>Data <small>3 · team-alpha</small></h2>
+          <ul class="rows">
+            <li><a class="t" href="#">greeting-db</a><span class="ty">database · postgresql</span><span class="d">PostgreSQL database with the greetings table</span></li>
+            <li><a class="t" href="#">greeting-events</a><span class="ty">topic · sns</span><span class="d">SNS topic with one greeting.created event per greeting. Feeds <a href="#">notification-jobs</a> (notifier).</span></li>
+            <li><a class="t" href="#">greeting-avatars</a><span class="ty">s3-bucket · s3</span><span class="d">S3 bucket for avatar images attached to greetings</span></li>
+          </ul>
+        </div>
+        <div class="box">
+          <h2>Runs on <small>2 · team-platform</small></h2>
+          <ul class="rows">
+            <li><a class="t" href="#">development</a><span class="ty">kubernetes-cluster</span><span class="d">k3d cluster "development" (API 127.0.0.1:6551, apps on localhost:9081), deployed by the cluster-zero ArgoCD</span></li>
+            <li><a class="t" href="#">production</a><span class="ty">kubernetes-cluster</span><span class="d">k3d cluster "production" (API 127.0.0.1:6552, apps on localhost:9082), deployed by the cluster-zero ArgoCD</span></li>
+          </ul>
+        </div>
+      </div>
+      <p class="dim" style="margin:0">No component dependencies, no subcomponents.</p>
+    </section>
+
+    <!-- KUBERNETES -->
+    <section class="view" id="v-k8s" role="tabpanel">
+      <div class="box">
+        <h2>Pods <small>backstage.io/kubernetes-id = greeting-api</small></h2>
+        <div class="tbl">
+          <table class="pods">
+            <thead><tr><th>Env</th><th>Pod</th><th>Status</th><th>Ready</th><th>Restarts</th><th>Image</th></tr></thead>
+            <tbody>
+              <tr><td>development</td><td class="mono">greeting-api-8679dd4674-jfzvp</td><td class="run">● Running</td><td class="num">1/1</td><td class="num">0</td><td class="mono">greeting-api:07f0d3f</td></tr>
+              <tr><td>production</td><td class="mono">greeting-api-8679dd4674-mgdd6</td><td class="run">● Running</td><td class="num">1/1</td><td class="num">0</td><td class="mono">greeting-api:07f0d3f</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="two">
+        <div class="box"><h2>development <small>deployment · service · replicaset</small></h2><div class="in"><span class="mono">greeting-api</span> <span class="dim">· 1 desired · 1 ready · ReplicaSet 8679dd4674</span></div></div>
+        <div class="box"><h2>production <small>deployment · service · replicaset</small></h2><div class="in"><span class="mono">greeting-api</span> <span class="dim">· 1 desired · 1 ready · ReplicaSet 8679dd4674</span></div></div>
+      </div>
+    </section>
+
+    <!-- DOCS -->
+    <section class="view" id="v-docs" role="tabpanel">
+      <div class="box doc">
+        <nav><a class="on" href="#">Overview</a><a href="#">Runbook</a></nav>
+        <article>
+          <h3>greeting-api</h3>
+          <p>FastAPI service of the <code>greeter</code> system, owned by <code>team-alpha</code>. Created from the wasp-idp Backstage template <code>python-service</code>.</p>
+          <h4>Endpoints</h4>
+          <p><code>GET /</code> App name and a greeting<br><code>GET /healthz</code> Liveness/readiness</p>
+          <h4>Delivery</h4>
+          <p>Every push to <code>main</code> runs the tests, publishes <code>ghcr.io/wasp-foundry/greeting-api:&lt;sha&gt;</code> and bumps the tag in <code>apps/greeting-api/overlays/development</code> of <code>wasp-foundry/gitops</code>. Production is promoted with <code>gh workflow run promote.yaml</code>.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+</div>
+
+<button class="btn theme" id="theme" aria-label="Toggle light mode"><svg width="16" height="16"><use href="#sun"/></svg></button>
+
+<script>
+  const keys = { o: 'overview', a: 'apis', d: 'deps', k: 'k8s', t: 'docs' };
+  const tabs = document.querySelectorAll('.seg [role=tab]');
+  function show(v) {
+    tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.v === v)));
+    document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+    try { history.replaceState(null, '', '#' + v); } catch (e) {}
+  }
+  tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.v)));
+  document.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.go); }));
+  let g = false;
+  addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea')) return;
+    if (e.key === 'g') { g = true; setTimeout(() => g = false, 800); return; }
+    if (g && keys[e.key]) { show(keys[e.key]); g = false; }
+  });
+  const h = location.hash.slice(1);
+  if (Object.values(keys).includes(h)) show(h);
+  document.getElementById('theme').addEventListener('click', () => {
+    const r = document.documentElement;
+    const light = r.dataset.theme ? r.dataset.theme === 'light' : matchMedia('(prefers-color-scheme: light)').matches;
+    r.dataset.theme = light ? 'dark' : 'light';
+  });
+</script>
