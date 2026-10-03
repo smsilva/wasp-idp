@@ -17,3 +17,12 @@ metadata:
 spec:
   type: team
   children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-platform
+  description: Platform team (owner of the shared environment clusters)
+spec:
+  type: team
+  children: []
