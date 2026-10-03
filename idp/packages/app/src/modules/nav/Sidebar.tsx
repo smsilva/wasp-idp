@@ -15,6 +15,7 @@ import StorageIcon from '@material-ui/icons/Storage';
 import { compatWrapper } from '@backstage/core-compat-api';
 import { NavContentBlueprint } from '@backstage/plugin-app-react';
 import { SidebarLogo } from './SidebarLogo';
+import { SidebarPinToggle } from './SidebarPinToggle';
 import MenuIcon from '@material-ui/icons/Menu';
 import SearchIcon from '@material-ui/icons/Search';
 import { SidebarSearchModal } from '@backstage/plugin-search';
@@ -81,6 +82,7 @@ export const SidebarContent = NavContentBlueprint.make({
           <SidebarSpace />
           <SidebarDivider />
           <NotificationsSidebarItem />
+          <SidebarPinToggle />
           <SidebarDivider />
           <SidebarGroup
             label="Settings"
