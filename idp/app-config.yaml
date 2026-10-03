@@ -29,6 +29,24 @@ app:
     - entity-card:catalog/has-subcomponents:
         attachTo: { id: entity-content:catalog/dependencies, input: cards }
 
+    # Entity header (#124, packages/app/src/modules/entityHeader): Source/Docs
+    # links and the context menu move into the custom header layout, the About
+    # card gives way to the Description card. Order here is the order rendered.
+    - entity-card:catalog/about: false
+    - entity-card:catalog/description
+    - entity-icon-link:catalog/view-source:
+        attachTo: { id: entity-header-layout:catalog/wasp, input: iconLinks }
+    - entity-icon-link:techdocs/read-docs:
+        attachTo: { id: entity-header-layout:catalog/wasp, input: iconLinks }
+    - entity-context-menu-item:catalog/refresh-entity
+    - entity-context-menu-item:catalog/edit-entity
+    - entity-context-menu-item:catalog/copy-entity-url:
+        attachTo: { id: entity-header-layout:catalog/wasp, input: contextMenuItems }
+    - entity-context-menu-item:catalog/inspect-entity:
+        attachTo: { id: entity-header-layout:catalog/wasp, input: contextMenuItems }
+    - entity-context-menu-item:catalog/unregister-entity:
+        attachTo: { id: entity-header-layout:catalog/wasp, input: contextMenuItems }
+
 organization:
   name: My Company
 
