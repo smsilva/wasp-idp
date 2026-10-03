@@ -15,6 +15,20 @@ app:
         config:
           path: /
 
+    # The APIs tab (entity-content:api-docs/apis) already lists provided and
+    # consumed APIs; drop the duplicate cards from the Overview tab
+    - entity-card:api-docs/provided-apis: false
+    - entity-card:api-docs/consumed-apis: false
+
+    # Component relation cards move from the Overview tab to the Dependencies tab
+    # (entity-content:catalog/dependencies, packages/app/src/modules/entityDependencies)
+    - entity-card:catalog/depends-on-components:
+        attachTo: { id: entity-content:catalog/dependencies, input: cards }
+    - entity-card:catalog/depends-on-resources:
+        attachTo: { id: entity-content:catalog/dependencies, input: cards }
+    - entity-card:catalog/has-subcomponents:
+        attachTo: { id: entity-content:catalog/dependencies, input: cards }
+
 organization:
   name: My Company
 
