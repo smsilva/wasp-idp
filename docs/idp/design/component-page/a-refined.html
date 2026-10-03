@@ -1,0 +1,546 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>greeting-api · Refined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: app shell (collapsed nav rail) + entity header that carries identity and description,
+   sticky tab bar with counts, Overview in a 2-column grid (operational left, facts right). */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f0f3f8;
+  --line: #e1e6ee;
+  --fg: #142033;
+  --fg-2: #4a5872;
+  --fg-3: #7a879c;
+  --accent: #1565c0;
+  --accent-soft: #e7f0fb;
+  --nav: #0a1929;
+  --nav-fg: #b2dffc;
+  --ok: #1e8e52;
+  --ok-soft: #e3f4ea;
+  --warn: #a8630a;
+  --warn-soft: #fbf0dc;
+  --shadow: 0 1px 2px rgba(20, 32, 51, .06), 0 1px 1px rgba(20, 32, 51, .03);
+  --code-bg: #0f1b2d;
+  --code-fg: #d6e2f5;
+  --font-sans: "IBM Plex Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1520; --surface: #131e2c; --surface-2: #182536; --line: #233246;
+    --fg: #e4ebf5; --fg-2: #a7b4c8; --fg-3: #74839a;
+    --accent: #6aa8f0; --accent-soft: #16304f;
+    --nav: #070f19; --nav-fg: #8fc4ea;
+    --ok: #4cc585; --ok-soft: #12321f; --warn: #e3a64a; --warn-soft: #3a2a10;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    --code-bg: #091220; --code-fg: #d6e2f5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1520; --surface: #131e2c; --surface-2: #182536; --line: #233246;
+  --fg: #e4ebf5; --fg-2: #a7b4c8; --fg-3: #74839a;
+  --accent: #6aa8f0; --accent-soft: #16304f;
+  --nav: #070f19; --nav-fg: #8fc4ea;
+  --ok: #4cc585; --ok-soft: #12321f; --warn: #e3a64a; --warn-soft: #3a2a10;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  --code-bg: #091220; --code-fg: #d6e2f5;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-size: 12.5px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* shell */
+.shell { display: grid; grid-template-columns: 56px minmax(0, 1fr); min-height: 100vh; }
+.rail { background: var(--nav); display: flex; flex-direction: column; align-items: center; gap: 6px; padding-block: 14px; position: sticky; top: 0; height: 100vh; }
+.rail .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #5c9ce6, #1565c0); margin-bottom: 14px; }
+.rail span { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; color: var(--nav-fg); opacity: .75; }
+.rail span.on { background: rgba(92, 156, 230, .18); opacity: 1; }
+.rail svg { width: 18px; height: 18px; }
+main { min-width: 0; padding-inline: 32px; padding-block: 20px 64px; max-width: 1280px; width: 100%; }
+
+/* header */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--fg-3); font-size: 13px; }
+.crumbs a { color: var(--fg-2); }
+.crumbs .sep { opacity: .5; }
+.head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: start; margin-top: 18px; }
+.glyph { width: 52px; height: 52px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+.glyph svg { width: 26px; height: 26px; }
+.eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; }
+h1 { font-size: 26px; line-height: 1.2; margin: 2px 0 4px; font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+.lede { color: var(--fg-2); font-size: 15px; margin: 0; max-width: 68ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; color: var(--fg); white-space: nowrap; }
+.chip .k { color: var(--fg-3); }
+.chip .av { width: 18px; height: 18px; border-radius: 50%; background: #1565c0; color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; margin-left: -4px; }
+.chip.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
+.chip.warn::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+a.chip:hover { border-color: var(--accent); text-decoration: none; }
+.actions { display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: 500 13px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+:root[data-theme="dark"] .btn.primary { color: #08111d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #08111d; } }
+.btn svg { width: 16px; height: 16px; }
+.btn.icon { width: 34px; padding: 0; justify-content: center; }
+
+/* tabs */
+.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); margin-top: 22px; border-bottom: 1px solid var(--line); display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.tabs button { appearance: none; border: 0; background: none; font: 500 14px var(--font-sans); color: var(--fg-2); padding: 12px 12px 11px; border-bottom: 2px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.tabs button:hover { color: var(--fg); }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.count { font-size: 11px; font-weight: 600; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--surface-2); color: var(--fg-2); display: inline-grid; place-items: center; }
+.count.zero { opacity: .55; }
+
+/* panels */
+.panel { padding-top: 24px; display: none; }
+.panel.on { display: block; animation: rise .25s ease-out; }
+@keyframes rise { from { transform: translateY(4px); opacity: .6; } to { transform: none; opacity: 1; } }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.stack { display: grid; gap: 24px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); min-width: 0; }
+.card > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 16px 20px 0; }
+.card h2 { font-size: 15px; font-weight: 600; margin: 0; }
+.card .sub { color: var(--fg-3); font-size: 13px; }
+.card .body { padding: 14px 20px 18px; }
+section > h2.sec { font-size: 15px; font-weight: 600; margin: 0 0 10px; display: flex; gap: 8px; align-items: baseline; }
+section > h2.sec small { font-weight: 400; color: var(--fg-3); font-size: 13px; }
+
+/* environments */
+.envs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.env { padding: 16px 18px; display: grid; gap: 10px; }
+.env .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.env .name { font-weight: 600; font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent); }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+.kv dt { color: var(--fg-3); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.sync { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fg-2); padding: 10px 14px; border-radius: 8px; background: var(--surface-2); margin-top: 12px; }
+.sync svg { width: 16px; height: 16px; color: var(--ok); flex: none; }
+
+/* dependency list */
+.deps { list-style: none; margin: 0; padding: 0; }
+.deps li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 20px; border-top: 1px solid var(--line); }
+.deps li:first-child { border-top: 0; }
+.deps .ic { width: 34px; height: 34px; border-radius: 8px; background: var(--surface-2); color: var(--fg-2); display: grid; place-items: center; }
+.deps .ic svg { width: 17px; height: 17px; }
+.deps .t { font-weight: 600; }
+.deps .d { color: var(--fg-2); font-size: 13px; }
+.deps .tag { font-size: 12px; color: var(--fg-3); white-space: nowrap; text-align: right; }
+.group-label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 600; color: var(--fg-3); padding: 14px 20px 6px; }
+
+/* facts */
+.facts { display: grid; gap: 0; }
+.facts .row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.facts .row:first-child { border-top: 0; }
+.facts .k { color: var(--fg-3); }
+.muted { color: var(--fg-3); }
+.links { display: grid; gap: 2px; }
+.links a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-inline: -10px; border-radius: 8px; color: var(--fg); }
+.links a:hover { background: var(--surface-2); text-decoration: none; }
+.links svg { width: 16px; height: 16px; color: var(--fg-3); }
+.links .ext { margin-left: auto; color: var(--fg-3); font-size: 12px; }
+.commit { display: grid; gap: 4px; font-size: 13px; }
+.commit .msg { font-weight: 500; }
+
+/* mini graph */
+.graph { width: 100%; height: auto; display: block; }
+.graph text { font-family: var(--font-sans); font-size: 12px; fill: var(--fg); }
+.graph .lbl { fill: var(--fg-3); font-size: 11px; }
+.graph .node { fill: var(--surface-2); stroke: var(--line); }
+.graph .self { fill: var(--accent); }
+.graph .selft { fill: #fff; font-weight: 600; }
+.graph .edge { stroke: var(--line); stroke-width: 1.5; fill: none; }
+
+/* empty state */
+.empty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; padding: 28px; align-items: center; }
+.empty h3 { margin: 0 0 6px; font-size: 17px; }
+.empty p { margin: 0 0 14px; color: var(--fg-2); max-width: 52ch; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--font-mono); }
+pre.code .c { color: #7f93b2; }
+pre.code .h { color: #8fd0a6; }
+
+/* table */
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th { text-align: left; font-weight: 600; font-size: 12px; color: var(--fg-3); padding: 10px 20px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 11px 20px; border-top: 1px solid var(--line); vertical-align: top; }
+tr:first-child td { border-top: 0; }
+
+/* docs */
+.docs { display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+.docs nav { border-right: 1px solid var(--line); padding: 18px 12px; display: grid; gap: 2px; align-content: start; }
+.docs nav a { padding: 7px 10px; border-radius: 6px; color: var(--fg-2); }
+.docs nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.docs article { padding: 22px 32px 32px; max-width: 760px; min-width: 0; }
+.docs article h2 { font-size: 22px; margin: 0 0 8px; }
+.docs article h3 { font-size: 16px; margin: 22px 0 8px; }
+.docs article p, .docs article li { color: var(--fg-2); }
+.docs code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--fg); }
+.docs .tbl-wrap { border: 1px solid var(--line); border-radius: 8px; }
+
+/* design notes */
+.notes { margin-top: 28px; border: 1px dashed var(--line); border-radius: var(--r); padding: 14px 18px; background: transparent; }
+.notes summary { cursor: pointer; font-weight: 600; color: var(--fg-2); }
+.notes ul { margin: 10px 0 0; padding-left: 18px; color: var(--fg-2); display: grid; gap: 4px; }
+.theme-toggle { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10; box-shadow: var(--shadow); }
+
+@media (max-width: 960px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .empty { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: none; }
+  main { padding-inline: 16px; }
+  .head { grid-template-columns: auto minmax(0, 1fr); }
+  .actions { grid-column: 1 / -1; }
+  .actions .btn:not(.icon) { flex: 1; justify-content: center; }
+  .glyph { width: 42px; height: 42px; }
+  h1 { font-size: 22px; }
+  .envs { grid-template-columns: minmax(0, 1fr); }
+  .docs { grid-template-columns: minmax(0, 1fr); }
+  .docs nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; }
+  .docs article { padding: 18px; }
+  .deps li { grid-template-columns: 34px minmax(0, 1fr); }
+  .deps .tag { grid-column: 2; text-align: left; }
+  .card > header, .card .body, .deps li, .group-label { padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .panel.on { animation: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-service" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7" ry="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-topic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-bucket" viewBox="0 0 24 24"><path d="M4 6h16l-2 14H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><ellipse cx="12" cy="6" rx="8" ry="2" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-k8s" viewBox="0 0 24 24"><path d="M12 2.5l8.2 4v9L12 21.5l-8.2-6v-9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="currentColor"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6M9 16h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="19" r="1.7" fill="currentColor"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-api" viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M14 5l-4 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-catalog" viewBox="0 0 24 24"><path d="M4 5h16v4H4zM4 11h16v4H4zM4 17h16v2H4z" fill="currentColor"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="shell">
+  <nav class="rail" aria-label="Backstage">
+    <div class="logo"></div>
+    <span><svg><use href="#i-search"/></svg></span>
+    <span class="on"><svg><use href="#i-catalog"/></svg></span>
+    <span><svg><use href="#i-api"/></svg></span>
+    <span><svg><use href="#i-doc"/></svg></span>
+  </nav>
+
+  <main>
+    <div class="crumbs">
+      <a href="#">Catalog</a><span class="sep">/</span>
+      <a href="#">communication</a><span class="sep">/</span>
+      <a href="#">messaging</a><span class="sep">/</span>
+      <a href="#">greeter</a><span class="sep">/</span>
+      <span>greeting-api</span>
+    </div>
+
+    <div class="head">
+      <div class="glyph"><svg><use href="#i-service"/></svg></div>
+      <div style="min-width:0">
+        <div class="eyebrow">Component · service</div>
+        <h1>greeting-api</h1>
+        <p class="lede">Greets callers, stores each greeting and publishes a greeting event</p>
+        <div class="meta">
+          <span class="chip warn">experimental</span>
+          <a class="chip" href="#"><span class="av">TA</span>team-alpha</a>
+          <a class="chip" href="#"><span class="k">System</span>greeter</a>
+          <a class="chip" href="#"><span class="k">Domain</span>messaging</a>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="https://github.com/wasp-foundry/greeting-api"><svg><use href="#i-code"/></svg>Source</a>
+        <a class="btn" href="#docs" data-go="docs"><svg><use href="#i-doc"/></svg>Docs</a>
+        <button class="btn icon" aria-label="Star"><svg><use href="#i-star"/></svg></button>
+        <button class="btn icon" aria-label="More actions"><svg><use href="#i-more"/></svg></button>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      <button role="tab" data-tab="apis">APIs <span class="count zero">0</span></button>
+      <button role="tab" data-tab="deps">Dependencies <span class="count">5</span></button>
+      <button role="tab" data-tab="k8s">Kubernetes <span class="count">2</span></button>
+      <button role="tab" data-tab="docs">Docs</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div class="panel on" id="p-overview" role="tabpanel">
+      <div class="grid">
+        <div class="stack">
+          <section>
+            <h2 class="sec">Environments <small>2 of 2 healthy</small></h2>
+            <div class="envs">
+              <div class="card env">
+                <div class="top"><span class="name">development</span><span class="pill">Running</span></div>
+                <dl class="kv">
+                  <dt>Pods</dt><dd class="num">1 / 1 ready · 0 restarts</dd>
+                  <dt>Image</dt><dd class="mono">greeting-api:07f0d3f</dd>
+                  <dt>Cluster</dt><dd>k3d development · ns <span class="mono">development</span></dd>
+                </dl>
+              </div>
+              <div class="card env">
+                <div class="top"><span class="name">production</span><span class="pill">Running</span></div>
+                <dl class="kv">
+                  <dt>Pods</dt><dd class="num">1 / 1 ready · 0 restarts</dd>
+                  <dt>Image</dt><dd class="mono">greeting-api:07f0d3f</dd>
+                  <dt>Cluster</dt><dd>k3d production · ns <span class="mono">production</span></dd>
+                </dl>
+              </div>
+            </div>
+            <div class="sync"><svg><use href="#i-check"/></svg><span>Production runs the same build as development. Nothing waiting to be promoted.</span></div>
+          </section>
+
+          <div class="card">
+            <header><h2>Depends on</h2><a class="sub" href="#deps" data-go="deps">All dependencies →</a></header>
+            <div class="group-label">Data</div>
+            <ul class="deps">
+              <li><span class="ic"><svg><use href="#i-db"/></svg></span><div><a class="t" href="#">greeting-db</a><div class="d">PostgreSQL database with the greetings table</div></div><span class="tag">database</span></li>
+              <li><span class="ic"><svg><use href="#i-topic"/></svg></span><div><a class="t" href="#">greeting-events</a><div class="d">SNS topic with one greeting.created event per greeting</div></div><span class="tag">topic</span></li>
+              <li><span class="ic"><svg><use href="#i-bucket"/></svg></span><div><a class="t" href="#">greeting-avatars</a><div class="d">S3 bucket for avatar images attached to greetings</div></div><span class="tag">s3-bucket</span></li>
+            </ul>
+            <div class="group-label">Runs on</div>
+            <ul class="deps">
+              <li><span class="ic"><svg><use href="#i-k8s"/></svg></span><div><a class="t" href="#">development</a> <span class="muted">·</span> <a class="t" href="#">production</a><div class="d">Kubernetes clusters owned by team-platform</div></div><span class="tag">kubernetes-cluster</span></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <header><h2>Relations</h2><a class="sub" href="#">Open graph →</a></header>
+            <div class="body">
+              <svg class="graph" viewBox="0 0 640 170" role="img" aria-label="greeting-api is part of greeter, owned by team-alpha, and depends on five resources">
+                <path class="edge" d="M150 45 C 220 45, 220 85, 262 85"/>
+                <path class="edge" d="M150 125 C 220 125, 220 85, 262 85"/>
+                <path class="edge" d="M378 85 C 430 85, 430 22, 470 22"/>
+                <path class="edge" d="M378 85 C 430 85, 430 54, 470 54"/>
+                <path class="edge" d="M378 85 C 430 85, 430 86, 470 86"/>
+                <path class="edge" d="M378 85 C 430 85, 430 118, 470 118"/>
+                <path class="edge" d="M378 85 C 430 85, 430 150, 470 150"/>
+                <rect class="node" x="30" y="30" width="120" height="30" rx="15"/><text x="90" y="49" text-anchor="middle">greeter</text>
+                <text class="lbl" x="90" y="22" text-anchor="middle">part of</text>
+                <rect class="node" x="30" y="110" width="120" height="30" rx="15"/><text x="90" y="129" text-anchor="middle">team-alpha</text>
+                <text class="lbl" x="90" y="160" text-anchor="middle">owned by</text>
+                <rect class="self" x="262" y="68" width="116" height="34" rx="17"/><text class="selft" x="320" y="89" text-anchor="middle">greeting-api</text>
+                <rect class="node" x="470" y="8" width="150" height="28" rx="14"/><text x="545" y="26" text-anchor="middle">greeting-db</text>
+                <rect class="node" x="470" y="40" width="150" height="28" rx="14"/><text x="545" y="58" text-anchor="middle">greeting-events</text>
+                <rect class="node" x="470" y="72" width="150" height="28" rx="14"/><text x="545" y="90" text-anchor="middle">greeting-avatars</text>
+                <rect class="node" x="470" y="104" width="150" height="28" rx="14"/><text x="545" y="122" text-anchor="middle">development</text>
+                <rect class="node" x="470" y="136" width="150" height="28" rx="14"/><text x="545" y="154" text-anchor="middle">production</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <aside class="stack">
+          <div class="card">
+            <header><h2>About</h2></header>
+            <div class="body facts">
+              <div class="row"><span class="k">Owner</span><a href="#">team-alpha</a></div>
+              <div class="row"><span class="k">System</span><a href="#">greeter</a></div>
+              <div class="row"><span class="k">Domain</span><span><a href="#">messaging</a> <span class="muted">in</span> <a href="#">communication</a></span></div>
+              <div class="row"><span class="k">Type</span><span>service</span></div>
+              <div class="row"><span class="k">Lifecycle</span><span>experimental</span></div>
+              <div class="row"><span class="k">Language</span><span>Python <span class="muted">· FastAPI</span></span></div>
+              <div class="row"><span class="k">Tags</span><span class="muted">None yet · <a href="#">add in catalog-info.yaml</a></span></div>
+            </div>
+          </div>
+          <div class="card">
+            <header><h2>Links</h2></header>
+            <div class="body links">
+              <a href="https://github.com/wasp-foundry/greeting-api"><svg><use href="#i-code"/></svg>wasp-foundry/greeting-api<span class="ext">GitHub ↗</span></a>
+              <a href="#docs" data-go="docs"><svg><use href="#i-doc"/></svg>Overview and runbook<span class="ext">TechDocs</span></a>
+              <a href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml"><svg><use href="#i-edit"/></svg>Edit catalog-info.yaml<span class="ext">↗</span></a>
+            </div>
+          </div>
+          <div class="card">
+            <header><h2>Latest commit</h2><span class="sub mono">07f0d3f</span></header>
+            <div class="body commit">
+              <span class="msg">feat: renomeia para greeting-api (#4)</span>
+              <span class="muted">main · Oct 3, 2026 · deployed to both environments</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- APIS -->
+    <div class="panel" id="p-apis" role="tabpanel">
+      <div class="card empty">
+        <div>
+          <h3>greeting-api doesn't publish an API yet</h3>
+          <p>It serves <span class="mono">GET /</span> and <span class="mono">GET /healthz</span>, but no API entity describes them. Declare one and it shows up here, with its OpenAPI definition and the components that consume it.</p>
+          <a class="btn primary" href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml"><svg><use href="#i-edit"/></svg>Edit catalog-info.yaml</a>
+        </div>
+        <pre class="code"><span class="c"># catalog-info.yaml</span>
+<span class="h">spec</span>:
+  type: service
+  system: greeter
+  <span class="h">providesApis</span>:
+    - greeting-api
+<span class="c">---</span>
+<span class="h">kind</span>: API
+<span class="h">metadata</span>:
+  name: greeting-api
+<span class="h">spec</span>:
+  type: openapi
+  definition:
+    $text: ./openapi.yaml</pre>
+      </div>
+    </div>
+
+    <!-- DEPENDENCIES -->
+    <div class="panel" id="p-deps" role="tabpanel">
+      <div class="stack">
+        <div class="card">
+          <header><h2>Resources</h2><span class="sub">5 · grouped by what they are for</span></header>
+          <div class="group-label">Data</div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><a href="#">greeting-db</a></td><td>database · <span class="muted">postgresql</span></td><td><a href="#">team-alpha</a></td><td>PostgreSQL database with the greetings table</td></tr>
+                <tr><td><a href="#">greeting-events</a></td><td>topic · <span class="muted">sns</span></td><td><a href="#">team-alpha</a></td><td>SNS topic with one greeting.created event per greeting. Also feeds <a href="#">notification-jobs</a> in notifier.</td></tr>
+                <tr><td><a href="#">greeting-avatars</a></td><td>s3-bucket · <span class="muted">s3</span></td><td><a href="#">team-alpha</a></td><td>S3 bucket for avatar images attached to greetings</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="group-label">Runs on</div>
+          <div class="tbl-wrap">
+            <table>
+              <tbody>
+                <tr><td><a href="#">development</a></td><td>kubernetes-cluster</td><td><a href="#">team-platform</a></td><td>k3d cluster "development" (API 127.0.0.1:6551, apps on localhost:9081), deployed by the cluster-zero ArgoCD</td></tr>
+                <tr><td><a href="#">production</a></td><td>kubernetes-cluster</td><td><a href="#">team-platform</a></td><td>k3d cluster "production" (API 127.0.0.1:6552, apps on localhost:9082), deployed by the cluster-zero ArgoCD</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="muted" style="margin:0">No other components and no subcomponents. Empty relation types are hidden instead of shown as empty tables.</p>
+      </div>
+    </div>
+
+    <!-- KUBERNETES -->
+    <div class="panel" id="p-k8s" role="tabpanel">
+      <div class="stack">
+        <div class="envs">
+          <div class="card">
+            <header><h2>development</h2><span class="pill">Running</span></header>
+            <div class="body">
+              <dl class="kv">
+                <dt>Deployment</dt><dd class="mono">greeting-api</dd>
+                <dt>Replicas</dt><dd class="num">1 desired · 1 ready</dd>
+                <dt>Pod</dt><dd class="mono">greeting-api-8679dd4674-jfzvp</dd>
+                <dt>Restarts</dt><dd class="num">0</dd>
+                <dt>Image</dt><dd class="mono">ghcr.io/wasp-foundry/greeting-api:07f0d3f</dd>
+                <dt>Namespace</dt><dd class="mono">development</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="card">
+            <header><h2>production</h2><span class="pill">Running</span></header>
+            <div class="body">
+              <dl class="kv">
+                <dt>Deployment</dt><dd class="mono">greeting-api</dd>
+                <dt>Replicas</dt><dd class="num">1 desired · 1 ready</dd>
+                <dt>Pod</dt><dd class="mono">greeting-api-8679dd4674-mgdd6</dd>
+                <dt>Restarts</dt><dd class="num">0</dd>
+                <dt>Image</dt><dd class="mono">ghcr.io/wasp-foundry/greeting-api:07f0d3f</dd>
+                <dt>Namespace</dt><dd class="mono">production</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <header><h2>Promotion</h2><span class="sub">gitops · apps/greeting-api/overlays</span></header>
+          <div class="body">
+            <p style="margin:0 0 10px;color:var(--fg-2)">Both overlays point to <span class="mono">07f0d3f</span>. When development moves ahead, promote with:</p>
+            <pre class="code">gh workflow run promote.yaml --repo wasp-foundry/gitops -f app=greeting-api</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOCS -->
+    <div class="panel" id="p-docs" role="tabpanel">
+      <div class="card docs">
+        <nav><a class="on" href="#">Overview</a><a href="#">Runbook</a></nav>
+        <article>
+          <h2>greeting-api</h2>
+          <p>FastAPI service of the <code>greeter</code> system, owned by <code>team-alpha</code>. Created from the wasp-idp Backstage template <code>python-service</code>.</p>
+          <h3>Endpoints</h3>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Path</th><th>Response</th></tr></thead>
+              <tbody>
+                <tr><td>GET</td><td><code>/</code></td><td>App name and a greeting</td></tr>
+                <tr><td>GET</td><td><code>/healthz</code></td><td>Liveness/readiness</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Delivery</h3>
+          <p>Every push to <code>main</code> runs the tests, publishes <code>ghcr.io/wasp-foundry/greeting-api:&lt;sha&gt;</code> and bumps the tag in <code>apps/greeting-api/overlays/development</code> of <code>wasp-foundry/gitops</code>.</p>
+        </article>
+      </div>
+    </div>
+
+    <details class="notes">
+      <summary>Notas de design (proposta A — Refined)</summary>
+      <ul>
+        <li>A descrição sobe para o header e sai do card: hoje ela aparece duas vezes (About e Description).</li>
+        <li>Breadcrumb com a cadeia Domain → subdomain → System no lugar de "Catalog" sozinho.</li>
+        <li>Abas com contagem: dá para ver que APIs está vazia sem abrir.</li>
+        <li>O Overview abre com o estado dos ambientes (o que mais se consulta), não com o grafo.</li>
+        <li>Dependências agrupadas por papel (Data / Runs on): clusters não se misturam com banco e fila.</li>
+        <li>Grafo de relações compacto (170px) com link para o grafo completo.</li>
+        <li>Seções vazias somem (Depends on components, Has subcomponents); estado vazio de APIs ensina o próximo passo.</li>
+        <li>Kubernetes mostra pod, imagem e restarts sem expandir; card de promoção explica o próximo passo do gitops.</li>
+        <li>Dados novos: linguagem e último commit vêm do GitHub (exige plugin/annotation).</li>
+      </ul>
+    </details>
+  </main>
+</div>
+
+<button class="btn icon theme-toggle" id="themeToggle" aria-label="Toggle dark mode"><svg><use href="#i-moon"/></svg></button>
+
+<script>
+  const tabs = document.querySelectorAll('.tabs [role=tab]');
+  function show(name) {
+    tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'p-' + name));
+    try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  }
+  tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
+  document.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.go); window.scrollTo({ top: 0 }); }));
+  const initial = location.hash.slice(1);
+  if (['overview', 'apis', 'deps', 'k8s', 'docs'].includes(initial)) show(initial);
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+  });
+</script>
