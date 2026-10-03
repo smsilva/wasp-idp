@@ -1,0 +1,6 @@
+site_name: greeter
+site_description: System that greets callers and publishes greeting events
+nav:
+  - Overview: index.md
+plugins:
+  - techdocs-core

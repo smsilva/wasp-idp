@@ -1,0 +1,8 @@
+site_name: communication
+site_description: Domain with the messaging and notifications subdomains
+nav:
+  - Overview: index.md
+  - Subdomains: subdomains.md
+  - Event flow: event-flow.md
+plugins:
+  - techdocs-core
