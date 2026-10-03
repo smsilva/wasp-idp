@@ -134,11 +134,17 @@ catalog:
       rules:
         - allow: [Group]
 
-    # Bookinfo domain, system and the k3d clusters as resources
+    # Bookinfo domain and system
     - type: file
       target: ../../catalog/bookinfo.yaml
       rules:
-        - allow: [Domain, System, Resource]
+        - allow: [Domain, System]
+
+    # Platform system and the k3d environment clusters as resources (#118)
+    - type: file
+      target: ../../catalog/platform.yaml
+      rules:
+        - allow: [System, Resource]
 
     # Communication domain: subdomains, systems and resources around greeting-api/notification-api (#114)
     - type: file

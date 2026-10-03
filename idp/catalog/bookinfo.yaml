@@ -20,24 +20,3 @@ metadata:
 spec:
   owner: group:default/team-alpha
   domain: bookstore
----
-# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-resource
-apiVersion: backstage.io/v1alpha1
-kind: Resource
-metadata:
-  name: development
-  description: k3d cluster "development" (API 127.0.0.1:6551, apps on localhost:9081), deployed by the cluster-zero ArgoCD
-spec:
-  type: kubernetes-cluster
-  owner: group:default/team-alpha
-  system: bookinfo
----
-apiVersion: backstage.io/v1alpha1
-kind: Resource
-metadata:
-  name: production
-  description: k3d cluster "production" (API 127.0.0.1:6552, apps on localhost:9082), deployed by the cluster-zero ArgoCD
-spec:
-  type: kubernetes-cluster
-  owner: group:default/team-alpha
-  system: bookinfo
