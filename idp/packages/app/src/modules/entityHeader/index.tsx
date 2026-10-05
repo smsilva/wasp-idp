@@ -4,8 +4,8 @@ import {
 } from '@backstage/frontend-plugin-api';
 import { useApi, alertApiRef, errorApiRef } from '@backstage/core-plugin-api';
 import { catalogApiRef, useEntity } from '@backstage/plugin-catalog-react';
+import catalogPlugin from '@backstage/plugin-catalog/alpha';
 import {
-  EntityCardBlueprint,
   EntityContextMenuItemBlueprint,
   EntityHeaderLayoutBlueprint,
   EntityIconLinkBlueprint,
@@ -14,10 +14,11 @@ import EditIcon from '@material-ui/icons/Edit';
 import RefreshIcon from '@material-ui/icons/Refresh';
 import { createEntityHeader } from './EntityHeader';
 
-// Entity page layout (#124): Source/Docs move from the About card into the
-// header, the About card is disabled and a Description card replaces it. The
-// wiring of the stock extensions (icon links, context menu items, about card)
-// lives in app-config.yaml under app.extensions.
+// Entity page header (#124, #130): breadcrumb, description, Owner/Lifecycle/
+// Source facts and the context menu live in the custom header layout, so the
+// About card is disabled and no description card is needed. The wiring of the
+// stock extensions (icon links, context menu items, about card) lives in
+// app-config.yaml under app.extensions.
 
 const HEADER_ID = 'entity-header-layout:catalog/wasp';
 
@@ -103,17 +104,11 @@ const editEntityMenuItem = EntityContextMenuItemBlueprint.make({
   },
 });
 
-const descriptionEntityCard = EntityCardBlueprint.make({
-  name: 'description',
-  params: {
-    type: 'content',
-    filter: { $not: { kind: { $in: ['user', 'group'] } } },
-    loader: async () => {
-      const { DescriptionCard } = await import('./DescriptionCard');
-      return <DescriptionCard />;
-    },
-  },
-});
+// The page layout's own header bar ("Catalog") repeats what the breadcrumb in
+// the entity header already shows, so the entity page renders without it.
+const entityPageWithoutHeader = catalogPlugin
+  .getExtension('page:catalog/entity')
+  .override({ params: { noHeader: true } });
 
 export const entityHeaderModule = createFrontendModule({
   pluginId: 'catalog',
@@ -121,6 +116,6 @@ export const entityHeaderModule = createFrontendModule({
     entityHeaderLayout,
     refreshEntityMenuItem,
     editEntityMenuItem,
-    descriptionEntityCard,
+    entityPageWithoutHeader,
   ],
 });
