@@ -47,6 +47,20 @@ app:
     - entity-context-menu-item:catalog/unregister-entity:
         attachTo: { id: entity-header-layout:catalog/wasp, input: contextMenuItems }
 
+    # Domain page (#129): the stock has-subdomains/has-systems tables, each
+    # only when the domain has at least one relation of its kind, so a domain
+    # without subdomains shows no empty table.
+    - entity-card:catalog/has-subdomains:
+        config:
+          filter:
+            kind: domain
+            relations: { $contains: { type: hasPart, targetRef: { $hasPrefix: 'domain:' } } }
+    - entity-card:catalog/has-systems:
+        config:
+          filter:
+            kind: domain
+            relations: { $contains: { type: hasPart, targetRef: { $hasPrefix: 'system:' } } }
+
 organization:
   name: My Company
 
