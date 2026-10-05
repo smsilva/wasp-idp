@@ -1,0 +1,394 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog filters · 2 options</title>
+<style>
+/* Grey dark palette of the app's default dark theme (MUI dark), as in the current catalog page. */
+:root {
+  --bg: #303030; --surface: #3c3c3c; --surface-2: #474747; --line: #4e4e4e; --line-2: #3f3f3f;
+  --fg: #f1f1f1; --fg-2: #c4c4c4; --fg-3: #959595;
+  --accent: #5aa9f7; --accent-soft: rgba(90, 169, 247, .15); --accent-line: rgba(90, 169, 247, .45);
+  --create: #8ab4f8; --create-fg: #0f1d33;
+  --font: "Helvetica Neue", Helvetica, Roboto, Arial, sans-serif;
+}
+:root[data-theme="light"] {
+  --bg: #f4f5f7; --surface: #fff; --surface-2: #f0f2f5; --line: #dfe3ea; --line-2: #eceff3;
+  --fg: #172033; --fg-2: #4a5568; --fg-3: #7b8597;
+  --accent: #1565c0; --accent-soft: #e8f0fb; --accent-line: #9cc0ea;
+  --create: #1565c0; --create-fg: #fff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+main { max-width: 1320px; margin: 0 auto; padding: 28px 24px 80px; display: grid; gap: 48px; }
+h1.page { font-size: 20px; margin: 0 0 6px; }
+.intro { color: var(--fg-2); margin: 0; max-width: 90ch; }
+.label { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.label b { font-size: 16px; }
+.label span { color: var(--fg-3); }
+code { font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+a, .link { color: var(--accent); text-decoration: none; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Page frame, shared */
+.frame { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 22px 24px 26px; }
+.top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.top h2 { margin: 0; font-size: 22px; font-weight: 700; }
+.create { background: var(--create); color: var(--create-fg); border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 600; }
+.panel { background: var(--surface); border-radius: 8px; overflow: hidden; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 18px; }
+.panel-head h3 { margin: 0; font-size: 16px; }
+.search { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); padding: 4px 2px; color: var(--fg-3); min-width: 220px; }
+.search input { background: none; border: 0; color: var(--fg); font: inherit; outline: none; width: 100%; }
+.search svg { width: 16px; height: 16px; flex: none; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12.5px; font-weight: 600; color: var(--fg-2); padding: 9px 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+td { padding: 9px 18px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+td.desc { color: var(--fg-2); max-width: 46ch; }
+td .tag { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; margin: 0 4px 2px 0; color: var(--fg-2); }
+.empty { padding: 28px 18px; color: var(--fg-2); }
+.empty button { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; }
+
+/* Option A: lean side column */
+.a .layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 20px; align-items: start; }
+.a aside { display: grid; gap: 18px; position: sticky; top: 12px; }
+.a .group-title { font-size: 12.5px; color: var(--fg-3); margin: 0 0 6px 10px; }
+.a .kinds { display: grid; gap: 1px; }
+.a .kinds button { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; text-align: left; color: var(--fg-2); position: relative; }
+.a .kinds button:hover { background: var(--surface); color: var(--fg); }
+.a .kinds button[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
+.a .kinds button[aria-pressed="true"]::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 3px; background: var(--accent); }
+.a .kinds .n { font-variant-numeric: tabular-nums; color: var(--fg-3); font-weight: 400; font-size: 13px; }
+.a .kinds button[aria-pressed="true"] .n { color: var(--accent); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--surface); border-radius: 7px; padding: 3px; gap: 2px; }
+.seg button { background: none; border: 0; border-radius: 5px; padding: 4px 6px; cursor: pointer; color: var(--fg-2); font-size: 13px; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--fg); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+.seg .n { color: var(--fg-3); font-variant-numeric: tabular-nums; margin-left: 4px; font-weight: 400; }
+.a .props { display: grid; border-top: 1px solid var(--line); }
+.a .prop { display: grid; grid-template-columns: 82px minmax(0, 1fr); align-items: center; border-bottom: 1px solid var(--line); min-height: 36px; }
+.a .prop label { color: var(--fg-3); font-size: 13px; padding-left: 10px; }
+.a .prop select { appearance: none; background: none; border: 0; color: var(--fg-2); font: inherit; font-size: 13.5px; padding: 7px 22px 7px 4px; cursor: pointer; width: 100%; text-overflow: ellipsis;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-3) 50%), linear-gradient(135deg, var(--fg-3) 50%, transparent 50%);
+  background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%; background-size: 4px 4px; background-repeat: no-repeat; }
+.a .prop select option { background: var(--surface); color: var(--fg); }
+.a .prop.on select { color: var(--accent); font-weight: 600; }
+.a .prop[hidden] { display: none; }
+.a .more { background: none; border: 0; color: var(--fg-3); font-size: 13px; padding: 6px 10px; cursor: pointer; text-align: left; }
+.a .more:hover { color: var(--fg); }
+.a .clear { background: none; border: 0; color: var(--accent); font-size: 13px; padding: 0 10px; cursor: pointer; text-align: left; justify-self: start; }
+.a .clear[hidden] { display: none; }
+
+/* Option B: horizontal filter bar */
+.b .kindtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
+.b .kindtabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 14px 9px; cursor: pointer; color: var(--fg-2); white-space: nowrap; margin-bottom: -1px; }
+.b .kindtabs button:hover { color: var(--fg); }
+.b .kindtabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+.b .kindtabs .n { color: var(--fg-3); font-variant-numeric: tabular-nums; margin-left: 6px; font-weight: 400; font-size: 12.5px; }
+.b .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.b .seg { display: inline-grid; }
+.b .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex: 1 1 auto; min-width: 0; }
+.b .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--accent-line); background: var(--accent-soft); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 13px; }
+.b .chip .k { color: var(--fg-3); }
+.b .chip button { background: none; border: 0; cursor: pointer; color: var(--fg-2); width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; padding: 0; }
+.b .chip button:hover { background: var(--surface-2); color: var(--fg); }
+.b .add { position: relative; }
+.b .add > button { background: none; border: 1px dashed var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; color: var(--fg-2); font-size: 13px; }
+.b .add > button:hover { color: var(--fg); border-color: var(--fg-3); }
+.b .menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); min-width: 200px; padding: 4px; display: grid; }
+.b .menu[hidden] { display: none; }
+.b .menu button { background: none; border: 0; text-align: left; padding: 6px 10px; border-radius: 5px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+.b .menu button:hover, .b .menu button:focus-visible { background: var(--accent-soft); outline: none; }
+.b .menu .n { color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.b .menu .back { color: var(--fg-3); font-size: 12.5px; }
+.b .clear-all { background: none; border: 0; color: var(--accent); font-size: 13px; cursor: pointer; padding: 0 4px; }
+.b .clear-all[hidden] { display: none; }
+.b .panel-head { padding: 12px 18px; }
+.b .count { color: var(--fg-3); font-size: 13px; }
+
+.notes { margin: 14px 0 0; padding-left: 18px; color: var(--fg-2); display: grid; gap: 4px; max-width: 110ch; }
+.toggle { position: fixed; right: 16px; bottom: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 6px 10px; cursor: pointer; z-index: 20; }
+
+@media (max-width: 860px) {
+  .a .layout { grid-template-columns: minmax(0, 1fr); }
+  .a aside { position: static; }
+  .a .kinds { display: flex; overflow-x: auto; gap: 4px; }
+  .a .kinds button { width: auto; gap: 8px; white-space: nowrap; }
+  .a .kinds button[aria-pressed="true"]::before { display: none; }
+  td.desc, th.desc { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .seg button, .a .kinds button, .b .kindtabs button { transition: background-color .12s, color .12s; }
+}
+</style>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+<main>
+  <div>
+    <h1 class="page">Filtros do catálogo — duas opções</h1>
+    <p class="intro">Hoje a coluna de filtros ocupa ~900 px de altura para cinco controles: Kind em dropdown, um bloco Personal/My Company com três linhas, e Owner, Lifecycle, Tags e Processing Status como selects vazios empilhados. As duas opções usam o catálogo real (usuário simulado: membro de <code>team-alpha</code>, com <code>greeter</code> nos favoritos) e os mesmos filtros de hoje (<code>EntityKindFilter</code>, <code>UserListFilter</code>, <code>EntityOwnerFilter</code>, <code>EntityLifecycleFilter</code>, <code>EntityTagFilter</code>, <code>EntityTypeFilter</code>); muda só a forma de escolher. Tudo é clicável.</p>
+  </div>
+
+  <section class="a">
+    <div class="label"><b>A — Coluna enxuta</b><span>mesma coluna da esquerda, com kinds visíveis, Owned/Starred/All numa linha e os demais filtros como lista de propriedades</span></div>
+    <div class="frame">
+      <div class="top"><h2>My Company Catalog</h2><button class="create">+ Create</button></div>
+      <div class="layout">
+        <aside aria-label="Filtros">
+          <div>
+            <p class="group-title" id="a-kind-title">Kind</p>
+            <div class="kinds" role="group" aria-labelledby="a-kind-title" data-a="kinds"></div>
+          </div>
+          <div class="seg" role="group" aria-label="Lista" data-a="list"></div>
+          <div class="props" data-a="props"></div>
+          <button class="more" data-a="more" aria-expanded="false">Mais filtros</button>
+          <button class="clear" data-a="clear" hidden>Limpar filtros</button>
+        </aside>
+        <div class="panel">
+          <div class="panel-head"><h3 data-a="title"></h3><label class="search"><svg><use href="#i-search"/></svg><input data-a="q" placeholder="Search" aria-label="Search"></label></div>
+          <div data-a="table"></div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li>Kind deixa de ser dropdown: os kinds ficam todos à vista com a contagem ao lado — a escolha mais frequente da página passa a ser um clique, e o número já diz onde há conteúdo.</li>
+      <li>Owned/Starred/All vira um controle segmentado de uma linha (hoje são três linhas em dois blocos com títulos em caixa alta).</li>
+      <li>Owner, Type, Lifecycle e Tags viram linhas de 36 px "rótulo → valor"; o valor fica azul quando o filtro está ativo. Processing status e Namespace, raramente usados, ficam atrás de "Mais filtros". Type só aparece quando o kind tem tipos.</li>
+      <li>Altura da coluna: ~900 px → ~420 px. A tabela não muda.</li>
+      <li><b>Implementação:</b> não toca no <code>page:catalog</code>. Desliga as extensões <code>catalog-filter:catalog/*</code> em <code>app-config.yaml</code> e adiciona, num módulo do app, três <code>CatalogFilterBlueprint</code> próprios que chamam <code>useEntityList().updateFilters</code> com as classes de filtro padrão. Contagens por kind via <code>catalogApi.getEntityFacets({ facets: ['kind'] })</code>. A largura da coluna segue fixa em <code>lg=2</code> pelo <code>CatalogFilterLayout</code>, e abaixo de <code>md</code> o Backstage já a move para um drawer.</li>
+    </ul>
+  </section>
+
+  <section class="b">
+    <div class="label"><b>B — Barra de filtros</b><span>kinds como abas, filtros como chips numa barra sobre a tabela, que ganha a largura toda</span></div>
+    <div class="frame">
+      <div class="top"><h2>My Company Catalog</h2><button class="create">+ Create</button></div>
+      <div class="kindtabs" role="tablist" aria-label="Kind" data-b="kinds"></div>
+      <div class="panel">
+        <div class="bar">
+          <div class="seg" role="group" aria-label="Lista" data-b="list"></div>
+          <div class="chips" data-b="chips"></div>
+          <label class="search"><svg><use href="#i-search"/></svg><input data-b="q" placeholder="Search" aria-label="Search"></label>
+        </div>
+        <div class="panel-head"><span class="count" data-b="count"></span></div>
+        <div data-b="table"></div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li>A coluna da esquerda some: a tabela passa de ~83% para 100% da largura, o que dá espaço para Description e Tags sem reticências.</li>
+      <li>Kinds viram abas com contagem — o mesmo padrão de abas da página de entidade, então catálogo e entidade falam a mesma língua.</li>
+      <li>Owned/Starred/All à esquerda da barra; os demais filtros só existem quando aplicados, como chips "Owner team-alpha ×". "+ Filtro" abre um menu de dois passos (campo → valor, com contagem). Sem nenhum filtro ativo, a barra é uma linha só.</li>
+      <li><b>Implementação:</b> exige sobrescrever o <code>page:catalog</code> (<code>catalogPlugin.getExtension('page:catalog').override(...)</code>) com uma página própria que monta <code>EntityListProvider</code>, a barra e o <code>CatalogTable</code> exportado pelo plugin, com a busca da tabela desligada (<code>tableOptions.search: false</code>) e <code>EntitySearchBar</code> na barra. Custa mais: Header, botão Create e export são recopiados do <code>DefaultCatalogPage</code> e deixam de acompanhar upgrades. As extensões <code>catalog-filter</code> de terceiros deixam de ter onde aparecer.</li>
+    </ul>
+  </section>
+</main>
+<button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'light' ? '' : 'light'">Claro / escuro</button>
+
+<script>
+// Real catalog of this repo (idp/catalog + wasp-foundry repos), 2026-10-05.
+const ENTITIES = [
+  ['Domain', 'bookstore', '', 'team-alpha', '', [], 'Selling books online — catalogue, product pages, reviews and ratings'],
+  ['Domain', 'communication', '', 'team-alpha', '', [], 'Everything that sends a message to someone — greetings and the notifications they trigger'],
+  ['Domain', 'messaging', '', 'team-alpha', '', [], 'Producing greetings and publishing an event for each one'],
+  ['Domain', 'notifications', '', 'team-beta', '', [], 'Reacting to greeting events and producing reports'],
+  ['System', 'bookinfo', '', 'team-alpha', '', [], 'Istio Bookinfo sample (productpage, details, reviews, ratings), one repo per service'],
+  ['System', 'greeter', '', 'team-alpha', '', [], 'Greets callers, stores each greeting and publishes a greeting event'],
+  ['System', 'notifier', '', 'team-beta', '', [], 'Consumes greeting events from a queue and writes periodic reports'],
+  ['System', 'platform', '', 'team-platform', '', [], 'Shared platform infrastructure — the environment clusters every app deploys to'],
+  ['System', 'examples', '', 'guests', '', [], ''],
+  ['Component', 'productpage', 'service', 'team-alpha', 'experimental', ['python', 'flask'], 'Bookinfo product page — renders a book with its details and reviews'],
+  ['Component', 'details', 'service', 'team-beta', 'experimental', ['ruby'], 'Bookinfo details service — book metadata such as author, year and ISBN'],
+  ['Component', 'reviews', 'service', 'team-beta', 'experimental', ['java', 'open-liberty'], 'Bookinfo reviews service — v1 without ratings, v2 black stars, v3 red stars'],
+  ['Component', 'ratings', 'service', 'team-beta', 'experimental', ['nodejs'], 'Bookinfo ratings service — star ratings per reviewer'],
+  ['Component', 'greeting-api', 'service', 'team-alpha', 'experimental', [], 'Greets callers, stores each greeting and publishes a greeting event'],
+  ['Component', 'notification-api', 'service', 'team-beta', 'experimental', [], 'Consumes greeting events from a queue and writes notification reports'],
+  ['Component', 'example-website', 'website', 'guests', 'experimental', [], ''],
+  ['API', 'details-api', 'openapi', 'team-beta', 'experimental', [], 'Book details by product id'],
+  ['API', 'ratings-api', 'openapi', 'team-beta', 'experimental', [], 'Star ratings by product id'],
+  ['API', 'reviews-api', 'openapi', 'team-beta', 'experimental', [], 'Book reviews by product id, with star ratings in v2 and v3'],
+  ['API', 'example-grpc-api', 'grpc', 'guests', 'experimental', [], ''],
+  ['Resource', 'greeting-db', 'database', 'team-alpha', '', [], 'Relational database with the greetings table'],
+  ['Resource', 'greeting-events', 'topic', 'team-alpha', '', [], 'Pub/sub topic with one greeting.created event per greeting'],
+  ['Resource', 'greeting-avatars', 'object-storage', 'team-alpha', '', [], 'Object storage bucket for avatar images attached to greetings'],
+  ['Resource', 'notification-db', 'database', 'team-beta', '', [], 'Relational database with delivered notifications'],
+  ['Resource', 'notification-jobs', 'queue', 'team-beta', '', [], 'Message queue subscribed to greeting-events (topic → queue fan-out)'],
+  ['Resource', 'notification-reports', 'object-storage', 'team-beta', '', [], 'Object storage bucket with the daily notification reports'],
+  ['Resource', 'development', 'kubernetes-cluster', 'team-platform', '', [], 'k3d cluster "development", deployed by the cluster-zero scripts'],
+  ['Resource', 'production', 'kubernetes-cluster', 'team-platform', '', [], 'k3d cluster "production", deployed by the cluster-zero scripts'],
+].map(([kind, name, type, owner, lifecycle, tags, desc]) => ({ kind, name, type, owner, lifecycle, tags, desc }));
+const KINDS = ['Domain', 'System', 'Component', 'API', 'Resource'];
+const PLURAL = { Domain: 'Domains', System: 'Systems', Component: 'Components', API: 'APIs', Resource: 'Resources' };
+const MY_TEAM = 'team-alpha';
+const STARRED = new Set(['greeter']);
+const FIELDS = [
+  { key: 'owner', label: 'Owner', values: e => [e.owner] },
+  { key: 'type', label: 'Type', values: e => e.type ? [e.type] : [] },
+  { key: 'lifecycle', label: 'Lifecycle', values: e => e.lifecycle ? [e.lifecycle] : [] },
+  { key: 'tag', label: 'Tags', values: e => e.tags },
+  { key: 'status', label: 'Processing status', values: () => ['ok'], extra: true },
+  { key: 'namespace', label: 'Namespace', values: () => ['default'], extra: true },
+];
+const LISTS = [['owned', 'Owned'], ['starred', 'Starred'], ['all', 'All']];
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+function inList(e, list) { return list === 'all' || (list === 'owned' ? e.owner === MY_TEAM : STARRED.has(e.name)); }
+function matches(e, st, skip) {
+  if (skip !== 'kind' && e.kind !== st.kind) return false;
+  if (skip !== 'list' && !inList(e, st.list)) return false;
+  for (const f of FIELDS) if (f.key !== skip && st.f[f.key] && !f.values(e).includes(st.f[f.key])) return false;
+  if (st.q && !(e.name + ' ' + e.desc).toLowerCase().includes(st.q.toLowerCase())) return false;
+  return true;
+}
+function valuesFor(st, field) {
+  const counts = new Map();
+  ENTITIES.filter(e => matches(e, st, field.key)).forEach(e => field.values(e).forEach(v => counts.set(v, (counts.get(v) || 0) + 1)));
+  return [...counts].sort((x, y) => x[0].localeCompare(y[0]));
+}
+function table(rows, st, onClear) {
+  if (!rows.length) {
+    const div = document.createElement('div');
+    div.className = 'empty';
+    div.innerHTML = 'Nenhuma entidade com esses filtros. <button>Limpar filtros</button>';
+    div.querySelector('button').onclick = onClear;
+    return div;
+  }
+  const hasType = rows.some(r => r.type);
+  const t = document.createElement('table');
+  t.innerHTML = `<thead><tr><th>Name</th><th>Owner</th>${hasType ? '<th>Type</th>' : ''}<th class="desc">Description</th><th>Tags</th></tr></thead><tbody>${
+    rows.map(r => `<tr><td><a href="#">${esc(r.name)}</a></td><td><a href="#">${esc(r.owner)}</a></td>${hasType ? `<td>${esc(r.type)}</td>` : ''}<td class="desc">${esc(r.desc)}</td><td>${r.tags.map(x => `<span class="tag">${esc(x)}</span>`).join('')}</td></tr>`).join('')
+  }</tbody>`;
+  return t;
+}
+// Kind change clears field filters, so a kind's count only honours list and search.
+function kindCount(st, k) { return ENTITIES.filter(e => matches(e, { ...st, kind: k, f: {} })).length; }
+function segmented(el, st, render) {
+  el.innerHTML = '';
+  for (const [key, label] of LISTS) {
+    const b = document.createElement('button');
+    b.setAttribute('aria-pressed', st.list === key);
+    b.innerHTML = `${label}<span class="n">${ENTITIES.filter(e => matches(e, { ...st, list: key })).length}</span>`;
+    b.onclick = () => { st.list = key; render(); };
+    el.append(b);
+  }
+}
+
+// Option A
+(() => {
+  const $ = k => document.querySelector(`[data-a="${k}"]`);
+  const st = { kind: 'Component', list: 'all', f: {}, q: '', more: false };
+  const reset = () => { st.f = {}; st.q = ''; $('q').value = ''; render(); };
+  $('q').oninput = ev => { st.q = ev.target.value; render(); };
+  $('more').onclick = () => { st.more = !st.more; render(); };
+  $('clear').onclick = reset;
+  function render() {
+    const kinds = $('kinds'); kinds.innerHTML = '';
+    for (const k of KINDS) {
+      const b = document.createElement('button');
+      b.setAttribute('aria-pressed', st.kind === k);
+      b.innerHTML = `${k}<span class="n">${kindCount(st, k)}</span>`;
+      b.onclick = () => { st.kind = k; st.f = {}; render(); };
+      kinds.append(b);
+    }
+    segmented($('list'), st, render);
+    const props = $('props'); props.innerHTML = '';
+    for (const f of FIELDS) {
+      const vals = valuesFor(st, f);
+      if (!vals.length && !st.f[f.key]) continue;
+      const row = document.createElement('div');
+      row.className = 'prop' + (st.f[f.key] ? ' on' : '');
+      row.hidden = f.extra && !st.more;
+      const id = 'a-' + f.key;
+      row.innerHTML = `<label for="${id}">${f.label}</label><select id="${id}"><option value="">Qualquer</option>${vals.map(([v, n]) => `<option value="${esc(v)}" ${st.f[f.key] === v ? 'selected' : ''}>${esc(v)} (${n})</option>`).join('')}</select>`;
+      row.querySelector('select').onchange = ev => { st.f[f.key] = ev.target.value || undefined; render(); };
+      props.append(row);
+    }
+    $('more').textContent = st.more ? 'Menos filtros' : 'Mais filtros';
+    $('more').setAttribute('aria-expanded', st.more);
+    $('clear').hidden = !Object.values(st.f).some(Boolean);
+    const rows = ENTITIES.filter(e => matches(e, st));
+    $('title').textContent = `${st.list === 'owned' ? 'Owned' : st.list === 'starred' ? 'Starred' : 'All'} ${PLURAL[st.kind]} (${rows.length})`;
+    $('table').replaceChildren(table(rows, st, reset));
+  }
+  render();
+})();
+
+// Option B
+(() => {
+  const $ = k => document.querySelector(`[data-b="${k}"]`);
+  const st = { kind: 'Component', list: 'all', f: { owner: 'team-beta' }, q: '' };
+  let menu = null; // null | 'fields' | field key
+  const reset = () => { st.f = {}; st.q = ''; $('q').value = ''; render(); };
+  $('q').oninput = ev => { st.q = ev.target.value; render(); };
+  document.addEventListener('click', ev => { if (menu && !ev.target.closest('.b .add')) { menu = null; render(); } });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && menu) { menu = null; render(); } });
+  function render() {
+    const tabs = $('kinds'); tabs.innerHTML = '';
+    for (const k of KINDS) {
+      const b = document.createElement('button');
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', st.kind === k);
+      b.innerHTML = `${PLURAL[k]}<span class="n">${kindCount(st, k)}</span>`;
+      b.onclick = () => { st.kind = k; st.f = {}; render(); };
+      tabs.append(b);
+    }
+    segmented($('list'), st, render);
+    const chips = $('chips'); chips.innerHTML = '';
+    for (const f of FIELDS) {
+      if (!st.f[f.key]) continue;
+      const c = document.createElement('span');
+      c.className = 'chip';
+      c.innerHTML = `<span class="k">${f.label}</span>${esc(st.f[f.key])}<button aria-label="Remover filtro ${f.label}"><svg width="12" height="12"><use href="#i-x"/></svg></button>`;
+      c.querySelector('button').onclick = () => { delete st.f[f.key]; render(); };
+      chips.append(c);
+    }
+    const add = document.createElement('div');
+    add.className = 'add';
+    add.innerHTML = '<button aria-haspopup="menu">+ Filtro</button><div class="menu" role="menu" hidden></div>';
+    add.firstChild.onclick = () => { menu = menu ? null : 'fields'; render(); };
+    const m = add.querySelector('.menu');
+    if (menu) {
+      m.hidden = false;
+      if (menu === 'fields') {
+        for (const f of FIELDS) {
+          const n = valuesFor(st, f).length;
+          if (!n || st.f[f.key]) continue;
+          const b = document.createElement('button');
+          b.setAttribute('role', 'menuitem');
+          b.innerHTML = `${f.label}<span class="n">${n}</span>`;
+          b.onclick = () => { menu = f.key; render(); };
+          m.append(b);
+        }
+      } else {
+        const f = FIELDS.find(x => x.key === menu);
+        const back = document.createElement('button');
+        back.className = 'back';
+        back.textContent = '‹ ' + f.label;
+        back.onclick = () => { menu = 'fields'; render(); };
+        m.append(back);
+        for (const [v, n] of valuesFor(st, f)) {
+          const b = document.createElement('button');
+          b.setAttribute('role', 'menuitem');
+          b.innerHTML = `${esc(v)}<span class="n">${n}</span>`;
+          b.onclick = () => { st.f[f.key] = v; menu = null; render(); };
+          m.append(b);
+        }
+      }
+    }
+    chips.append(add);
+    if (Object.values(st.f).some(Boolean)) {
+      const clr = document.createElement('button');
+      clr.className = 'clear-all';
+      clr.textContent = 'Limpar';
+      clr.onclick = reset;
+      chips.append(clr);
+    }
+    if (menu) m.querySelector('button')?.focus();
+    const rows = ENTITIES.filter(e => matches(e, st));
+    $('count').textContent = `${rows.length} de ${ENTITIES.filter(e => e.kind === st.kind).length} ${PLURAL[st.kind].toLowerCase()}`;
+    $('table').replaceChildren(table(rows, st, reset));
+  }
+  render();
+})();
+</script>
