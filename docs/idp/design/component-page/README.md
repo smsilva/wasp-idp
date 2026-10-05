@@ -7,6 +7,7 @@ Os arquivos são HTML autocontidos no formato de artifact do claude.ai (sem `<ht
 | Proposta | Arquivo | Ideia |
 |---|---|---|
 | A — Refined | [`a-refined.html`](a-refined.html) | Evolução implementável com MUI/BUI: descrição no header, breadcrumb Domain → System, abas com contagem, Overview começando pelos ambientes, dependências agrupadas por papel, seções vazias escondidas |
+| A — Refined, versão inicial | [`a-refined-initial.html`](a-refined-initial.html) | Recorte da A que sai só do que já existe (catálogo, plugin Kubernetes, catalog-graph, api-docs, TechDocs): sem aba Environments, sem Latest commit/Language da API do GitHub; "Running version" vem das imagens dos pods |
 | B — Console | [`b-console.html`](b-console.html) | Dark-first: coluna de identidade fixa, linha de status, trilha de entrega commit → imagem → dev → prod, topologia em colunas, atalhos de teclado nas abas |
 
 ## Problemas da página atual que as duas atacam
