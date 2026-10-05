@@ -1,8 +1,10 @@
-// Entity page header: the stock EntityHeaderBui (@backstage/plugin-catalog,
-// src/alpha/components/EntityHeader) plus Source/Docs metadata items built from
-// the entity-icon-link extensions that used to live in the About card. A custom
-// header layout only receives tabs, so it also renders the context menu itself.
-// Review against EntityHeaderBui when upgrading Backstage.
+// Entity page header (#130): the identity block (EntityIdentity — breadcrumb,
+// kind icon, title, description, facts and actions) above the stock BUI
+// Header, which keeps only the tabs. The facts are Owner, the entity-icon-link
+// extensions attached to this layout (Source) and Lifecycle. A custom
+// header layout only receives tabs, so it also renders the context menu
+// itself. Review against EntityHeaderBui (@backstage/plugin-catalog,
+// src/alpha/components/EntityHeader) when upgrading Backstage.
 import { ReactElement, ReactNode, useMemo } from 'react';
 import { useRouteRefParams } from '@backstage/core-plugin-api';
 import {
@@ -11,10 +13,7 @@ import {
 } from '@backstage/frontend-plugin-api';
 import {
   entityRouteRef,
-  getEntityRelations,
   useAsyncEntity,
-  useEntityPresentation,
-  useEntityRefLink,
   useStarredEntity,
 } from '@backstage/plugin-catalog-react';
 import type {
@@ -36,9 +35,10 @@ import StarIcon from '@material-ui/icons/Star';
 import StarBorderIcon from '@material-ui/icons/StarBorder';
 import MoreVertIcon from '@material-ui/icons/MoreVert';
 import { useOwnerUsers } from './useOwnerUsers';
+import { EntityIdentity, type Fact } from './EntityIdentity';
+import identityStyles from './EntityIdentity.module.css';
 
 type Entity = NonNullable<ReturnType<typeof useAsyncEntity>['entity']>;
-type EntityRef = ReturnType<typeof getEntityRelations>[number];
 
 export type HeaderIconLink = {
   id: string;
@@ -63,41 +63,7 @@ const iconLinkPresentation: Record<
     // https://github.com/<org>/<repo>/... -> <repo>
     text: href => new URL(href).pathname.split('/')[2] || 'Source',
   },
-  'entity-icon-link:techdocs/read-docs': {
-    label: 'Docs',
-    text: () => 'TechDocs',
-  },
 };
-
-const refName = (ref: EntityRef) =>
-  `${ref.kind}:${ref.namespace}/${ref.name}`.toLocaleLowerCase('en-US');
-
-function HierarchyLinks({ refs }: { refs: EntityRef[] }) {
-  const entityLink = useEntityRefLink();
-  return (
-    <>
-      {refs.map((ref, index) => (
-        <span key={refName(ref)}>
-          {index > 0 ? ', ' : null}
-          <Link href={entityLink(ref)} standalone>
-            {ref.name}
-          </Link>
-        </span>
-      ))}
-    </>
-  );
-}
-
-function hierarchyLabel(ref: EntityRef) {
-  switch (ref.kind.toLocaleLowerCase('en-US')) {
-    case 'system':
-      return 'System';
-    case 'domain':
-      return 'Domain';
-    default:
-      return 'Part of';
-  }
-}
 
 function IconLinkValue({
   href,
@@ -129,7 +95,7 @@ function IconLinkValue({
   );
 }
 
-function useMetadata(entity: Entity | undefined, iconLinks: HeaderIconLink[]) {
+function useFacts(entity: Entity | undefined, iconLinks: HeaderIconLink[]) {
   const owners = useOwnerUsers(entity);
   // Hook count is stable: iconLinks comes from the extension inputs, fixed for
   // the lifetime of the app.
@@ -138,33 +104,17 @@ function useMetadata(entity: Entity | undefined, iconLinks: HeaderIconLink[]) {
 
   return useMemo(() => {
     if (!entity) return [];
-    const metadata: { label: string; value: ReactNode }[] = [];
-
-    const lifecycle = (entity.spec as { lifecycle?: unknown })?.lifecycle;
-    if (lifecycle) {
-      metadata.push({ label: 'Lifecycle', value: String(lifecycle) });
-    }
+    const facts: Fact[] = [];
     if (owners.length > 0) {
-      metadata.push({
+      facts.push({
         label: 'Owner',
         value: <HeaderMetadataUsers users={owners} />,
       });
     }
-    const hierarchy = getEntityRelations(entity, 'partOf').reduce<
-      Record<string, EntityRef[]>
-    >((groups, ref) => {
-      const label = hierarchyLabel(ref);
-      groups[label] = [...(groups[label] ?? []), ref];
-      return groups;
-    }, {});
-    for (const [label, refs] of Object.entries(hierarchy)) {
-      metadata.push({ label, value: <HierarchyLinks refs={refs} /> });
-    }
-
     for (const { link, props } of linkProps) {
       if (!link.filter(entity) || props.disabled || !props.href) continue;
       const presentation = iconLinkPresentation[link.id];
-      metadata.push({
+      facts.push({
         label: presentation?.label ?? props.label,
         value: (
           <IconLinkValue
@@ -175,7 +125,16 @@ function useMetadata(entity: Entity | undefined, iconLinks: HeaderIconLink[]) {
         ),
       });
     }
-    return metadata;
+    // Lifecycle last: the right edge, next to the actions
+    const lifecycle = (entity.spec as { lifecycle?: unknown })?.lifecycle;
+    if (lifecycle) {
+      facts.push({
+        label: 'Lifecycle',
+        value: String(lifecycle),
+        emphasis: lifecycle !== 'production',
+      });
+    }
+    return facts;
     // linkProps is rebuilt every render; its content only changes with entity
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entity, owners]);
@@ -255,31 +214,31 @@ export function createEntityHeader(
   return function EntityHeader(props: EntityHeaderLayoutProps) {
     const { entity } = useAsyncEntity();
     const routeParams = useRouteRefParams(entityRouteRef);
-    const presentation = useEntityPresentation(entity ?? routeParams);
-    const metadata = useMetadata(entity, iconLinks);
-    const type = (entity?.spec as { type?: unknown } | undefined)?.type;
+    const facts = useFacts(entity, iconLinks);
 
     return (
-      <Header
-        title={presentation.primaryTitle}
-        tags={[
-          { label: entity?.kind ?? routeParams.kind },
-          ...(type ? [{ label: String(type) }] : []),
-        ]}
-        metadata={metadata}
-        tabs={entity ? props.tabs : undefined}
-        activeTabId={props.activeTabId}
-        customActions={
-          entity ? (
-            <>
-              <FavoriteEntityButton entity={entity} />
-              <EntityContextMenu
-                items={menuItems.filter(item => item.filter(entity))}
-              />
-            </>
-          ) : undefined
-        }
-      />
+      <>
+        <EntityIdentity
+          entity={entity}
+          fallbackRef={routeParams}
+          facts={facts}
+          actions={
+            entity ? (
+              <>
+                <FavoriteEntityButton entity={entity} />
+                <EntityContextMenu
+                  items={menuItems.filter(item => item.filter(entity))}
+                />
+              </>
+            ) : undefined
+          }
+        />
+        <Header
+          className={identityStyles.tabsOnly}
+          tabs={entity ? props.tabs : undefined}
+          activeTabId={props.activeTabId}
+        />
+      </>
     );
   };
 }
