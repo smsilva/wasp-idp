@@ -1,0 +1,190 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entity header · 2 options</title>
+<style>
+/* Dark palette close to the app's Midnight theme. */
+:root {
+  --bg: #0f1722; --surface: #151f2c; --surface-2: #1b2736; --line: #243246;
+  --fg: #e4ebf5; --fg-2: #a7b4c8; --fg-3: #74839a; --accent: #6aa8f0; --accent-soft: #16304f;
+  --warn: #e3a64a; --warn-soft: #3a2a10;
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+:root[data-theme="light"] {
+  --bg: #f4f6f9; --surface: #fff; --surface-2: #f0f3f8; --line: #e1e6ee;
+  --fg: #142033; --fg-2: #4a5872; --fg-3: #7a879c; --accent: #1565c0; --accent-soft: #e7f0fb;
+  --warn: #a8630a; --warn-soft: #fbf0dc;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+main { max-width: 1240px; margin: 0 auto; padding: 28px 24px 72px; display: grid; gap: 44px; }
+h1.page { font-size: 20px; margin: 0; }
+.intro { color: var(--fg-2); margin: 4px 0 0; max-width: 90ch; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.option > .label { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.option > .label b { font-size: 15px; }
+.option > .label span { color: var(--fg-3); font-size: 13px; }
+.frame { border: 1px dashed var(--line); border-radius: 12px; padding: 20px 24px 0; background: var(--bg); }
+.frame + .frame { margin-top: 14px; }
+.frame .content { height: 64px; margin: 0 -24px; border-top: 1px solid var(--line); background: repeating-linear-gradient(90deg, transparent 0 24px, var(--surface) 24px 25px); opacity: .5; }
+.notes { color: var(--fg-2); font-size: 13px; margin: 12px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.icon { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); display: inline-grid; place-items: center; color: var(--fg-2); }
+.icon svg { width: 16px; height: 16px; }
+.actions { display: flex; gap: 6px; }
+
+/* breadcrumb shared */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); }
+.crumbs a { color: var(--fg-2); }
+.crumbs .sep { opacity: .5; }
+.crumbs .k { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-3); margin-right: 2px; }
+
+/* tabs shared */
+.tabs { display: flex; gap: 2px; margin-top: 14px; overflow-x: auto; }
+.tabs span { padding: 10px 12px 9px; color: var(--fg-2); border-bottom: 2px solid transparent; white-space: nowrap; font-size: 14px; }
+.tabs span.on { color: var(--fg); border-bottom-color: var(--accent); }
+
+/* A — two lines */
+.a .row1 { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.a .row2 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
+.a h1 { font-size: 24px; line-height: 1.2; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+.a .kind { font-size: 12px; color: var(--fg-3); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; align-self: center; }
+.a .desc { color: var(--fg-2); flex: 1 1 360px; min-width: 0; }
+.a .meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 13px; color: var(--fg-2); }
+.a .meta .k { color: var(--fg-3); margin-right: 4px; }
+.a .meta .warn { color: var(--warn); font-weight: 600; }
+
+/* B — identity + facts column */
+.b .crumbs { margin-bottom: 10px; }
+.b .grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 32px; align-items: start; }
+.b .ident { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 14px; align-items: center; }
+.b .glyph { width: 44px; height: 44px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; grid-row: span 2; }
+.b .glyph svg { width: 22px; height: 22px; }
+.b h1 { font-size: 22px; line-height: 1.2; margin: 0; font-weight: 700; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.b h1 small { font-size: 12px; font-weight: 500; color: var(--fg-3); letter-spacing: .04em; text-transform: uppercase; }
+.b .desc { color: var(--fg-2); margin: 0; max-width: 72ch; }
+.b .side { display: flex; align-items: flex-start; gap: 24px; }
+.b dl { margin: 0; display: grid; grid-auto-flow: column; gap: 0 22px; font-size: 13px; }
+.b dt { color: var(--fg-3); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+.b dd { margin: 2px 0 0; white-space: nowrap; }
+.b dd .warn { color: var(--warn); font-weight: 600; }
+.b dd .av { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #1565c0; color: #fff; font-size: 10px; font-weight: 700; margin-right: 5px; vertical-align: -3px; }
+
+.toggle { position: fixed; right: 16px; bottom: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+@media (max-width: 760px) {
+  .b .grid { grid-template-columns: minmax(0, 1fr); }
+  .b .side { justify-content: space-between; }
+  .b dl { grid-auto-flow: row; grid-template-columns: repeat(2, auto); gap: 8px 22px; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="19" r="1.7" fill="currentColor"/></symbol>
+    <symbol id="i-domain" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-service" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<main>
+  <div>
+    <h1 class="page">Topo da página de entidade — duas opções</h1>
+    <p class="intro">Ambas trazem o breadcrumb de volta para todos os kinds (Catalog › Domain › … › System), sobem a descrição para o topo (o card Description deixa de ser necessário) e juntam owner, tipo, lifecycle e Source numa só faixa. Cada opção mostra um Domain (<code>flow</code>) e um Component (<code>greeting-api</code>). O header de hoje ocupa ~180 px antes das abas; A fica em ~120 px e B em ~130 px.</p>
+  </div>
+
+  <!-- A -->
+  <section class="option">
+    <div class="label"><b>A — Duas linhas</b><span>breadcrumb, título com descrição ao lado, metadados em texto corrido</span></div>
+
+    <div class="frame a">
+      <div class="row1">
+        <nav class="crumbs"><a href="#">Catalog</a></nav>
+        <div class="actions"><span class="icon"><svg><use href="#i-star"/></svg></span><span class="icon"><svg><use href="#i-more"/></svg></span></div>
+      </div>
+      <div class="row2">
+        <h1>flow</h1><span class="kind">Domain</span>
+        <span class="desc">Flow product</span>
+      </div>
+      <div class="meta"><span><span class="k">Owner</span><a href="#">platform-team</a></span></div>
+      <div class="tabs"><span class="on">Overview</span><span>TechDocs</span></div>
+      <div class="content"></div>
+    </div>
+
+    <div class="frame a">
+      <div class="row1">
+        <nav class="crumbs"><a href="#">Catalog</a><span class="sep">›</span><a href="#">communication</a><span class="sep">›</span><a href="#">messaging</a><span class="sep">›</span><a href="#">greeter</a></nav>
+        <div class="actions"><span class="icon"><svg><use href="#i-star"/></svg></span><span class="icon"><svg><use href="#i-more"/></svg></span></div>
+      </div>
+      <div class="row2">
+        <h1>greeting-api</h1><span class="kind">Component · service</span>
+        <span class="desc">Greets callers, stores each greeting and publishes a greeting event</span>
+      </div>
+      <div class="meta">
+        <span><span class="k">Owner</span><a href="#">team-alpha</a></span>
+        <span><span class="k">Source</span><a href="#">greeting-api ↗</a></span>
+        <span class="warn">experimental</span>
+      </div>
+      <div class="tabs"><span class="on">Overview</span><span>APIs</span><span>Dependencies</span><span>Kubernetes</span><span>TechDocs</span></div>
+      <div class="content"></div>
+    </div>
+
+    <ul class="notes">
+      <li>Breadcrumb e ações na mesma linha: a linha do topo, hoje vazia, passa a ter função.</li>
+      <li>A descrição fica ao lado do título (quebra para baixo quando é longa) — o card Description some do Overview.</li>
+      <li>Metadados como texto corrido, sem chips nem avatar: o mínimo de tinta. System e Domain não se repetem: já estão no breadcrumb.</li>
+      <li>Mapeia direto para o <code>Header</code> do <code>@backstage/ui</code> (<code>breadcrumbs</code>, <code>description</code>, <code>metadata</code>) com pouco CSS extra.</li>
+    </ul>
+  </section>
+
+  <!-- B -->
+  <section class="option">
+    <div class="label"><b>B — Identidade à esquerda, fatos à direita</b><span>ícone do kind, descrição sob o título, coluna compacta de fatos</span></div>
+
+    <div class="frame b">
+      <nav class="crumbs"><a href="#">Catalog</a></nav>
+      <div class="grid">
+        <div class="ident">
+          <span class="glyph"><svg><use href="#i-domain"/></svg></span>
+          <h1>flow <small>Domain</small></h1>
+          <p class="desc">Flow product</p>
+        </div>
+        <div class="side">
+          <dl><div><dt>Owner</dt><dd><span class="av">P</span><a href="#">platform-team</a></dd></div></dl>
+          <div class="actions"><span class="icon"><svg><use href="#i-star"/></svg></span><span class="icon"><svg><use href="#i-more"/></svg></span></div>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Overview</span><span>TechDocs</span></div>
+      <div class="content"></div>
+    </div>
+
+    <div class="frame b">
+      <nav class="crumbs"><span class="k">Domain</span><a href="#">communication</a><span class="sep">›</span><a href="#">messaging</a><span class="sep">›</span><span class="k">System</span><a href="#">greeter</a></nav>
+      <div class="grid">
+        <div class="ident">
+          <span class="glyph"><svg><use href="#i-service"/></svg></span>
+          <h1>greeting-api <small>Component · service</small></h1>
+          <p class="desc">Greets callers, stores each greeting and publishes a greeting event</p>
+        </div>
+        <div class="side">
+          <dl>
+            <div><dt>Owner</dt><dd><span class="av">TA</span><a href="#">team-alpha</a></dd></div>
+            <div><dt>Lifecycle</dt><dd><span class="warn">experimental</span></dd></div>
+            <div><dt>Source</dt><dd><a href="#">greeting-api ↗</a></dd></div>
+          </dl>
+          <div class="actions"><span class="icon"><svg><use href="#i-star"/></svg></span><span class="icon"><svg><use href="#i-more"/></svg></span></div>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Overview</span><span>APIs</span><span>Dependencies</span><span>Kubernetes</span><span>TechDocs</span></div>
+      <div class="content"></div>
+    </div>
+
+    <ul class="notes">
+      <li>Breadcrumb rotulado (Domain / System) — deixa claro o que é cada nível sem precisar abrir.</li>
+      <li>Ícone do kind dá âncora visual; título e descrição formam um bloco só.</li>
+      <li>Fatos numa coluna à direita, com rótulo acima do valor: escaneáveis e alinhados entre páginas; no celular descem para baixo do título.</li>
+      <li>Mais distante do <code>Header</code> padrão do BUI: o layout precisa ser montado no header customizado (o que já existe desde #124).</li>
+    </ul>
+  </section>
+</main>
+
+<button class="toggle" onclick="const r=document.documentElement;r.dataset.theme=r.dataset.theme==='light'?'':'light'">Light / dark</button>
