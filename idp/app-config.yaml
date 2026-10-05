@@ -15,6 +15,17 @@ app:
         config:
           path: /
 
+    # Compact filter column (packages/app/src/modules/catalogPage) replaces
+    # the stock pickers, which stack one block per filter
+    - catalog-filter:catalog/kind: false
+    - catalog-filter:catalog/type: false
+    - catalog-filter:catalog/list: false
+    - catalog-filter:catalog/mode: false
+    - catalog-filter:catalog/lifecycle: false
+    - catalog-filter:catalog/tag: false
+    - catalog-filter:catalog/processing-status: false
+    - catalog-filter:catalog/namespace: false
+
     # The APIs tab (entity-content:api-docs/apis) already lists provided and
     # consumed APIs; drop the duplicate cards from the Overview tab
     - entity-card:api-docs/provided-apis: false

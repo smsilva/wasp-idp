@@ -1,0 +1,29 @@
+/* Catalog index page (#128). CatalogTable has no slot in its toolbar, so the
+ * Create button is laid over the toolbar's right end and the search bar moves
+ * left to make room for it. */
+
+.root {
+  padding-top: var(--bui-space-6);
+}
+
+.content {
+  position: relative;
+}
+
+.create {
+  position: absolute;
+  top: 22px;
+  right: var(--bui-space-5);
+}
+
+.content :global([class*='PluginCatalogTableToolbar-root']) {
+  padding-right: 128px;
+  min-height: 64px;
+}
+
+/* The toolbar title is an h5 (18px); one step down keeps it a label for the
+ * table rather than a second page title. */
+.content :global([class*='PluginCatalogTableToolbar-text']) {
+  font-size: 1rem;
+  font-weight: 700;
+}

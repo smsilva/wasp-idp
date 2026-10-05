@@ -5,6 +5,7 @@ import { blueThemeModule } from './themes/blueTheme';
 import { authModule } from './modules/auth/SignInPage';
 import { entityPresentationModule } from './modules/entityPresentation';
 import { entityHeaderModule } from './modules/entityHeader';
+import { catalogPageModule } from './modules/catalogPage';
 
 export default createApp({
   features: [
@@ -14,5 +15,6 @@ export default createApp({
     authModule,
     entityPresentationModule,
     entityHeaderModule,
+    catalogPageModule,
   ],
 });
