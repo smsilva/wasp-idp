@@ -20,12 +20,35 @@ app:
     - entity-card:api-docs/provided-apis: false
     - entity-card:api-docs/consumed-apis: false
 
-    # Component relation cards stay on the Overview, above the relations graph,
-    # like the has-components/has-resources cards of a System (#130: same layout
-    # across entity pages). Order here is the order rendered.
-    - entity-card:catalog/depends-on-components
-    - entity-card:catalog/depends-on-resources
-    - entity-card:catalog/has-subcomponents
+    # Relation cards on the Overview, above the relations graph, with the same
+    # layout on every entity page (#130). Each card only renders when the entity
+    # has at least one relation of its kind, so empty tables are hidden. Order
+    # here is the order rendered.
+    - entity-card:catalog/depends-on-components:
+        config:
+          filter:
+            kind: component
+            relations: { $contains: { type: dependsOn, targetRef: { $hasPrefix: 'component:' } } }
+    - entity-card:catalog/depends-on-resources:
+        config:
+          filter:
+            kind: component
+            relations: { $contains: { type: dependsOn, targetRef: { $hasPrefix: 'resource:' } } }
+    - entity-card:catalog/has-subcomponents:
+        config:
+          filter:
+            kind: component
+            relations: { $contains: { type: hasPart, targetRef: { $hasPrefix: 'component:' } } }
+    - entity-card:catalog/has-components:
+        config:
+          filter:
+            kind: system
+            relations: { $contains: { type: hasPart, targetRef: { $hasPrefix: 'component:' } } }
+    - entity-card:catalog/has-resources:
+        config:
+          filter:
+            kind: system
+            relations: { $contains: { type: hasPart, targetRef: { $hasPrefix: 'resource:' } } }
 
     # Entity header (#124, #130, packages/app/src/modules/entityHeader): the
     # custom header layout shows breadcrumb, description, Owner/Lifecycle and
