@@ -4,7 +4,7 @@
                      ┌─> greeting-db       (database)
 greeting-api ────────┼─> greeting-avatars  (bucket)
                      └─> greeting-events   (topic)
-                               │ greeting.created, SNS → SQS
+                               │ greeting.created, topic → queue
                                ▼
                          notification-jobs (queue) ──> notification-api ──┬─> notification-db      (database)
                                                                           └─> notification-reports (bucket)
