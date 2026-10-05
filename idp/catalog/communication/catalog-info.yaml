@@ -1,6 +1,7 @@
 # Example domain with subdomains around greeting-api and notification-api (#114).
-# The resources are descriptive only: nothing here provisions a database,
-# queue, topic or bucket. The Components live in their own repos
+# The resources are descriptive only and cloud-agnostic (described by role,
+# never by cloud service): nothing here provisions a database, queue, topic or
+# bucket. The Components live in their own repos
 # (wasp-foundry/greeting-api, wasp-foundry/notification-api) and point back here via
 # spec.system; the Resources attach to them with dependencyOf.
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-domain
@@ -58,8 +59,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: greeting-db
-  description: PostgreSQL database with the greetings table
-  tags: [postgresql]
+  description: Relational database with the greetings table
 spec:
   type: database
   owner: group:default/team-alpha
@@ -71,8 +71,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: greeting-events
-  description: SNS topic with one greeting.created event per greeting
-  tags: [sns]
+  description: Pub/sub topic with one greeting.created event per greeting
 spec:
   type: topic
   owner: group:default/team-alpha
@@ -84,10 +83,9 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: greeting-avatars
-  description: S3 bucket for avatar images attached to greetings
-  tags: [s3]
+  description: Object storage bucket for avatar images attached to greetings
 spec:
-  type: s3-bucket
+  type: object-storage
   owner: group:default/team-alpha
   system: greeter
   dependencyOf:
@@ -97,8 +95,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: notification-db
-  description: PostgreSQL database with delivered notifications
-  tags: [postgresql]
+  description: Relational database with delivered notifications
 spec:
   type: database
   owner: group:default/team-beta
@@ -110,8 +107,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: notification-jobs
-  description: SQS queue subscribed to greeting-events (SNS → SQS fan-out)
-  tags: [sqs]
+  description: Message queue subscribed to greeting-events (topic → queue fan-out)
 spec:
   type: queue
   owner: group:default/team-beta
@@ -125,10 +121,9 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: notification-reports
-  description: S3 bucket with the daily notification reports
-  tags: [s3]
+  description: Object storage bucket with the daily notification reports
 spec:
-  type: s3-bucket
+  type: object-storage
   owner: group:default/team-beta
   system: notifier
   dependencyOf:
