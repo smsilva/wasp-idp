@@ -1,0 +1,259 @@
+/* Compact catalog filter column (option A of
+ * docs/idp/design/catalog-filters/options.html). Colours and spacing come from
+ * the BUI tokens (--bui-*), so it follows the light/dark and Graphite/Midnight
+ * themes like the entity header does. */
+
+.root {
+  display: grid;
+  gap: var(--bui-space-5);
+  padding: var(--bui-space-3) var(--bui-space-3) var(--bui-space-4);
+  border: 1px solid var(--bui-border-1);
+  border-radius: var(--bui-radius-3);
+  background: var(--bui-bg-neutral-1);
+  font-size: var(--bui-font-size-3);
+  color: var(--bui-fg-primary);
+}
+
+.root[data-collapsed='true'] {
+  padding: var(--bui-space-2);
+  justify-items: center;
+}
+
+/* The stock CatalogFilterLayout keeps the filter column at lg=2 of a MUI grid
+ * and has no collapsed mode, so when the column is collapsed it shrinks to
+ * the toggle and the table column takes the rest of the row. */
+:global(.MuiGrid-container):has(
+    > :global(.MuiGrid-grid-lg-2) .root[data-collapsed='true']
+  )
+  > :global(.MuiGrid-grid-lg-2) {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+:global(.MuiGrid-container):has(
+    > :global(.MuiGrid-grid-lg-2) .root[data-collapsed='true']
+  )
+  > :global(.MuiGrid-grid-lg-10) {
+  flex: 1 1 0;
+  max-width: none;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: calc(-1 * var(--bui-space-2));
+}
+
+.title {
+  margin: 0 0 0 var(--bui-space-3);
+  font-size: var(--bui-font-size-4);
+  font-weight: 700;
+}
+
+.toggle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--bui-radius-2);
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--bui-fg-secondary) !important;
+}
+
+.toggle:hover {
+  background: var(--bui-bg-neutral-1-hover);
+  color: var(--bui-fg-primary) !important;
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--bui-accent-bg);
+  color: var(--bui-accent-fg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.root button {
+  font: inherit;
+  color: inherit;
+}
+
+.root button:focus-visible,
+.root select:focus-visible {
+  outline: 2px solid var(--bui-ring);
+  outline-offset: 2px;
+}
+
+.groupTitle {
+  margin: 0 0 var(--bui-space-1) var(--bui-space-3);
+  color: var(--bui-fg-secondary);
+}
+
+.kinds {
+  display: grid;
+  gap: 1px;
+}
+
+.kind {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 6px var(--bui-space-3);
+  border: 0;
+  border-radius: var(--bui-radius-2);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--bui-fg-secondary) !important;
+}
+
+.kind:hover {
+  background: var(--bui-bg-neutral-2-hover);
+  color: var(--bui-fg-primary) !important;
+}
+
+.kind[aria-pressed='true'] {
+  background: var(--bui-bg-neutral-3);
+  color: var(--bui-fg-primary) !important;
+  font-weight: 600;
+}
+
+.kind[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--bui-accent-bg);
+}
+
+.count {
+  margin-left: var(--bui-space-1);
+  color: var(--bui-fg-secondary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.kind[aria-pressed='true'] .count {
+  color: var(--bui-accent-bg);
+}
+
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--bui-radius-3);
+  background: var(--bui-bg-neutral-2);
+}
+
+.segmented button {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--bui-radius-2);
+  background: none;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--bui-fg-secondary) !important;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--bui-bg-neutral-3);
+  box-shadow: 0 0 0 1px var(--bui-border-1);
+  color: var(--bui-fg-primary) !important;
+  font-weight: 600;
+}
+
+.segmented button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.props {
+  display: grid;
+  border-top: 1px solid var(--bui-border-1);
+}
+
+.prop {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  min-height: 36px;
+  border-bottom: 1px solid var(--bui-border-1);
+}
+
+.prop label {
+  padding-left: var(--bui-space-3);
+  color: var(--bui-fg-secondary);
+}
+
+.prop select {
+  width: 100%;
+  padding: 7px 22px 7px 4px;
+  border: 0;
+  appearance: none;
+  background: none;
+  font: inherit;
+  color: var(--bui-fg-secondary);
+  text-overflow: ellipsis;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.prop select option {
+  background: var(--bui-bg-neutral-2);
+  color: var(--bui-fg-primary);
+}
+
+.prop[data-active='true'] select {
+  color: var(--bui-accent-bg);
+  font-weight: 600;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--bui-space-2);
+  margin-top: calc(-1 * var(--bui-space-3));
+}
+
+.more,
+.clear {
+  padding: 4px var(--bui-space-3);
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.more {
+  color: var(--bui-fg-secondary) !important;
+}
+
+.more:hover {
+  color: var(--bui-fg-primary) !important;
+}
+
+.clear {
+  color: var(--bui-accent-bg) !important;
+}
