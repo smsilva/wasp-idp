@@ -141,7 +141,17 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 
 - The local DB is SQLite `:memory:`, but repos of the `wasp-foundry` org come back on their own: the GitHub entity provider (`catalog.providers.github.waspFoundry`) rescans `/catalog-info.yaml` on `main` every 5 min (first run 15 s after start). Only entities registered by hand from elsewhere vanish on restart.
 - New `catalog.locations` in `app-config.yaml` are not hot-reloaded — restart `yarn start`.
+- Stop `yarn start` before switching branches: the dev server hot-reloads the other branch's files and does not recover cleanly on switching back (stale cards/modules until restart).
 - The Kubernetes tab groups by cluster entry, never by namespace, and the backend lists by `backstage.io/kubernetes-id` across all namespaces. To show namespaces as environments, `app-config.single-cluster.yaml` declares the same API server twice with a `namespace` key, which `packages/backend/src/namespaceScopedFetcherModule.ts` turns into a namespaced fetch — without it a ServiceAccount bound to one namespace gets 403 on the cluster-wide list.
+
+## Entity page — conventions
+
+- Keep every entity page on the same layout: stock catalog cards (`has-*`, `depends-on-*`) on the Overview, no kind-specific tabs or custom list cards. Custom Domain cards and a Dependencies tab were built and dropped for breaking homogeneity between kinds.
+- Hide empty stock relation cards with a `config.filter` in `app-config.yaml`, not code: `relations: { $contains: { type: hasPart, targetRef: { $hasPrefix: 'system:' } } }` (filter predicates support `$contains`, `$hasPrefix`, `$in`, `$exists`, `$not`).
+- Change stock page params (e.g. `noHeader`) with `catalogPlugin.getExtension('page:catalog/entity').override({ params: {...} })` in a frontend module; `app.extensions` config only exposes `path`/`title`.
+- The BUI `Header` has no icon slot and its `className` lands on the title row, not a wrapper; `HeaderNav` is not exported. The custom header renders identity above it and hides that row to keep only the tabs.
+- `renderTestApp` takes extension definitions (the blueprint `make` results), not `module.extensions`; test cards with `createTestEntityPage` + `catalogApiMock` from `@backstage/plugin-catalog-react/testUtils` (the in-memory client honours `relations.<type>` filters).
+- Stack PRs carefully: merging a PR whose base is another feature branch right after that base merges lands it on the feature branch, not `main` (#132). Merge the base first and wait for GitHub to retarget, or open the follow-up against `main`.
 
 ## Catalog examples and TechDocs
 
