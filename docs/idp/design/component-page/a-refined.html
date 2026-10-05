@@ -23,6 +23,7 @@
   --ok-soft: #e3f4ea;
   --warn: #a8630a;
   --warn-soft: #fbf0dc;
+  --err: #c62f2f;
   --shadow: 0 1px 2px rgba(20, 32, 51, .06), 0 1px 1px rgba(20, 32, 51, .03);
   --code-bg: #0f1b2d;
   --code-fg: #d6e2f5;
@@ -36,7 +37,7 @@
     --fg: #e4ebf5; --fg-2: #a7b4c8; --fg-3: #74839a;
     --accent: #6aa8f0; --accent-soft: #16304f;
     --nav: #070f19; --nav-fg: #8fc4ea;
-    --ok: #4cc585; --ok-soft: #12321f; --warn: #e3a64a; --warn-soft: #3a2a10;
+    --ok: #4cc585; --ok-soft: #12321f; --warn: #e3a64a; --warn-soft: #3a2a10; --err: #f07070;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4);
     --code-bg: #091220; --code-fg: #d6e2f5;
     color-scheme: dark;
@@ -47,7 +48,7 @@
   --fg: #e4ebf5; --fg-2: #a7b4c8; --fg-3: #74839a;
   --accent: #6aa8f0; --accent-soft: #16304f;
   --nav: #070f19; --nav-fg: #8fc4ea;
-  --ok: #4cc585; --ok-soft: #12321f; --warn: #e3a64a; --warn-soft: #3a2a10;
+  --ok: #4cc585; --ok-soft: #12321f; --warn: #e3a64a; --warn-soft: #3a2a10; --err: #f07070;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
   --code-bg: #091220; --code-fg: #d6e2f5;
   color-scheme: dark;
@@ -193,6 +194,30 @@ tr:first-child td { border-top: 0; }
 .docs code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--fg); }
 .docs .tbl-wrap { border: 1px solid var(--line); border-radius: 8px; }
 
+/* environments (ArgoCD) */
+.count.warn-count { background: var(--warn-soft); color: var(--warn); }
+.illus { margin: 0; font-size: 13px; color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 9px 14px; }
+.sumrow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.stat { display: grid; gap: 2px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.stat .v { font-size: 22px; font-weight: 600; line-height: 1.2; }
+.stat .l { font-size: 12.5px; color: var(--fg-2); display: inline-flex; align-items: center; gap: 6px; }
+.stat.bad .v { color: var(--warn); }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none; }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.err { background: var(--err); } .dot.info { background: var(--accent); }
+.bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--surface-2); margin-top: 14px; }
+.bar span { background: var(--ok); } .bar span.w { background: var(--warn); }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 20px 4px; }
+.fchip { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--fg-2); font: 500 12.5px var(--font-sans); height: 28px; padding: 0 10px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.fchip .num { color: var(--fg-3); }
+.fchip.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+table.apps td { white-space: nowrap; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; }
+.st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.st.ok { color: var(--ok); } .st.warn { color: var(--warn); } .st.err { color: var(--err); } .st.info { color: var(--accent); }
+.tfoot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid var(--line); }
+@media (max-width: 960px) { .sumrow { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .sumrow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .filters, .tfoot { padding-inline: 16px; } }
+
 /* design notes */
 .notes { margin-top: 28px; border: 1px dashed var(--line); border-radius: var(--r); padding: 14px 18px; background: transparent; }
 .notes summary { cursor: pointer; font-weight: 600; color: var(--fg-2); }
@@ -268,15 +293,14 @@ tr:first-child td { border-top: 0; }
         <h1>greeting-api</h1>
         <p class="lede">Greets callers, stores each greeting and publishes a greeting event</p>
         <div class="meta">
-          <span class="chip warn">experimental</span>
           <a class="chip" href="#"><span class="av">TA</span>team-alpha</a>
           <a class="chip" href="#"><span class="k">System</span>greeter</a>
           <a class="chip" href="#"><span class="k">Domain</span>messaging</a>
+          <span class="chip warn">experimental</span>
         </div>
       </div>
       <div class="actions">
         <a class="btn" href="https://github.com/wasp-foundry/greeting-api"><svg><use href="#i-code"/></svg>Source</a>
-        <a class="btn" href="#docs" data-go="docs"><svg><use href="#i-doc"/></svg>Docs</a>
         <button class="btn icon" aria-label="Star"><svg><use href="#i-star"/></svg></button>
         <button class="btn icon" aria-label="More actions"><svg><use href="#i-more"/></svg></button>
       </div>
@@ -284,6 +308,7 @@ tr:first-child td { border-top: 0; }
 
     <div class="tabs" role="tablist">
       <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      <button role="tab" data-tab="envs">Environments <span class="count warn-count">5 out of sync</span></button>
       <button role="tab" data-tab="apis">APIs <span class="count zero">0</span></button>
       <button role="tab" data-tab="deps">Dependencies <span class="count">5</span></button>
       <button role="tab" data-tab="k8s">Kubernetes <span class="count">2</span></button>
@@ -294,29 +319,6 @@ tr:first-child td { border-top: 0; }
     <div class="panel on" id="p-overview" role="tabpanel">
       <div class="grid">
         <div class="stack">
-          <section>
-            <h2 class="sec">Environments <small>2 of 2 healthy</small></h2>
-            <div class="envs">
-              <div class="card env">
-                <div class="top"><span class="name">development</span><span class="pill">Running</span></div>
-                <dl class="kv">
-                  <dt>Pods</dt><dd class="num">1 / 1 ready · 0 restarts</dd>
-                  <dt>Image</dt><dd class="mono">greeting-api:07f0d3f</dd>
-                  <dt>Cluster</dt><dd>k3d development · ns <span class="mono">development</span></dd>
-                </dl>
-              </div>
-              <div class="card env">
-                <div class="top"><span class="name">production</span><span class="pill">Running</span></div>
-                <dl class="kv">
-                  <dt>Pods</dt><dd class="num">1 / 1 ready · 0 restarts</dd>
-                  <dt>Image</dt><dd class="mono">greeting-api:07f0d3f</dd>
-                  <dt>Cluster</dt><dd>k3d production · ns <span class="mono">production</span></dd>
-                </dl>
-              </div>
-            </div>
-            <div class="sync"><svg><use href="#i-check"/></svg><span>Production runs the same build as development. Nothing waiting to be promoted.</span></div>
-          </section>
-
           <div class="card">
             <header><h2>Depends on</h2><a class="sub" href="#deps" data-go="deps">All dependencies →</a></header>
             <div class="group-label">Data</div>
@@ -374,18 +376,68 @@ tr:first-child td { border-top: 0; }
             <header><h2>Links</h2></header>
             <div class="body links">
               <a href="https://github.com/wasp-foundry/greeting-api"><svg><use href="#i-code"/></svg>wasp-foundry/greeting-api<span class="ext">GitHub ↗</span></a>
-              <a href="#docs" data-go="docs"><svg><use href="#i-doc"/></svg>Overview and runbook<span class="ext">TechDocs</span></a>
               <a href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml"><svg><use href="#i-edit"/></svg>Edit catalog-info.yaml<span class="ext">↗</span></a>
             </div>
           </div>
           <div class="card">
-            <header><h2>Latest commit</h2><span class="sub mono">07f0d3f</span></header>
+            <header><h2>Latest commit</h2><a class="sub mono" href="https://github.com/wasp-foundry/greeting-api/commit/07f0d3f88fec15a36e49293635d10d5d1073cbf9">07f0d3f ↗</a></header>
             <div class="body commit">
-              <span class="msg">feat: renomeia para greeting-api (#4)</span>
-              <span class="muted">main · Oct 3, 2026 · deployed to both environments</span>
+              <a class="msg" href="https://github.com/wasp-foundry/greeting-api/commit/07f0d3f88fec15a36e49293635d10d5d1073cbf9">feat: renomeia para greeting-api (#4)</a>
+              <span class="muted">main · Oct 3, 2026 12:43</span>
+              <span class="muted">Image tag found in 2 of 2 clusters</span>
             </div>
           </div>
         </aside>
+      </div>
+    </div>
+
+    <!-- ENVIRONMENTS -->
+    <div class="panel" id="p-envs" role="tabpanel">
+      <div class="stack">
+        <p class="illus">Dados ilustrativos: simulam 312 ArgoCD Applications para validar o layout em escala. Hoje o greeting-api tem 2 (development e production), já em sincronia.</p>
+        <div class="card">
+          <header><h2>ArgoCD Applications</h2><a class="sub" href="#">Open in ArgoCD ↗</a></header>
+          <div class="body">
+            <div class="sumrow">
+              <div class="stat"><span class="v num">312</span><span class="l">Applications</span></div>
+              <div class="stat"><span class="v num">307</span><span class="l"><i class="dot ok"></i>Synced</span></div>
+              <div class="stat bad"><span class="v num">5</span><span class="l"><i class="dot warn"></i>Out of sync</span></div>
+              <div class="stat"><span class="v num">309</span><span class="l"><i class="dot ok"></i>Healthy</span></div>
+              <div class="stat bad"><span class="v num">2</span><span class="l"><i class="dot err"></i>Degraded</span></div>
+              <div class="stat"><span class="v num">1</span><span class="l"><i class="dot info"></i>Progressing</span></div>
+            </div>
+            <div class="bar" role="img" aria-label="307 synced, 5 out of sync"><span style="width:98.4%"></span><span class="w" style="width:1.6%"></span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <header><h2>Needs attention first</h2><span class="sub">Showing 10 of 312 · out of sync and degraded on top</span></header>
+          <div class="filters">
+            <button class="fchip on">All <span class="num">312</span></button>
+            <button class="fchip">Out of sync <span class="num">5</span></button>
+            <button class="fchip">Degraded <span class="num">2</span></button>
+            <button class="fchip">production <span class="num">156</span></button>
+            <button class="fchip">development <span class="num">156</span></button>
+          </div>
+          <div class="tbl-wrap">
+            <table class="apps">
+              <thead><tr><th>Application</th><th>Sync</th><th>Health</th><th>Revision</th><th>Cluster</th><th>Last sync</th></tr></thead>
+              <tbody>
+                <tr><td><a href="#">greeting-api-cell-042-production</a></td><td><span class="st warn">OutOfSync</span></td><td><span class="st err">Degraded</span></td><td class="mono">fe822e2</td><td>cell-042</td><td class="num muted">3 h ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-117-production</a></td><td><span class="st warn">OutOfSync</span></td><td><span class="st err">Degraded</span></td><td class="mono">fe822e2</td><td>cell-117</td><td class="num muted">3 h ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-008-production</a></td><td><span class="st warn">OutOfSync</span></td><td><span class="st info">Progressing</span></td><td class="mono">19a3aac</td><td>cell-008</td><td class="num muted">12 min ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-203-development</a></td><td><span class="st warn">OutOfSync</span></td><td><span class="st ok">Healthy</span></td><td class="mono">19a3aac</td><td>cell-203</td><td class="num muted">1 d ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-219-development</a></td><td><span class="st warn">OutOfSync</span></td><td><span class="st ok">Healthy</span></td><td class="mono">19a3aac</td><td>cell-219</td><td class="num muted">1 d ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-001-production</a></td><td><span class="st ok">Synced</span></td><td><span class="st ok">Healthy</span></td><td class="mono">07f0d3f</td><td>cell-001</td><td class="num muted">2 d ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-002-production</a></td><td><span class="st ok">Synced</span></td><td><span class="st ok">Healthy</span></td><td class="mono">07f0d3f</td><td>cell-002</td><td class="num muted">2 d ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-003-production</a></td><td><span class="st ok">Synced</span></td><td><span class="st ok">Healthy</span></td><td class="mono">07f0d3f</td><td>cell-003</td><td class="num muted">2 d ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-004-production</a></td><td><span class="st ok">Synced</span></td><td><span class="st ok">Healthy</span></td><td class="mono">07f0d3f</td><td>cell-004</td><td class="num muted">2 d ago</td></tr>
+                <tr><td><a href="#">greeting-api-cell-005-production</a></td><td><span class="st ok">Synced</span></td><td><span class="st ok">Healthy</span></td><td class="mono">07f0d3f</td><td>cell-005</td><td class="num muted">2 d ago</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="tfoot"><span class="muted">302 more Applications</span><a class="btn" href="#">View all 312 in ArgoCD ↗</a></div>
+        </div>
       </div>
     </div>
 
@@ -514,12 +566,15 @@ tr:first-child td { border-top: 0; }
         <li>A descrição sobe para o header e sai do card: hoje ela aparece duas vezes (About e Description).</li>
         <li>Breadcrumb com a cadeia Domain → subdomain → System no lugar de "Catalog" sozinho.</li>
         <li>Abas com contagem: dá para ver que APIs está vazia sem abrir.</li>
-        <li>O Overview abre com o estado dos ambientes (o que mais se consulta), não com o grafo.</li>
+        <li>v2: ambientes viram a aba Environments (resumo + 10 primeiras ArgoCD Applications, problemas no topo, link para o ArgoCD), pensada para centenas de Applications.</li>
+        <li>v2: a aba de docs fica só como aba; saem o botão Docs do header e o link TechDocs do card Links.</li>
+        <li>v2: lifecycle vai para o fim da linha de chips.</li>
+        <li>v2: Latest commit linka o commit real e cruza o SHA com a tag da imagem nos clusters.</li>
         <li>Dependências agrupadas por papel (Data / Runs on): clusters não se misturam com banco e fila.</li>
         <li>Grafo de relações compacto (170px) com link para o grafo completo.</li>
         <li>Seções vazias somem (Depends on components, Has subcomponents); estado vazio de APIs ensina o próximo passo.</li>
         <li>Kubernetes mostra pod, imagem e restarts sem expandir; card de promoção explica o próximo passo do gitops.</li>
-        <li>Dados novos: linguagem e último commit vêm do GitHub (exige plugin/annotation).</li>
+        <li>Dados novos: último commit via GitHub API a partir de <code>github.com/project-slug</code>; Applications via plugin do ArgoCD.</li>
       </ul>
     </details>
   </main>
@@ -537,7 +592,7 @@ tr:first-child td { border-top: 0; }
   tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
   document.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.go); window.scrollTo({ top: 0 }); }));
   const initial = location.hash.slice(1);
-  if (['overview', 'apis', 'deps', 'k8s', 'docs'].includes(initial)) show(initial);
+  if (['overview', 'envs', 'apis', 'deps', 'k8s', 'docs'].includes(initial)) show(initial);
   document.getElementById('themeToggle').addEventListener('click', () => {
     const root = document.documentElement;
     const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
