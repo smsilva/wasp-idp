@@ -4,7 +4,6 @@ import { navModule } from './modules/nav';
 import { blueThemeModule } from './themes/blueTheme';
 import { authModule } from './modules/auth/SignInPage';
 import { entityPresentationModule } from './modules/entityPresentation';
-import { entityDependenciesModule } from './modules/entityDependencies';
 import { entityHeaderModule } from './modules/entityHeader';
 
 export default createApp({
@@ -14,7 +13,6 @@ export default createApp({
     blueThemeModule,
     authModule,
     entityPresentationModule,
-    entityDependenciesModule,
     entityHeaderModule,
   ],
 });
