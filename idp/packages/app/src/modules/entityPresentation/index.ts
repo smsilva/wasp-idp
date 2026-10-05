@@ -72,7 +72,7 @@ const typeIcons: Record<string, IconComponent> = {
   'resource:queue': fromReactIcons(PiQueue),
   'resource:topic': fromReactIcons(PiList),
   'resource:database': fromReactIcons(TbDatabase),
-  'resource:s3-bucket': fromReactIcons(TbBucket),
+  'resource:object-storage': fromReactIcons(TbBucket),
   'resource:llm-provider': fromReactIcons(MdPsychology),
   'resource:speech-to-text': fromReactIcons(TbMicrophone),
   'resource:kubernetes-cluster': fromReactIcons(SiKubernetes),
