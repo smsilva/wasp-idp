@@ -159,7 +159,7 @@ section > h2.sec small { font-weight: 400; color: var(--fg-3); font-size: 13px; 
 .commit .msg { font-weight: 500; }
 
 /* mini graph */
-.graph { width: 100%; height: auto; display: block; }
+.graph { width: 100%; max-width: 720px; height: auto; display: block; margin-inline: auto; }
 .graph text { font-family: var(--font-sans); font-size: 12px; fill: var(--fg); }
 .graph .lbl { fill: var(--fg-3); font-size: 11px; }
 .graph .node { fill: var(--surface-2); stroke: var(--line); }
@@ -193,6 +193,10 @@ tr:first-child td { border-top: 0; }
 .docs article p, .docs article li { color: var(--fg-2); }
 .docs code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--fg); }
 .docs .tbl-wrap { border: 1px solid var(--line); border-radius: 8px; }
+
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.facts .row .k.mono { font-size: 12px; }
+@media (max-width: 960px) { .pair { grid-template-columns: minmax(0, 1fr); } }
 
 /* environments (ArgoCD) */
 .count.warn-count { background: var(--warn-soft); color: var(--warn); }
@@ -313,12 +317,29 @@ table.apps td { white-space: nowrap; }
       <button role="tab" data-tab="deps">Dependencies <span class="count">5</span></button>
       <button role="tab" data-tab="k8s">Kubernetes <span class="count">2</span></button>
       <button role="tab" data-tab="docs">Docs</button>
+      <button role="tab" data-tab="about">About</button>
     </div>
 
     <!-- OVERVIEW -->
     <div class="panel on" id="p-overview" role="tabpanel">
-      <div class="grid">
-        <div class="stack">
+      <div class="stack">
+        <div class="pair">
+          <div class="card">
+            <header><h2>Links</h2></header>
+            <div class="body links">
+              <a href="https://github.com/wasp-foundry/greeting-api"><svg><use href="#i-code"/></svg>wasp-foundry/greeting-api<span class="ext">GitHub ↗</span></a>
+              <a href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml"><svg><use href="#i-edit"/></svg>Edit catalog-info.yaml<span class="ext">↗</span></a>
+            </div>
+          </div>
+          <div class="card">
+            <header><h2>Latest commit</h2><a class="sub mono" href="https://github.com/wasp-foundry/greeting-api/commit/07f0d3f88fec15a36e49293635d10d5d1073cbf9">07f0d3f ↗</a></header>
+            <div class="body commit">
+              <a class="msg" href="https://github.com/wasp-foundry/greeting-api/commit/07f0d3f88fec15a36e49293635d10d5d1073cbf9">feat: renomeia para greeting-api (#4)</a>
+              <span class="muted">main · Oct 3, 2026 12:43</span>
+              <span class="muted">Image tag found in 2 of 2 clusters</span>
+            </div>
+          </div>
+        </div>
           <div class="card">
             <header><h2>Depends on</h2><a class="sub" href="#deps" data-go="deps">All dependencies →</a></header>
             <div class="group-label">Data</div>
@@ -357,37 +378,6 @@ table.apps td { white-space: nowrap; }
               </svg>
             </div>
           </div>
-        </div>
-
-        <aside class="stack">
-          <div class="card">
-            <header><h2>About</h2></header>
-            <div class="body facts">
-              <div class="row"><span class="k">Owner</span><a href="#">team-alpha</a></div>
-              <div class="row"><span class="k">System</span><a href="#">greeter</a></div>
-              <div class="row"><span class="k">Domain</span><span><a href="#">messaging</a> <span class="muted">in</span> <a href="#">communication</a></span></div>
-              <div class="row"><span class="k">Type</span><span>service</span></div>
-              <div class="row"><span class="k">Lifecycle</span><span>experimental</span></div>
-              <div class="row"><span class="k">Language</span><span>Python <span class="muted">· FastAPI</span></span></div>
-              <div class="row"><span class="k">Tags</span><span class="muted">None yet · <a href="#">add in catalog-info.yaml</a></span></div>
-            </div>
-          </div>
-          <div class="card">
-            <header><h2>Links</h2></header>
-            <div class="body links">
-              <a href="https://github.com/wasp-foundry/greeting-api"><svg><use href="#i-code"/></svg>wasp-foundry/greeting-api<span class="ext">GitHub ↗</span></a>
-              <a href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml"><svg><use href="#i-edit"/></svg>Edit catalog-info.yaml<span class="ext">↗</span></a>
-            </div>
-          </div>
-          <div class="card">
-            <header><h2>Latest commit</h2><a class="sub mono" href="https://github.com/wasp-foundry/greeting-api/commit/07f0d3f88fec15a36e49293635d10d5d1073cbf9">07f0d3f ↗</a></header>
-            <div class="body commit">
-              <a class="msg" href="https://github.com/wasp-foundry/greeting-api/commit/07f0d3f88fec15a36e49293635d10d5d1073cbf9">feat: renomeia para greeting-api (#4)</a>
-              <span class="muted">main · Oct 3, 2026 12:43</span>
-              <span class="muted">Image tag found in 2 of 2 clusters</span>
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
 
@@ -537,6 +527,36 @@ table.apps td { white-space: nowrap; }
       </div>
     </div>
 
+    <!-- ABOUT -->
+    <div class="panel" id="p-about" role="tabpanel">
+      <div class="pair">
+        <div class="card">
+          <header><h2>Metadata</h2><span class="sub">from catalog-info.yaml</span></header>
+          <div class="body facts">
+            <div class="row"><span class="k">Ref</span><span class="mono">component:default/greeting-api</span></div>
+            <div class="row"><span class="k">Kind</span><span>Component</span></div>
+            <div class="row"><span class="k">Type</span><span>service</span></div>
+            <div class="row"><span class="k">Lifecycle</span><span>experimental</span></div>
+            <div class="row"><span class="k">Owner</span><a href="#">team-alpha</a></div>
+            <div class="row"><span class="k">System</span><a href="#">greeter</a></div>
+            <div class="row"><span class="k">Domain</span><span><a href="#">communication</a> <span class="muted">›</span> <a href="#">messaging</a></span></div>
+            <div class="row"><span class="k">Language</span><span>Python <span class="muted">· from GitHub</span></span></div>
+            <div class="row"><span class="k">Tags</span><span class="muted">None yet · <a href="https://github.com/wasp-foundry/greeting-api/edit/main/catalog-info.yaml">add in catalog-info.yaml</a></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <header><h2>Annotations</h2><span class="sub">5 of 8 · full list in Inspect entity</span></header>
+          <div class="body facts">
+            <div class="row"><span class="k mono">project-slug</span><span class="mono">wasp-foundry/greeting-api</span></div>
+            <div class="row"><span class="k mono">techdocs-ref</span><span class="mono">dir:.</span></div>
+            <div class="row"><span class="k mono">kubernetes-id</span><span class="mono">greeting-api</span></div>
+            <div class="row"><span class="k mono">source</span><span class="mono">github.com/wasp-foundry/greeting-api/tree/main/</span></div>
+            <div class="row"><span class="k mono">managed-by</span><span class="mono">github.com/wasp-foundry/greeting-api/tree/main/catalog-info.yaml</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- DOCS -->
     <div class="panel" id="p-docs" role="tabpanel">
       <div class="card docs">
@@ -569,6 +589,8 @@ table.apps td { white-space: nowrap; }
         <li>v2: ambientes viram a aba Environments (resumo + 10 primeiras ArgoCD Applications, problemas no topo, link para o ArgoCD), pensada para centenas de Applications.</li>
         <li>v2: a aba de docs fica só como aba; saem o botão Docs do header e o link TechDocs do card Links.</li>
         <li>v2: lifecycle vai para o fim da linha de chips.</li>
+        <li>v3: card About vira aba (Metadata + Annotations); no Overview ele só repetia os chips do header.</li>
+        <li>v3: Overview em coluna única: Links e Latest commit no topo, depois Depends on e Relations. A ordem dos cards é fixada no app-config (o Backstage não permite ao usuário arrastar cards na página de entidade).</li>
         <li>v2: Latest commit linka o commit real e cruza o SHA com a tag da imagem nos clusters.</li>
         <li>Dependências agrupadas por papel (Data / Runs on): clusters não se misturam com banco e fila.</li>
         <li>Grafo de relações compacto (170px) com link para o grafo completo.</li>
@@ -592,7 +614,7 @@ table.apps td { white-space: nowrap; }
   tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.tab)));
   document.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.go); window.scrollTo({ top: 0 }); }));
   const initial = location.hash.slice(1);
-  if (['overview', 'envs', 'apis', 'deps', 'k8s', 'docs'].includes(initial)) show(initial);
+  if (['overview', 'envs', 'apis', 'deps', 'k8s', 'docs', 'about'].includes(initial)) show(initial);
   document.getElementById('themeToggle').addEventListener('click', () => {
     const root = document.documentElement;
     const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
