@@ -10,7 +10,7 @@ Usage: ${0##*/} [--recreate] [--config <file>]...
   --recreate   delete the k3d cluster first (scripts/single-cluster/down)
   --config     extra Backstage config appended after app-config.yaml and
                app-config.single-cluster.yaml (repeatable; e.g.
-               app-config.flow.local.yaml)
+               idp/app-config.<name>.local.yaml)
 USAGE
 }
 
