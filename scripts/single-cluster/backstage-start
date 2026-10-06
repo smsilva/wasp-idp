@@ -1,0 +1,64 @@
+#!/bin/bash
+# Bring up the single k3d cluster (scripts/single-cluster/up), export the
+# read-only kubernetes credentials and start Backstage against it.
+set -e
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} [--recreate] [--config <file>]...
+
+  --recreate   delete the k3d cluster first (scripts/single-cluster/down)
+  --config     extra Backstage config appended after app-config.yaml and
+               app-config.single-cluster.yaml (repeatable; e.g.
+               app-config.flow.local.yaml)
+USAGE
+}
+
+this_script_path="$(realpath "${0}")"
+this_script_directory="${this_script_path%/*}"
+idp_directory="$(realpath "${this_script_directory}/../../idp")"
+
+PATH="${this_script_directory}:${PATH}"
+
+recreate="false"
+extra_configs=()
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --recreate) recreate="true"; shift ;;
+    --config) extra_configs+=("$(realpath "${2?}")"); shift 2 ;;
+    --help) show_usage; exit 0 ;;
+    *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+  esac
+done
+
+if [[ "${recreate}" == "true" ]]; then
+  down
+fi
+
+up
+
+eval "$(backstage-reader)"
+
+# repo start resolves relative --config paths against packages/backend
+config_options=(
+  --config "${idp_directory}/app-config.yaml"
+  --config "${idp_directory}/app-config.single-cluster.yaml"
+)
+
+for config in "${extra_configs[@]}"; do
+  config_options+=(--config "${config}")
+done
+
+cd "${idp_directory}"
+
+if command -v yarn > /dev/null; then
+  yarn_command=(yarn)
+else
+  yarn_command=(node .yarn/releases/yarn-4.4.1.cjs)
+fi
+
+echo ""
+echo "Starting Backstage (frontend :3000, backend :7007)..."
+
+exec "${yarn_command[@]}" start "${config_options[@]}"
