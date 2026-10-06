@@ -1,7 +1,6 @@
 # CLAUDE.md — aws/ (poc-cloud-idp)
 
-Contexto AWS do PoC EKS via Crossplane (ver plano em
-`docs/superpowers/plans/2026-08-10-aws-eks-crossplane-walk-skeleton.md`).
+Contexto AWS do PoC EKS via Crossplane.
 
 > **Arquitetura de referência hub-and-spoke** (objetivo evoluído da PoC): documentação
 > evolutiva em `aws/docs/` — `aws/docs/CLAUDE.md` é o índice mestre, cada domínio é uma
@@ -14,6 +13,14 @@ Contexto AWS do PoC EKS via Crossplane (ver plano em
 > válido (API groups como `platform.example.com`, nomes `poc-eks`) usam valores genéricos
 > concretos — **nunca** `<...>` em campo executável. Valores reais desta conta ficam em
 > `CLAUDE.local.md` na raiz do repo (gitignored).
+
+## Regras de operação na AWS
+
+- **Só ADICIONAR recursos isolados; nunca alterar config compartilhada** — policy/role de outro
+  time, records de terceiros numa zona pai, o ClusterIssuer compartilhado. As contas podem
+  hospedar infra de outros sistemas (ver "Conta AWS" abaixo); só é nosso o que tem prefixo
+  `poc-idp/`, `poc-eks-` ou `crossplane-poc`.
+- **Nunca destruir um cluster EKS sem autorização explícita** — recriar leva ~28-30 min.
 
 ## Vocabulário: três eixos que já se chamaram "hub" (leia antes de qualquer coisa)
 
@@ -33,16 +40,15 @@ A palavra "hub" cobria três coisas independentes neste repo. Dois eixos foram r
 > (`poc-idp/crossplane-poc-credentials`) é o nome real de um secret na AWS, não um apelido —
 > renomeá-lo quebraria o `load-crossplane-creds`. Fica.
 
-### `cluster-zero` é da trilha Azure — NÃO é o Control Plane da AWS
+### `cluster-zero` NÃO é o Control Plane da AWS
 
 Quarto termo que já causou confusão, e a fonte é legítima: `cluster-zero` existe no repo e
-descreve um **AKS**, não um EKS.
+não é o Control Plane da AWS.
 
 | | `cluster-zero` | **Control Plane** (este contexto) |
 |---|---|---|
-| Cloud | Azure (AKS, `azurerm ~> 4.x`) | AWS |
-| Onde vive | `scripts/cluster-zero/` (exercício k3d local) e o plano `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md` | `aws/eks/scripts/`, cluster k3d `control-plane` |
-| Estado | **Trilha pausada** — "não é o foco" (`HANDOFF.md`). O diretório `infra/terraform/cluster-zero/` do plano **nunca foi criado** em nenhum branch | Ativo |
+| O que é | k3d local do IDP: `idp-cluster-zero` + clusters `development`/`production`, ArgoCD com o ApplicationSet `foundry-apps` ([ADR 0019](../docs/adr/0019-environment-clusters-managed-by-central-argocd.md)) | Crossplane que provisiona na AWS |
+| Onde vive | `scripts/cluster-zero/` (operação em `docs/idp/CLAUDE.md`); o plano AKS `docs/superpowers/plans/2026-08-07-cluster-zero-terraform.md` é desenho de outra trilha, nunca construído | `aws/eks/scripts/`, cluster k3d `control-plane` |
 
 O plano de `cluster-zero` referencia `infra/terraform/cluster-zero/README.md`, que não existe —
 é **link para artefato nunca construído**, não doc desatualizada. Não "consertar" apagando: o
@@ -150,25 +156,17 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
   Crossplane) e (2) mesmo depois de corrigir o TLS, `read: connection reset by peer`
   durante o pull das camadas da imagem (rede da VPN reseta transferências maiores).
 - **Fix real: desconectar a VPN e recriar o cluster do zero** (`k3d cluster delete` +
-  `install-crossplane` + `install-providers`) — sem VPN, os 5 providers instalam e
+  `install-crossplane` + `install-providers`) — sem VPN, os providers instalam e
   ficam `Healthy` sem nenhum patch manual de CA cert ou DNS. Não tente contornar via
   patch de CA/resolv.conf enquanto a VPN estiver ativa; é retrabalho descartável.
 
-## Gotcha (RESOLVIDA): k3d com 3 servers quebra o quorum do etcd neste host
+## k3d do control plane: 1 server neste host
 
-- `install-crossplane` nascia com `--servers 3` (default herdado do track Azure em
-  `scripts/cluster-zero/`, que só documentava lentidão — ver `CLAUDE.md`, "Crossplane
-  provider wait timeout"). Neste host (8 cores) o resultado foi mais grave que lento: o
-  server-0 (initializing server) entrava em **crash-loop** (`failed to wait for apiserver
-  ready: context deadline exceeded`, exit code 1 a cada 1-2,5 min) enquanto server-1/
-  server-2 ficavam travados em `connection refused 127.0.0.1:6443` — perda de quorum do
-  etcd embutido do k3s, não simples atraso de patch pressure. `kubectl get providers`
-  retornava `apiserver not ready`/`etcdserver: request timed out` de forma persistente,
-  mesmo após >15 min.
-- **Fix: `k3d cluster delete` + recriar com 1 server** (`install-crossplane` já tem esse
-  default agora). Sem etcd distribuído para eleger líder, os 8 providers instalaram e
-  ficaram `Healthy` em ~4 min, sem nenhum restart. Para este PoC de single control-plane
-  sem HA real, 1 server é suficiente — 3 servers só faz sentido com CPU/IO sobrando.
+- `install-crossplane` sobe com 1 server (default). Com `--servers 3`, neste host (8 cores) o etcd
+  embutido do k3s perde quorum: server-0 em crash-loop (`failed to wait for apiserver ready`), os
+  outros em `connection refused 127.0.0.1:6443`, e `kubectl` devolvendo `etcdserver: request timed
+  out` indefinidamente. Fix: `k3d cluster delete` + recriar com 1 server. 3 servers só com CPU/IO
+  sobrando.
 
 ## Gotcha (RESOLVIDA): race de Pod Identity do EBS CSI — fases 65 + 68
 
@@ -425,8 +423,7 @@ Só depois destes 4 é que faz sentido aplicar XRD/Composition/claim (ex.: `reso
 - **XR `Environment` (`resources/environment/`) está BLOQUEADO e superado** — o orquestrador
   dependia de um `spec.id` compartilhado que morreu na migração de identidade para `metadata.name`;
   os filhos compostos ganham nome com hash e o match por label entre XRs quebra. Usar os charts
-  `hub`/`spoke`/`cluster` diretamente. O `README.md` de lá ainda diz "walk skeleton COMPLETE" —
-  é resíduo, o banner de BLOQUEADO é a verdade atual.
+  `hub`/`spoke`/`cluster` diretamente.
 - **As Compositions param no equivalente às fases 72/74** (`cluster-auth` + os dois
   `remote-providerconfig`). Tudo de 76 em diante — sub-zona Route53, ESO, external-dns, LBC, Istio,
   cert-manager, app de validação — existe **só** no chart faseado (`aws/eks/chart/templates/`).

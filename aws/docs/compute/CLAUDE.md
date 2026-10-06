@@ -35,5 +35,5 @@
   [`accounts/`](../accounts/) (a conta do projeto), [`security/`](../security/) (Pod Identity, roles escopadas).
 - **Código:** [`eks/chart/`](../../eks/chart/) (modelo faseado atual) e [`eks/resources/`](../../eks/resources/) (abstrações
   `cluster/`, `argocd/`, alvo).
-- Regra herdada do PoC ([`CLAUDE.md`](../../CLAUDE.md)): **nunca destruir o cluster sem autorização
+- Regra de [`aws/CLAUDE.md`](../../CLAUDE.md) ("Regras de operação na AWS"): **nunca destruir o cluster sem autorização
   explícita** (EKS leva ~28-30 min p/ recriar) — vale para toda operação neste domínio.

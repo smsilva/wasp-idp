@@ -41,13 +41,13 @@ Nada disto é pendência hoje — é o slot reconhecido para quando o ⑥ sair d
 
 - **Hoje no PoC:** observabilidade é **pontual e sob demanda** — logs do control plane e de
   pods consultáveis (o `eks-mcp-server` lê CloudWatch Logs/Insights, eventos K8s, pod logs);
-  CloudTrail protegido por SCP. Não há painel central, nem alarme de conectividade (não há TGW/VPN
-  ainda), nem Container Insights habilitado por padrão.
+  CloudTrail protegido por SCP. Não há painel central, nem alarme de conectividade (TGW e Client VPN
+  existem na camada Terraform, sem alarme), nem Container Insights habilitado por padrão.
 - **Alvo desta referência:** os três sinais ligados por padrão em cada spoke, com **alarmes de
   conectividade** (o que o hub-and-spoke exige) e custo como sinal — consolidados, não
   espalhados.
-- **Gap central:** os alarmes de conectividade só fazem sentido quando TGW/VPN existirem
-  ([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), Gap 2) — hoje são mapa; o que já dá para ligar é logs + Container Insights.
+- **Gap central:** TGW e Client VPN já existem (`aws/terraform/src/hub`), então os alarmes de
+  conectividade já podem ser ligados, junto com logs e Container Insights.
 
 ## Relação com o resto do repo
 

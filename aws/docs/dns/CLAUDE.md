@@ -22,7 +22,7 @@
 - **Hoje no PoC:** external-dns + cert-manager publicam/certificam sob uma zona pai
   **compartilhada** (`<root-domain>`); a subzona por ambiente é criada via
   `provider-aws-route53` (`Zone`/`Record`), mas **não** há um XR `DnsZone` de alto nível — a
-  lógica está espalhada. Ver [`CLAUDE.md`](../../CLAUDE.md) (fatia 2, "DNS fixado").
+  lógica está espalhada. Ver [`CLAUDE.md`](../../CLAUDE.md), seção "DNS: sub-zona delegada por ambiente + wildcard".
 - **Alvo desta referência:** um XR **`DnsZone`** (Zone + Record NS na pai + wildcard),
   **filho do Cluster**, composable e isolado — a responsabilidade de DNS deixa de ser
   espalhada e vira uma abstração (decisão ratificada).
@@ -52,7 +52,7 @@ Terraform (`aws/terraform/dns/`). Três coisas que só apareceram executando:
   NLB do cluster) e [`security/`](../security/) (IAM do external-dns/cert-manager, Pod Identity, segredos).
 - **Serve** o futuro domínio Compute (o cluster expõe apps sob a subzona) e a exposição
   pública fim-a-fim.
-- Regra herdada do PoC ([`CLAUDE.md`](../../CLAUDE.md)): numa zona pai **compartilhada**, só ADICIONAR
+- Regra de [`aws/CLAUDE.md`](../../CLAUDE.md) ("Regras de operação na AWS"): numa zona pai **compartilhada**, só ADICIONAR
   records isolados (o NS da própria subzona); **nunca** alterar records de terceiros.
 
 ## TLS no edge: o ALB só lê ACM

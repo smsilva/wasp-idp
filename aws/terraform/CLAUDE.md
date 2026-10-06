@@ -12,8 +12,8 @@ muda toda semana ([`decisions.md`](../../decisions.md) §7, cardinalidade × chu
 revisitar aquela decisão.**
 
 A **especificação funcional do provisionamento EKS são as Compositions Crossplane** do repo de
-referência interno (caminho em `CLAUDE.local.md`), não as fases do chart `aws/eks/chart/templates/`.
-As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro lado.
+referência interno (`<assets-repo>`, `crossplane/providers/aws/eks`), não as fases do chart
+`aws/eks/chart/templates/`. As fases são a mesma coisa menos decomposta e com bugs já corrigidos do outro lado.
 
 ## State
 
@@ -553,7 +553,7 @@ o recurso da outra cloud atrás de um `local.manage_*` para poder desligar sem e
 
 ## Regiões
 
-- Uma raiz por região (`network-foundation/<região>/`), com `key` de backend própria. **Não**
+- Uma raiz por região (`regions/<região>/`), com `key` de backend própria. **Não**
   usar uma raiz só alternando backend com `init -reconfigure`: esquecer de trocar mistura as
   regiões e nada no Terraform pega isso.
 - Região, CIDR e AZs ficam **inline** em cada `main.tf` — são decisões de desenho documentadas em

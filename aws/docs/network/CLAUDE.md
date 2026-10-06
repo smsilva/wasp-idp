@@ -20,12 +20,12 @@ no PoC vs. o alvo multi-account) está no tópico 7.
 
 ## Estado atual vs. alvo (resumo)
 
-- **Hoje no PoC:** uma `Network` XR (single-account, CIDR `172.16.0.0/16` fixo, 4 subnets)
-  provisiona a VPC que hospeda o EKS. Não há Hub, TGW nem VPN. Ver [`eks/resources/network/`](../../eks/resources/network/).
+- **Hoje no repo:** a `Network` XR deriva a VPC de `spec.vpcCidrSecondOctet` (`10.<N>.0.0/16`,
+  4 subnets) — ver [`eks/resources/network/`](../../eks/resources/network/). Hub com TGW e Client VPN
+  existe na camada Terraform (`aws/terraform/src/hub`, raiz `regions/<região>/`).
 - **Alvo desta referência:** Hub-and-spoke multi-account com TGW, VPN e isolamento por
   tenant — a `Network` do PoC vira uma **spoke** desse desenho maior.
-- **Gap crítico já mapeado:** o CIDR `172.16.0.0/16` hardcoded é incompatível com
-  hub-and-spoke (colide entre VPCs). Parametrização e alinhamento com supernet: tópicos 1 e 7.
+- **Alinhamento com a supernet:** tópicos 1 e 7.
 
 ## Armadilha: route table de tenant só isola se o attachment for por tenant
 

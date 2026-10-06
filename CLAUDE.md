@@ -12,20 +12,19 @@
 
 - Backlog ("Next Steps") lives in GitHub Issues + Project v2 (board #6, `smsilva/wasp-idp`), not as a checklist in `HANDOFF.md`. Architecture decisions go to `docs/adr/` (Nygard format, one file per decision, immutable once accepted). Still-open findings/limitations and unresolved questions go to `aws/docs/known-broken.md` / `aws/docs/open-questions.md`; durable lessons already fixed but worth not relearning go to `aws/docs/lessons-learned/<topic>.md`. Client VPN operation (profile naming, connect/disconnect, troubleshooting) is documented once in `aws/docs/vpn/client-vpn-operations.md`. `HANDOFF.md` only points to these, never duplicates their content.
 
-- **Every issue created must land on the board — in two steps, not one.** `gh issue create` does NOT add it: the board has no "Auto-add" workflow, so the issue is born outside it and that backlog is invisible (it happened to #38, #39, #56, #62, #64, #65). And adding is not enough — `gh project item-add` leaves `Status` empty, and the board view groups by `Status`, so a valueless item lands in a "No Status" column nobody looks at.
+- **Every issue created must land on the board with `Status` set.** `gh issue create` does not add it (the board has no "Auto-add" workflow), and `gh project item-add` leaves `Status` empty, so the item lands in a "No Status" column the board view does not show.
 
   ```bash
-  gh project item-add 6 --owner smsilva --url <issue-url>
-  gh project item-list 6 --owner smsilva --format json   # to get the itemId
-  gh project item-edit --id <itemId> \
+  item_id="$(gh project item-add 6 --owner smsilva --url <issue-url> --format json --jq .id)"
+  gh project item-edit --id "${item_id}" \
     --project-id PVT_kwHOAARkfs4Bh2xz \
     --field-id PVTSSF_lAHOAARkfs4Bh2xzzhgw8QM \
     --single-select-option-id 2841e349
   ```
 
-  Simpler, and works right after `item-add` (when `item-list` may not show the new item yet): `gh project item-edit 6 --owner smsilva --url <issue-url> --field Status --value Backlog`. Most reliable (verified 2026-10-01): `item-add ... --format json --jq .id` already returns the itemId, so pass it to `item-edit --id`; then confirm with `gh api graphql -f query='query{node(id:"<itemId>"){... on ProjectV2Item{fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'` — `item-list` (even with `--limit 100`) did not show items added minutes earlier.
+  Confirm with `gh api graphql -f query='query{node(id:"<itemId>"){... on ProjectV2Item{fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'` — `item-list` lags minutes behind new items. `item-add` is idempotent, so re-running it is safe. Option ids: `Backlog` `2841e349`, `Todo` `1346028c`, `In Progress` `d9b40b84`, `Done` `1168c952`.
 
-  Option ids: `Backlog` `2841e349`, `Todo` `1346028c`, `In Progress` `d9b40b84`, `Done` `1168c952`. Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `item-list` — an open issue off the board is work lost from sight. **Pass `--limit 100` to both:** `item-list` defaults to 30 items and the board already has more than that, so the default silently omits items and an audit run without it reports issues as "missing from the board" that are already on it. `item-add` is idempotent — calling it twice does not duplicate the item, so re-running after an unclear result is safe.
+  Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `gh project item-list` — pass `--limit 100` to both, since `item-list` defaults to 30 items and the board has more.
 
 - **`gh pr edit` / `gh issue edit` fail on this repo** with `GraphQL: Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)`. The command exits non-zero and changes nothing — easy to read as "edited" if the output is not checked. Use the REST API instead: `gh api --method PATCH repos/smsilva/wasp-idp/pulls/<n> --input <file.json>` with `{"title": ..., "body": ...}`. `gh issue create`, `gh issue comment` and `gh issue close` are unaffected.
 
