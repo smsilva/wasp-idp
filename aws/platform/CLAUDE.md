@@ -33,7 +33,7 @@ deriva os external-names (`<prefix>-<metadata.name>-*`) e o label `environment.e
 - **Charts** (orquestração/topologia): aqui. Referenciam os XRs por `apiVersion`
   (`platform.example.com/v1alpha1`), não por path.
 
-## Regra herdada do PoC
+## Regra de operação
 
-Só ADICIONAR recursos isolados; nunca alterar policy/role compartilhada. `providerConfigName`
+Ver [`aws/CLAUDE.md`](../CLAUDE.md), "Regras de operação na AWS". Só ADICIONAR recursos isolados; nunca alterar policy/role compartilhada. `providerConfigName`
 é OBRIGATÓRIO nos XRs (falha-fechado: XR sem ele é rejeitado, não vaza para a conta `network`).

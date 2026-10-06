@@ -31,7 +31,7 @@ por qualquer time.
 | **Well-Architected** | Cada decisão é justificada contra os pilares AWS WAF (com foco em Security, Reliability, Operational Excellence e Cost). Referências REL/SEC/OPS citadas nos tópicos. **Conferir o ID contra a página oficial antes de citar** — nunca de memória: numeração e títulos mudam entre revisões do framework, e IDs errados já passaram batido em três tabelas. **O WAF nomeia zero contas e zero OUs** — nome de conta vem do AWS SRA, nome de OU vem do whitepaper *Organizing Your AWS Environment*; ver a tabela de hierarquia de fontes em `accounts/01-organizations-and-ous.md`. |
 | **Composable by design** | Cada peça é uma abstração componível (Crossplane XR): Network, Cluster, DnsZone. Um recurso de alto nível compõe os de baixo; nada é monolítico. (Pilar 5 do "Platform Engineering 2.0".) |
 | **Agnóstico ao ambiente** | O corpo da doc usa **placeholders** (`<hub-cidr>`, `<root-domain>`, `<asn>`) — ninguém precisa dos valores reais de uma organização específica para reusar a referência. |
-| **Nunca alterar config compartilhada** | Só ADICIONAR recursos isolados. Regra herdada do PoC (ver [`CLAUDE.md`](../../CLAUDE.md)). |
+| **Nunca alterar config compartilhada** | Só ADICIONAR recursos isolados. Ver [`aws/CLAUDE.md`](../CLAUDE.md), "Regras de operação na AWS". |
 
 ## Vocabulário: "Hub" é topologia; `network` é conta
 

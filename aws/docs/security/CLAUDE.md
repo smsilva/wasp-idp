@@ -39,5 +39,5 @@
 
 - **Depende de** [`accounts/`](../accounts/) (SSO e contas onde as identidades vivem) e serve
   [`network/`](../network/) (RAM do TGW, auth de VPN) e o futuro domínio Compute (Pod Identity do EKS).
-- Regra herdada do PoC ([`CLAUDE.md`](../../CLAUDE.md)): **só ADICIONAR** recursos isolados; nunca alterar
+- Regra de [`aws/CLAUDE.md`](../../CLAUDE.md) ("Regras de operação na AWS"): **só ADICIONAR** recursos isolados; nunca alterar
   policy/role compartilhada de outro time. Toda policy escopa a ARNs `poc-eks-*`/`poc-idp/*`.
