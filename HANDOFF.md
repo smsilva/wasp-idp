@@ -99,7 +99,7 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: apresentação detalhada como deck único público em `docs/presentation/`, publicada no GitHub Pages; cortes por público virão de filtro sobre `audiences` (#148) | Entregue em 2026-10-10 |
 | Plataforma: identidade e fonte da verdade — [ADR 0021](docs/adr/0021-keycloak-as-platform-identity-broker.md) (Keycloak, sem Dex) e [ADR 0022](docs/adr/0022-kube-api-as-platform-source-of-truth.md) (CRDs `platform.wasp.silvios.me` + Platform API como fachada) (#140, #145) | Aceitos em 2026-10-10 |
 | Plataforma: CLI `platform` (Python, pacote `wasp_platform`) + Platform API + provider `local_vcluster` — cada Environment é um vcluster dentro do `platform-local`, criado por um controller no próprio cluster (#152, #183). Login com Google via Keycloak e JWT validado na API (#142–#144), journal em arquivo (#172). Guia: https://smsilva.github.io/wasp-idp/cli/ — o Pages é um site único (deck na raiz, guia em `/cli/`), buildado por `.github/workflows/pages.yaml` | Entregue em 2026-10-10 |
-| Plataforma: Postgres no journal (#172); Terraform do OAuth do Google (#171) | Aberto (Backlog) |
+| Plataforma: delete só pelo dono (#185, próxima); compartilhar ambientes com grupos (#186, começa por ADR); Postgres no journal (#172); walkthrough repetível (#178–#182); Terraform do OAuth do Google (#171) | Aberto (Backlog) |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
 | Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
 | Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
@@ -350,6 +350,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-10-10 — #183, ambientes locais como vcluster.** Provider `local_vcluster` roda dentro do `platform-local` (sem processo no host), porta por ambiente em `7100`–`7119`, kubeconfig só para o dono ou `platform-admins`; `local_k3d` e `platform provider run` removidos. Walkthrough da CLI do zero em `cli/docs/walkthrough.md`.
 - **2026-10-10 — Identidade da plataforma ponta a ponta (#142, #143, #144, #173).** Keycloak no `platform-local` com o realm `platform` como código e o Google como Identity Provider; a Platform API valida o JWT; `platform login` (PKCE ou `--use-device-code`), `logout` e `whoami`; tema `platform` nas telas do Keycloak e no callback da CLI, em pt-BR e en. PRs #170, #174 e #175.
 - **2026-10-10 — #153, deck alinhado aos ADRs 0021 e 0022.** Trilha de auditoria pelo journal da API (#157), slide `orchestrator` com Crossplane e os modos provision/compose/bind (#158), SSO com Keycloak no lugar do Dex (#159), ADRs como aceitos (#160). Links da apresentação e do guia da CLI no `README.md`.
 - **2026-10-10 — Progresso de tarefas migrado para as issues e o board #6.** O `HANDOFF.local.md` deixou de existir; a #153 foi dividida em #157–#160.
