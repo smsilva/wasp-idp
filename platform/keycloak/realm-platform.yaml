@@ -1,0 +1,79 @@
+# Realm `platform` as code, applied by keycloak-config-cli (deploy/realm-import.yaml) on every `platform init`.
+# $(env:…) is resolved by keycloak-config-cli from Secrets, so no credential lives here.
+# `platform init` drops identityProviders/identityProviderMappers when GOOGLE_CLIENT_ID is not set,
+# and the bootstrap-admin mapper when --admin was never given.
+realm: platform
+enabled: true
+defaultGroups:
+  - /platform-users
+groups:
+  - name: platform-admins
+  - name: platform-users
+
+clientScopes:
+  - name: platform-groups
+    protocol: openid-connect
+    attributes:
+      include.in.token.scope: "false"
+    protocolMappers:
+      - name: groups
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        config:
+          claim.name: groups
+          full.path: "false"
+          access.token.claim: "true"
+          id.token.claim: "true"
+          userinfo.token.claim: "true"
+  - name: platform-api-audience
+    protocol: openid-connect
+    attributes:
+      include.in.token.scope: "false"
+    protocolMappers:
+      - name: audience
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        config:
+          included.client.audience: platform-api
+          access.token.claim: "true"
+
+clients:
+  - clientId: platform-cli
+    name: platform CLI
+    publicClient: true
+    standardFlowEnabled: true # Authorization Code + PKCE, the CLI default
+    directAccessGrantsEnabled: false
+    redirectUris:
+      - http://127.0.0.1/*
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: "true" # platform login --use-device-code
+    defaultClientScopes:
+      - basic
+      - profile
+      - email
+      - platform-groups
+      - platform-api-audience
+  - clientId: platform-api
+    name: Platform API
+    bearerOnly: true
+
+identityProviders:
+  - alias: google
+    providerId: google
+    enabled: true
+    trustEmail: true
+    config:
+      clientId: $(env:GOOGLE_CLIENT_ID)
+      clientSecret: $(env:GOOGLE_CLIENT_SECRET)
+      defaultScope: openid profile email
+      syncMode: IMPORT
+
+identityProviderMappers:
+  - name: bootstrap-admin
+    identityProviderAlias: google
+    identityProviderMapper: oidc-advanced-group-idp-mapper
+    config:
+      syncMode: INHERIT
+      claims: '[{"key":"email","value":"$(env:PLATFORM_ADMIN_EMAIL)"}]'
+      group: /platform-admins
