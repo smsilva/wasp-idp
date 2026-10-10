@@ -30,6 +30,17 @@ Os arquivos são HTML autocontidos e abrem direto no navegador. Os dados são fi
 - **A:** `theme.properties` herdando `keycloak.v2`, um CSS e um `template.ftl` que só troca o cabeçalho. Sobrevive bem a upgrades do Keycloak.
 - **B:** um `template.ftl` com o layout em duas colunas e textos por tela (`login.ftl`, `login-oauth2-device-verify-user-code.ftl`, `error.ftl`). As oito caixas do device code pedem um pouco de JS. A cada upgrade, o `template.ftl` precisa ser comparado com o do `keycloak.v2`.
 
+## Textos
+
+O tema sai em pt-BR e en (`messages_pt_BR.properties`, `messages_en.properties`); o Keycloak escolhe pelo idioma do navegador. Frases já definidas:
+
+| Tela | pt-BR | en |
+|---|---|---|
+| Login (B, coluna de contexto) | Bem-vindo de volta. Entre e siga construindo. | Welcome back. Sign in and keep building. |
+| Primeiro login | Que bom ter você aqui. Confira seus dados. | Glad you're here. Check your details. |
+
+Ortografia: **bem-vindo**, com hífen, é a forma do VOLP (ABL) desde antes do Acordo; "benvindo" só como nome próprio.
+
 ## Escolha
 
 Pendente de aprovação na #173.
