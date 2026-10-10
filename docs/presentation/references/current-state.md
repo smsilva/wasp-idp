@@ -12,9 +12,9 @@ Contexto para o fechamento "onde estamos / próximos passos". A plataforma é um
 ## Próximos passos (issues abertas no board)
 
 - **Platform API como fronteira única:** CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás como implementação.
-- **Identidade:** Keycloak como broker (Google autentica, Keycloak guarda grupos), sem Dex — ADR 0021 em proposta.
-- **Fonte da verdade:** API do Kubernetes para estado desejado, Postgres como journal e projeção para o portal — ADR 0022 em proposta.
-- **CLI `platform`:** esqueleto, `init --profile local`, `login` com PKCE e device code, `whoami`.
+- **Identidade:** Keycloak como broker (Google autentica, Keycloak guarda grupos), sem Dex — ADR 0021, aceito em 2026-10-10.
+- **Fonte da verdade:** API do Kubernetes para estado desejado, Postgres como journal e projeção para o portal — ADR 0022, aceito em 2026-10-10.
+- **CLI `platform`:** `init --target local` e `environment create|list|delete` já entregues (#152); falta `login` com PKCE e device code e `whoami`.
 - **Portal:** redesign da página de Component e aba Environments com as Applications do Argo CD.
 
 ## Oportunidade

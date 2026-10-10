@@ -3324,7 +3324,7 @@ State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão
 <strong>O que a PoC já tem de cada um:</strong>
 • <strong>Dispatch path:</strong> claim <code class='note-code'>Environment</code> (um pedido vira infra).
 • <strong>Validation loop:</strong> schema do XRD + fitness functions (Ready/Synced, echo 200).
-• <strong>Scoped identity:</strong> SSO com Keycloak em proposta; o agente com identidade própria <strong>ainda não</strong>.
+• <strong>Scoped identity:</strong> SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria <strong>ainda não</strong>.
 • <strong>Sandboxed environments:</strong> <code class='note-code'>Environment</code> efêmero e sandbox por requisição.
 
 <strong>Avaliação:</strong> evals como suíte de regressão; o que se avalia é <strong>o estado final no ambiente</strong>, não a fala do agente (Anthropic).
@@ -3344,7 +3344,7 @@ State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão
 <strong>O que a PoC já tem de cada um:</strong>
 • <strong>Dispatch path:</strong> claim <code class='note-code'>Environment</code> (um pedido vira infra).
 • <strong>Validation loop:</strong> schema do XRD + fitness functions (Ready/Synced, echo 200).
-• <strong>Scoped identity:</strong> SSO com Keycloak em proposta; o agente com identidade própria <strong>ainda não</strong>.
+• <strong>Scoped identity:</strong> SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria <strong>ainda não</strong>.
 • <strong>Sandboxed environments:</strong> <code class='note-code'>Environment</code> efêmero e sandbox por requisição.
 
 <strong>Avaliação:</strong> evals como suíte de regressão; o que se avalia é <strong>o estado final no ambiente</strong>, não a fala do agente (Anthropic).
@@ -3364,7 +3364,7 @@ State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão
 <strong>O que a PoC já tem de cada um:</strong>
 • <strong>Dispatch path:</strong> claim <code class='note-code'>Environment</code> (um pedido vira infra).
 • <strong>Validation loop:</strong> schema do XRD + fitness functions (Ready/Synced, echo 200).
-• <strong>Scoped identity:</strong> SSO com Keycloak em proposta; o agente com identidade própria <strong>ainda não</strong>.
+• <strong>Scoped identity:</strong> SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria <strong>ainda não</strong>.
 • <strong>Sandboxed environments:</strong> <code class='note-code'>Environment</code> efêmero e sandbox por requisição.
 
 <strong>Avaliação:</strong> evals como suíte de regressão; o que se avalia é <strong>o estado final no ambiente</strong>, não a fala do agente (Anthropic).
@@ -3384,7 +3384,7 @@ State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão
 <strong>O que a PoC já tem de cada um:</strong>
 • <strong>Dispatch path:</strong> claim <code class='note-code'>Environment</code> (um pedido vira infra).
 • <strong>Validation loop:</strong> schema do XRD + fitness functions (Ready/Synced, echo 200).
-• <strong>Scoped identity:</strong> SSO com Keycloak em proposta; o agente com identidade própria <strong>ainda não</strong>.
+• <strong>Scoped identity:</strong> SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria <strong>ainda não</strong>.
 • <strong>Sandboxed environments:</strong> <code class='note-code'>Environment</code> efêmero e sandbox por requisição.
 
 <strong>Avaliação:</strong> evals como suíte de regressão; o que se avalia é <strong>o estado final no ambiente</strong>, não a fala do agente (Anthropic).
@@ -3404,7 +3404,7 @@ State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão
 <strong>O que a PoC já tem de cada um:</strong>
 • <strong>Dispatch path:</strong> claim <code class='note-code'>Environment</code> (um pedido vira infra).
 • <strong>Validation loop:</strong> schema do XRD + fitness functions (Ready/Synced, echo 200).
-• <strong>Scoped identity:</strong> SSO com Keycloak em proposta; o agente com identidade própria <strong>ainda não</strong>.
+• <strong>Scoped identity:</strong> SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria <strong>ainda não</strong>.
 • <strong>Sandboxed environments:</strong> <code class='note-code'>Environment</code> efêmero e sandbox por requisição.
 
 <strong>Avaliação:</strong> evals como suíte de regressão; o que se avalia é <strong>o estado final no ambiente</strong>, não a fala do agente (Anthropic).
@@ -3830,23 +3830,9 @@ Siglas:
 
 <strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
 
-Decisões em proposta (ADR 0021 e 0022 no board).
+Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em <code class='note-code'>docs/adr/</code>. A primeira fatia já roda localmente: <code class='note-code'>platform init</code> sobe o control plane em k3d com o CRD <code class='note-code'>Environment</code> e a Platform API, ainda sem autenticação.
 
-Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='405'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
-
-Siglas:
-• <strong>JWT</strong> (JSON Web Token): o token que a API valida.
-• <strong>PKCE</strong> (Proof Key for Code Exchange): login da CLI pelo navegador.
-
-<strong>Platform API:</strong> CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás, como implementação.
-
-<strong>Identidade:</strong> Keycloak como broker — o Google autentica, o Keycloak guarda os grupos (<code class='note-code'>platform-admins</code>, <code class='note-code'>platform-users</code>), a API valida o JWT. A avaliação inicial com Dex foi descartada: o Dex não guarda usuários nem grupos.
-
-<strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
-
-Decisões em proposta (ADR 0021 e 0022 no board).
-
-Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='406'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
+Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='405'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
 
 Siglas:
 • <strong>JWT</strong> (JSON Web Token): o token que a API valida.
@@ -3858,23 +3844,9 @@ Siglas:
 
 <strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
 
-Decisões em proposta (ADR 0021 e 0022 no board).
+Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em <code class='note-code'>docs/adr/</code>. A primeira fatia já roda localmente: <code class='note-code'>platform init</code> sobe o control plane em k3d com o CRD <code class='note-code'>Environment</code> e a Platform API, ainda sem autenticação.
 
-Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='407'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
-
-Siglas:
-• <strong>JWT</strong> (JSON Web Token): o token que a API valida.
-• <strong>PKCE</strong> (Proof Key for Code Exchange): login da CLI pelo navegador.
-
-<strong>Platform API:</strong> CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás, como implementação.
-
-<strong>Identidade:</strong> Keycloak como broker — o Google autentica, o Keycloak guarda os grupos (<code class='note-code'>platform-admins</code>, <code class='note-code'>platform-users</code>), a API valida o JWT. A avaliação inicial com Dex foi descartada: o Dex não guarda usuários nem grupos.
-
-<strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
-
-Decisões em proposta (ADR 0021 e 0022 no board).
-
-Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='408'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
+Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='406'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
 
 Siglas:
 • <strong>JWT</strong> (JSON Web Token): o token que a API valida.
@@ -3886,9 +3858,37 @@ Siglas:
 
 <strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
 
-Decisões em proposta (ADR 0021 e 0022 no board).
+Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em <code class='note-code'>docs/adr/</code>. A primeira fatia já roda localmente: <code class='note-code'>platform init</code> sobe o control plane em k3d com o CRD <code class='note-code'>Environment</code> e a Platform API, ainda sem autenticação.
 
-Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='409'><div class='np-head'>Where we are and next steps · next-steps</div><div class='np-message'>Próximo: vários clients sobre a mesma plataforma.</div><div class='notes'>O que queremos dizer: <strong>vários clients sobre a mesma plataforma</strong>.
+Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='407'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
+
+Siglas:
+• <strong>JWT</strong> (JSON Web Token): o token que a API valida.
+• <strong>PKCE</strong> (Proof Key for Code Exchange): login da CLI pelo navegador.
+
+<strong>Platform API:</strong> CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás, como implementação.
+
+<strong>Identidade:</strong> Keycloak como broker — o Google autentica, o Keycloak guarda os grupos (<code class='note-code'>platform-admins</code>, <code class='note-code'>platform-users</code>), a API valida o JWT. A avaliação inicial com Dex foi descartada: o Dex não guarda usuários nem grupos.
+
+<strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
+
+Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em <code class='note-code'>docs/adr/</code>. A primeira fatia já roda localmente: <code class='note-code'>platform init</code> sobe o control plane em k3d com o CRD <code class='note-code'>Environment</code> e a Platform API, ainda sem autenticação.
+
+Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='408'><div class='np-head'>Where we are and next steps · platform-api-next</div><div class='np-message'>Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients.</div><div class='notes'>O que queremos dizer: <strong>o próximo passo é a fronteira</strong>: uma Platform API na frente de tudo, com identidade única.
+
+Siglas:
+• <strong>JWT</strong> (JSON Web Token): o token que a API valida.
+• <strong>PKCE</strong> (Proof Key for Code Exchange): login da CLI pelo navegador.
+
+<strong>Platform API:</strong> CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás, como implementação.
+
+<strong>Identidade:</strong> Keycloak como broker — o Google autentica, o Keycloak guarda os grupos (<code class='note-code'>platform-admins</code>, <code class='note-code'>platform-users</code>), a API valida o JWT. A avaliação inicial com Dex foi descartada: o Dex não guarda usuários nem grupos.
+
+<strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
+
+Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em <code class='note-code'>docs/adr/</code>. A primeira fatia já roda localmente: <code class='note-code'>platform init</code> sobe o control plane em k3d com o CRD <code class='note-code'>Environment</code> e a Platform API, ainda sem autenticação.
+
+Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='409'><div class='np-head'>Where we are and next steps · next-steps</div><div class='np-message'>Próximo: vários clients sobre a mesma plataforma.</div><div class='notes'>O que queremos dizer: <strong>vários clients sobre a mesma plataforma</strong>.
 
 Siglas:
 • <strong>MCP</strong> (Model Context Protocol): como o agente lê o catálogo.
@@ -5885,7 +5885,7 @@ State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão
 <strong>O que a PoC já tem de cada um:</strong>
 • <strong>Dispatch path:</strong> claim <code class='note-code'>Environment</code> (um pedido vira infra).
 • <strong>Validation loop:</strong> schema do XRD + fitness functions (Ready/Synced, echo 200).
-• <strong>Scoped identity:</strong> SSO com Keycloak em proposta; o agente com identidade própria <strong>ainda não</strong>.
+• <strong>Scoped identity:</strong> SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria <strong>ainda não</strong>.
 • <strong>Sandboxed environments:</strong> <code class='note-code'>Environment</code> efêmero e sandbox por requisição.
 
 <strong>Avaliação:</strong> evals como suíte de regressão; o que se avalia é <strong>o estado final no ambiente</strong>, não a fala do agente (Anthropic).
@@ -6065,9 +6065,9 @@ Siglas:
 
 <strong>Estado:</strong> a API do Kubernetes como fonte da verdade (watch, <code class='note-code'>spec</code>/<code class='note-code'>status</code>, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
 
-Decisões em proposta (ADR 0021 e 0022 no board).
+Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em <code class='note-code'>docs/adr/</code>. A primeira fatia já roda localmente: <code class='note-code'>platform init</code> sobe o control plane em k3d com o CRD <code class='note-code'>Environment</code> e a Platform API, ainda sem autenticação.
 
-Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div>
+Fonte: <a href='references/current-state.md' target='_blank'>references/current-state.md</a>, <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div>
   <div class='label'>Fontes</div><ul class='sources'><li><a href='references/current-state.md' target='_blank'>references/current-state.md</a></li><li><a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a><ul><li><a href='https://id' target='_blank'>https://id</a></li></ul></li></ul>
   <div class='meta'><code>platform-api-next</code> · depende de: <a href='#mvp1-level'>mvp1-level</a>, <a href='#single-sign-on'>single-sign-on</a>, <a href='#landscape-api'>landscape-api</a></div>
 </section>

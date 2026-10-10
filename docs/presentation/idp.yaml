@@ -2248,7 +2248,7 @@ slides:
       **O que a PoC já tem de cada um:**
       - **Dispatch path:** claim `Environment` (um pedido vira infra).
       - **Validation loop:** schema do XRD + fitness functions (Ready/Synced, echo 200).
-      - **Scoped identity:** SSO com Keycloak em proposta; o agente com identidade própria **ainda não**.
+      - **Scoped identity:** SSO com Keycloak decidido (ADR 0021), implementação em andamento; o agente com identidade própria **ainda não**.
       - **Sandboxed environments:** `Environment` efêmero e sandbox por requisição.
 
       **Avaliação:** evals como suíte de regressão; o que se avalia é **o estado final no ambiente**, não a fala do agente (Anthropic).
@@ -2444,9 +2444,9 @@ slides:
 
       **Estado:** a API do Kubernetes como fonte da verdade (watch, `spec`/`status`, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
 
-      Decisões em proposta (ADR 0021 e 0022 no board).
+      Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em `docs/adr/`. A primeira fatia já roda localmente: `platform init` sobe o control plane em k3d com o CRD `Environment` e a Platform API, ainda sem autenticação.
 
-      Fonte: references/current-state.md, references/sso-dex.md.
+      Fonte: references/current-state.md, references/sso-dex.md, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.
     dependsOn: [mvp1-level, single-sign-on, landscape-api]
 
   - name: next-steps
