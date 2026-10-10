@@ -1661,9 +1661,9 @@ slides:
 
       **Chave:** o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o **ID numérico da conta**. A cada login, o par login ↔ ID vai para um **audit sink**.
 
-      **Trilha:** vive no Git (todo Environment e deploy é commit ou PR), nos audit logs do cluster, nos events do Argo CD e do Crossplane — tudo num **sink central no Observability Plane**. **O catálogo não é trilha de auditoria.**
+      **Trilha:** o **journal da Platform API** (append-only, cada pedido com spec, autor e horário, gravado antes de ser aplicado), os audit logs do cluster e os events do Argo CD e do Crossplane — tudo num **sink central no Observability Plane**. GitOps fica como evolução possível, trocando o `StateWriter`. **O catálogo não é trilha de auditoria.**
 
-      Fonte: references/sso-dex.md.
+      Fonte: references/sso-dex.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.
     dependsOn: [who-decides]
 
   - name: agent-identity
