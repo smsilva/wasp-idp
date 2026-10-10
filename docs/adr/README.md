@@ -28,3 +28,4 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0018](0018-separate-github-apps-per-role.md) | Dois GitHub Apps na `wasp-foundry`, um por papel (scaffolding vs. bump de tag) |
 | [0019](0019-environment-clusters-managed-by-central-argocd.md) | Clusters `development` e `production` gerenciados pelo ArgoCD do cluster-zero: matrix generator, overlays por ambiente, promoção por PR |
 | [0020](0020-catalog-discovery-from-github-org.md) | Catalog descobre os repos da org `wasp-foundry` pelo entity provider do GitHub |
+| [0021](0021-keycloak-as-platform-identity-broker.md) | Keycloak, sem Dex, como broker de identidade da plataforma: Google autentica, Keycloak autoriza |
