@@ -92,6 +92,37 @@ label { display: block; font-size: 12px; color: var(--fg-2); margin: 0 0 6px; }
 .status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-3); border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px; }
 .status i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: block; }
 .status.err i { background: var(--err); }
+
+/* Narrow screens (phone): the context column collapses into a compact band above the form.
+   The terminal is hidden except on the device screen, where the code to compare matters. */
+@media (max-width: 860px) {
+  .split { grid-template-columns: 1fr; }
+  .ctx { padding: 20px 20px 18px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .ctx h3 { font-size: 20px; max-width: none; }
+  .ctx p, .ctx .planes { display: none; }
+  .ctx .term { display: none; }
+  .ctx.keep-term .term { display: block; margin-top: 6px; }
+  .ctx.keep-term .term .tb { display: none; }
+  .form { padding: 24px 20px 32px; justify-content: flex-start; }
+  .codebox { gap: 4px; grid-template-columns: repeat(4, 1fr) 12px repeat(4, 1fr); }
+  .codebox span { height: 44px; font-size: 18px; }
+}
+/* Mockup chrome: phone frames that force the narrow layout regardless of the window width. */
+.phones { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+.phone { width: 360px; border: 1px solid var(--line-2); border-radius: 30px; padding: 12px 10px; background: #070a12; }
+.phone .notch { width: 90px; height: 6px; border-radius: 6px; background: #1f2937; margin: 2px auto 10px; }
+.phone .scr { border-radius: 18px; overflow: hidden; background: var(--bg); height: 700px; overflow-y: auto; }
+.phone .cap { text-align: center; color: var(--fg-3); font-size: 12px; margin-top: 8px; }
+.phone .split { grid-template-columns: 1fr; min-height: 0; }
+.phone .ctx { padding: 20px 20px 18px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+.phone .ctx h3 { font-size: 20px; max-width: none; }
+.phone .ctx p, .phone .ctx .planes, .phone .ctx .term { display: none; }
+.phone .ctx.keep-term .term { display: block; margin-top: 6px; }
+.phone .ctx.keep-term .term .tb { display: none; }
+.phone .ctx.keep-term .term pre { font-size: 11px; padding: 10px 12px; }
+.phone .form { padding: 24px 20px 32px; justify-content: flex-start; max-width: none; }
+.phone .codebox { gap: 4px; grid-template-columns: repeat(4, 1fr) 12px repeat(4, 1fr); }
+.phone .codebox span { height: 44px; font-size: 18px; }
 </style>
 
 <svg width="0" height="0" style="position:absolute">
@@ -102,7 +133,7 @@ label { display: block; font-size: 12px; color: var(--fg-2); margin: 0 0 6px; }
   <h1>Keycloak theme · B — Split</h1>
   <p class="lead">Tela dividida: à esquerda, o contexto — o que é a plataforma e o terminal que está pedindo o login —; à direita, a ação. A coluna da esquerda conecta o navegador ao comando que o usuário acabou de rodar, que é como quase todo login acontece (<code>platform login</code>). Exige um <code>template.ftl</code> próprio para o layout; os parciais de formulário continuam os do <code>keycloak.v2</code>. Abaixo de 860 px a coluna de contexto vira uma faixa no topo.</p>
   <div class="toc">
-    <a href="#login">1 · Login</a><a href="#device">2 · Device code</a><a href="#grant">2b · Consentimento</a><a href="#error">3 · Erro</a><a href="#profile">4 · Primeiro login</a><a href="#callback">6 · Callback da CLI</a>
+    <a href="#login">1 · Login</a><a href="#device">2 · Device code</a><a href="#grant">2b · Consentimento</a><a href="#error">3 · Erro</a><a href="#profile">4 · Primeiro login</a><a href="#callback">6 · Callback da CLI</a><a href="#mobile">7 · Celular</a>
   </div>
   <p class="lead" style="margin-top:10px">O Account Console (5) fica igual ao da variante A: ele é uma app React com tema próprio e não usa este layout.</p>
 
@@ -274,5 +305,72 @@ Opening the browser to sign in …
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="screen" id="mobile">
+    <h2>7 · Celular</h2>
+    <p>Abaixo de 860 px a coluna de contexto vira uma faixa curta acima do formulário: fica a marca e o título, saem o parágrafo, os planes e o terminal. A exceção é o device code: ali o código do terminal é o que o usuário compara, então ele continua visível. É o caso mais comum no celular — o terminal está no computador e a URL impressa por ele foi aberta no telefone.</p>
+    <div class="phones">
+      <div>
+        <div class="phone"><div class="notch"></div><div class="scr">
+          <div class="split">
+            <div class="ctx">
+              <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+              <h3>Que bom te ver de novo. <em>Entre e siga construindo.</em></h3>
+            </div>
+            <div class="form">
+              <h4>Entrar</h4>
+              <p class="sub">Use sua conta Google.</p>
+              <a class="btn google" href="#"><svg><use href="#g"/></svg>Continuar com Google</a>
+              <div class="muted-link">Conta de emergência? <a href="#">Entrar com usuário e senha</a></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="cap">1 · Login</div>
+      </div>
+      <div>
+        <div class="phone"><div class="notch"></div><div class="scr">
+          <div class="split">
+            <div class="ctx keep-term">
+              <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+              <h3>Conectando <em>um terminal</em>.</h3>
+              <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre>and confirm the code <span class="hl">ABCD-EFGH</span></pre></div>
+            </div>
+            <div class="form">
+              <h4>Confirme o código</h4>
+              <p class="sub">É o mesmo do terminal?</p>
+              <div class="codebox"><span>A</span><span>B</span><span>C</span><span>D</span><span class="sep">–</span><span>E</span><span>F</span><span>G</span><span>H</span></div>
+              <div class="help">Expira em 10 minutos e vale para um único login.</div>
+              <a class="btn primary" href="#">Sim, continuar</a>
+              <ol class="steps" style="margin-top:22px"><li class="now">Confirmar o código</li><li>Entrar com Google</li><li>Autorizar o terminal</li></ol>
+            </div>
+          </div>
+        </div></div>
+        <div class="cap">2 · Device code</div>
+      </div>
+      <div>
+        <div class="phone"><div class="notch"></div><div class="scr">
+          <div class="split">
+            <div class="ctx">
+              <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+              <h3>Este terminal vai agir <em>em seu nome</em>.</h3>
+            </div>
+            <div class="form">
+              <h4>Autorizar o terminal?</h4>
+              <p class="sub">Entrando como <b>voce@example.com</b>.</p>
+              <div class="perm"><div><b>platform CLI</b> · <span class="kv">platform-cli</span></div><div>✓ nome e e-mail</div><div>✓ grupos <span class="kv">platform-admins</span>, <span class="kv">platform-users</span></div><div>✓ chamar a Platform API</div></div>
+              <div class="row"><a class="btn ghost" href="#">Negar</a><a class="btn primary" href="#">Autorizar</a></div>
+              <ol class="steps" style="margin-top:22px"><li class="done">Confirmar o código</li><li class="done">Entrar com Google</li><li class="now">Autorizar o terminal</li></ol>
+            </div>
+          </div>
+        </div></div>
+        <div class="cap">2b · Consentimento</div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li>O <code>platform login</code> sem device code não acontece no celular: o callback vai para <code>127.0.0.1</code> do computador. No celular, o caminho é sempre o device code.</li>
+      <li>Para o celular alcançar o Keycloak, ele precisa estar numa URL acessível pela rede (não <code>localhost</code>). No target local isso não acontece; vale para targets com DNS público. O tema já sai pronto para isso.</li>
+      <li>Botões com 44 px de altura, o mínimo confortável para toque.</li>
+    </ul>
   </section>
 </div>

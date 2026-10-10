@@ -41,6 +41,12 @@ O tema sai em pt-BR e en (`messages_pt_BR.properties`, `messages_en.properties`)
 
 Os textos evitam marcar gênero ("bem-vindo" fica fora). Se aparecer, a forma é **bem-vindo**, com hífen, a do VOLP (ABL); "benvindo" só como nome próprio.
 
+## Celular
+
+Abaixo de 860 px a coluna de contexto vira uma faixa curta acima do formulário, só com a marca e o título. No device code, a linha do terminal com o código continua visível, porque é ela que o usuário compara. Seção "7 · Celular" do `b-split.html`.
+
+No celular, o caminho é sempre o device code: o `platform login` padrão devolve o código para `127.0.0.1` do computador. E o celular só alcança o Keycloak quando ele tem uma URL acessível pela rede; no target local (`localhost:8180`) isso não acontece.
+
 ## Escolha
 
-Pendente de aprovação na #173.
+**B — Split**, aprovada na #173 em 2026-10-10.
