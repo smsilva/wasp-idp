@@ -97,6 +97,7 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: aba Dependencies para Components e cards de API fora do Overview (#123) | Entregue em 2026-10-03 |
 | IDP: header de entidade com Source/Docs e card Description no lugar do About (#124) — `modules/entityHeader/EntityHeader.tsx` replica o `EntityHeaderBui` nativo, revisar em upgrades do Backstage | Entregue em 2026-10-03 |
 | IDP: apresentação detalhada como deck único público em `docs/presentation/`, publicada no GitHub Pages; cortes por público virão de filtro sobre `audiences` (#148) | Entregue em 2026-10-10 |
+| Plataforma: CLI `platform` (Python, pacote `wasp_platform`) + Platform API + provider `local_k3d` — primeiro Environment como k3d local a partir do CRD `Environment` (#152, PR #154). Sem auth (#144), journal em arquivo. Guia: https://smsilva.github.io/wasp-idp/cli/ | Entregue em 2026-10-10 |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
 | Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
 | Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
