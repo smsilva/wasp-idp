@@ -4,6 +4,7 @@ Tokens live in ~/.config/platform/credentials (0600). They are never printed or 
 """
 import base64
 import hashlib
+import html
 import http.server
 import json
 import os
@@ -181,6 +182,37 @@ def _oauth_error(response: httpx.Response) -> str:
     return str(response.status_code)
 
 
+CALLBACK_TEXT = {
+  "en": {
+    "ok": ("All set.", "Back to the terminal.", "login complete", "You can close this tab", "Next, in the terminal:"),
+    "fail": ("Something went wrong", "along the way.", "login failed", "Login not completed", "Run platform login again."),
+  },
+  "pt-BR": {
+    "ok": ("Pronto.", "Volte ao terminal.", "login concluído", "Pode fechar esta aba", "Próximos passos no terminal:"),
+    "fail": ("Algo deu errado", "no caminho.", "login não concluído", "Login não concluído", "Rode platform login de novo."),
+  },
+}
+
+
+def callback_page(ok: bool, error: str | None, accept_language: str = "") -> str:
+  """The browser page at the end of `platform login`, in the look of the Keycloak theme (#173)."""
+  lang = "pt-BR" if accept_language.lower().startswith("pt") else "en"
+  heading, heading_em, status, title, message = CALLBACK_TEXT[lang]["ok" if ok else "fail"]
+  if ok:
+    term = '<span class="okc">✓</span> Logged in'
+    extra = '<div class="cmds">platform whoami<br>platform environment list</div>'
+  else:
+    term = "✗ login failed"
+    # The error comes from the redirect query string: escape it, an attacker controls it.
+    message = f"{html.escape(error)}. {message}" if error else message
+    extra = ""
+  template = (Path(__file__).parent / "assets" / "callback.html").read_text()
+  return template.format(
+    lang=lang, title=title, heading=heading, heading_em=heading_em, status=status, message=message,
+    term=term, extra=extra, dot="var(--ok)" if ok else "var(--err)",
+  )
+
+
 class _Callback:
   """Single-request HTTP listener on a random free port of 127.0.0.1."""
 
@@ -201,9 +233,9 @@ class _Callback:
         else:
           owner.code = query.get("code", [None])[0]
         ok = owner.code is not None
-        body = ("Login complete. You can return to the terminal." if ok else f"Login failed: {owner.error}").encode()
+        body = callback_page(ok, owner.error, self.headers.get("Accept-Language", "")).encode()
         self.send_response(200 if ok else 400)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(body)
         owner.done.set()

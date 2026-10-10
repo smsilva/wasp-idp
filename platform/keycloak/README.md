@@ -10,6 +10,16 @@ Broker de identidade da plataforma (ADR 0021): o Google autentica, o Keycloak gu
 - Aplica o realm `realm-platform.yaml` com o keycloak-config-cli (`deploy/realm-import.yaml`). O import é idempotente, e o `init` recria o Job a cada execução.
 - Grava `issuer` e `client_id` em `~/.config/platform/config.yaml`.
 
+## Tema
+
+O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado no mockup `docs/idp/design/keycloak-theme/b-split.html` (variante B — Split): coluna de contexto à esquerda, formulário à direita, faixa curta no topo em telas estreitas.
+
+- Herda o `keycloak.v2`. Só três peças são nossas: `template.ftl` (cópia do `keycloak.v2` 26.5.5 com o layout em duas colunas, trechos marcados `platform:`), `context.ftl` (título, texto e terminal de cada tela) e `resources/css/platform.css` (tokens do PatternFly v5 apontados para a paleta do deck). Os formulários continuam os do `keycloak.v2`.
+- Textos em pt-BR e en (`messages/`), escolhidos pelo idioma do navegador ou pelo seletor no canto. As chaves `platform.*` são da coluna de contexto; as demais substituem textos do Keycloak.
+- O `platform init` empacota o tema num ConfigMap (`keycloak-theme`, caminhos com `__` no lugar de `/`), e um init container remonta a árvore em `/opt/keycloak/themes`. Um hash do conteúdo na anotação do Deployment reinicia o Keycloak só quando o tema muda.
+- **Upgrade do Keycloak:** compare `template.ftl` com o do `keycloak.v2` da versão nova e reaplique os trechos `platform:`.
+- **Não reinicie o Keycloak com alguém no meio de um login:** a sessão de autenticação vive na memória do pod, e o retorno do Google cai num servidor que a esqueceu (`ERR_EMPTY_RESPONSE` no navegador, `identity provider unreachable` na CLI).
+
 ## Issuer
 
 `KC_HOSTNAME=http://localhost:8180` fixa o issuer de todo token em `http://localhost:8180/realms/platform`. Dentro do cluster, a Platform API busca o JWKS pela URL interna (`http://keycloak.platform-auth.svc:8080`) e compara o `iss` com a URL pública. Sem o hostname fixo, os dois valores divergem e a validação falha.

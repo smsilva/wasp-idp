@@ -1,0 +1,132 @@
+/* platform theme (#173, variant B — Split). Mockup: docs/idp/design/keycloak-theme/b-split.html.
+   Loaded after keycloak.v2 styles.css: re-points the PatternFly v5 tokens to the deck palette and
+   lays the stock card out as the right column. Always dark (theme.properties darkMode=false). */
+:root {
+  --platform-bg: #0a0e1a; --platform-panel: #111827; --platform-panel-2: #0d1322;
+  --platform-line: #1f2937; --platform-line-2: #2b3648;
+  --platform-fg: #e6edf6; --platform-fg-2: #9fb3c8; --platform-fg-3: #6b7a8d;
+  --platform-accent: #4a9ef4; --platform-ok: #7ee787; --platform-err: #ff7b72; --platform-amber: #e5c07b;
+  --platform-mono: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --platform-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --pf-v5-global--FontFamily--text: var(--platform-sans);
+  --pf-v5-global--FontFamily--heading: var(--platform-sans);
+  --pf-v5-global--Color--100: var(--platform-fg);
+  --pf-v5-global--Color--200: var(--platform-fg-2);
+  --pf-v5-global--BackgroundColor--100: var(--platform-panel-2);
+  --pf-v5-global--BorderColor--100: var(--platform-line-2);
+  --pf-v5-global--BorderColor--200: var(--platform-line-2);
+  --pf-v5-global--primary-color--100: var(--platform-accent);
+  --pf-v5-global--primary-color--200: #63adf6;
+  --pf-v5-global--link--Color: var(--platform-accent);
+  --pf-v5-global--link--Color--hover: #63adf6;
+  --pf-v5-global--danger-color--100: var(--platform-err);
+  --pf-v5-global--BorderRadius--sm: 8px;
+  color-scheme: dark;
+}
+html.login-pf, body.platform { background: var(--platform-bg) !important; color: var(--platform-fg); }
+body.platform { margin: 0; font-family: var(--platform-sans); }
+
+.platform-split { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 100vh; }
+
+/* Left: context column */
+.platform-ctx {
+  padding: 48px 56px; border-right: 1px solid var(--platform-line); display: flex; flex-direction: column; gap: 22px;
+  background:
+    radial-gradient(700px 360px at 0% 0%, rgba(74, 158, 244, .14), transparent 70%),
+    radial-gradient(600px 300px at 100% 100%, rgba(124, 92, 255, .10), transparent 70%),
+    #080c17;
+}
+.platform-brand { display: flex; align-items: center; gap: 10px; }
+.platform-brand .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, var(--platform-accent), #7c5cff); color: #050912; font-weight: 700; }
+.platform-brand .name { font-weight: 600; letter-spacing: .02em; }
+.platform-brand .name span { color: var(--platform-fg-3); font-weight: 400; }
+.platform-ctx h2 { font-size: 30px; line-height: 1.2; margin: 24px 0 0; max-width: 18ch; font-weight: 700; }
+.platform-ctx h2 em { font-style: normal; color: var(--platform-accent); }
+.platform-ctx p { color: var(--platform-fg-2); margin: 0; max-width: 46ch; }
+.platform-planes { display: flex; flex-wrap: wrap; gap: 6px; }
+.platform-planes span { border: 1px solid var(--platform-line-2); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--platform-fg-3); }
+.platform-term { background: #05080f; border: 1px solid var(--platform-line-2); border-radius: 10px; overflow: hidden; margin-top: auto; max-width: 560px; }
+.platform-term .tb { display: flex; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--platform-line); }
+.platform-term .tb i { width: 9px; height: 9px; border-radius: 50%; display: block; background: #2b3648; }
+.platform-term pre { margin: 0; padding: 12px 14px; font: 12.5px/1.7 var(--platform-mono); color: var(--platform-fg-2); white-space: pre-wrap; background: none; border: 0; }
+.platform-term .p { color: var(--platform-accent); }
+.platform-term .hl { color: var(--platform-amber); font-weight: 600; }
+.platform-term .cur { display: inline-block; width: 8px; height: 14px; background: var(--platform-fg-2); vertical-align: -2px; animation: platform-blink 1.1s steps(1) infinite; }
+@keyframes platform-blink { 50% { opacity: 0; } }
+.platform-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; counter-reset: s; }
+.platform-steps li { display: flex; gap: 10px; color: var(--platform-fg-2); font-size: 13px; }
+.platform-steps li::before { counter-increment: s; content: counter(s); width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--platform-line-2); display: grid; place-items: center; font-size: 11px; color: var(--platform-fg-3); flex: none; }
+.platform-steps li.done::before { content: "✓"; border-color: var(--platform-ok); color: var(--platform-ok); }
+.platform-steps li.now { color: var(--platform-fg); }
+.platform-steps li.now::before { border-color: var(--platform-accent); color: var(--platform-accent); }
+
+/* Right: the stock keycloak.v2 card, flattened into the column */
+.platform-form.pf-v5-c-login { background: none !important; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 48px 32px; }
+.platform-form .pf-v5-c-login__container { display: block; width: 100%; max-width: 420px; padding: 0; grid-template-columns: none; }
+.platform-form .pf-v5-c-login__main { background: none; box-shadow: none; margin: 0; }
+.platform-form .pf-v5-c-login__main-header { padding: 0 0 6px; }
+.platform-form .pf-v5-c-login__main-body, .platform-form .pf-v5-c-login__main-footer { padding-left: 0; padding-right: 0; }
+.platform-form .pf-v5-c-title, #kc-page-title { font-size: 22px !important; font-weight: 700; color: var(--platform-fg); }
+.platform-form .pf-v5-c-form-control { background: var(--platform-panel-2); border-radius: 8px; }
+.platform-form .pf-v5-c-form-control > input { color: var(--platform-fg); }
+.platform-form .pf-v5-c-button { border-radius: 9px; min-height: 44px; font-weight: 600; }
+.platform-form .pf-v5-c-button.pf-m-primary { --pf-v5-c-button--m-primary--Color: #04101f; --pf-v5-c-button--m-primary--hover--Color: #04101f; }
+.platform-form .pf-v5-c-alert { border-radius: 6px; border-left: 3px solid var(--platform-err); background: rgba(255, 123, 114, .1); }
+
+/* Google button: white, as the Google brand guidelines ask */
+#social-google { background: #f8fafc !important; color: #1f2937 !important; border-color: #f8fafc !important; justify-content: center !important; gap: 10px; min-height: 44px; }
+#social-google::after { border: 0 !important; }
+#social-google svg { width: 18px; height: 18px; }
+#social-google span { margin: 0 !important; font-weight: 600; }
+/* "Use your Google account." reads as the subtitle above the Google button */
+.platform-form .pf-v5-c-login__main-footer-band { border: 0; padding: 0 0 14px; text-align: left; }
+.platform-form .pf-v5-c-login__main-footer-band-item { color: var(--platform-fg-2); }
+
+/* Local account: hidden behind a link (js/platform.js), still there for emergencies */
+body.platform[data-page-id="login-login"] #kc-form.platform-collapsed { display: none; }
+.platform-local-toggle { display: block; margin-top: 14px; text-align: center; font-size: 13px; color: var(--platform-fg-3); }
+.platform-local-toggle a { cursor: pointer; }
+
+/* Device code: one wide monospace field that reads like the eight boxes of the mockup */
+#device-user-code { font: 600 24px var(--platform-mono) !important; letter-spacing: .3em; text-align: center; text-transform: uppercase; height: 56px; }
+.platform-form #kc-user-verify-device-user-code-form label { color: var(--platform-fg-2); font-weight: 400; }
+
+/* Grant: scopes as a checked list */
+#kc-oauth ul { list-style: none; padding: 12px 14px; margin: 0 0 18px; border: 1px solid var(--platform-line-2); border-radius: 10px; background: var(--platform-panel-2); display: grid; gap: 8px; }
+#kc-oauth ul li::before { content: "✓ "; color: var(--platform-ok); }
+#kc-oauth h3 { font-size: 14px; color: var(--platform-fg-2); font-weight: 400; margin: 0 0 10px; }
+#kc-oauth #kc-form-buttons .pf-v5-c-form__actions, #kc-oauth .form-actions #kc-form-buttons > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#kc-oauth #kc-login { order: 2; }
+#kc-oauth #kc-cancel { order: 1; }
+
+/* Phone: the context column collapses into a short band above the form */
+@media (max-width: 860px) {
+  .platform-split { grid-template-columns: 1fr; min-height: 0; }
+  .platform-ctx { padding: 20px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--platform-line); }
+  .platform-ctx h2 { font-size: 20px; margin-top: 8px; max-width: none; }
+  .platform-ctx p, .platform-planes, .platform-term, .platform-steps { display: none; }
+  .platform-ctx.keep-term .platform-term { display: block; margin-top: 6px; }
+  .platform-ctx.keep-term .platform-term .tb { display: none; }
+  .platform-form.pf-v5-c-login { padding: 24px 20px 32px; align-items: flex-start; }
+}
+
+/* Login page: Google first, local account below (keycloak.v2 renders the form first) */
+body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-body { display: flex; flex-direction: column; }
+body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-body > .pf-v5-c-login__main-footer { order: -1; }
+
+/* Language: follows the browser (pt-BR or en); the switcher sits small at the top right */
+.platform-form .pf-v5-c-login__main-header-utilities { position: fixed; top: 16px; right: 20px; width: auto; }
+.platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control { width: auto; min-height: 0; background: transparent !important; border: 1px solid var(--platform-line-2); border-radius: 999px; font-size: 12px; }
+.platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::before,
+.platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::after { border: 0 !important; }
+#login-select-toggle { background: transparent; color: var(--platform-fg-3); padding: 3px 28px 3px 12px; border: 0; font-size: 12px; }
+#login-select-toggle option { background: var(--platform-panel); color: var(--platform-fg); }
+.platform-form .pf-v5-c-login__main-header { border-top: 0 !important; }
+.platform-form .pf-v5-c-login__main { border-top: 0 !important; --pf-v5-c-login__main--BorderTop: none; }
+.platform-form .pf-v5-c-form-control { --pf-v5-c-form-control--before--BorderColor: var(--platform-line-2); --pf-v5-c-form-control--after--BorderColor: var(--platform-line-2); }
+
+/* Primary submit buttons fill the column, as in the mockup */
+.platform-form #kc-form-buttons, .platform-form #kc-form-buttons .pf-v5-c-form__actions { width: 100%; }
+.platform-form #kc-form-buttons input[type="submit"], .platform-form #kc-form-buttons button { width: 100%; }
+#device-user-code { width: 100%; }

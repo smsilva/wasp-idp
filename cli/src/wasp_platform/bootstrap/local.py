@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 import secrets
@@ -128,6 +129,8 @@ def install_keycloak(root: Path, admin_email: str | None, log) -> dict:
   }
   _kubectl("apply", "--filename", "-", input=json.dumps(configmap))
 
+  _apply_theme(keycloak_dir / "theme" / "platform")
+
   log("waiting for Keycloak …")
   _kubectl("rollout", "status", "deployment/keycloak", "--namespace", AUTH_NAMESPACE, "--timeout", "300s")
 
@@ -141,6 +144,24 @@ def install_keycloak(root: Path, admin_email: str | None, log) -> dict:
     raise BootstrapError(f"realm import did not complete:\n{logs}") from error
   wait_issuer(ISSUER)
   return {"issuer": ISSUER, "google": google, "admin": admin_email or None}
+
+
+def theme_configmap(theme_dir: Path) -> dict:
+  """The theme tree as one ConfigMap: keys flatten the path with "__" (the init container rebuilds it)."""
+  data = {
+    "__".join(path.relative_to(theme_dir).parts): path.read_text()
+    for path in sorted(theme_dir.rglob("*")) if path.is_file()
+  }
+  return {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "keycloak-theme", "namespace": AUTH_NAMESPACE}, "data": data}
+
+
+def _apply_theme(theme_dir: Path) -> None:
+  configmap = theme_configmap(theme_dir)
+  _kubectl("apply", "--filename", "-", input=json.dumps(configmap))
+  # The theme is copied at pod start: a changed theme needs a new pod, an unchanged one keeps it.
+  digest = hashlib.sha256(json.dumps(configmap["data"], sort_keys=True).encode()).hexdigest()[:16]
+  patch = {"spec": {"template": {"metadata": {"annotations": {"platform.wasp.silvios.me/theme": digest}}}}}
+  _kubectl("patch", "deployment", "keycloak", "--namespace", AUTH_NAMESPACE, "--type", "merge", "--patch", json.dumps(patch))
 
 
 def wait_issuer(issuer: str, timeout: int = 60) -> None:
