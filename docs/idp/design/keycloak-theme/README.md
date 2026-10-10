@@ -36,10 +36,10 @@ O tema sai em pt-BR e en (`messages_pt_BR.properties`, `messages_en.properties`)
 
 | Tela | pt-BR | en |
 |---|---|---|
-| Login (B, coluna de contexto) | Bem-vindo de volta. Entre e siga construindo. | Welcome back. Sign in and keep building. |
+| Login (B, coluna de contexto) | Que bom te ver de novo. Entre e siga construindo. | Good to see you again. Sign in and keep building. |
 | Primeiro login | Que bom ter você aqui. Confira seus dados. | Glad you're here. Check your details. |
 
-Ortografia: **bem-vindo**, com hífen, é a forma do VOLP (ABL) desde antes do Acordo; "benvindo" só como nome próprio.
+Os textos evitam marcar gênero ("bem-vindo" fica fora). Se aparecer, a forma é **bem-vindo**, com hífen, a do VOLP (ABL); "benvindo" só como nome próprio.
 
 ## Escolha
 
