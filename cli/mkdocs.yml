@@ -6,6 +6,7 @@ edit_uri: edit/main/cli/docs/
 docs_dir: docs
 nav:
   - Uso: index.md
+  - Walkthrough: walkthrough.md
 theme:
   name: material
   language: pt-BR
