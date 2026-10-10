@@ -36,6 +36,25 @@ spec:
     spec:
       securityContext:
         fsGroup: 1000
+      # The platform theme (#173) arrives flattened in the ConfigMap keycloak-theme (a ConfigMap has
+      # no directories: "login__resources__css__platform.css"); this rebuilds the tree.
+      initContainers:
+        - name: theme
+          image: quay.io/keycloak/keycloak:26.5.5
+          command:
+            - bash
+            - -c
+            - |
+              for file in /theme-src/*; do
+                target="/themes/platform/$(basename "${file}" | sed 's|__|/|g')"
+                mkdir -p "$(dirname "${target}")"
+                cp "${file}" "${target}"
+              done
+          volumeMounts:
+            - name: theme-src
+              mountPath: /theme-src
+            - name: themes
+              mountPath: /themes
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:26.5.5
@@ -78,10 +97,17 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /opt/keycloak/data
+            - name: themes
+              mountPath: /opt/keycloak/themes
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: keycloak-data
+        - name: theme-src
+          configMap:
+            name: keycloak-theme
+        - name: themes
+          emptyDir: {}
 ---
 # k3s servicelb publishes port 8180 on the load balancer; `platform init` maps it to 127.0.0.1:8180.
 apiVersion: v1

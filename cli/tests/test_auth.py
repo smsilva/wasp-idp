@@ -200,3 +200,30 @@ def test_logout_revokes_refresh_token(idp, oidc, monkeypatch):
   assert runner.invoke(app, ["logout"]).exit_code == 0
   assert idp.revoked == ["refresh-live"]
   assert not auth.credentials_path().exists()
+
+
+def test_callback_page_success_in_portuguese():
+  page = auth.callback_page(True, None, "pt-BR,pt;q=0.9,en;q=0.8")
+  assert '<html lang="pt-BR">' in page
+  assert "Volte ao terminal." in page and "platform whoami" in page
+
+
+def test_callback_page_failure_escapes_error():
+  page = auth.callback_page(False, "<script>alert(1)</script>", "en-US")
+  assert "<script>alert(1)</script>" not in page
+  assert "&lt;script&gt;" in page
+  assert "Login not completed" in page
+
+
+def test_browser_login_serves_themed_page(idp, oidc):
+  pages = []
+  def open_browser(url):
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+    idp.verifiers["code-1"] = query["code_challenge"]
+    callback = f"{query['redirect_uri']}?code=code-1&state={query['state']}"
+    request = urllib.request.Request(callback, headers={"Accept-Language": "en"})
+    threading.Thread(target=lambda: pages.append(urllib.request.urlopen(request).read().decode()), daemon=True).start()
+    return True
+  oidc.login_browser(open_browser=open_browser, timeout=10)
+  time.sleep(0.2)
+  assert "Back to the terminal." in pages[0]

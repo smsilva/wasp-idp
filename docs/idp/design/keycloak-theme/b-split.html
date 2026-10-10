@@ -1,0 +1,376 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keycloak theme · B — Split</title>
+<style>
+/* Variant B — Split: a context column on the left (what the platform is, where you came from,
+   the terminal you are signing in for) and the form column on the right. Needs a custom
+   template.ftl layout; the form partials (field.ftl, social-providers.ftl) stay keycloak.v2. */
+:root {
+  --bg: #0a0e1a; --panel: #111827; --panel-2: #0d1322; --line: #1f2937; --line-2: #2b3648;
+  --fg: #e6edf6; --fg-2: #9fb3c8; --fg-3: #6b7a8d;
+  --accent: #4a9ef4; --accent-soft: rgba(74, 158, 244, .12);
+  --ok: #7ee787; --err: #ff7b72; --err-soft: rgba(255, 123, 114, .1); --amber: #e5c07b;
+  --mono: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #05070d; color: var(--fg); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-decoration: none; }
+
+/* Mockup chrome (not part of the theme) */
+.doc { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+.doc > h1 { font-size: 22px; margin: 0; }
+.doc > p.lead { color: var(--fg-2); margin: 6px 0 0; max-width: 92ch; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 8px; }
+.toc a { border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 12px; color: var(--fg-2); font-size: 13px; }
+section.screen { margin-top: 44px; }
+section.screen > h2 { font-size: 16px; margin: 0 0 4px; }
+section.screen > p { color: var(--fg-3); margin: 0 0 14px; font-size: 13px; max-width: 100ch; }
+.stack { display: grid; gap: 18px; }
+.browser { border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.browser .bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #0f1524; border-bottom: 1px solid var(--line); }
+.browser .dots { display: flex; gap: 6px; }
+.browser .dots i { width: 10px; height: 10px; border-radius: 50%; background: #2b3648; display: block; }
+.browser .url { flex: 1; font: 12px var(--mono); color: var(--fg-3); background: #0a0f1c; border-radius: 6px; padding: 3px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.browser .state { font-size: 11px; color: var(--amber); text-transform: uppercase; letter-spacing: .06em; }
+.notes { margin: 14px 0 0; padding-left: 18px; color: var(--fg-2); font-size: 13px; display: grid; gap: 3px; }
+
+/* ===== Theme ===== */
+.split { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 520px; }
+.ctx {
+  position: relative; padding: 36px 40px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 22px;
+  background:
+    radial-gradient(600px 300px at 0% 0%, rgba(74, 158, 244, .14), transparent 70%),
+    radial-gradient(500px 260px at 100% 100%, rgba(124, 92, 255, .10), transparent 70%),
+    #080c17;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), #7c5cff); color: #050912; font: 700 15px var(--sans); }
+.brand .name { font-weight: 600; letter-spacing: .02em; }
+.brand .name span { color: var(--fg-3); font-weight: 400; }
+.ctx h3 { font-size: 26px; line-height: 1.2; margin: 0; max-width: 18ch; }
+.ctx h3 em { font-style: normal; color: var(--accent); }
+.ctx p { color: var(--fg-2); margin: 0; max-width: 46ch; }
+.planes { display: flex; flex-wrap: wrap; gap: 6px; }
+.planes span { border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--fg-3); }
+.term { background: #05080f; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; margin-top: auto; }
+.term .tb { display: flex; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.term .tb i { width: 9px; height: 9px; border-radius: 50%; display: block; background: #2b3648; }
+.term pre { margin: 0; padding: 12px 14px; font: 12.5px/1.7 var(--mono); color: var(--fg-2); white-space: pre-wrap; }
+.term .p { color: var(--accent); }
+.term .ok { color: var(--ok); }
+.term .hl { color: var(--amber); font-weight: 600; }
+.term .cur { display: inline-block; width: 8px; height: 14px; background: var(--fg-2); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.form { padding: 44px 48px; display: flex; flex-direction: column; justify-content: center; max-width: 470px; width: 100%; justify-self: center; }
+.form h4 { font-size: 20px; margin: 0; }
+.form .sub { color: var(--fg-2); margin: 6px 0 24px; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 44px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg); font: 500 14px var(--sans); }
+.btn.google { background: #f8fafc; color: #1f2937; border-color: #f8fafc; font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #04101f; font-weight: 600; }
+.btn.ghost { background: transparent; }
+.btn svg { width: 18px; height: 18px; }
+.muted-link { margin-top: 14px; text-align: center; font-size: 13px; color: var(--fg-3); }
+label { display: block; font-size: 12px; color: var(--fg-2); margin: 0 0 6px; }
+.input { width: 100%; height: 40px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg); padding: 0 12px; font: 14px var(--sans); }
+.codebox { display: grid; grid-template-columns: repeat(4, 1fr) 18px repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.codebox span { height: 52px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); display: grid; place-items: center; font: 600 22px var(--mono); }
+.codebox span.sep { border: 0; background: none; color: var(--fg-3); }
+.codebox.err span:not(.sep) { border-color: var(--err); }
+.help { font-size: 12px; color: var(--fg-3); margin-bottom: 18px; }
+.alert { border-left: 3px solid var(--err); background: var(--err-soft); color: #ffd1cc; border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; counter-reset: s; }
+.steps li { display: flex; gap: 10px; color: var(--fg-2); font-size: 13px; }
+.steps li::before { counter-increment: s; content: counter(s); width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 11px; color: var(--fg-3); flex: none; }
+.steps li.done::before { content: "✓"; border-color: var(--ok); color: var(--ok); }
+.steps li.now { color: var(--fg); }
+.steps li.now::before { border-color: var(--accent); color: var(--accent); }
+.perm { border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; margin-bottom: 18px; background: var(--panel-2); display: grid; gap: 8px; color: var(--fg-2); font-size: 13px; }
+.perm b { color: var(--fg); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv { font: 12px var(--mono); color: var(--fg-3); }
+.status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-3); border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 10px; }
+.status i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: block; }
+.status.err i { background: var(--err); }
+
+/* Narrow screens (phone): the context column collapses into a compact band above the form.
+   The terminal is hidden except on the device screen, where the code to compare matters. */
+@media (max-width: 860px) {
+  .split { grid-template-columns: 1fr; }
+  .ctx { padding: 20px 20px 18px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .ctx h3 { font-size: 20px; max-width: none; }
+  .ctx p, .ctx .planes { display: none; }
+  .ctx .term { display: none; }
+  .ctx.keep-term .term { display: block; margin-top: 6px; }
+  .ctx.keep-term .term .tb { display: none; }
+  .form { padding: 24px 20px 32px; justify-content: flex-start; }
+  .codebox { gap: 4px; grid-template-columns: repeat(4, 1fr) 12px repeat(4, 1fr); }
+  .codebox span { height: 44px; font-size: 18px; }
+}
+/* Mockup chrome: phone frames that force the narrow layout regardless of the window width. */
+.phones { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+.phone { width: 360px; border: 1px solid var(--line-2); border-radius: 30px; padding: 12px 10px; background: #070a12; }
+.phone .notch { width: 90px; height: 6px; border-radius: 6px; background: #1f2937; margin: 2px auto 10px; }
+.phone .scr { border-radius: 18px; overflow: hidden; background: var(--bg); height: 700px; overflow-y: auto; }
+.phone .cap { text-align: center; color: var(--fg-3); font-size: 12px; margin-top: 8px; }
+.phone .split { grid-template-columns: 1fr; min-height: 0; }
+.phone .ctx { padding: 20px 20px 18px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+.phone .ctx h3 { font-size: 20px; max-width: none; }
+.phone .ctx p, .phone .ctx .planes, .phone .ctx .term { display: none; }
+.phone .ctx.keep-term .term { display: block; margin-top: 6px; }
+.phone .ctx.keep-term .term .tb { display: none; }
+.phone .ctx.keep-term .term pre { font-size: 11px; padding: 10px 12px; }
+.phone .form { padding: 24px 20px 32px; justify-content: flex-start; max-width: none; }
+.phone .codebox { gap: 4px; grid-template-columns: repeat(4, 1fr) 12px repeat(4, 1fr); }
+.phone .codebox span { height: 44px; font-size: 18px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="g" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></symbol>
+</svg>
+
+<div class="doc">
+  <h1>Keycloak theme · B — Split</h1>
+  <p class="lead">Tela dividida: à esquerda, o contexto — o que é a plataforma e o terminal que está pedindo o login —; à direita, a ação. A coluna da esquerda conecta o navegador ao comando que o usuário acabou de rodar, que é como quase todo login acontece (<code>platform login</code>). Exige um <code>template.ftl</code> próprio para o layout; os parciais de formulário continuam os do <code>keycloak.v2</code>. Abaixo de 860 px a coluna de contexto vira uma faixa no topo.</p>
+  <div class="toc">
+    <a href="#login">1 · Login</a><a href="#device">2 · Device code</a><a href="#grant">2b · Consentimento</a><a href="#error">3 · Erro</a><a href="#profile">4 · Primeiro login</a><a href="#callback">6 · Callback da CLI</a><a href="#mobile">7 · Celular</a>
+  </div>
+  <p class="lead" style="margin-top:10px">O Account Console (5) fica igual ao da variante A: ele é uma app React com tema próprio e não usa este layout.</p>
+
+  <section class="screen" id="login">
+    <h2>1 · Login</h2>
+    <p>Sem conta local visível: o link discreto no fim abre o formulário de senha.</p>
+    <div class="browser">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:8180/realms/platform/protocol/openid-connect/auth?client_id=account-console…</div><span class="state">padrão</span></div>
+      <div class="split">
+        <div class="ctx">
+          <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+          <h3>Que bom te ver de novo. <em>Entre e siga construindo.</em></h3>
+          <p>O mesmo login vale para a CLI, o portal e a API. Quem você é e o que pode fazer vêm dos grupos da plataforma.</p>
+          <div class="planes"><span>Developer Control</span><span>Integration &amp; Delivery</span><span>Resource</span><span>Observability</span><span>Security</span></div>
+          <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre><span class="p">$</span> platform whoami
+<span class="cur"></span></pre></div>
+        </div>
+        <div class="form">
+          <h4>Entrar</h4>
+          <p class="sub">Use sua conta Google.</p>
+          <a class="btn google" href="#"><svg><use href="#g"/></svg>Continuar com Google</a>
+          <div class="muted-link">Conta de emergência? <a href="#">Entrar com usuário e senha</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="device">
+    <h2>2 · Device code</h2>
+    <p>O terminal da esquerda repete o código que o usuário deve conferir. Com a URL completa (<code>?user_code=</code>), o código já vem preenchido e o usuário só confere.</p>
+    <div class="stack">
+      <div class="browser">
+        <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:8180/realms/platform/device?user_code=ABCD-EFGH</div><span class="state">código preenchido</span></div>
+        <div class="split">
+          <div class="ctx">
+            <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+            <h3>Conectando <em>um terminal</em>.</h3>
+            <p>Confira se o código é o mesmo que aparece no terminal onde você rodou o comando. Se não for, feche esta aba.</p>
+            <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre><span class="p">$</span> platform login --use-device-code
+Open http://localhost:8180/realms/platform/device?user_code=ABCD-EFGH
+and confirm the code <span class="hl">ABCD-EFGH</span>
+<span class="cur"></span></pre></div>
+          </div>
+          <div class="form">
+            <h4>Confirme o código</h4>
+            <p class="sub">É o mesmo do terminal?</p>
+            <div class="codebox"><span>A</span><span>B</span><span>C</span><span>D</span><span class="sep">–</span><span>E</span><span>F</span><span>G</span><span>H</span></div>
+            <div class="help">Expira em 10 minutos e vale para um único login.</div>
+            <a class="btn primary" href="#">Sim, continuar</a>
+            <ol class="steps" style="margin-top:22px"><li class="now">Confirmar o código</li><li>Entrar com Google</li><li>Autorizar o terminal</li></ol>
+          </div>
+        </div>
+      </div>
+      <div class="browser">
+        <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:8180/realms/platform/device</div><span class="state">código inválido ou usado</span></div>
+        <div class="split">
+          <div class="ctx">
+            <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+            <h3>Conectando <em>um terminal</em>.</h3>
+            <p>Cada código vale para um único login e expira em 10 minutos.</p>
+            <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre><span class="p">$</span> platform login --use-device-code
+<span class="cur"></span></pre></div>
+          </div>
+          <div class="form">
+            <h4>Confirme o código</h4>
+            <div class="alert">Código inválido, expirado ou já usado. Rode o comando ao lado de novo para gerar outro.</div>
+            <div class="codebox err"><span>I</span><span>I</span><span>O</span><span>V</span><span class="sep">–</span><span>G</span><span>D</span><span>K</span><span>W</span></div>
+            <div class="help">&nbsp;</div>
+            <a class="btn primary" href="#">Tentar outro código</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li>Oito caixas em vez de um campo livre: o formato do código fica óbvio e a comparação com o terminal é visual.</li>
+      <li>A trilha de três passos mostra que ainda falta o Google e a autorização: hoje o usuário não sabe quantas telas vêm.</li>
+    </ul>
+  </section>
+
+  <section class="screen" id="grant">
+    <h2>2b · Consentimento do device code</h2>
+    <div class="browser">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:8180/realms/platform/login-actions/consent…</div><span class="state">confirmar</span></div>
+      <div class="split">
+        <div class="ctx">
+          <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+          <h3>Este terminal vai agir <em>em seu nome</em>.</h3>
+          <p>Ele poderá criar e apagar ambientes, como você faria. O acesso dura até você rodar <code>platform logout</code>.</p>
+          <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre><span class="p">$</span> platform login --use-device-code
+and confirm the code <span class="hl">ABCD-EFGH</span>
+<span class="cur"></span></pre></div>
+        </div>
+        <div class="form">
+          <h4>Autorizar o terminal?</h4>
+          <p class="sub">Entrando como <b>voce@example.com</b>.</p>
+          <div class="perm"><div><b>platform CLI</b> · <span class="kv">platform-cli</span></div><div>✓ nome e e-mail</div><div>✓ grupos <span class="kv">platform-admins</span>, <span class="kv">platform-users</span></div><div>✓ chamar a Platform API</div></div>
+          <div class="row"><a class="btn ghost" href="#">Negar</a><a class="btn primary" href="#">Autorizar</a></div>
+          <ol class="steps" style="margin-top:22px"><li class="done">Confirmar o código</li><li class="done">Entrar com Google</li><li class="now">Autorizar o terminal</li></ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="error">
+    <h2>3 · Erro</h2>
+    <div class="browser">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:8180/realms/platform/broker/google/endpoint?state=…</div><span class="state">falha no Google</span></div>
+      <div class="split">
+        <div class="ctx">
+          <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+          <h3>Algo deu errado <em>no caminho</em>.</h3>
+          <p>Seu terminal continua esperando. Tente de novo; se o erro persistir, mande o código ao lado para quem administra a plataforma.</p>
+          <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre><span class="p">$</span> kubectl logs deploy/keycloak -n platform-auth | grep <span class="hl">identity_provider_login_failure</span></pre></div>
+        </div>
+        <div class="form">
+          <span class="status err" style="align-self:flex-start;margin-bottom:14px"><i></i>identity_provider_login_failure</span>
+          <h4>Não foi possível entrar com o Google</h4>
+          <p class="sub">O Google não completou a autenticação.</p>
+          <a class="btn primary" href="#">Tentar de novo</a>
+          <div class="muted-link"><span class="kv">19:41:03 UTC · realm platform</span></div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li>O comando de diagnóstico aparece só para admins? O tema não sabe quem é admin antes do login; mostrar a todos é aceitável num ambiente local, não em produção. A variante A não tem esse dilema.</li>
+    </ul>
+  </section>
+
+  <section class="screen" id="profile">
+    <h2>4 · Primeiro login</h2>
+    <div class="browser">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">localhost:8180/realms/platform/login-actions/first-broker-login…</div><span class="state">revisar perfil</span></div>
+      <div class="split">
+        <div class="ctx">
+          <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+          <h3>Que bom ter você aqui. <em>Confira seus dados.</em></h3>
+          <p>Nome e e-mail vieram do Google. Você entra no grupo <span class="kv">platform-users</span>; quem administra a plataforma pode te dar mais acesso.</p>
+        </div>
+        <div class="form">
+          <h4>Seus dados</h4>
+          <p class="sub" style="margin-bottom:18px">&nbsp;</p>
+          <div style="margin-bottom:14px"><label>E-mail</label><input class="input" value="voce@example.com" disabled></div>
+          <div class="row" style="margin-bottom:18px"><div><label>Nome</label><input class="input" value="Ana"></div><div><label>Sobrenome</label><input class="input" value="Souza"></div></div>
+          <a class="btn primary" href="#">Continuar</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="callback">
+    <h2>6 · Callback da CLI</h2>
+    <p>Mesma divisão, servida em <code>127.0.0.1</code> pelo <code>platform login</code>.</p>
+    <div class="browser">
+      <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">127.0.0.1:35311/callback?state=…&amp;code=…</div><span class="state">sucesso</span></div>
+      <div class="split">
+        <div class="ctx">
+          <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+          <h3>Pronto. <em>Volte ao terminal.</em></h3>
+          <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre><span class="p">$</span> platform login
+Opening the browser to sign in …
+<span class="ok">✓</span> Logged in as voce@example.com (platform-admins, platform-users)
+<span class="p">$</span> <span class="cur"></span></pre></div>
+        </div>
+        <div class="form">
+          <span class="status" style="align-self:flex-start;margin-bottom:14px"><i></i>login concluído</span>
+          <h4>Pode fechar esta aba</h4>
+          <p class="sub">Próximos passos no terminal:</p>
+          <div class="perm" style="font-family:var(--mono);font-size:12.5px"><div>platform whoami</div><div>platform environment list</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen" id="mobile">
+    <h2>7 · Celular</h2>
+    <p>Abaixo de 860 px a coluna de contexto vira uma faixa curta acima do formulário: fica a marca e o título, saem o parágrafo, os planes e o terminal. A exceção é o device code: ali o código do terminal é o que o usuário compara, então ele continua visível. É o caso mais comum no celular — o terminal está no computador e a URL impressa por ele foi aberta no telefone.</p>
+    <div class="phones">
+      <div>
+        <div class="phone"><div class="notch"></div><div class="scr">
+          <div class="split">
+            <div class="ctx">
+              <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+              <h3>Que bom te ver de novo. <em>Entre e siga construindo.</em></h3>
+            </div>
+            <div class="form">
+              <h4>Entrar</h4>
+              <p class="sub">Use sua conta Google.</p>
+              <a class="btn google" href="#"><svg><use href="#g"/></svg>Continuar com Google</a>
+              <div class="muted-link">Conta de emergência? <a href="#">Entrar com usuário e senha</a></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="cap">1 · Login</div>
+      </div>
+      <div>
+        <div class="phone"><div class="notch"></div><div class="scr">
+          <div class="split">
+            <div class="ctx keep-term">
+              <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+              <h3>Conectando <em>um terminal</em>.</h3>
+              <div class="term"><div class="tb"><i></i><i></i><i></i></div><pre>and confirm the code <span class="hl">ABCD-EFGH</span></pre></div>
+            </div>
+            <div class="form">
+              <h4>Confirme o código</h4>
+              <p class="sub">É o mesmo do terminal?</p>
+              <div class="codebox"><span>A</span><span>B</span><span>C</span><span>D</span><span class="sep">–</span><span>E</span><span>F</span><span>G</span><span>H</span></div>
+              <div class="help">Expira em 10 minutos e vale para um único login.</div>
+              <a class="btn primary" href="#">Sim, continuar</a>
+              <ol class="steps" style="margin-top:22px"><li class="now">Confirmar o código</li><li>Entrar com Google</li><li>Autorizar o terminal</li></ol>
+            </div>
+          </div>
+        </div></div>
+        <div class="cap">2 · Device code</div>
+      </div>
+      <div>
+        <div class="phone"><div class="notch"></div><div class="scr">
+          <div class="split">
+            <div class="ctx">
+              <div class="brand"><div class="mark">w</div><div class="name">wasp <span>· platform</span></div></div>
+              <h3>Este terminal vai agir <em>em seu nome</em>.</h3>
+            </div>
+            <div class="form">
+              <h4>Autorizar o terminal?</h4>
+              <p class="sub">Entrando como <b>voce@example.com</b>.</p>
+              <div class="perm"><div><b>platform CLI</b> · <span class="kv">platform-cli</span></div><div>✓ nome e e-mail</div><div>✓ grupos <span class="kv">platform-admins</span>, <span class="kv">platform-users</span></div><div>✓ chamar a Platform API</div></div>
+              <div class="row"><a class="btn ghost" href="#">Negar</a><a class="btn primary" href="#">Autorizar</a></div>
+              <ol class="steps" style="margin-top:22px"><li class="done">Confirmar o código</li><li class="done">Entrar com Google</li><li class="now">Autorizar o terminal</li></ol>
+            </div>
+          </div>
+        </div></div>
+        <div class="cap">2b · Consentimento</div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li>O <code>platform login</code> sem device code não acontece no celular: o callback vai para <code>127.0.0.1</code> do computador. No celular, o caminho é sempre o device code.</li>
+      <li>Para o celular alcançar o Keycloak, ele precisa estar numa URL acessível pela rede (não <code>localhost</code>). No target local isso não acontece; vale para targets com DNS público. O tema já sai pronto para isso.</li>
+      <li>Botões com 44 px de altura, o mínimo confortável para toque.</li>
+    </ul>
+  </section>
+</div>

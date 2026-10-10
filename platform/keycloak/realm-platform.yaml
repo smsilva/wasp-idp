@@ -4,6 +4,14 @@
 # and the bootstrap-admin mapper when --admin was never given.
 realm: platform
 enabled: true
+displayName: wasp platform
+# Theme `platform` (theme/platform, #173); texts in pt-BR and en, picked from the browser language.
+loginTheme: platform
+internationalizationEnabled: true
+supportedLocales:
+  - pt-BR
+  - en
+defaultLocale: en
 defaultGroups:
   - /platform-users
 groups:
@@ -61,6 +69,7 @@ clients:
 identityProviders:
   - alias: google
     providerId: google
+    displayName: Google
     enabled: true
     trustEmail: true
     config:
