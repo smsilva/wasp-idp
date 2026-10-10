@@ -27,7 +27,7 @@ A expiração de um ambiente é aplicada pelo provider direto no CR e não passa
 
 ## Autenticação
 
-Nenhuma nesta fatia: o serviço só é alcançável por `127.0.0.1:9090` no host. O middleware de auth é um no-op marcado `TODO(#144)` (`current_actor` em `app.py`).
+Nenhuma nesta fatia: o serviço só é alcançável por `127.0.0.1:9090` no host. O middleware de auth é um no-op marcado `TODO(#144)` (`current_actor` em `app.py`). Para que "só `127.0.0.1`" valha também contra DNS rebinding, a API recusa (`400`) qualquer header `Host` fora de `PLATFORM_ALLOWED_HOSTS` (default `127.0.0.1,localhost`).
 
 ## Desenvolvimento
 

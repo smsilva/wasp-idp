@@ -83,6 +83,9 @@ spec:
             httpGet:
               path: /healthz
               port: http
+              httpHeaders:
+                - name: Host # the kubelet sends the pod IP, which TrustedHostMiddleware rejects
+                  value: localhost
           volumeMounts:
             - name: journal
               mountPath: /var/lib/platform

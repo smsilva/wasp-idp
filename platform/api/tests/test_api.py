@@ -141,3 +141,9 @@ def test_journal_keeps_unapplied_request_when_apply_fails(client, journal_path):
   client.post("/v1/environments", json={"name": "dup", "profile": "ephemeral"})
   lines = [json.loads(line) for line in journal_path.read_text().splitlines()]
   assert [line["applied"] for line in lines] == [False, True, False]
+
+
+@pytest.mark.parametrize("host,status", [("127.0.0.1:9090", 200), ("localhost:9090", 200), ("attacker.example:9090", 400)])
+def test_rejects_unexpected_host_header(state, journal_path, host, status):
+  client = TestClient(create_app(state, Journal(journal_path), ["127.0.0.1", "localhost"]))
+  assert client.get("/v1/environments", headers={"Host": host}).status_code == status

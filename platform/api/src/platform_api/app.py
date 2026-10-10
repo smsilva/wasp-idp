@@ -3,6 +3,7 @@ import re
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, field_validator
 
 from . import environments
@@ -40,8 +41,12 @@ def current_actor(request: Request) -> str:
   return "anonymous"
 
 
-def create_app(state, journal: Journal) -> FastAPI:
+def create_app(state, journal: Journal, allowed_hosts: list[str] | None = None) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.1.0")
+  if allowed_hosts:
+    # Without authentication (#144), "only on 127.0.0.1" must also hold for the Host header: a web page
+    # that rebinds its own DNS name to 127.0.0.1 would otherwise reach the API as a same-origin caller.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
   @app.get("/healthz")
   def healthz():
@@ -100,4 +105,5 @@ def build() -> FastAPI:
 
   namespace = os.environ.get("PLATFORM_NAMESPACE", "platform-system")
   journal_path = os.environ.get("PLATFORM_JOURNAL", "/var/lib/platform/journal.jsonl")
-  return create_app(KubeApplyWriter(namespace), Journal(journal_path))
+  allowed_hosts = os.environ.get("PLATFORM_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+  return create_app(KubeApplyWriter(namespace), Journal(journal_path), allowed_hosts)
