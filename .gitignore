@@ -37,3 +37,8 @@ saml-metadata.xml
 
 # Andaime de contexto derivado de docs versionadas — nao versionar (segunda fonte de verdade)
 docs/superpowers/context/
+
+# Python (CLI, Platform API, providers)
+.venv/
+__pycache__/
+.pytest_cache/
