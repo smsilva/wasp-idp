@@ -6,7 +6,9 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 
 | Método | Caminho | Resposta |
 |---|---|---|
-| `GET` | `/healthz` | `200` |
+| `GET` | `/healthz` | `200`, sem token |
+| `GET` | `/v1/me` | `200`, `{"sub", "email", "groups"}` do token |
+| `GET` | `/v1/capabilities` | `200`, `{"items": [{"name", "status"}]}`; sem provider, `NoProviderForCapability` |
 | `POST` | `/v1/environments` | `202`, body `{"name", "profile": "ephemeral"\|"shared", "expires": "3d"}` |
 | `GET` | `/v1/environments` | `200`, `{"items": [...]}` |
 | `GET` | `/v1/environments/{name}` | `200` |
@@ -21,13 +23,27 @@ Os objetos devolvidos são a visão da API (`name`, `profile`, `status`, `expire
 
 ## Journal
 
-Nesta fatia, o journal é um arquivo append-only JSON Lines em `/var/lib/platform/journal.jsonl`, num PVC (`platform-api-journal`). Cada pedido aceito gera uma linha com `applied: false` **antes** de ser aplicado e outra com o mesmo `id` e `applied: true` depois. O Postgres substitui o arquivo com a #144.
+Nesta fatia, o journal é um arquivo append-only JSON Lines em `/var/lib/platform/journal.jsonl`, num PVC (`platform-api-journal`). Cada pedido aceito gera uma linha com `applied: false` **antes** de ser aplicado e outra com o mesmo `id` e `applied: true` depois. O Postgres substitui o arquivo com a #172.
 
 A expiração de um ambiente é aplicada pelo provider direto no CR e não passa pelo journal.
 
 ## Autenticação
 
-Nenhuma nesta fatia: o serviço só é alcançável por `127.0.0.1:9090` no host. O middleware de auth é um no-op marcado `TODO(#144)` (`current_actor` em `app.py`). Para que "só `127.0.0.1`" valha também contra DNS rebinding, a API recusa (`400`) qualquer header `Host` fora de `PLATFORM_ALLOWED_HOSTS` (default `127.0.0.1,localhost`).
+Toda rota `/v1/*` exige `Authorization: Bearer <token>` emitido pelo Keycloak (ADR 0021). A validação (`auth.py`, `pyjwt`):
+
+- assinatura RS256 pelo JWKS, buscado pela URL interna (`PLATFORM_OIDC_JWKS_URL`, o Service `keycloak.platform-auth`);
+- `iss` igual ao issuer público (`PLATFORM_OIDC_ISSUER`, `http://localhost:8180/realms/platform`), o mesmo `KC_HOSTNAME` do Keycloak;
+- `aud` contém `platform-api`; `exp` e `sub` obrigatórios.
+
+Sem token ou com token inválido, `401` com `WWW-Authenticate: Bearer`; o motivo exato não vai na resposta. `require_group("platform-admins")` responde `403` quando o grupo falta na claim `groups`. O autor no journal é `sub (e-mail)`.
+
+A validação mora na API, não só na borda: funciona igual em qualquer target, e a API precisa das claims para o journal e a autorização. Um ingress ou mesh validando antes é camada extra, não substituto.
+
+O `TrustedHostMiddleware` continua: a API recusa (`400`) header `Host` fora de `PLATFORM_ALLOWED_HOSTS` (default `127.0.0.1,localhost`), contra DNS rebinding.
+
+## Erros
+
+Toda resposta de erro tem o formato `{"error": {"code", "message"}}`, com `code` em `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict` ou `invalid_request`. Operações longas futuras devolverão um ID de operação em vez de bloquear a requisição.
 
 ## Desenvolvimento
 

@@ -43,7 +43,7 @@ def api(monkeypatch):
       return httpx.Response(200, json={"items": list(environments.values())})
     name = path.rsplit("/", 1)[-1]
     if name not in environments:
-      return httpx.Response(404, json={"detail": f"environment '{name}' not found"})
+      return httpx.Response(404, json={"error": {"code": "not_found", "message": f"environment '{name}' not found"}})
     if request.method == "GET":
       calls["get"] += 1
       if calls["get"] >= 2:
@@ -58,7 +58,7 @@ def api(monkeypatch):
   original = client_module.PlatformClient.__init__
   monkeypatch.setattr(
     client_module.PlatformClient, "__init__",
-    lambda self, base_url=None, transport_=None: original(self, "http://api.test", transport),
+    lambda self, base_url=None, transport_=None, token=None: original(self, "http://api.test", transport, token or (lambda: "test-token")),
   )
   monkeypatch.setattr(environment.time, "sleep", lambda seconds: None)
   return environments

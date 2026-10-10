@@ -3,10 +3,14 @@ import re
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import environments
+from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
 from .state import ENVIRONMENTS, AlreadyExists, Conflict, NotFound
@@ -35,28 +39,57 @@ class EnvironmentRequest(BaseModel):
     return value
 
 
-def current_actor(request: Request) -> str:
-  # TODO(#144): validate the Keycloak JWT and return the subject. No authentication in this slice:
-  # the service is only reachable through 127.0.0.1 on the host.
-  return "anonymous"
+# Capabilities and whether a provider serves them, in the vocabulary of the CRD conditions (ADR 0022).
+CAPABILITIES = {
+  "identity": "Active",
+  "environment": "Active",
+  "catalog": "NoProviderForCapability",
+  "build": "NoProviderForCapability",
+  "release": "NoProviderForCapability",
+}
+
+ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 422: "invalid_request"}
 
 
-def create_app(state, journal: Journal, allowed_hosts: list[str] | None = None) -> FastAPI:
-  app = FastAPI(title="Platform API", version="0.1.0")
+def _error(status: int, message, headers=None) -> JSONResponse:
+  return JSONResponse({"error": {"code": ERROR_CODES.get(status, "error"), "message": message}}, status, headers=headers)
+
+
+def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None) -> FastAPI:
+  app = FastAPI(title="Platform API", version="0.2.0")
+  app.state.verifier = verifier
   if allowed_hosts:
-    # Without authentication (#144), "only on 127.0.0.1" must also hold for the Host header: a web page
-    # that rebinds its own DNS name to 127.0.0.1 would otherwise reach the API as a same-origin caller.
+    # Defense in depth next to the JWT: a web page that rebinds its own DNS name to 127.0.0.1 would
+    # otherwise reach the API as a same-origin caller.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+  # One error shape for every route: {"error": {"code", "message"}}.
+  @app.exception_handler(StarletteHTTPException)
+  def http_error(request: Request, error: StarletteHTTPException):
+    return _error(error.status_code, error.detail, getattr(error, "headers", None))
+
+  @app.exception_handler(RequestValidationError)
+  def validation_error(request: Request, error: RequestValidationError):
+    message = "; ".join(f"{'.'.join(str(part) for part in item['loc'][1:])}: {item['msg']}" for item in error.errors())
+    return _error(422, message)
 
   @app.get("/healthz")
   def healthz():
     return {"status": "ok"}
 
+  @app.get("/v1/me")
+  def me(principal: Principal = Depends(current_principal)):
+    return {"sub": principal.sub, "email": principal.email, "groups": sorted(principal.groups)}
+
+  @app.get("/v1/capabilities")
+  def capabilities(principal: Principal = Depends(current_principal)):
+    return {"items": [{"name": name, "status": status} for name, status in CAPABILITIES.items()]}
+
   @app.post("/v1/environments", status_code=202)
-  def create_environment(request: EnvironmentRequest, actor: str = Depends(current_actor)):
+  def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
     deadline = expires_at(request.expires) if request.expires else None
     body = environments.manifest(request.name, request.profile, deadline)
-    entry = journal.record("create", "Environment", request.name, body["spec"], actor)
+    entry = journal.record("create", "Environment", request.name, body["spec"], principal.actor)
     try:
       created = state.create(ENVIRONMENTS, body)
     except AlreadyExists:
@@ -72,24 +105,24 @@ def create_app(state, journal: Journal, allowed_hosts: list[str] | None = None) 
     return environments.view(created)
 
   @app.get("/v1/environments")
-  def list_environments():
+  def list_environments(principal: Principal = Depends(current_principal)):
     items = sorted(state.list(ENVIRONMENTS), key=lambda obj: obj["metadata"]["name"])
     return {"items": [environments.view(obj) for obj in items]}
 
   @app.get("/v1/environments/{name}")
-  def get_environment(name: str):
+  def get_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
       return environments.view(state.get(ENVIRONMENTS, name))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
 
   @app.delete("/v1/environments/{name}", status_code=202)
-  def delete_environment(name: str, actor: str = Depends(current_actor)):
+  def delete_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
       state.get(ENVIRONMENTS, name)
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
-    entry = journal.record("delete", "Environment", name, None, actor)
+    entry = journal.record("delete", "Environment", name, None, principal.actor)
     try:
       state.delete(ENVIRONMENTS, name)
     except NotFound:
@@ -106,4 +139,5 @@ def build() -> FastAPI:
   namespace = os.environ.get("PLATFORM_NAMESPACE", "platform-system")
   journal_path = os.environ.get("PLATFORM_JOURNAL", "/var/lib/platform/journal.jsonl")
   allowed_hosts = os.environ.get("PLATFORM_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
-  return create_app(KubeApplyWriter(namespace), Journal(journal_path), allowed_hosts)
+  verifier = Verifier(issuer=os.environ["PLATFORM_OIDC_ISSUER"], jwks_url=os.environ["PLATFORM_OIDC_JWKS_URL"])
+  return create_app(KubeApplyWriter(namespace), Journal(journal_path), verifier, allowed_hosts)

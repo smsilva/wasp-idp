@@ -81,7 +81,47 @@ issuer: http://localhost:8180/realms/platform
 client_id: platform-cli
 ```
 
-## 4. Criar um ambiente sem provider
+## 4. Entrar
+
+Todo comando além de `init` e `provider run` fala com a Platform API, que exige um token do Keycloak.
+
+```bash
+platform login
+```
+
+```
+Opening the browser to sign in …
+✓ Logged in as voce@example.com (platform-admins, platform-users)
+```
+
+O navegador vai direto à tela do Google e termina em "Login complete. You can return to the terminal.". Por trás, a CLI usa Authorization Code com PKCE e recebe o código num listener temporário em `127.0.0.1`.
+
+Sem navegador nesta máquina (SSH, container), use o device code e abra a URL em qualquer outro dispositivo:
+
+```bash
+platform login --use-device-code
+```
+
+```
+Open http://localhost:8180/realms/platform/device?user_code=ABCD-EFGH
+and confirm the code ABCD-EFGH
+✓ Logged in as voce@example.com (platform-admins, platform-users)
+```
+
+```bash
+platform whoami
+```
+
+```
+voce@example.com (platform-admins, platform-users)
+```
+
+O `whoami` pergunta à API quem ela vê; não lê o token localmente. Os tokens ficam em `~/.config/platform/credentials` (permissão `0600`), e a CLI renova o access token sozinha quando faltam menos de 60 s para ele expirar. `platform logout` revoga a sessão no Keycloak e apaga o arquivo.
+
+!!! warning
+    O Keycloak precisa ser alcançado em `localhost:8180` pelo navegador: é o endereço que o Google aceita como redirect. Em SSH, use `--use-device-code` com um túnel (`ssh -L 8180:localhost:8180`).
+
+## 5. Criar um ambiente sem provider
 
 ```bash
 platform environment create greetings-test \
@@ -105,7 +145,7 @@ NAME            PROFILE    STATUS                   EXPIRES
 greetings-test  ephemeral  NoProviderForCapability  59m
 ```
 
-## 5. Subir o provider
+## 6. Subir o provider
 
 Em outro terminal, e deixe rodando:
 
@@ -140,7 +180,7 @@ env-greetings-test   1/1       0/0      true
 platform-local       1/1       0/0      true
 ```
 
-## 6. Usar o cluster do ambiente
+## 7. Usar o cluster do ambiente
 
 ```bash
 export KUBECONFIG=~/.config/platform/environments/greetings-test.kubeconfig
@@ -152,7 +192,7 @@ NAME                              STATUS   ROLES                  AGE   VERSION
 k3d-env-greetings-test-server-0   Ready    control-plane,master   56s   v1.31.5+k3s1
 ```
 
-## 7. Criar e esperar ficar pronto
+## 8. Criar e esperar ficar pronto
 
 Com o provider rodando:
 
@@ -170,7 +210,7 @@ provisioning demo (profile: ephemeral) …
 ✓ demo ready
 ```
 
-## 8. Saída em JSON
+## 9. Saída em JSON
 
 ```bash
 platform environment create doc-sample \
@@ -195,7 +235,7 @@ platform environment create doc-sample \
 platform environment list --output json | jq -r '.[].name'
 ```
 
-## 9. Apagar
+## 10. Apagar
 
 ```bash
 platform environment delete greetings-test
@@ -212,7 +252,7 @@ INFO deleting cluster env-greetings-test
 INFO environment greetings-test removed
 ```
 
-## 10. Expiração
+## 11. Expiração
 
 Ambientes com `--expires` são apagados pelo provider quando o prazo vence:
 
@@ -230,7 +270,7 @@ INFO environment short-lived removed
 
 Formatos de `--expires`: `30m`, `12h`, `3d`, `1w`.
 
-## 11. Por baixo: o CRD
+## 12. Por baixo: o CRD
 
 ```bash
 kubectl --context k3d-platform-local \
@@ -243,7 +283,7 @@ NAME   PROFILE     READY   REASON         EXPIRES
 demo   ephemeral   True    ClusterReady   2026-10-13T17:01:16Z
 ```
 
-Journal dos pedidos (uma linha antes e outra depois de aplicar):
+Journal dos pedidos (uma linha antes e outra depois de aplicar). O `actor` é o `sub` do token, imutável, seguido do e-mail:
 
 ```bash
 kubectl --context k3d-platform-local \
@@ -252,11 +292,11 @@ kubectl --context k3d-platform-local \
 ```
 
 ```json
-{"id":"552d…","actor":"anonymous","action":"create","kind":"Environment","name":"demo","spec":{"profile":"ephemeral","expiresAt":"2026-10-13T17:01:16Z"},"applied":false}
+{"id":"552d…","actor":"fe16e6a6-… (voce@example.com)","action":"create","kind":"Environment","name":"demo","spec":{"profile":"ephemeral","expiresAt":"2026-10-13T17:01:16Z"},"applied":false}
 {"id":"552d…","applied":true}
 ```
 
-## 12. Desmontar tudo
+## 13. Desmontar tudo
 
 ```bash
 platform environment list --output json | jq -r '.[].name' \
@@ -273,6 +313,9 @@ rm ~/.config/platform/config.yaml
 | Comando | O que faz |
 |---|---|
 | `platform init --target local [--admin <email>]` | cria `platform-local`, CRDs, Platform API e Keycloak |
+| `platform login [--use-device-code]` | entra com a conta Google |
+| `platform whoami` | e-mail e grupos, vistos pela API |
+| `platform logout` | revoga a sessão e apaga as credenciais |
 | `platform provider run --target local` | provisiona ambientes como k3d (foreground) |
 | `platform environment create <nome> --profile ephemeral\|shared [--expires 3d] [--wait]` | pede um ambiente |
 | `platform environment list` | NAME, PROFILE, STATUS, EXPIRES |

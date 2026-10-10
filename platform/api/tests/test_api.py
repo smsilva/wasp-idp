@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
 from platform_api.journal import Journal
+from tokens import ISSUER, TokenFactory
 from platform_api.state import AlreadyExists, Conflict, NotFound
 
 
@@ -66,8 +67,15 @@ def journal_path(tmp_path):
 
 
 @pytest.fixture
-def client(state, journal_path):
-  return TestClient(create_app(state, Journal(journal_path)))
+def tokens():
+  return TokenFactory()
+
+
+@pytest.fixture
+def client(state, journal_path, tokens):
+  client = TestClient(create_app(state, Journal(journal_path), tokens.verifier()))
+  client.headers["Authorization"] = f"Bearer {tokens.issue()}"
+  return client
 
 
 def test_healthz(client):
@@ -134,6 +142,7 @@ def test_journal_records_before_and_after_apply(client, journal_path):
   assert lines[0]["action"] == "create" and lines[0]["spec"] == {"profile": "ephemeral"}
   assert lines[0]["id"] == lines[1]["id"]
   assert lines[2]["action"] == "delete"
+  assert lines[0]["actor"] == "user-1 (dev@example.com)"
 
 
 def test_journal_keeps_unapplied_request_when_apply_fails(client, journal_path):
@@ -144,6 +153,7 @@ def test_journal_keeps_unapplied_request_when_apply_fails(client, journal_path):
 
 
 @pytest.mark.parametrize("host,status", [("127.0.0.1:9090", 200), ("localhost:9090", 200), ("attacker.example:9090", 400)])
-def test_rejects_unexpected_host_header(state, journal_path, host, status):
-  client = TestClient(create_app(state, Journal(journal_path), ["127.0.0.1", "localhost"]))
-  assert client.get("/v1/environments", headers={"Host": host}).status_code == status
+def test_rejects_unexpected_host_header(state, journal_path, tokens, host, status):
+  client = TestClient(create_app(state, Journal(journal_path), tokens.verifier(), ["127.0.0.1", "localhost"]))
+  headers = {"Host": host, "Authorization": f"Bearer {tokens.issue()}"}
+  assert client.get("/v1/environments", headers=headers).status_code == status
