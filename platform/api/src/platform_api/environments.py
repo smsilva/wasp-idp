@@ -33,8 +33,9 @@ def no_provider_status() -> dict:
   }
 
 
-def can_read_credentials(obj: dict, principal) -> bool:
-  """The kubeconfig is admin access to the environment: only its owner and platform admins get it."""
+def is_owner_or_admin(obj: dict, principal) -> bool:
+  """Reading the kubeconfig (admin access) and deleting an environment are reserved to its owner and
+  platform admins. Without the owner annotation (created before it existed), only admins pass."""
   owner = (obj.get("metadata", {}).get("annotations") or {}).get(OWNER_ANNOTATION)
   return principal.sub == owner or ADMIN_GROUP in principal.groups
 
@@ -43,7 +44,7 @@ def view(obj: dict, with_kubeconfig: bool = False) -> dict:
   """The API view of an Environment: clients never couple to the CR shape.
 
   kubeconfigData is a credential: never in the list, and in the single read only when the caller
-  passed can_read_credentials.
+  passed is_owner_or_admin.
   """
   metadata = obj.get("metadata", {})
   spec = obj.get("spec", {})

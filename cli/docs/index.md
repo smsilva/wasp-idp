@@ -287,7 +287,7 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform environment create <nome> --profile ephemeral\|shared [--expires 3d] [--wait]` | pede um ambiente |
 | `platform environment list` | NAME, PROFILE, STATUS, EXPIRES |
 | `platform environment get <nome>` | status e mensagem; grava o kubeconfig quando pronto |
-| `platform environment delete <nome>` | remove o ambiente e o vcluster |
+| `platform environment delete <nome>` | remove o ambiente e o vcluster; só o dono ou `platform-admins` |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |

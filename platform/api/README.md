@@ -12,9 +12,11 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `POST` | `/v1/environments` | `202`, body `{"name", "profile": "ephemeral"\|"shared", "expires": "3d"}` |
 | `GET` | `/v1/environments` | `200`, `{"items": [...]}` |
 | `GET` | `/v1/environments/{name}` | `200` |
-| `DELETE` | `/v1/environments/{name}` | `202` |
+| `DELETE` | `/v1/environments/{name}` | `202`; `403` para quem não é o dono nem `platform-admins` |
 
 `GET /v1/environments/{name}` traz também `kubeconfigData`, o acesso de administrador ao ambiente, mas só para quem o criou (anotação `platform.wasp.silvios.me/owner`, gravada pela API com o `sub` do token no create) ou para quem está em `platform-admins`. A lista nunca o traz.
+
+`DELETE /v1/environments/{name}` segue a mesma regra: só o dono ou `platform-admins` apagam; os demais recebem `403` (`forbidden`), e o pedido negado não entra no journal. Ambientes sem a anotação `owner` (criados antes do PR #184) só são apagáveis por `platform-admins`. A expiração não passa por aqui: o provider apaga pelo `spec.expiresAt` direto na kube API.
 
 Os objetos devolvidos são a visão da API (`name`, `profile`, `status`, `expiresAt`, `kubeconfig`), não o CR cru: clientes não acoplam ao formato dos CRDs.
 

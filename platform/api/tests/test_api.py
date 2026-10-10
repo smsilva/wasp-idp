@@ -134,6 +134,32 @@ def test_delete(client, state):
   assert client.delete("/v1/environments/gone").status_code == 404
 
 
+def test_delete_forbidden_to_other_users(client, state, tokens, journal_path):
+  client.post("/v1/environments", json={"name": "mine", "profile": "ephemeral"})
+  other = {"Authorization": f"Bearer {tokens.issue(sub='user-2', email='other@example.com')}"}
+  response = client.delete("/v1/environments/mine", headers=other)
+  assert response.status_code == 403
+  assert response.json()["error"]["code"] == "forbidden"
+  assert "mine" in state.objects
+  actions = [json.loads(line).get("action") for line in journal_path.read_text().splitlines()]
+  assert "delete" not in actions
+
+
+def test_platform_admins_delete_any_environment(client, state, tokens):
+  client.post("/v1/environments", json={"name": "theirs", "profile": "ephemeral"})
+  admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
+  assert client.delete("/v1/environments/theirs", headers=admin).status_code == 202
+  assert "theirs" not in state.objects
+
+
+def test_environment_without_owner_is_deleted_only_by_admins(client, state, tokens):
+  client.post("/v1/environments", json={"name": "legacy", "profile": "ephemeral"})
+  del state.objects["legacy"]["metadata"]["annotations"]
+  assert client.delete("/v1/environments/legacy").status_code == 403
+  admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
+  assert client.delete("/v1/environments/legacy", headers=admin).status_code == 202
+
+
 def test_journal_records_before_and_after_apply(client, journal_path):
   client.post("/v1/environments", json={"name": "audited", "profile": "ephemeral"})
   client.delete("/v1/environments/audited")
