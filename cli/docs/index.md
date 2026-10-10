@@ -199,7 +199,7 @@ platform environment list --output json
 ]
 ```
 
-A lista nunca traz o kubeconfig, que é uma credencial; só `platform environment get` o recebe.
+A lista nunca traz o kubeconfig, que é uma credencial. O `platform environment get` o recebe só para quem criou o ambiente ou para quem está em `platform-admins`; os demais veem o status, sem o acesso.
 
 ```bash
 platform environment list --output json | jq -r '.[].name'

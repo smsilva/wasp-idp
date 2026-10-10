@@ -14,6 +14,8 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `GET` | `/v1/environments/{name}` | `200` |
 | `DELETE` | `/v1/environments/{name}` | `202` |
 
+`GET /v1/environments/{name}` traz também `kubeconfigData`, o acesso de administrador ao ambiente, mas só para quem o criou (anotação `platform.wasp.silvios.me/owner`, gravada pela API com o `sub` do token no create) ou para quem está em `platform-admins`. A lista nunca o traz.
+
 Os objetos devolvidos são a visão da API (`name`, `profile`, `status`, `expiresAt`, `kubeconfig`), não o CR cru: clientes não acoplam ao formato dos CRDs.
 
 ## Escrita

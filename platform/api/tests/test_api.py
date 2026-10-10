@@ -159,9 +159,33 @@ def test_rejects_unexpected_host_header(state, journal_path, tokens, host, statu
   assert client.get("/v1/environments", headers=headers).status_code == status
 
 
-def test_kubeconfig_data_only_on_single_get(client, state):
+def ready_with_kubeconfig(state, name):
+  state.objects[name]["status"] = {"port": 7100, "kubeconfigData": "apiVersion: v1\n", "conditions": [{"type": "Ready", "status": "True"}]}
+
+
+def test_create_records_owner(client, state):
+  client.post("/v1/environments", json={"name": "mine", "profile": "ephemeral"})
+  assert state.objects["mine"]["metadata"]["annotations"]["platform.wasp.silvios.me/owner"] == "user-1"
+
+
+def test_kubeconfig_data_only_on_single_get_for_owner(client, state):
   client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
-  state.objects["vc"]["status"] = {"port": 7100, "kubeconfigData": "apiVersion: v1\n", "conditions": [{"type": "Ready", "status": "True"}]}
+  ready_with_kubeconfig(state, "vc")
   assert "kubeconfigData" not in client.get("/v1/environments").json()["items"][0]
   single = client.get("/v1/environments/vc").json()
   assert single["kubeconfigData"] == "apiVersion: v1\n" and single["port"] == 7100
+
+
+def test_kubeconfig_hidden_from_other_users(client, state, tokens):
+  client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
+  ready_with_kubeconfig(state, "vc")
+  other = {"Authorization": f"Bearer {tokens.issue(sub='user-2', email='other@example.com')}"}
+  single = client.get("/v1/environments/vc", headers=other).json()
+  assert "kubeconfigData" not in single and single["status"] == "ready"
+
+
+def test_kubeconfig_visible_to_platform_admins(client, state, tokens):
+  client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
+  ready_with_kubeconfig(state, "vc")
+  admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
+  assert client.get("/v1/environments/vc", headers=admin).json()["kubeconfigData"] == "apiVersion: v1\n"
