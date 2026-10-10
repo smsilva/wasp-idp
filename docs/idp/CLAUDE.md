@@ -145,6 +145,10 @@ One-time setup utilities in `scripts/` (not part of daily workflow):
 - Stop `yarn start` before switching branches: the dev server hot-reloads the other branch's files and does not recover cleanly on switching back (stale cards/modules until restart).
 - The Kubernetes tab groups by cluster entry, never by namespace, and the backend lists by `backstage.io/kubernetes-id` across all namespaces. To show namespaces as environments, `app-config.single-cluster.yaml` declares the same API server twice with a `namespace` key, which `packages/backend/src/namespaceScopedFetcherModule.ts` turns into a namespaced fetch — without it a ServiceAccount bound to one namespace gets 403 on the cluster-wide list.
 
+- `yarn lint` in `packages/app` shows 4 `no-restricted-syntax` warnings that predate the current work — not a regression.
+- `app-config.yaml` does not pass Prettier; do not reformat the whole file.
+- After a backend restart, open tabs log "Failed to authenticate WebSocket connection" until the page is reloaded.
+
 ## Entity page — conventions
 
 - Keep every entity page on the same layout: stock catalog cards (`has-*`, `depends-on-*`) on the Overview, no kind-specific tabs or custom list cards. Custom Domain cards and a Dependencies tab were built and dropped for breaking homogeneity between kinds.
