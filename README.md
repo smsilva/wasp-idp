@@ -3,6 +3,15 @@
 Plataforma AWS multi-tenant (hub-and-spoke, EKS) com um IDP (Backstage) por cima. Ponto de entrada
 único do repo — cada linha abaixo é uma porta para um tronco de documentação.
 
+## Sites publicados
+
+| O quê | Link |
+|---|---|
+| Apresentação do IDP, em modo de apresentação (setas navegam, `Esc` volta ao índice) | https://smsilva.github.io/wasp-idp/#present-1 |
+| Guia da CLI `platform` (MkDocs) | https://smsilva.github.io/wasp-idp/cli/ |
+
+Os dois são publicados no GitHub Pages pelo workflow `.github/workflows/pages.yaml` a cada push na `main`.
+
 ## Por onde começar
 
 | Se você quer... | Vá para |
