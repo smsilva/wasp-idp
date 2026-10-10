@@ -348,6 +348,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-10-10 — #153, deck alinhado aos ADRs 0021 e 0022.** Trilha de auditoria pelo journal da API (#157), slide `orchestrator` com Crossplane e os modos provision/compose/bind (#158), SSO com Keycloak no lugar do Dex (#159), ADRs como aceitos (#160). Links da apresentação e do guia da CLI no `README.md`.
 - **2026-10-10 — Progresso de tarefas migrado para as issues e o board #6.** O `HANDOFF.local.md` deixou de existir; a #153 foi dividida em #157–#160.
 - **2026-10-01 — #105, Bookinfo no catalog com deploy em development e production.** Quatro serviços do Istio Bookinfo em repos próprios da `wasp-foundry`, Domain/System/APIs/Resources no catalog com descoberta automática da org, ArgoCD do cluster-zero gerenciando dois clusters de ambiente com promoção por PR. Spec e planos em `docs/superpowers/{specs,plans}/2026-10-01-bookinfo-catalog-multi-cluster*`.
 - **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo, hoje `greeting-api`). PR #103. Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
