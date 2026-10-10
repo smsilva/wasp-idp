@@ -52,6 +52,16 @@ uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
 
 Os scripts de `scripts/cluster-zero` e `scripts/single-cluster` usam `6550`–`6553` e `9080`–`9083`.
 
+## Limitações conhecidas
+
+- Sem autenticação até a #144: a Platform API aceita qualquer chamador local e só valida o header `Host`. O journal é JSON Lines num PVC até o Postgres (#144).
+- O provider roda em foreground. Sem ele, os pedidos ficam em `NoProviderForCapability`, e apagar um ambiente com o provider parado deixa o `Environment` preso no finalizer e o cluster `env-*` vivo até o provider subir.
+
+## Alternativas descartadas
+
+- Workflow de Pages separado para o guia: substituiria o site do deck. O guia é publicado pelo mesmo `pages.yaml`, em `/cli/`.
+- `kopf`/operator no cluster para o provider `local_k3d`: o provider precisa de Docker no host.
+
 ## Testes
 
 ```bash

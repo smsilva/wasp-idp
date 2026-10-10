@@ -2,13 +2,12 @@
 
 ## Handoff conventions
 
-- Two handoff files, split by scope:
-  - `HANDOFF.local.md` (root, gitignored) — task progress: the active front, last step, next step, state of the local environment (clusters, running processes). Every in-flight task lives here.
-  - `HANDOFF.md` (root, versioned) — broad, general state of the repo: what exists and is live, fronts delivered (one line + date), cross-cutting gotchas, pointers to ADRs/known-broken/board. Never task progress ("parado em", "próximo passo" of a specific task).
+- **Task progress lives in GitHub Issues + the Project v2 board (#6, `smsilva/wasp-idp`), not in handoff files.** There is no `HANDOFF.local.md`. To resume: the active front is what is `In Progress` on the board, then `Todo`; each issue carries its own context, decisions and open questions in its body and comments. Split work into one issue per deliverable (sub-issues under a parent when they share a goal) and handle them in sequence, one branch and PR each. Before stopping mid-task, leave the state (last step, next step, open decision) as a comment on the issue — anything needed to resume on another machine must be on GitHub or in the repo, never only on local disk.
+- `HANDOFF.md` (root, versioned) keeps only broad repo state: what exists and is live, fronts delivered (one line + date), cross-cutting gotchas, pointers to ADRs/known-broken/board. Never task progress.
 
 - PII (emails) and anything identifying a person/company go in `CLAUDE.local.md` (gitignored), never in `HANDOFF.md` — the repo is public.
 
-- Completed-work narrative moves out of `HANDOFF.md` once a step is done, to keep the active handoff short. Keep only a one-line summary + date in `HANDOFF.md`. How the archive itself is organised (folder-per-theme, naming, immutability, `index.md` as the single entry point) is documented once, in `docs/archived/README.md` — read it there instead of restating the rule here.
+- Completed-work narrative moves out of `HANDOFF.md` once a step is done, to keep it short. Keep only a one-line summary + date in `HANDOFF.md`. How the archive itself is organised (folder-per-theme, naming, immutability, `index.md` as the single entry point) is documented once, in `docs/archived/README.md` — read it there instead of restating the rule here.
 
 - Backlog ("Next Steps") lives in GitHub Issues + Project v2 (board #6, `smsilva/wasp-idp`), not as a checklist in `HANDOFF.md`. Architecture decisions go to `docs/adr/` (Nygard format, one file per decision, immutable once accepted). Still-open findings/limitations and unresolved questions go to `aws/docs/known-broken.md` / `aws/docs/open-questions.md`; durable lessons already fixed but worth not relearning go to `aws/docs/lessons-learned/<topic>.md`. Client VPN operation (profile naming, connect/disconnect, troubleshooting) is documented once in `aws/docs/vpn/client-vpn-operations.md`. `HANDOFF.md` only points to these, never duplicates their content.
 

@@ -1,6 +1,6 @@
 # HANDOFF
 
-Visão geral e estado do repo. Progresso de qualquer tarefa em andamento (parado em, próximo passo, ambiente local) vive em `HANDOFF.local.md` (gitignored) de quem está trabalhando — ver `CLAUDE.md`.
+Visão geral e estado do repo. Progresso de tarefas vive nas issues e no board #6 (`In Progress`, depois `Todo`); cada issue carrega contexto, decisões e o último estado em comentários — ver `CLAUDE.md`.
 
 ## Why
 
@@ -348,6 +348,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-10-10 — Progresso de tarefas migrado para as issues e o board #6.** O `HANDOFF.local.md` deixou de existir; a #153 foi dividida em #157–#160.
 - **2026-10-01 — #105, Bookinfo no catalog com deploy em development e production.** Quatro serviços do Istio Bookinfo em repos próprios da `wasp-foundry`, Domain/System/APIs/Resources no catalog com descoberta automática da org, ArgoCD do cluster-zero gerenciando dois clusters de ambiente com promoção por PR. Spec e planos em `docs/superpowers/{specs,plans}/2026-10-01-bookinfo-catalog-multi-cluster*`.
 - **2026-10-01 — #101, criação de aplicação por time na org `wasp-foundry`.** Template Backstage `python-service` cria o repo, CI publica no GHCR e o ApplicationSet `foundry-apps` faz o deploy no k3d do cluster-zero; aceitação ponta a ponta com `hello-alpha` (mantido como exemplo vivo, hoje `greeting-api`). PR #103. Spec e planos em `docs/superpowers/{specs,plans}/2026-09-30-foundry-app-scaffolding*`.
 - **2026-09-30 — #100, Backstage 1.49.0 → 1.55.3** (PR #102). Exigiu fixar `@yarnpkg/core` em
