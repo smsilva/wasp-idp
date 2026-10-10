@@ -31,7 +31,7 @@ Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em
 
 ## Documentação
 
-Guia passo a passo com exemplos em `docs/index.md` (MkDocs):
+Guia passo a passo com exemplos em `docs/index.md` (MkDocs), publicado em https://smsilva.github.io/wasp-idp/cli/ pelo workflow `.github/workflows/pages.yaml` a cada push na `main`. Para ver localmente:
 
 ```bash
 uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
