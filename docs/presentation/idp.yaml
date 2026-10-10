@@ -1010,19 +1010,24 @@ slides:
     act: integration-delivery
     topic: "Orchestrator"
     audiences: [platform]
-    message: "O orquestrador lê a declaração da app, decide o que criar e mantém os recursos em dia; a ferramenta ainda está em avaliação."
-    screen: ["**What:** _turns_ the declaration into resources", "**Keeps:** resources _in sync_ with it over time", "**Tool:** under evaluation"]
+    message: "O orquestrador lê a declaração da app, decide como atender cada recurso e mantém tudo em dia, com o Crossplane como motor."
+    screen: ["**What:** _turns_ the declaration into resources", "**Modes:** `provision` · `compose` · `bind`", "**Engine:** `Crossplane` + a resolver controller"]
     dependsOn: [score-what-not]
     notes: |-
-      O que queremos dizer: **o papel do orquestrador está definido; a ferramenta, não** — e isso é uma escolha consciente.
+      O que queremos dizer: **o orquestrador decide como cada recurso pedido é atendido** e mantém o resultado em dia.
 
       **O papel:** é a camada de controle persistente entre a declaração e os recursos. Lê o `app-spec.yaml` do Developer Control, decide o que criar em cada ambiente e mantém os recursos em dia ao longo do tempo. Definição em Platform as a Product, **p. 16**: 'persistent control layer that coordinates capabilities across the platform, manages state, enforces policy, and enables safe evolution over time'.
 
-      **A ferramenta:** está em avaliação por uma pessoa do time, e a divisão de papéis com o IaC ainda está em aberto. Por isso não aparece na tela — a mesma regra da landscape: **categoria antes de ferramenta**, para não enviesar a decisão.
+      **Três modos de atender um recurso** (o `postgres` da spec, por exemplo):
+      - **provision:** um recurso dedicado — uma instância Postgres só da app;
+      - **compose:** algo dentro de um recurso compartilhado — um database numa instância Postgres única;
+      - **bind:** conectar a algo que já existe — um banco restaurado de backup ou de outro time.
 
-      Se perguntarem "por que ainda não decidiram?": o papel não depende da ferramenta; escolhê-la é uma das frentes do time.
+      Quem decide o modo é um **resolvedor**, um controller: cada recurso do Score vira um `ResourceRequest`, o modo default vem da `BindingPolicy` do ambiente, e o modo resolvido fica no `status`. O dev não escolhe serviço de nuvem nem modo; o ambiente efêmero tende a `compose`, o de produção a `provision`.
 
-      Fonte: references/platform-as-a-product.md, references/base-deck.md, references/poc.md.
+      **O motor:** o **Crossplane** executa o que o resolvedor decidiu e reconcilia continuamente. Os controllers (Crossplane, Argo CD) já estão no control plane; o resolvedor é mais um, e a fonte da verdade são os CRDs (ADR 0022).
+
+      Fonte: references/platform-as-a-product.md, references/base-deck.md, references/poc.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.
 
   - name: platform-facade
     act: integration-delivery
@@ -1995,6 +2000,8 @@ slides:
       O que queremos dizer: **release é ligar uma versão a um ambiente** — e a resposta é uma URL.
 
       O banco aparece aqui porque **a spec pediu**: o dev não abriu ticket nem escolheu serviço de nuvem.
+
+      **O modo resolvido aparece na saída:** `compose → shared-pg/greetings_test` — num ambiente efêmero, o banco é um database na instância Postgres compartilhada, não uma instância nova. Em produção o mesmo pedido resolveria para `provision`.
 
       **Forma da CLI:** `platform <recurso> <verbo>` com a app como escopo (`--app`), como `gh release create`, `gcloud builds list`, `fly releases --app`. O deploy devolve a URL na saída, como o `gcloud run deploy`: não há comando só para buscá-la.
 

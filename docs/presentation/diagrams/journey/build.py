@@ -147,7 +147,7 @@ SESSIONS = {
       "--app greeting-api",
       "--version 0.3.0-greetings.1a2b3c4",
       "--env greetings-test"],
-     ["✓ postgres provisioned in greetings-test (from app-spec.yaml)",
+     ["✓ postgres: compose → shared-pg/greetings_test (from app-spec.yaml)",
       "✓ deployed · 2/2 replicas healthy",
       "URL: https://greeting-api.greetings-test.platform.example.com"]),
   ],

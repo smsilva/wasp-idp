@@ -86,10 +86,10 @@ docs/presentation/
 - **IA como fio condutor, não bloco à parte:** o arco termina em "IDP para humanos e agentes". Os cinco planes viram a tooling layer do Agentic Engineering Platform, e o ato `agentic` acrescenta as camadas de paths e agent infrastructure. A tese vem do DORA ROI (p. 40: o IDP é "the risk mitigator and the context provider for AI agents"); o State of AI dá o modelo de camadas e de maturidade.
 - **AGENTS.md entra com ressalva, não como argumento:** os estudos não mostram ganho de acerto, só de eficiência ([`agents-md.md`](agents-md.md)). A mensagem é contexto curto e gerado pelo golden path.
 - **Transição de tópico:** cada mudança de `topic` ganha um passo de transição gerado pelo `render-outline` (ato + tópico em destaque). Não vira slide no YAML; o índice e a numeração de slides não mudam, só a de passos.
+- **Orquestrador:** Crossplane como motor e um resolvedor (controller) que escolhe o modo de cada recurso — `provision`, `compose` ou `bind` (ADR 0022). Substitui a pergunta "Kratix e Crossplane?".
 
 ## Perguntas em aberto
 
 - **Filtro por público:** como o `render-outline` gera os cortes (flag `--audience`, um YAML de corte que lista atos/slides, ou os dois) e se a página inicial com a lista de cortes volta junto.
 - **Ideias guardadas:** o slide "One CLI, every plane" (um terminal com 2 comandos ilustrativos por plane) saiu porque a jornada ponta a ponta mostra a CLI melhor; o desenho segue em `diagrams/landscape/cli.svg` (gerado por `build.py`, `CLI_GROUPS`) para reaproveitar.
-- Kratix **e** Crossplane: explicar a divisão de papéis (orquestrador vs. IaC) ou escolher um? O report *Platform as a Product* dá argumento para o papel do orquestrador, mas é patrocinado pela Syntasso.
 - Demo ao vivo: mostrar os conceitos do catálogo no Backstage deste repo (`idp/`) durante a apresentação. Não decidido.
