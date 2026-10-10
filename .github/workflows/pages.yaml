@@ -1,15 +1,19 @@
-name: presentation-pages
+name: pages
 
-# Publishes the IDP presentation (docs/presentation/) on GitHub Pages: regenerates the HTML from
-# idp.yaml, so the site never depends on the committed HTML. One deck, so the deck is the site's
-# index.html. Links to references/*.md point to the blob on GitHub — on Pages the raw .md would
-# show as plain text.
+# Publishes the repo's GitHub Pages site. A repo has a single Pages site, so every part is built here
+# and deployed together:
+# - / : the IDP presentation (docs/presentation/), regenerated from idp.yaml, so the site never
+#   depends on the committed HTML. Links to references/*.md point to the blob on GitHub — on Pages
+#   the raw .md would show as plain text.
+# - /cli/ : the platform CLI guide (cli/docs/, MkDocs).
 on:
   push:
     branches: [main]
     paths:
       - docs/presentation/**
-      - .github/workflows/presentation-pages.yaml
+      - cli/docs/**
+      - cli/mkdocs.yml
+      - .github/workflows/pages.yaml
   workflow_dispatch:
 
 permissions:
@@ -19,15 +23,12 @@ permissions:
 
 # One deploy at a time; a new push does not cancel the deploy in progress.
 concurrency:
-  group: presentation-pages
+  group: pages
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: docs/presentation
     steps:
       - uses: actions/checkout@v4
 
@@ -36,9 +37,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install pyyaml
+        run: pip install pyyaml mkdocs-material
 
-      - name: Build the site
+      - name: Build the presentation
+        working-directory: docs/presentation
         env:
           TOPICS_URL: https://github.com/${{ github.repository }}/blob/${{ github.sha }}/docs/presentation/references
         run: |
@@ -47,6 +49,13 @@ jobs:
           ./render-outline idp.yaml \
             --output "${site}/index.html" \
             --topics-url "${TOPICS_URL}"
+
+      - name: Build the CLI guide
+        run: |
+          mkdocs build \
+            --strict \
+            --config-file cli/mkdocs.yml \
+            --site-dir "${RUNNER_TEMP}/site/cli"
 
       - uses: actions/upload-pages-artifact@v3
         with:
