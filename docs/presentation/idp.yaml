@@ -1596,7 +1596,7 @@ slides:
     message: "Um único emissor de tokens para toda a plataforma; a origem da identidade é um conector trocável."
     heading: "One token issuer"
     align: true
-    screen: ["**What:** one OIDC issuer for the platform", "**Source:** a swappable connector", "**Candidate:** `Dex` _(first evaluation)_"]
+    screen: ["**What:** one OIDC issuer for the platform", "**Source:** a swappable connector", "**Broker:** `Keycloak` _(ADR 0021)_"]
     notes: |-
       O que queremos dizer: **um único emissor de tokens**; trocar a origem da identidade não mexe em nenhum client.
 
@@ -1607,15 +1607,15 @@ slides:
       - **CLI** (command-line interface).
       - **EKS** (Elastic Kubernetes Service).
 
-      **Avaliação inicial** (ADR proposto numa PoC de referência; nesta plataforma, substituído por Keycloak — ver o fechamento): Dex standalone como único OIDC issuer, com um client por consumidor — portal, CLI (PKCE), Argo CD e clusters (EKS registra o Dex como OIDC identity provider).
+      **Decisão (ADR 0021):** o **Keycloak** é o broker e o único OIDC issuer, com um client por consumidor — CLI (`platform-cli`: PKCE e device code), Platform API, Argo CD e clusters. **O Google autentica, o Keycloak autoriza:** o Google entra como Identity Provider do realm `platform`, e os grupos (`platform-admins`, `platform-users`) vivem no Keycloak. O realm é declarado como código.
 
-      **Trocar a fonte** (GitHub, Entra ID, Google Workspace, LDAP) **é trocar o connector**; nenhum client muda.
+      **Trocar ou somar a fonte** (Google, Entra ID, GitHub) **é outro Identity Provider no mesmo realm**; nenhum client muda.
 
       **O inverso é caro:** trocar o issuer mexe em todos os clients e clusters. Por isso o IdP de produção se escolhe antes de multiplicar clusters.
 
-      **Alternativas descartadas:** Cognito (não federa GitHub, issuer preso à AWS) e o Dex embutido do Argo CD (acoplado ao ciclo de vida dele).
+      **Alternativas descartadas:** **Dex** — a avaliação inicial, numa PoC de referência: não guarda usuários nem grupos, e com conta Google pessoal os grupos precisam morar em algum lugar; Cognito (não federa GitHub, issuer preso à AWS); o Dex embutido do Argo CD (acoplado ao ciclo de vida dele).
 
-      Fonte: references/sso-dex.md.
+      Fonte: references/sso-dex.md, docs/adr/0021-keycloak-as-platform-identity-broker.md.
     dependsOn: [single-sign-on]
 
   - name: who-decides
@@ -1647,7 +1647,7 @@ slides:
     notes: |-
       O que queremos dizer: **o acesso de emergência nunca depende do próprio SSO** (Single Sign-On).
 
-      **Dex:** roda no hub como componente do **Security Plane** (não acessório do portal), com issuer estável (`id.<domínio>`) independente de onde roda.
+      **Keycloak:** roda no hub como componente do **Security Plane** (não acessório do portal), com issuer estável (`id.<domínio>`, fixado por `KC_HOSTNAME`) independente de onde roda.
 
       **Break-glass:** todo cluster, inclusive o hub, mantém acesso administrativo via **IAM** (Identity and Access Management; EKS access entries). Se o hub cair, **nenhum token novo é emitido**; os clusters seguem rodando e o break-glass cobre o intervalo.
 
