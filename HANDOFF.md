@@ -350,6 +350,7 @@ Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-10-10 — Identidade da plataforma ponta a ponta (#142, #143, #144, #173).** Keycloak no `platform-local` com o realm `platform` como código e o Google como Identity Provider; a Platform API valida o JWT; `platform login` (PKCE ou `--use-device-code`), `logout` e `whoami`; tema `platform` nas telas do Keycloak e no callback da CLI, em pt-BR e en. PRs #170, #174 e #175.
 - **2026-10-10 — #153, deck alinhado aos ADRs 0021 e 0022.** Trilha de auditoria pelo journal da API (#157), slide `orchestrator` com Crossplane e os modos provision/compose/bind (#158), SSO com Keycloak no lugar do Dex (#159), ADRs como aceitos (#160). Links da apresentação e do guia da CLI no `README.md`.
 - **2026-10-10 — Progresso de tarefas migrado para as issues e o board #6.** O `HANDOFF.local.md` deixou de existir; a #153 foi dividida em #157–#160.
 - **2026-10-01 — #105, Bookinfo no catalog com deploy em development e production.** Quatro serviços do Istio Bookinfo em repos próprios da `wasp-foundry`, Domain/System/APIs/Resources no catalog com descoberta automática da org, ArgoCD do cluster-zero gerenciando dois clusters de ambiente com promoção por PR. Spec e planos em `docs/superpowers/{specs,plans}/2026-10-01-bookinfo-catalog-multi-cluster*`.
