@@ -307,12 +307,18 @@ items.forEach((item) => item.addEventListener('click', (event) => {
 }));
 deck.querySelector('.index').addEventListener('click', (event) => event.stopPropagation());
 // #present-N opens step N; #present-<slide name> opens that slide's first step (stable when steps shift).
-const start = location.hash.match(/^#present-([\\w-]+)$/);
-if (start) {
-  const named = /^\\d+$/.test(start[1]) ? null : deck.querySelector(`.stage[data-slide='${start[1]}']`);
+// Also on hashchange: pasting a #present-… link into a tab already on the deck does not reload the page.
+function presentFromHash() {
+  const start = location.hash.match(/^#present-([\\w-]+)$/);
+  if (!start) return false;
+  const numeric = /^\\d+$/.test(start[1]);
+  const named = numeric ? null : deck.querySelector(`.stage[data-slide='${start[1]}']`);
+  if (!numeric && !named) return false;
   present(named ? Number(named.dataset.step) : Number(start[1]) - 1);
+  return true;
 }
-if (start && location.search.includes('index')) openIndex();
+if (presentFromHash() && location.search.includes('index')) openIndex();
+window.addEventListener('hashchange', presentFromHash);
 document.addEventListener('keydown', (event) => {
   if (!deck.classList.contains('on')) {
     if (event.key === 'p' || event.key === 'P') present(0);
