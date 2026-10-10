@@ -43,6 +43,10 @@
 - The repo has a single GitHub Pages site: `pages.yaml` builds the deck (root) and the CLI guide (`/cli/`) into one artifact. Add new sites as another build step there, never as a second deploy workflow — it would replace the whole site.
 - The Platform API validates the Keycloak JWT on every `/v1/*` route (`platform/api/src/platform_api/auth.py`): `iss` is the public `http://localhost:8180/realms/platform` (KC_HOSTNAME) while the JWKS comes through the in-cluster Service. `TrustedHostMiddleware` (`127.0.0.1`/`localhost`) stays as defense in depth against DNS rebinding; keep the readiness probe sending `Host: localhost`.
 - Keycloak's `platform-cli` client enforces PKCE, and Keycloak applies it to the device grant too: `--use-device-code` sends `code_challenge` on the device authorization request and `code_verifier` when polling.
+- Environments are vclusters created by the `local_vcluster` controller inside `platform-local` (no host process). Each gets one host port from `7100`–`7119`: the range lives in both `ENV_PORTS` (`cli/src/wasp_platform/bootstrap/local.py`) and `PORTS` (`platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py`) — change both together.
+- `kubeconfigData` is admin access to an environment: never return it from list endpoints, and only to the owner (annotation `platform.wasp.silvios.me/owner`, set from the token `sub` on create) or `platform-admins`. New routes touching an environment must apply the same owner check (#185 for delete, #186 for group sharing).
+- Never restart Keycloak (theme reload, `platform init` with a changed theme) while someone is mid-login: the auth session lives in pod memory, and the Google callback hits a server that forgot it (`ERR_EMPTY_RESPONSE`).
+- Every new CLI command or output change also updates `cli/docs/walkthrough.md` in the same change (#182).
 
 ## IDP Tool (Backstage)
 
