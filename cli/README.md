@@ -18,6 +18,8 @@ Ou, para ter `platform` no `PATH`: `uv tool install --editable cli/`. A instala�
 
 ```bash
 platform init --target local --admin <email> # k3d platform-local, CRDs, Platform API, Keycloak; idempotente
+platform login                               # Google via Keycloak; --use-device-code sem navegador
+platform whoami
 platform provider run --target local         # outro terminal, foreground
 platform environment create greetings-test \
   --profile ephemeral \
@@ -40,7 +42,7 @@ uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
 ## Fronteira
 
 - `wasp_platform.bootstrap` é a única parte que fala com Docker, k3d e `kubectl`. Só `init` e `provider run` importam esse módulo (`tests/test_boundaries.py` garante).
-- `wasp_platform.client` é o cliente HTTP da Platform API, usado por todos os outros comandos.
+- `wasp_platform.client` é o cliente HTTP da Platform API, usado por todos os outros comandos. Ele manda o access token de `wasp_platform.auth`, que faz o login (PKCE ou device code), guarda os tokens em `~/.config/platform/credentials` (`0600`) e os renova.
 
 ## Portas do target local
 
@@ -55,7 +57,7 @@ Os scripts de `scripts/cluster-zero` e `scripts/single-cluster` usam `6550`–`6
 
 ## Limitações conhecidas
 
-- Sem autenticação até a #144: a Platform API aceita qualquer chamador local e só valida o header `Host`. O journal é JSON Lines num PVC até o Postgres (#144).
+- O journal é JSON Lines num PVC até o Postgres (#172).
 - O provider roda em foreground. Sem ele, os pedidos ficam em `NoProviderForCapability`, e apagar um ambiente com o provider parado deixa o `Environment` preso no finalizer e o cluster `env-*` vivo até o provider subir.
 
 ## Alternativas descartadas

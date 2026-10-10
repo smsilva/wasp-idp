@@ -98,8 +98,8 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: header de entidade com Source/Docs e card Description no lugar do About (#124) — `modules/entityHeader/EntityHeader.tsx` replica o `EntityHeaderBui` nativo, revisar em upgrades do Backstage | Entregue em 2026-10-03 |
 | IDP: apresentação detalhada como deck único público em `docs/presentation/`, publicada no GitHub Pages; cortes por público virão de filtro sobre `audiences` (#148) | Entregue em 2026-10-10 |
 | Plataforma: identidade e fonte da verdade — [ADR 0021](docs/adr/0021-keycloak-as-platform-identity-broker.md) (Keycloak, sem Dex) e [ADR 0022](docs/adr/0022-kube-api-as-platform-source-of-truth.md) (CRDs `platform.wasp.silvios.me` + Platform API como fachada) (#140, #145) | Aceitos em 2026-10-10 |
-| Plataforma: CLI `platform` (Python, pacote `wasp_platform`) + Platform API + provider `local_k3d` — primeiro Environment como k3d local a partir do CRD `Environment` (#152). Sem auth (#144), journal em arquivo. Guia: https://smsilva.github.io/wasp-idp/cli/ — o Pages é um site único (deck na raiz, guia em `/cli/`), buildado por `.github/workflows/pages.yaml` | Entregue em 2026-10-10 |
-| Plataforma: Keycloak + login (#142, #143); Postgres no journal + JWT (#144) | Aberto (Backlog) |
+| Plataforma: CLI `platform` (Python, pacote `wasp_platform`) + Platform API + provider `local_k3d` — primeiro Environment como k3d local a partir do CRD `Environment` (#152). Login com Google via Keycloak e JWT validado na API (#142–#144), journal em arquivo (#172). Guia: https://smsilva.github.io/wasp-idp/cli/ — o Pages é um site único (deck na raiz, guia em `/cli/`), buildado por `.github/workflows/pages.yaml` | Entregue em 2026-10-10 |
+| Plataforma: Postgres no journal (#172); Terraform do OAuth do Google (#171) | Aberto (Backlog) |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
 | Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
 | Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |

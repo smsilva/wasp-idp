@@ -181,6 +181,10 @@ def install(admin_email: str | None = None, log=None) -> dict:
   _kubectl("apply", "--filename", str(root / "platform" / "crds"))
   _kubectl("wait", "crd", "--all", "--for", "condition=Established", "--timeout", "60s")
 
+  # Keycloak first: the Platform API validates tokens against its keys.
+  log("deploying Keycloak …")
+  identity = install_keycloak(root, admin_email, log)
+
   api_dir = root / "platform" / "api"
   log("building the Platform API image …")
   _run("docker", "build", "--quiet", "--tag", f"{IMAGE}:dev", str(api_dir))
@@ -195,9 +199,6 @@ def install(admin_email: str | None = None, log=None) -> dict:
   _kubectl("apply", "--filename", "-", input=manifest)
   _kubectl("rollout", "status", "deployment/platform-api", "--namespace", NAMESPACE, "--timeout", "180s")
   wait_healthy(API_URL)
-
-  log("deploying Keycloak …")
-  identity = install_keycloak(root, admin_email, log)
 
   path = config.save({
     **config.load(),

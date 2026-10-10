@@ -79,6 +79,11 @@ spec:
               value: platform-system
             - name: PLATFORM_JOURNAL
               value: /var/lib/platform/journal.jsonl
+            # `iss` must equal the public issuer (KC_HOSTNAME); the keys come through the Service.
+            - name: PLATFORM_OIDC_ISSUER
+              value: http://localhost:8180/realms/platform
+            - name: PLATFORM_OIDC_JWKS_URL
+              value: http://keycloak.platform-auth.svc:8080/realms/platform/protocol/openid-connect/certs
           readinessProbe:
             httpGet:
               path: /healthz
