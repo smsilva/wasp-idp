@@ -27,7 +27,7 @@ class StateWriter(Protocol):
 
   def replace_status(self, plural: str, body: dict) -> dict: ...
 
-  def delete(self, plural: str, name: str) -> None: ...
+  def delete(self, plural: str, name: str, uid: str | None = None) -> None: ...
 
 
 class StateReader(Protocol):
@@ -71,12 +71,17 @@ class KubeApplyWriter:
         raise NotFound(name) from error
       raise
 
-  def delete(self, plural: str, name: str) -> None:
+  def delete(self, plural: str, name: str, uid: str | None = None) -> None:
+    """With uid, the kube API only deletes that exact object: one recreated under the same name in
+    the meantime fails the precondition (409) instead of being removed."""
+    body = {"preconditions": {"uid": uid}} if uid else None
     try:
-      self.api.delete_namespaced_custom_object(GROUP, VERSION, self.namespace, plural, name)
+      self.api.delete_namespaced_custom_object(GROUP, VERSION, self.namespace, plural, name, body=body)
     except self._api_exception as error:
       if error.status == 404:
         raise NotFound(name) from error
+      if error.status == 409:
+        raise Conflict(name) from error
       raise
 
   def get(self, plural: str, name: str) -> dict:

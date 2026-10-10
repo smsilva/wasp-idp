@@ -113,21 +113,25 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   def get_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
       obj = state.get(ENVIRONMENTS, name)
-      return environments.view(obj, with_kubeconfig=environments.can_read_credentials(obj, principal))
+      return environments.view(obj, with_kubeconfig=environments.is_owner_or_admin(obj, principal))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
 
   @app.delete("/v1/environments/{name}", status_code=202)
   def delete_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
-      state.get(ENVIRONMENTS, name)
+      obj = state.get(ENVIRONMENTS, name)
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
+    if not environments.is_owner_or_admin(obj, principal):
+      raise HTTPException(403, f"environment '{name}' can only be deleted by its owner or platform-admins")
     entry = journal.record("delete", "Environment", name, None, principal.actor)
     try:
-      state.delete(ENVIRONMENTS, name)
+      state.delete(ENVIRONMENTS, name, uid=obj["metadata"].get("uid"))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
+    except Conflict:
+      raise HTTPException(409, f"environment '{name}' changed while deleting: try again")
     journal.mark_applied(entry)
     return {"name": name, "status": "deleting"}
 

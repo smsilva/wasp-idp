@@ -15,6 +15,7 @@ class FakeState:
     self.objects = {}
     self.version = 0
     self.on_create = None
+    self.before_delete = None
 
   def _bump(self, obj):
     self.version += 1
@@ -26,6 +27,7 @@ class FakeState:
       raise AlreadyExists(name)
     obj = json.loads(json.dumps(body))
     obj["metadata"]["creationTimestamp"] = "2026-10-10T00:00:00Z"
+    obj["metadata"]["uid"] = f"uid-{self.version + 1}"
     self._bump(obj)
     self.objects[name] = obj
     created = json.loads(json.dumps(obj))
@@ -42,9 +44,13 @@ class FakeState:
     self._bump(current)
     return json.loads(json.dumps(current))
 
-  def delete(self, plural, name):
+  def delete(self, plural, name, uid=None):
+    if self.before_delete:
+      self.before_delete(self)
     if name not in self.objects:
       raise NotFound(name)
+    if uid is not None and self.objects[name]["metadata"]["uid"] != uid:
+      raise Conflict(name)
     del self.objects[name]
 
   def get(self, plural, name):
@@ -132,6 +138,46 @@ def test_delete(client, state):
   assert client.delete("/v1/environments/gone").status_code == 202
   assert "gone" not in state.objects
   assert client.delete("/v1/environments/gone").status_code == 404
+
+
+def test_delete_forbidden_to_other_users(client, state, tokens, journal_path):
+  client.post("/v1/environments", json={"name": "mine", "profile": "ephemeral"})
+  other = {"Authorization": f"Bearer {tokens.issue(sub='user-2', email='other@example.com')}"}
+  response = client.delete("/v1/environments/mine", headers=other)
+  assert response.status_code == 403
+  assert response.json()["error"]["code"] == "forbidden"
+  assert "mine" in state.objects
+  actions = [json.loads(line).get("action") for line in journal_path.read_text().splitlines()]
+  assert "delete" not in actions
+
+
+def test_platform_admins_delete_any_environment(client, state, tokens):
+  client.post("/v1/environments", json={"name": "theirs", "profile": "ephemeral"})
+  admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
+  assert client.delete("/v1/environments/theirs", headers=admin).status_code == 202
+  assert "theirs" not in state.objects
+
+
+def test_environment_without_owner_is_deleted_only_by_admins(client, state, tokens):
+  client.post("/v1/environments", json={"name": "legacy", "profile": "ephemeral"})
+  del state.objects["legacy"]["metadata"]["annotations"]
+  assert client.delete("/v1/environments/legacy").status_code == 403
+  admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
+  assert client.delete("/v1/environments/legacy", headers=admin).status_code == 202
+
+
+def test_delete_does_not_remove_an_environment_recreated_after_the_owner_check(client, state, tokens):
+  client.post("/v1/environments", json={"name": "raced", "profile": "ephemeral"})
+  other = {"Authorization": f"Bearer {tokens.issue(sub='user-2', email='other@example.com')}"}
+
+  def recreate_by_other_user(fake):
+    del fake.objects["raced"]
+    fake.before_delete = None
+    client.post("/v1/environments", json={"name": "raced", "profile": "ephemeral"}, headers=other)
+
+  state.before_delete = recreate_by_other_user
+  assert client.delete("/v1/environments/raced").status_code == 409
+  assert state.objects["raced"]["metadata"]["annotations"]["platform.wasp.silvios.me/owner"] == "user-2"
 
 
 def test_journal_records_before_and_after_apply(client, journal_path):
