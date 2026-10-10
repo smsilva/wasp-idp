@@ -2327,21 +2327,21 @@ Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>
 
 <strong>Chave:</strong> o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o <strong>ID numérico da conta</strong>. A cada login, o par login ↔ ID vai para um <strong>audit sink</strong>.
 
-<strong>Trilha:</strong> vive no Git (todo Environment e deploy é commit ou PR), nos audit logs do cluster, nos events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. <strong>O catálogo não é trilha de auditoria.</strong>
+<strong>Trilha:</strong> o <strong>journal da Platform API</strong> (append-only, cada pedido com spec, autor e horário, gravado antes de ser aplicado), os audit logs do cluster e os events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. GitOps fica como evolução possível, trocando o <code class='note-code'>StateWriter</code>. <strong>O catálogo não é trilha de auditoria.</strong>
 
-Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='260'><div class='np-head'>Observability &amp; Security · audit-trail</div><div class='np-message'>Quem fez o quê fica registrado fora do catálogo, com uma chave que não muda.</div><div class='notes'>O que queremos dizer: <strong>quem fez o quê fica registrado fora do catálogo</strong>, com uma chave que não muda.
-
-<strong>Chave:</strong> o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o <strong>ID numérico da conta</strong>. A cada login, o par login ↔ ID vai para um <strong>audit sink</strong>.
-
-<strong>Trilha:</strong> vive no Git (todo Environment e deploy é commit ou PR), nos audit logs do cluster, nos events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. <strong>O catálogo não é trilha de auditoria.</strong>
-
-Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='261'><div class='np-head'>Observability &amp; Security · audit-trail</div><div class='np-message'>Quem fez o quê fica registrado fora do catálogo, com uma chave que não muda.</div><div class='notes'>O que queremos dizer: <strong>quem fez o quê fica registrado fora do catálogo</strong>, com uma chave que não muda.
+Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='260'><div class='np-head'>Observability &amp; Security · audit-trail</div><div class='np-message'>Quem fez o quê fica registrado fora do catálogo, com uma chave que não muda.</div><div class='notes'>O que queremos dizer: <strong>quem fez o quê fica registrado fora do catálogo</strong>, com uma chave que não muda.
 
 <strong>Chave:</strong> o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o <strong>ID numérico da conta</strong>. A cada login, o par login ↔ ID vai para um <strong>audit sink</strong>.
 
-<strong>Trilha:</strong> vive no Git (todo Environment e deploy é commit ou PR), nos audit logs do cluster, nos events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. <strong>O catálogo não é trilha de auditoria.</strong>
+<strong>Trilha:</strong> o <strong>journal da Platform API</strong> (append-only, cada pedido com spec, autor e horário, gravado antes de ser aplicado), os audit logs do cluster e os events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. GitOps fica como evolução possível, trocando o <code class='note-code'>StateWriter</code>. <strong>O catálogo não é trilha de auditoria.</strong>
 
-Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div></template><template data-notes='262'><div class='np-head'>Observability &amp; Security · agent-identity</div><div class='np-message'>Agentes também precisam de identidade própria — e hoje a maioria empresta a de alguém.</div><div class='notes'>O que queremos dizer: <strong>agente precisa de identidade própria</strong>; hoje um em cada quatro empresta a de uma pessoa.
+Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='261'><div class='np-head'>Observability &amp; Security · audit-trail</div><div class='np-message'>Quem fez o quê fica registrado fora do catálogo, com uma chave que não muda.</div><div class='notes'>O que queremos dizer: <strong>quem fez o quê fica registrado fora do catálogo</strong>, com uma chave que não muda.
+
+<strong>Chave:</strong> o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o <strong>ID numérico da conta</strong>. A cada login, o par login ↔ ID vai para um <strong>audit sink</strong>.
+
+<strong>Trilha:</strong> o <strong>journal da Platform API</strong> (append-only, cada pedido com spec, autor e horário, gravado antes de ser aplicado), os audit logs do cluster e os events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. GitOps fica como evolução possível, trocando o <code class='note-code'>StateWriter</code>. <strong>O catálogo não é trilha de auditoria.</strong>
+
+Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div></template><template data-notes='262'><div class='np-head'>Observability &amp; Security · agent-identity</div><div class='np-message'>Agentes também precisam de identidade própria — e hoje a maioria empresta a de alguém.</div><div class='notes'>O que queremos dizer: <strong>agente precisa de identidade própria</strong>; hoje um em cada quatro empresta a de uma pessoa.
 
 <strong>O que a pesquisa mostra:</strong> como as identidades de IA são geridas na plataforma (Figure 16, State of AI Vol. 2, p. 38).
 • <strong>25%</strong> entregam aos agentes as credenciais de uma pessoa.
@@ -5316,9 +5316,9 @@ Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>
 
 <strong>Chave:</strong> o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o <strong>ID numérico da conta</strong>. A cada login, o par login ↔ ID vai para um <strong>audit sink</strong>.
 
-<strong>Trilha:</strong> vive no Git (todo Environment e deploy é commit ou PR), nos audit logs do cluster, nos events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. <strong>O catálogo não é trilha de auditoria.</strong>
+<strong>Trilha:</strong> o <strong>journal da Platform API</strong> (append-only, cada pedido com spec, autor e horário, gravado antes de ser aplicado), os audit logs do cluster e os events do Argo CD e do Crossplane — tudo num <strong>sink central no Observability Plane</strong>. GitOps fica como evolução possível, trocando o <code class='note-code'>StateWriter</code>. <strong>O catálogo não é trilha de auditoria.</strong>
 
-Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>.</div>
+Fonte: <a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a>, docs/adr/0022-kube-api-as-platform-source-of-truth.md.</div>
   <div class='label'>Fontes</div><ul class='sources'><li><a href='references/sso-dex.md' target='_blank'>references/sso-dex.md</a><ul><li><a href='https://id' target='_blank'>https://id</a></li></ul></li></ul>
   <div class='meta'><code>audit-trail</code> · depende de: <a href='#who-decides'>who-decides</a> · mais relevante para: <span class='tag'>executive</span><span class='tag'>platform</span></div>
 </section>
