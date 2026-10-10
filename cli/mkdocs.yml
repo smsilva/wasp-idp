@@ -1,0 +1,13 @@
+site_name: platform CLI
+site_description: Primeiro Environment local com a CLI platform
+docs_dir: docs
+nav:
+  - Uso: index.md
+theme:
+  name: material
+  language: pt-BR
+  features:
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences

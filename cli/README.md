@@ -29,6 +29,14 @@ platform environment delete greetings-test
 
 Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em `~/.config/platform/environments/<nome>.kubeconfig`.
 
+## Documentação
+
+Guia passo a passo com exemplos em `docs/index.md` (MkDocs):
+
+```bash
+uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
+```
+
 ## Fronteira
 
 - `wasp_platform.bootstrap` é a única parte que fala com Docker, k3d e `kubectl`. Só `init` e `provider run` importam esse módulo (`tests/test_boundaries.py` garante).
