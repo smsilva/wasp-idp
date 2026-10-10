@@ -1,0 +1,52 @@
+# Provider local_vcluster (#183): runs inside platform-local and turns each Environment into a
+# vcluster (Helm release `vcluster`) in namespace env-<name>. Installed by `platform init`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: local-vcluster-provider
+  namespace: platform-system
+---
+# The vcluster chart creates namespaced objects plus a ClusterRole/ClusterRoleBinding per
+# virtual cluster, so the provider needs broad rights. Local target only: a provider for a
+# shared target would install vclusters through a narrower path (e.g. a vcluster operator).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: local-vcluster-provider
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: local-vcluster-provider
+    namespace: platform-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-vcluster-provider
+  namespace: platform-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one reconciler at a time
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: local-vcluster-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: local-vcluster-provider
+    spec:
+      serviceAccountName: local-vcluster-provider
+      containers:
+        - name: provider
+          image: local-vcluster-provider:dev
+          imagePullPolicy: Never
+          args: [--namespace, platform-system]
+          resources:
+            requests:
+              memory: 96Mi
+            limits:
+              memory: 256Mi

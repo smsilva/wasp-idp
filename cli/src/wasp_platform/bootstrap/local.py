@@ -26,6 +26,10 @@ KEYCLOAK_PORT = "8180"
 KEYCLOAK_URL = f"http://localhost:{KEYCLOAK_PORT}"
 ISSUER = f"{KEYCLOAK_URL}/realms/platform"
 CLI_CLIENT_ID = "platform-cli"
+# One host port per vcluster environment (provider local_vcluster, #183); must match PORTS in
+# platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py.
+ENV_PORTS = "7100-7119"
+PROVIDER_IMAGE = "local-vcluster-provider"
 
 
 class BootstrapError(Exception):
@@ -59,14 +63,29 @@ def cluster_exists() -> bool:
   return CLUSTER in names
 
 
-def _ensure_keycloak_port(log) -> None:
-  """Clusters created before Keycloak lack the 8180 mapping; k3d can add it to the load balancer."""
+def _ensure_port(ports: str, log) -> None:
+  """Clusters created by an older init lack newer mappings; k3d can add them to the load balancer."""
   clusters = json.loads(_run("k3d", "cluster", "list", CLUSTER, "--output", "json"))
-  ports = json.dumps(clusters[0].get("nodes", []))
-  if f'"HostPort": "{KEYCLOAK_PORT}"' in ports:
+  mapped = json.dumps(clusters[0].get("nodes", []))
+  if f'"HostPort": "{ports.split("-")[0]}"' in mapped:
     return
-  log(f"adding port {KEYCLOAK_PORT} to cluster {CLUSTER} …")
-  _run("k3d", "cluster", "edit", CLUSTER, "--port-add", f"127.0.0.1:{KEYCLOAK_PORT}:{KEYCLOAK_PORT}@loadbalancer")
+  log(f"adding port {ports} to cluster {CLUSTER} …")
+  _run("k3d", "cluster", "edit", CLUSTER, "--port-add", f"127.0.0.1:{ports}:{ports}@loadbalancer")
+
+
+def _build_and_import(name: str, context: Path) -> str:
+  """Build, tag by image id and import into platform-local: an unchanged build keeps the tag, so the rollout is a no-op."""
+  _run("docker", "build", "--quiet", "--tag", f"{name}:dev", str(context))
+  image_id = _run("docker", "image", "inspect", "--format", "{{.Id}}", f"{name}:dev").strip()
+  image = f"{name}:{image_id.removeprefix('sha256:')[:12]}"
+  _run("docker", "tag", f"{name}:dev", image)
+  _run("k3d", "image", "import", image, "--cluster", CLUSTER)
+  return image
+
+
+def _deploy(manifest_path: Path, name: str, image: str) -> None:
+  manifest = manifest_path.read_text().replace(f"image: {name}:dev", f"image: {image}")
+  _kubectl("apply", "--filename", "-", input=manifest)
 
 
 def _secret_value(namespace: str, name: str, key: str) -> str | None:
@@ -195,8 +214,10 @@ def install(admin_email: str | None = None, log=None) -> dict:
       "--api-port", API_PORT,
       "--app-port", f"127.0.0.1:{APP_PORT}",
       "--extra-port", f"127.0.0.1:{KEYCLOAK_PORT}:{KEYCLOAK_PORT}",
+      "--extra-port", f"127.0.0.1:{ENV_PORTS}:{ENV_PORTS}",
     )
-  _ensure_keycloak_port(log)
+  _ensure_port(KEYCLOAK_PORT, log)
+  _ensure_port(ENV_PORTS, log)
 
   log("applying CRDs …")
   _kubectl("apply", "--filename", str(root / "platform" / "crds"))
@@ -208,18 +229,19 @@ def install(admin_email: str | None = None, log=None) -> dict:
 
   api_dir = root / "platform" / "api"
   log("building the Platform API image …")
-  _run("docker", "build", "--quiet", "--tag", f"{IMAGE}:dev", str(api_dir))
-  # Tag by image id: an unchanged build keeps the same tag and the rollout is a no-op.
-  image_id = _run("docker", "image", "inspect", "--format", "{{.Id}}", f"{IMAGE}:dev").strip()
-  image = f"{IMAGE}:{image_id.removeprefix('sha256:')[:12]}"
-  _run("docker", "tag", f"{IMAGE}:dev", image)
-  _run("k3d", "image", "import", image, "--cluster", CLUSTER)
+  image = _build_and_import(IMAGE, api_dir)
 
   log("deploying the Platform API …")
-  manifest = (api_dir / "deploy" / "platform-api.yaml").read_text().replace(f"image: {IMAGE}:dev", f"image: {image}")
-  _kubectl("apply", "--filename", "-", input=manifest)
+  _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, image)
   _kubectl("rollout", "status", "deployment/platform-api", "--namespace", NAMESPACE, "--timeout", "180s")
   wait_healthy(API_URL)
+
+  provider_dir = root / "platform" / "providers" / "local_vcluster"
+  log("building the environment provider image …")
+  provider_image = _build_and_import(PROVIDER_IMAGE, provider_dir)
+  log("deploying the environment provider (local_vcluster) …")
+  _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
+  _kubectl("rollout", "status", "deployment/local-vcluster-provider", "--namespace", NAMESPACE, "--timeout", "180s")
 
   path = config.save({
     **config.load(),
@@ -240,19 +262,3 @@ def wait_healthy(url: str, timeout: int = 90) -> None:
     if time.monotonic() > deadline:
       raise BootstrapError(f"Platform API not healthy at {url}/healthz after {timeout}s")
     time.sleep(2)
-
-
-def run_provider() -> None:
-  """Replace this process with the local k3d provider: it runs on the host because it drives Docker."""
-  if not shutil.which("uv"):
-    raise BootstrapError("'uv' not found in PATH")
-  if not cluster_exists():
-    raise BootstrapError(f"cluster {CLUSTER} not found: run 'platform init --target local' first")
-  project = repo_root() / "platform" / "providers" / "local_k3d"
-  os.execvp("uv", [
-    "uv", "run", "--quiet", "--project", str(project),
-    "local-k3d-provider",
-    "--context", CONTEXT,
-    "--namespace", NAMESPACE,
-    "--kubeconfig-dir", str(config.config_dir() / "environments"),
-  ])

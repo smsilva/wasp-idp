@@ -1,18 +1,18 @@
 # Walkthrough
 
-Roteiro para demonstrar a CLI `platform` partindo do zero: sem cluster, sem config e sem a CLI instalada. Rodado de ponta a ponta em 2026-10-10. Os tempos abaixo vêm dessa execução.
+Roteiro para demonstrar a CLI `platform` partindo do zero: sem cluster, sem config e sem a CLI instalada. Rodado de ponta a ponta em 2026-10-10; os passos 8 a 11 foram refeitos com o provider `local_vcluster` (#183) no mesmo dia.
 
 O guia de uso, com cada comando explicado, é a [página principal](index.md). Esta página é a sequência para apresentar ou para conferir que tudo continua funcionando.
 
 ## Preparação
 
-Duas janelas de terminal (ou dois painéis do tmux): a de cima para os comandos, a de baixo para o provider. Um navegador logado na conta Google que vai entrar na plataforma.
+Um terminal e um navegador logado na conta Google que vai entrar na plataforma. O provider de ambientes roda dentro do cluster.
 
 | Etapa | Tempo |
 |---|---|
-| `platform init` do zero | ~3 min |
+| `platform init` do zero | ~4 min |
 | Login (device code + Google) | ~1 min, manual |
-| Ambiente pronto com o provider rodando | ~15 s |
+| Ambiente pronto (vcluster) | ~30 s |
 | Roteiro inteiro | ~10 min |
 
 ## 0. Partir do zero
@@ -21,7 +21,7 @@ Duas janelas de terminal (ou dois painéis do tmux): a de cima para os comandos,
     Apaga o control plane local, os ambientes e as credenciais. O usuário do Keycloak é recriado no primeiro login.
 
 ```bash
-k3d cluster list --no-headers | awk '/^(platform-local|env-)/ {print $1}' | xargs --no-run-if-empty k3d cluster delete
+k3d cluster delete platform-local
 rm -rf ~/.config/platform
 uv tool uninstall wasp-platform
 ```
@@ -103,56 +103,53 @@ platform whoami --output json
 
 O `sub` é o ID imutável do usuário no Keycloak; é ele que vai para a trilha de auditoria.
 
-## 8. Pedido sem provider
+## 8. Criar um ambiente
 
 ```bash
-platform environment create greetings-test --profile ephemeral --expires 3d
-platform environment list
+time platform environment create greetings-test --profile ephemeral --expires 1h --wait
 ```
 
 ```
-NAME            PROFILE    STATUS                   EXPIRES
-greetings-test  ephemeral  NoProviderForCapability  2d 23h
+provisioning greetings-test (profile: ephemeral) …
+  NoProviderForCapability
+  Provisioning
+✓ greetings-test ready
+
+real    0m32s
 ```
 
-O pedido foi aceito e gravado como CRD, mas ninguém o atende ainda.
+O pedido começa em `NoProviderForCapability` e o provider `local_vcluster`, que roda dentro do `platform-local`, o assume em seguida. Não há segundo terminal.
 
-## 9. Subir o provider
-
-No segundo terminal:
+## 9. O provider por dentro
 
 ```bash
-platform provider run --target local
+kubectl --context k3d-platform-local --namespace platform-system logs deploy/local-vcluster-provider --tail 3
+kubectl --context k3d-platform-local get namespaces | grep env-
 ```
 
 ```
-INFO watching environments in k3d-platform-local/platform-system
-INFO creating cluster env-greetings-test
+INFO creating vcluster env-greetings-test on port 7100
 INFO environment greetings-test ready
+env-greetings-test   Active   40s
 ```
 
 ## 10. Usar o ambiente
 
 ```bash
-platform environment list
+platform environment get greetings-test
 kubectl --kubeconfig ~/.config/platform/environments/greetings-test.kubeconfig get nodes
+kubectl --kubeconfig ~/.config/platform/environments/greetings-test.kubeconfig create deployment web --image nginx:alpine
 ```
 
-## 11. Criar esperando ficar pronto
+## 11. Segundo ambiente, em paralelo
 
 ```bash
-time platform environment create demo --profile ephemeral --expires 1h --wait
+platform environment create demo --profile ephemeral --expires 1h --wait
+platform environment get demo
 platform environment list --output json
 ```
 
-```
-provisioning demo (profile: ephemeral) …
-  pending
-  Provisioning
-✓ demo ready
-
-real    0m16s
-```
+Cada ambiente ganha a próxima porta livre da faixa `7100`–`7119` (`demo` fica na `7101`).
 
 ## 12. Trilha de auditoria
 
@@ -169,12 +166,10 @@ kubectl --context k3d-platform-local --namespace platform-system \
 
 ## 13. Limpar e sair
 
-Com o provider ainda rodando (é ele que apaga os clusters `env-*`):
-
 ```bash
 platform environment delete demo
 platform environment delete greetings-test
-k3d cluster list
+kubectl --context k3d-platform-local get namespaces | grep env- || echo "no environments"
 platform logout
 platform whoami
 ```
@@ -184,7 +179,7 @@ platform whoami
 ✗ not logged in: run 'platform login'
 ```
 
-Pare o provider com `Ctrl+C`. O `platform-local` continua no ar para a próxima rodada; para desmontar tudo, volte ao passo 0.
+O `platform-local` continua no ar para a próxima rodada; para desmontar tudo, volte ao passo 0.
 
 ## Ideias para tornar o roteiro repetível
 

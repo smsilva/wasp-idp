@@ -1,9 +1,9 @@
-"""Only init and provider run may reach Docker, k3d or kubectl; everything else goes through the API."""
+"""Only init may reach Docker, k3d or kubectl; everything else goes through the API."""
 import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).parents[1] / "src" / "wasp_platform"
-ALLOWED = {"commands/init.py", "commands/provider.py"}
+ALLOWED = {"commands/init.py"}
 
 
 def imports_bootstrap(path: Path) -> bool:

@@ -1,11 +1,13 @@
 # platform CLI
 
-Sobe um control plane local e cria Environments, cada um como um cluster k3d.
+Sobe um control plane local e cria Environments, cada um como um cluster Kubernetes virtual (vcluster) dentro dele.
 
 ```
-platform CLI ──HTTP──▶ Platform API ──▶ CRD Environment ◀──watch── provider local_k3d ──▶ k3d env-<nome>
-                       (platform-local)                             (no host)
+platform CLI ──HTTP──▶ Platform API ──▶ CRD Environment ◀──watch── provider local_vcluster ──▶ vcluster env-<nome>
+                      └──────────────────────────── platform-local (k3d) ─────────────────────────────┘
 ```
+
+O provider roda dentro do `platform-local`, instalado pelo `init`: não há processo para manter aberto no host.
 
 ## 1. Pré-requisitos
 
@@ -83,7 +85,7 @@ client_id: platform-cli
 
 ## 4. Entrar
 
-Todo comando além de `init` e `provider run` fala com a Platform API, que exige um token do Keycloak.
+Todo comando além de `init` fala com a Platform API, que exige um token do Keycloak.
 
 ```bash
 platform login
@@ -121,45 +123,25 @@ O `whoami` pergunta à API quem ela vê; não lê o token localmente. Os tokens 
 !!! warning
     O Keycloak precisa ser alcançado em `localhost:8180` pelo navegador: é o endereço que o Google aceita como redirect. Em SSH, use `--use-device-code` com um túnel (`ssh -L 8180:localhost:8180`).
 
-## 5. Criar um ambiente sem provider
+## 5. Criar um ambiente
 
 ```bash
 platform environment create greetings-test \
   --profile ephemeral \
-  --expires 1h
+  --expires 1h \
+  --wait
 ```
 
 ```
 provisioning greetings-test (profile: ephemeral) …
-greetings-test: NoProviderForCapability
+  NoProviderForCapability
+  Provisioning
+✓ greetings-test ready
 ```
 
-O pedido fica registrado e espera um provider.
+A API aceita o pedido e grava um `Environment`; o status começa em `NoProviderForCapability`. O provider `local_vcluster`, que roda dentro do `platform-local`, assume o pedido em seguida e instala um vcluster no namespace `env-greetings-test`. Leva cerca de 30 s.
 
-```bash
-platform environment list
-```
-
-```
-NAME            PROFILE    STATUS                   EXPIRES
-greetings-test  ephemeral  NoProviderForCapability  59m
-```
-
-## 6. Subir o provider
-
-Em outro terminal, e deixe rodando:
-
-```bash
-platform provider run --target local
-```
-
-```
-INFO watching environments in k3d-platform-local/platform-system
-INFO creating cluster env-greetings-test
-INFO environment greetings-test ready
-```
-
-O ambiente pendente converge sozinho:
+Sem `--wait`, o comando volta logo e o ambiente segue sendo criado:
 
 ```bash
 platform environment list
@@ -170,72 +152,60 @@ NAME            PROFILE    STATUS  EXPIRES
 greetings-test  ephemeral  ready   59m
 ```
 
+## 6. Usar o cluster do ambiente
+
+O `--wait` grava o kubeconfig. Para um ambiente criado sem ele, `platform environment get` faz o mesmo:
+
 ```bash
-k3d cluster list
+platform environment get greetings-test
 ```
 
 ```
-NAME                 SERVERS   AGENTS   LOADBALANCER
-env-greetings-test   1/1       0/0      true
-platform-local       1/1       0/0      true
+greetings-test: ready
+  vcluster running in namespace env-greetings-test, API on 127.0.0.1:7100
+  kubectl --kubeconfig ~/.config/platform/environments/greetings-test.kubeconfig get nodes
 ```
-
-## 7. Usar o cluster do ambiente
 
 ```bash
 export KUBECONFIG=~/.config/platform/environments/greetings-test.kubeconfig
 kubectl get nodes
+kubectl create deployment web --image nginx:alpine
 ```
 
 ```
-NAME                              STATUS   ROLES                  AGE   VERSION
-k3d-env-greetings-test-server-0   Ready    control-plane,master   56s   v1.31.5+k3s1
+NAME                          STATUS   ROLES    AGE   VERSION
+k3d-platform-local-server-0   Ready    <none>   17s   v1.36.0
 ```
 
-## 8. Criar e esperar ficar pronto
+O nó que aparece é o do `platform-local`: o vcluster tem API, etcd e controllers próprios, e os pods rodam no cluster de fora, no namespace `env-greetings-test`. Cada ambiente ganha uma porta da faixa `7100`–`7119`, mapeada pelo `init` em `127.0.0.1`.
 
-Com o provider rodando:
+## 7. Saída em JSON
 
 ```bash
-platform environment create demo \
-  --profile ephemeral \
-  --expires 3d \
-  --wait
-```
-
-```
-provisioning demo (profile: ephemeral) …
-  pending
-  Provisioning
-✓ demo ready
-```
-
-## 9. Saída em JSON
-
-```bash
-platform environment create doc-sample \
-  --profile ephemeral \
-  --expires 3d \
-  --output json
+platform environment list --output json
 ```
 
 ```json
-{
-  "name": "doc-sample",
-  "profile": "ephemeral",
-  "expiresAt": "2026-10-13T17:28:53Z",
-  "status": "NoProviderForCapability",
-  "message": "no provider has claimed the environment capability yet",
-  "kubeconfig": null,
-  "createdAt": "2026-10-10T17:28:53Z"
-}
+[
+  {
+    "name": "greetings-test",
+    "profile": "ephemeral",
+    "expiresAt": "2026-10-10T21:35:22Z",
+    "status": "ready",
+    "message": "vcluster running in namespace env-greetings-test, API on 127.0.0.1:7100",
+    "port": 7100,
+    "createdAt": "2026-10-10T20:35:22Z"
+  }
+]
 ```
+
+A lista nunca traz o kubeconfig, que é uma credencial. O `platform environment get` o recebe só para quem criou o ambiente ou para quem está em `platform-admins`; os demais veem o status, sem o acesso.
 
 ```bash
 platform environment list --output json | jq -r '.[].name'
 ```
 
-## 10. Apagar
+## 8. Apagar
 
 ```bash
 platform environment delete greetings-test
@@ -245,32 +215,31 @@ platform environment delete greetings-test
 ✓ greetings-test deleting
 ```
 
-O provider remove o cluster e o kubeconfig:
+O provider desinstala o vcluster e remove o namespace `env-greetings-test`.
 
-```
-INFO deleting cluster env-greetings-test
-INFO environment greetings-test removed
-```
+## 9. Expiração
 
-## 11. Expiração
-
-Ambientes com `--expires` são apagados pelo provider quando o prazo vence:
+Ambientes com `--expires` são apagados pelo provider quando o prazo vence (checado a cada 10 s):
 
 ```bash
 platform environment create short-lived \
   --profile ephemeral \
-  --expires 2m
+  --expires 1m
+```
+
+```bash
+kubectl --context k3d-platform-local --namespace platform-system logs deploy/local-vcluster-provider
 ```
 
 ```
-INFO environment short-lived expired at 2026-10-10T16:03:16Z, deleting
-INFO deleting cluster env-short-lived
+INFO environment short-lived expired at 2026-10-10T21:38:44Z, deleting
+INFO deleting vcluster env-short-lived
 INFO environment short-lived removed
 ```
 
 Formatos de `--expires`: `30m`, `12h`, `3d`, `1w`.
 
-## 12. Por baixo: o CRD
+## 10. Por baixo: o CRD
 
 ```bash
 kubectl --context k3d-platform-local \
@@ -296,7 +265,7 @@ kubectl --context k3d-platform-local \
 {"id":"552d…","applied":true}
 ```
 
-## 13. Desmontar tudo
+## 11. Desmontar tudo
 
 ```bash
 platform environment list --output json | jq -r '.[].name' \
@@ -305,28 +274,27 @@ k3d cluster delete platform-local
 rm ~/.config/platform/config.yaml
 ```
 
-!!! warning
-    Apague os ambientes com o provider rodando: é ele que remove os clusters `env-*`.
+Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 
 ## Referência rápida
 
 | Comando | O que faz |
 |---|---|
-| `platform init --target local [--admin <email>]` | cria `platform-local`, CRDs, Platform API e Keycloak |
+| `platform init --target local [--admin <email>]` | cria `platform-local`, CRDs, Keycloak, Platform API e o provider `local_vcluster` |
 | `platform login [--use-device-code]` | entra com a conta Google |
 | `platform whoami` | e-mail e grupos, vistos pela API |
 | `platform logout` | revoga a sessão e apaga as credenciais |
-| `platform provider run --target local` | provisiona ambientes como k3d (foreground) |
 | `platform environment create <nome> --profile ephemeral\|shared [--expires 3d] [--wait]` | pede um ambiente |
 | `platform environment list` | NAME, PROFILE, STATUS, EXPIRES |
-| `platform environment delete <nome>` | remove o ambiente e o cluster |
+| `platform environment get <nome>` | status e mensagem; grava o kubeconfig quando pronto |
+| `platform environment delete <nome>` | remove o ambiente e o vcluster |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |
 |---|---|
 | `NoProviderForCapability` | nenhum provider assumiu o pedido |
-| `Provisioning` | cluster sendo criado |
-| `ready` | cluster no ar, kubeconfig gravado |
+| `Provisioning` | vcluster sendo criado |
+| `ready` | vcluster no ar; `get` ou `--wait` gravam o kubeconfig |
 | `ProvisioningFailed` | erro do provider; veja `message` no JSON |
 | `deleting` | remoção em andamento |
 
@@ -335,3 +303,4 @@ rm ~/.config/platform/config.yaml
 | `6560` | Kubernetes API do `platform-local` |
 | `127.0.0.1:9090` | Platform API |
 | `localhost:8180` | Keycloak (issuer `http://localhost:8180/realms/platform`) |
+| `127.0.0.1:7100`–`7119` | API de cada ambiente (vcluster), uma porta por ambiente |

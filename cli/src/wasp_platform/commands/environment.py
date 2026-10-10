@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import datetime, timezone
 from enum import Enum
@@ -5,6 +6,7 @@ from typing import Annotated
 
 import typer
 
+from .. import config
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, fail, print_json, print_table, success
 
@@ -79,6 +81,19 @@ def _wait_ready(client: PlatformClient, environment: dict, timeout: int, quiet: 
       fail(f"{environment['name']} not ready after {timeout}s (status: {environment['status']})")
     time.sleep(2)
     environment = client.get_environment(environment["name"])
+  return save_kubeconfig(environment)
+
+
+def save_kubeconfig(environment: dict) -> dict:
+  """The provider runs inside the cluster and returns the kubeconfig in the API: the CLI writes it locally."""
+  data = environment.pop("kubeconfigData", None)
+  if data:
+    path = config.config_dir() / "environments" / f"{environment['name']}.kubeconfig"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w") as file:
+      file.write(data)
+    environment["kubeconfig"] = str(path)
   return environment
 
 
@@ -94,6 +109,23 @@ def list_(output: OutputOption = Format.table):
     return
   rows = [[item["name"], item["profile"], item["status"], remaining(item.get("expiresAt"))] for item in items]
   print_table(["NAME", "PROFILE", "STATUS", "EXPIRES"], rows)
+
+
+@app.command("get")
+def get(name: str, output: OutputOption = Format.table):
+  """Show an environment and write its kubeconfig when it is ready."""
+  try:
+    environment = save_kubeconfig(_client().get_environment(name))
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(environment)
+    return
+  typer.echo(f"{environment['name']}: {environment['status']}")
+  if environment.get("message"):
+    typer.echo(f"  {environment['message']}")
+  if environment["status"] == "ready" and environment.get("kubeconfig"):
+    typer.echo(f"  kubectl --kubeconfig {environment['kubeconfig']} get nodes")
 
 
 @app.command("delete")

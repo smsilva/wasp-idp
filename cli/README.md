@@ -20,7 +20,6 @@ Ou, para ter `platform` no `PATH`: `uv tool install --editable cli/`. A instala�
 platform init --target local --admin <email> # k3d platform-local, CRDs, Platform API, Keycloak; idempotente
 platform login                               # Google via Keycloak; --use-device-code sem navegador
 platform whoami
-platform provider run --target local         # outro terminal, foreground
 platform environment create greetings-test \
   --profile ephemeral \
   --expires 3d \
@@ -29,7 +28,9 @@ platform environment list
 platform environment delete greetings-test
 ```
 
-Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em `~/.config/platform/environments/<nome>.kubeconfig`.
+Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em `~/.config/platform/environments/<nome>.kubeconfig`, gravado por `environment create --wait` ou `environment get`.
+
+Cada ambiente é um vcluster dentro do `platform-local`, criado pelo provider `local_vcluster` (`platform/providers/local_vcluster/`), que o `init` instala no cluster. Não há processo para manter aberto no host.
 
 ## Documentação
 
@@ -41,7 +42,7 @@ uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
 
 ## Fronteira
 
-- `wasp_platform.bootstrap` é a única parte que fala com Docker, k3d e `kubectl`. Só `init` e `provider run` importam esse módulo (`tests/test_boundaries.py` garante).
+- `wasp_platform.bootstrap` é a única parte que fala com Docker, k3d e `kubectl`. Só o `init` importa esse módulo (`tests/test_boundaries.py` garante).
 - `wasp_platform.client` é o cliente HTTP da Platform API, usado por todos os outros comandos. Ele manda o access token de `wasp_platform.auth`, que faz o login (PKCE ou device code), guarda os tokens em `~/.config/platform/credentials` (`0600`) e os renova.
 
 ## Portas do target local
@@ -51,19 +52,22 @@ uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
 | Kubernetes API do `platform-local` | `6560` |
 | Platform API (`127.0.0.1` apenas) | `9090` |
 | Keycloak (`127.0.0.1` apenas; issuer em `localhost`) | `8180` |
-| Kubernetes API de cada `env-<nome>` | livre, escolhida pelo provider (`127.0.0.1`) |
+| Kubernetes API de cada ambiente (vcluster) | `7100`–`7119`, uma por ambiente (`127.0.0.1`) |
 
 Os scripts de `scripts/cluster-zero` e `scripts/single-cluster` usam `6550`–`6553` e `9080`–`9083`.
 
 ## Limitações conhecidas
 
 - O journal é JSON Lines num PVC até o Postgres (#172).
-- O provider roda em foreground. Sem ele, os pedidos ficam em `NoProviderForCapability`, e apagar um ambiente com o provider parado deixa o `Environment` preso no finalizer e o cluster `env-*` vivo até o provider subir.
+- No máximo 20 ambientes ao mesmo tempo: um por porta da faixa `7100`–`7119`. Acima disso, o ambiente fica em `ProvisioningFailed`.
+- Os pods de cada vcluster rodam no próprio `platform-local` e disputam recursos com o control plane.
+- O IP do load balancer é alcançável do host Linux; no Docker Desktop (macOS, Windows), só o mapeamento de portas do `init` funciona.
 
 ## Alternativas descartadas
 
 - Workflow de Pages separado para o guia: substituiria o site do deck. O guia é publicado pelo mesmo `pages.yaml`, em `/cli/`.
-- `kopf`/operator no cluster para o provider `local_k3d`: o provider precisa de Docker no host.
+- Provider `local_k3d` no host (um cluster k3d por ambiente): exigia Docker no host e um `platform provider run` aberto em foreground; trocado pelo `local_vcluster` na #183.
+- Cluster API para o ambiente efêmero local: o CAPD precisa do socket do Docker montado no cluster, e o `cluster-api-provider-vcluster` só tem versões alpha (#183).
 
 ## Testes
 

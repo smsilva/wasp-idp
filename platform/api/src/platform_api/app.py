@@ -88,7 +88,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   @app.post("/v1/environments", status_code=202)
   def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
     deadline = expires_at(request.expires) if request.expires else None
-    body = environments.manifest(request.name, request.profile, deadline)
+    body = environments.manifest(request.name, request.profile, deadline, principal.sub)
     entry = journal.record("create", "Environment", request.name, body["spec"], principal.actor)
     try:
       created = state.create(ENVIRONMENTS, body)
@@ -112,7 +112,8 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   @app.get("/v1/environments/{name}")
   def get_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
-      return environments.view(state.get(ENVIRONMENTS, name))
+      obj = state.get(ENVIRONMENTS, name)
+      return environments.view(obj, with_kubeconfig=environments.can_read_credentials(obj, principal))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
 
