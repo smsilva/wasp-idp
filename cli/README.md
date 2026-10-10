@@ -17,7 +17,7 @@ Ou, para ter `platform` no `PATH`: `uv tool install --editable cli/`. A instala�
 ## Uso (target local)
 
 ```bash
-platform init --target local                 # k3d platform-local, CRDs, Platform API; idempotente
+platform init --target local --admin <email> # k3d platform-local, CRDs, Platform API, Keycloak; idempotente
 platform provider run --target local         # outro terminal, foreground
 platform environment create greetings-test \
   --profile ephemeral \
@@ -48,6 +48,7 @@ uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
 |---|---|
 | Kubernetes API do `platform-local` | `6560` |
 | Platform API (`127.0.0.1` apenas) | `9090` |
+| Keycloak (`127.0.0.1` apenas; issuer em `localhost`) | `8180` |
 | Kubernetes API de cada `env-<nome>` | livre, escolhida pelo provider (`127.0.0.1`) |
 
 Os scripts de `scripts/cluster-zero` e `scripts/single-cluster` usam `6550`–`6553` e `9080`–`9083`.

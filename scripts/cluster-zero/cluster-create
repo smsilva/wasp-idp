@@ -3,7 +3,7 @@ set -e
 
 show_usage() {
   cat <<USAGE
-Usage: ${0##*/} --name <name> --api-port <port> [--servers <n>] [--network <network>] [--app-port <port>]
+Usage: ${0##*/} --name <name> --api-port <port> [--servers <n>] [--network <network>] [--app-port <port>] [--extra-port <host:lb>]...
 
   --name       k3d cluster name (kubectl context becomes k3d-<name>)
   --api-port   host port for the Kubernetes API
@@ -11,6 +11,8 @@ Usage: ${0##*/} --name <name> --api-port <port> [--servers <n>] [--network <netw
   --network    Docker network shared by the clusters (default: k3d-idp)
   --app-port   host port mapped to load balancer port 9080 (apps);
                without it, host 9080/9443 map to 80/443 (ArgoCD)
+  --extra-port another host port mapped to a load balancer port, as k3d
+               expects it ([ip:]host:lb); repeatable
 USAGE
 }
 
@@ -19,6 +21,7 @@ api_port=""
 servers="1"
 network="k3d-idp"
 app_port=""
+extra_ports=()
 
 while [[ "$#" -gt 0 ]]; do
   case "${1}" in
@@ -27,6 +30,7 @@ while [[ "$#" -gt 0 ]]; do
     --servers) servers="${2?}"; shift 2 ;;
     --network) network="${2?}"; shift 2 ;;
     --app-port) app_port="${2?}"; shift 2 ;;
+    --extra-port) extra_ports+=("${2?}"); shift 2 ;;
     --help) show_usage; exit 0 ;;
     *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
   esac
@@ -49,6 +53,10 @@ if [[ -n "${app_port}" ]]; then
 else
   port_options=(--port "9080:80@loadbalancer" --port "9443:443@loadbalancer")
 fi
+
+for extra_port in "${extra_ports[@]}"; do
+  port_options+=(--port "${extra_port}@loadbalancer")
+done
 
 docker network inspect "${network}" > /dev/null 2>&1 \
   || docker network create "${network}" > /dev/null
