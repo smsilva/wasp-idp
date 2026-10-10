@@ -1,0 +1,419 @@
+# Reference architecture of the Internal Developer Platform (slide 2 of the base
+# deck) as Backstage catalog entities. Each plane is a System of the Domain
+# internal-developer-platform; each tool is a Component (software the platform
+# runs or uses) or a Resource (managed cloud service). The platform-engineering
+# category goes in spec.type. No versions: the catalog holds the stable concept.
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: internal-developer-platform
+  title: Internal Developer Platform
+  description: Self-service platform that turns a developer request into running software
+  links:
+    - url: https://platformengineering.org/platform-tooling
+      title: Platform tooling landscape
+spec:
+  owner: group:default/platform-team
+# ── Planes ───────────────────────────────────────────────────────────────────
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: developer-control-plane
+  title: Developer Control Plane
+  description: Where developers interact with the platform
+spec:
+  owner: group:default/platform-team
+  domain: internal-developer-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: integration-delivery-plane
+  title: Integration & Delivery Plane
+  description: Turns code and intent into versioned artifacts and running workloads
+spec:
+  owner: group:default/platform-team
+  domain: internal-developer-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: resource-plane
+  title: Resource Plane
+  description: Compute, data, networking and services where workloads run
+spec:
+  owner: group:default/platform-team
+  domain: internal-developer-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: observability-plane
+  title: Observability Plane
+  description: Metrics, logs, cost and incidents of everything that runs
+spec:
+  owner: group:default/platform-team
+  domain: internal-developer-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: security-plane
+  title: Security Plane
+  description: Guardrails that cross every other plane
+spec:
+  owner: group:default/platform-team
+  domain: internal-developer-platform
+# ── Developer Control Plane ──────────────────────────────────────────────────
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: vscode
+  title: VS Code
+spec:
+  type: ide
+  lifecycle: production
+  owner: group:default/platform-team
+  system: developer-control-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: claude-code
+  title: Claude Code
+spec:
+  type: agent
+  lifecycle: production
+  owner: group:default/platform-team
+  system: developer-control-plane
+  consumesApis:
+    - score-workload-spec
+  dependsOn:
+    - component:default/backstage
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage
+  title: Backstage
+spec:
+  type: portal
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: developer-control-plane
+  dependsOn:
+    - component:default/github
+    - component:default/argo-cd
+    - component:default/kratix
+# ── Integration & Delivery Plane ─────────────────────────────────────────────
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: github
+  title: GitHub
+spec:
+  type: version-control
+  lifecycle: production
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: bitbucket
+  title: Bitbucket
+spec:
+  type: version-control
+  lifecycle: production
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: github-actions
+  title: GitHub Actions
+spec:
+  type: ci
+  lifecycle: production
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+  dependsOn:
+    - component:default/github
+    - resource:default/azure-container-registry
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-container-registry
+  title: Azure Container Registry
+  description: Where versions live — every image tag is a version
+spec:
+  type: registry
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: score-workload-spec
+  title: Score
+  description: Contract between developer and platform — what the workload needs, not how or where
+spec:
+  type: score
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+  definition: |
+    # https://score.dev
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: kratix
+  title: Kratix
+spec:
+  type: platform-orchestrator
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+  providesApis:
+    - score-workload-spec
+  dependsOn:
+    - component:default/crossplane
+    - component:default/terraform
+    - component:default/argo-cd
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: crossplane
+  title: Crossplane
+spec:
+  type: iac
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+  dependsOn:
+    - resource:default/azure-kubernetes-service
+    - resource:default/azure-sql
+    - resource:default/azure-dns
+    - resource:default/azure-service-bus
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: terraform
+  title: Terraform
+spec:
+  type: iac
+  lifecycle: production
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: argo-cd
+  title: Argo CD
+spec:
+  type: cd
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: integration-delivery-plane
+  dependsOn:
+    - component:default/github
+    - resource:default/azure-container-registry
+    - resource:default/azure-kubernetes-service
+# ── Resource Plane ───────────────────────────────────────────────────────────
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-kubernetes-service
+  title: Azure Kubernetes Service
+spec:
+  type: compute
+  owner: group:default/platform-team
+  system: resource-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-sql
+  title: Azure SQL
+spec:
+  type: data
+  owner: group:default/platform-team
+  system: resource-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-dns
+  title: Azure DNS
+spec:
+  type: networking
+  owner: group:default/platform-team
+  system: resource-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-service-bus
+  title: Azure Service Bus
+spec:
+  type: services
+  owner: group:default/platform-team
+  system: resource-plane
+# ── Observability Plane ──────────────────────────────────────────────────────
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-monitor
+  title: Azure Monitor
+spec:
+  type: monitoring-logging
+  owner: group:default/platform-team
+  system: observability-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: prometheus
+  title: Prometheus
+spec:
+  type: observability
+  lifecycle: production
+  owner: group:default/platform-team
+  system: observability-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: grafana
+  title: Grafana
+spec:
+  type: observability
+  lifecycle: production
+  owner: group:default/platform-team
+  system: observability-plane
+  dependsOn:
+    - component:default/prometheus
+    - resource:default/azure-monitor
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: kubecost
+  title: Kubecost
+spec:
+  type: finops
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: observability-plane
+  dependsOn:
+    - component:default/prometheus
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: pagerduty
+  title: PagerDuty
+spec:
+  type: incident-management
+  lifecycle: production
+  owner: group:default/platform-team
+  system: observability-plane
+# ── Security Plane ───────────────────────────────────────────────────────────
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: sonarqube
+  title: SonarQube
+spec:
+  type: code-analysis
+  lifecycle: production
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-key-vault
+  title: Azure Key Vault
+spec:
+  type: secrets
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: auth0
+  title: Auth0
+spec:
+  type: id-management
+  lifecycle: production
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: kyverno
+  title: Kyverno
+spec:
+  type: policy-control
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: azure-policy
+  title: Azure Policy
+spec:
+  type: policy-control
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cilium
+  title: Cilium
+spec:
+  type: network-security
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: prisma-cloud
+  title: Prisma Cloud
+spec:
+  type: security-suite
+  lifecycle: production
+  owner: group:default/platform-team
+  system: security-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: snyk
+  title: Snyk
+spec:
+  type: security-suite
+  lifecycle: production
+  owner: group:default/platform-team
+  system: security-plane
