@@ -127,9 +127,11 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
       raise HTTPException(403, f"environment '{name}' can only be deleted by its owner or platform-admins")
     entry = journal.record("delete", "Environment", name, None, principal.actor)
     try:
-      state.delete(ENVIRONMENTS, name)
+      state.delete(ENVIRONMENTS, name, uid=obj["metadata"].get("uid"))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
+    except Conflict:
+      raise HTTPException(409, f"environment '{name}' changed while deleting: try again")
     journal.mark_applied(entry)
     return {"name": name, "status": "deleting"}
 
