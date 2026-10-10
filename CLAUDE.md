@@ -27,11 +27,21 @@
 
 - **`gh pr edit` / `gh issue edit` fail on this repo** with `GraphQL: Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)`. The command exits non-zero and changes nothing — easy to read as "edited" if the output is not checked. Use the REST API instead: `gh api --method PATCH repos/smsilva/wasp-idp/pulls/<n> --input <file.json>` with `{"title": ..., "body": ...}`. `gh issue create`, `gh issue comment` and `gh issue close` are unaffected.
 
+- **Closing keywords must be English** (`Closes #n`, `Fixes #n`). "Fecha #n" in a PR body does not close the issue on merge — close it by hand and move it to `Done` on the board.
+
+- **Stacked PRs:** merging the base PR does not retarget the child (the base branch is not auto-deleted). Rebase the child with `git rebase --onto origin/main <base-commit>`, force-push, and switch its base to `main` via REST `{"base": "main"}`. GitHub may keep reporting `mergeable_state: dirty` after the retarget even with no real conflict; amending the commit (`--amend --no-edit --date=now`) and force-pushing forces a recompute.
+
 - Write GitHub issue bodies so a fresh agent (no conversation context) can act without re-deriving facts already knowable from the code: state a checked fact directly ("the policy is already `Resource = \"*\"`"), never phrase it as "discover/verify whether X exists" when a `grep`/read already answers it. That phrasing pattern caused real rework the first time it shipped — verified by dry-running a cold agent against the issue.
 
 ## Branch naming
 
 - Always create a branch when starting work on a GitHub issue. The branch name convention is: `feat/<issue_number>-<short-description>[-<phase-number>]`
+
+## Platform CLI and Platform API
+
+- `cli/` (package `wasp_platform`, script `platform`), `platform/api/` and `platform/providers/local_k3d/` are three separate `uv` projects: run `uv sync` and `uv run pytest` inside each. Usage guide in `cli/docs/index.md`, published at `/cli/` by `.github/workflows/pages.yaml`.
+- The repo has a single GitHub Pages site: `pages.yaml` builds the deck (root) and the CLI guide (`/cli/`) into one artifact. Add new sites as another build step there, never as a second deploy workflow — it would replace the whole site.
+- The Platform API has no auth until #144; `TrustedHostMiddleware` (`127.0.0.1`/`localhost`) guards against DNS rebinding. Keep it, and keep the readiness probe sending `Host: localhost`.
 
 ## IDP Tool (Backstage)
 
