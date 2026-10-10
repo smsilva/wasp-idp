@@ -188,8 +188,8 @@ Pare o provider com `Ctrl+C`. O `platform-local` continua no ar para a próxima 
 
 ## Ideias para tornar o roteiro repetível
 
-- **Script `scripts/demo/cli-walkthrough`:** roda os passos em sequência, pausa antes de cada um (Enter para seguir) e para no login esperando o device code. Serve para apresentar e para conferir antes de um merge.
-- **Teste de fumaça sem humano:** o login é o único passo manual. Um usuário local de teste no realm (só no target local, criado pelo `init` com senha aleatória num Secret) e o grant de senha desligado para todos os outros clients permitiriam um `platform login --test-user` e, com ele, rodar o roteiro inteiro em CI.
-- **Medir:** guardar o tempo de cada etapa (como na tabela acima) para perceber quando o `init` ou o provider ficam mais lentos.
-- **Gravar:** `asciinema rec` durante o roteiro gera um vídeo de terminal leve para o README e para o deck.
-- **Evoluir junto com a CLI:** cada comando novo (`release create`, `app create`) entra aqui como um passo, com a saída esperada.
+- **Script `scripts/demo/cli-walkthrough` (#178):** roda os passos em sequência, pausa antes de cada um (Enter para seguir) e para no login esperando o device code. Serve para apresentar e para conferir antes de um merge.
+- **Teste de fumaça sem humano (#179):** o login é o único passo manual. Um usuário local de teste no realm (só no target local, criado pelo `init` com senha aleatória num Secret) e o grant de senha desligado para todos os outros clients permitiriam um `platform login --test-user` e, com ele, rodar o roteiro inteiro em CI.
+- **Medir (#180):** guardar o tempo de cada etapa (como na tabela acima) para perceber quando o `init` ou o provider ficam mais lentos.
+- **Gravar (#181):** `asciinema rec` durante o roteiro gera um vídeo de terminal leve para o README e para o deck.
+- **Evoluir junto com a CLI (#182):** cada comando novo (`release create`, `app create`) entra aqui como um passo, com a saída esperada.
