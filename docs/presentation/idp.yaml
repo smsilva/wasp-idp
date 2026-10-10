@@ -1,0 +1,2500 @@
+deck:
+  name: idp-presentation
+  title: "Internal Developer Platform"
+  subtitle: "A shared journey to a platform for humans and agents"
+  focus: "IDP para humanos e agentes — fontes primárias (DORA 2025, DORA ROI, MCP, evals), gates determinísticos, camadas do AEP e escala de maturidade"
+  meta: ["Full deck"]
+  audience: "For leadership, engineering and platform teams"
+  # Deck longo: a agenda só aparece no índice, não volta entre as partes.
+  agendaSteps: false
+
+# Classificação de relevância por público: base do filtro que gera versões por público.
+audiences:
+  executive: "Liderança — por que e quanto vale"
+  engineering: "Devs que consomem a plataforma — como uso"
+  platform: "Time de plataforma — como funciona por dentro"
+
+acts:
+  - name: opening
+    title: "Opening"
+  - name: problem
+    title: "The problem"
+    question: "Why build a platform?"
+    opening: false
+  - name: direction
+    title: "Where we're heading"
+    question: "What are we building toward?"
+    opening: false
+  - name: developer-control
+    title: "Developer Control Plane"
+    question: "Where does the developer come in?"
+    opening: false
+  - name: integration-delivery
+    title: "Integration & Delivery Plane"
+    question: "How does intent become running software?"
+    opening: false
+  - name: resource
+    title: "Resource Plane"
+    question: "Where does it run?"
+    opening: false
+  - name: operate
+    title: "Observability & Security"
+    question: "How do we operate with confidence?"
+    opening: false
+  - name: api
+    title: "Platform API"
+    question: "How does anyone ask the platform for something?"
+    opening: false
+  - name: journey
+    title: "The journey"
+    question: "What does it look like end to end?"
+    opening: false
+  - name: final
+    title: "The final picture"
+    question: "How does it all fit together?"
+    opening: false
+  - name: agentic
+    title: "Humans and agents"
+    question: "What if the platform user is an agent?"
+    opening: false
+  - name: where-we-are
+    title: "Where we are and next steps"
+    question: "What exists today and what comes next?"
+    opening: false
+
+# Partes: agenda (tecla I) e retorno opcional da agenda entre partes (deck.agendaSteps).
+# Cada parte agrupa atos; cada item aponta (`go`) para um ato ou um slide.
+parts:
+  - title: "The problem"
+    message: "Why build a platform?"
+    acts: [problem]
+    items:
+      - {label: "Our starting point", go: delivery-friction}
+      - {label: "Developer friction", go: cognitive-load}
+      - {label: "AI needs a platform", go: ai-gap}
+      - {label: "Platform as a product", go: platform-as-product}
+  - title: "Where we're heading"
+    message: "What are we building toward?"
+    acts: [direction]
+    items:
+      - {label: "The goal", go: idea-to-product}
+      - {label: "The proposal", go: landscape-empty}
+  - title: "Developer Control Plane"
+    message: "Where does the developer come in?"
+    acts: [developer-control]
+    items:
+      - {label: "Software Catalog", go: developer-control}
+      - {label: "App Declaration", go: landscape-dev-2}
+      - {label: "Golden Paths", go: landscape-dev-3}
+  - title: "Integration & Delivery Plane"
+    message: "How does intent become running software?"
+    acts: [integration-delivery]
+    items:
+      - {label: "Version Control", go: integration-delivery}
+      - {label: "CI · Registry", go: landscape-ind-2}
+      - {label: "Orchestrator", go: landscape-ind-4}
+      - {label: "IaC", go: landscape-ind-5}
+      - {label: "Delivery", go: landscape-ind-6}
+      - {label: "Verification before the PR", go: ci-bottleneck}
+  - title: "Resource Plane"
+    message: "Where does it run?"
+    acts: [resource]
+    items:
+      - {label: "Cloud resources", go: concrete-resources}
+  - title: "Observability & Security"
+    message: "How do we operate with confidence?"
+    acts: [operate]
+    items:
+      - {label: "Runtime health", go: landscape-obs-1}
+      - {label: "Cost & AI usage", go: token-finops}
+      - {label: "Platform as a product", go: platform-as-product-signals}
+      - {label: "Guardrails", go: landscape-sec-1}
+      - {label: "Identity & access", go: single-sign-on}
+  - title: "Platform API"
+    message: "How does anyone ask the platform for something?"
+    acts: [api]
+    items:
+      - {label: "One API", go: api}
+      - {label: "Clients", go: landscape-clients}
+  - title: "The journey"
+    message: "What does it look like end to end?"
+    acts: [journey]
+    items:
+      - {label: "From idea to running product", go: journey}
+  - title: "The final picture"
+    message: "How does it all fit together?"
+    acts: [final]
+    items:
+      - {label: "Reference architecture", go: final}
+  - title: "Humans and agents"
+    message: "What if the platform user is an agent?"
+    acts: [agentic]
+    items:
+      - {label: "Agents as users", go: agents-as-users}
+      - {label: "Contracts & gates", go: spec-is-contract}
+      - {label: "Layers for agents", go: aep-layers}
+      - {label: "Maturity", go: maturity-levels}
+  - title: "Where we are and next steps"
+    message: "What exists today and what comes next?"
+    acts: [where-we-are]
+    items:
+      - {label: "MVP 1", go: mvp1}
+      - {label: "Next steps", go: platform-api-next}
+      - {label: "closing", go: closing}
+
+# Campos por slide:
+#   name       slug estável (referenciado por dependsOn; reordenar não quebra)
+#   act        nome do ato
+#   audiences  públicos para os quais o slide é mais relevante; ausente = todos
+#   dependsOn  slides que precisam ter sido vistos antes (o encadeamento do raciocínio)
+#   heading    título do slide: aparece sozinho no 1º passo e fica no alto, esmaecido, enquanto os itens de screen entram
+#   source     origem curta mostrada no rodapé do slide (obrigatória quando há número na tela)
+#   align      true: itens **Rótulo:** valor viram tabela invisível (valores alinhados à esquerda)
+#   subitems   together: subitens "- " de um valor aparecem todos de uma vez (default: um por passo)
+#   code       {file, lines?, focus?}: bloco de código estilo IDE no lugar de `screen`;
+#              `focus` realça linhas e esmaece o resto (mostrar um arquivo por partes)
+# Idioma: `screen` (keywords) em inglês; `message` e `notes` em pt-BR.
+
+
+
+
+
+slides:
+  # ── Abertura ────────────────────────────────────────
+  - name: title
+    act: opening
+    animations: none
+    message: "Construir um IDP é uma jornada compartilhada, com objetivos claros — não um desenho a entregar."
+    screen: ["Internal Developer Platform"]
+    subtitle: "A shared journey to a platform for humans and agents"
+    notes: |-
+      O que queremos dizer: **construir um IDP não é implantar o desenho final**. É uma jornada que fazemos juntos, com objetivos claros e um primeiro passo já entregue.
+
+      **Quando começamos, a ideia era mostrar o desenho dos 5 planes.** No caminho ficou claro que ele envolve muito mais: catálogo e ownership, contratos e gates, identidade, custo, segurança, e agentes como novos usuários da plataforma.
+
+      **Roteiro:** o problema, cada plane peça por peça, a API e seus clientes, a jornada da ideia ao `curl`, o desenho completo, o que muda com agentes, e onde estamos hoje com o MVP 1 e os próximos passos.
+
+      **Objetivo:** alinhar o que a plataforma é e o que não é, e sair daqui com aliados.
+
+  # ── O problema ──────────────────────────────────────
+  - name: delivery-friction
+    act: problem
+    topic: "Our starting point"
+    message: "Times de infraestrutura cuidam da infra para os times de aplicação — e quem tem uma ideia ainda precisa pedir a outro time."
+    heading: "Asking for infrastructure today"
+    screen: ["**Request:** to another team", "**Receives:** a whole environment", "**Knowledge:** documented, _not self-service_"]
+    notes: |-
+      O que queremos dizer: **o dev não carrega a infra sozinho** — um time de infraestrutura cuida dela. O que ainda pesa é o caminho: **quem tem uma ideia precisa pedir**, e recebe o pacote que existe.
+
+      **Pedido:** mesmo quando a criação de um ambiente já é automatizada para quem opera (um PR conduzido por um operator, por exemplo), continua sendo um pedido a outro time, que precisa ter agenda.
+
+      **O que se recebe:** um **ambiente inteiro** (rede, gateway, apps, mensageria). Um recurso avulso, como um banco ou uma fila, segue outro caminho, também por pedido.
+
+      **Conhecimento:** o "como se faz" está escrito — how-tos, runbooks — e parte dele já roda sozinho. Mas foi escrito **para quem opera**: quem tem a ideia não o executa por conta própria. A plataforma leva esse mesmo conhecimento a um **golden path** que o dev usa sem pedir — e que um agente também usa, porque ele **só usa o que está escrito num formato que a máquina lê** (DORA, p. 41). DORA = DevOps Research and Assessment.
+
+      Pedir à plateia um exemplo próprio funciona bem aqui.
+
+      Fonte: references/dora-roi-ai.md.
+
+  - name: one-size-environment
+    act: problem
+    topic: "Our starting point"
+    message: "O modelo de um ambiente completo por cliente funciona e escala; o uso mudou, e o pacote ficou grande para o uso mais comum de hoje."
+    heading: "One environment fits all"
+    screen: ["**Works:** one isolated environment per client", "**Shape:** the full stack, every time", "**Today:** many only need `LiteLLM` for `Claude Code`"]
+    notes: |-
+      O que queremos dizer: um modelo comum de plataforma interna — **um ambiente completo e isolado por cliente** — **funciona e escala**. O que muda é o uso: hoje muitos só querem apontar o Claude Code para um gateway de modelos (LiteLLM), e **recebem o ambiente inteiro**.
+
+      **Forma:** cada ambiente sobe rede, runtime, as apps e mensageria; serviços compartilhados ficam num ambiente central, alcançado por um gateway.
+
+      **Por que a transição é gradual:** clientes com VPN própria e faixas de IP reservadas, login federado por cliente, apps que dependem do ambiente central. Os dois modelos convivem por um tempo.
+
+      **Não é correção de erro:** cada escolha teve um motivo no momento — decisões de baixo custo no início que o crescimento tornou caras. A plataforma nova **leva adiante o que o modelo anterior provou**.
+
+      Fonte: references/platform-illusion.md.
+
+  - name: cognitive-load
+    act: problem
+    topic: "Developer friction"
+    message: "Hoje a complexidade é absorvida por gente, um ticket por vez; a plataforma a absorve uma vez, como self-service."
+    heading: "Who absorbs the complexity"
+    screen: ["**Today:** infra teams, one ticket at a time", "**Platform:** once, as self-service"]
+    notes: |-
+      O que queremos dizer: no cenário de partida **o dev não carrega a stack inteira** — os times de infraestrutura carregam, **um pedido por vez**. A plataforma absorve essa complexidade **uma vez**, e o pedido vira self-service.
+
+      A complexidade do cloud native não some: **ou é absorvida por pessoas a cada pedido, ou uma vez por quem constrói a plataforma**. O primeiro modelo escala com o número de pessoas de infraestrutura; o segundo, não.
+
+      **DORA ROI** (DevOps Research and Assessment, retorno sobre investimento, p. 40): 'a platform that treats the developer—or any builder—as the user, minimizing the cognitive load required to move code from an agent's prompt to a production environment.'
+
+      David Iyanu Jonathan, 'The platform engineering illusion' (platformengineering.com, 2026-07-31): o 'you build it, you run it' virou **'you build it, you run it, you secure it, you monitor it, you cost-optimize it, and you keep current on eleven CVE feeds.'** O trabalho da plataforma é **'reduce unnecessary complexity while preserving necessary complexity'** — sem esconder tanto que depurar vire arqueologia.
+
+      Fonte: references/dora-roi-ai.md, references/platform-illusion.md.
+    dependsOn: [one-size-environment]
+
+  - name: empathy-gap
+    act: problem
+    topic: "Developer friction"
+    message: "Plataforma poderosa e difícil de usar não é adotada: falta empatia, não API."
+    heading: "The empathy gap"
+    screen: ["**Symptom:** powerful but hard to use", "**Question:** how does it feel to use?"]
+    notes: |-
+      O que queremos dizer: plataforma poderosa e difícil de usar não é adotada; **falta empatia, não API**.
+
+      Tatiana Mikhaleva, 'The empathy gap: Why your platform needs UX, not just APIs' (platformengineering.org, 2026-03-23): **IDPs falham por investir na infraestrutura e esquecer quem a usa**. IDP = Internal Developer Platform.
+
+      Duas citações do artigo:
+      - 'We forget the most critical component in the stack. We forget the human being trying to use it.'
+      - 'A backend engineer should not need deep Kubernetes knowledge to get a URL for their service.' — é exatamente o que a PoC faz.
+
+      **Ressalva:** artigo de opinião; os números citados no texto não têm fonte original, não usar.
+
+      Segunda voz, mesma tese, em 'The platform engineering illusion': **'the platform was correct and nobody wanted it.'** O time construiu a plataforma como quem constrói uma ponte, e o dev a viveu como um pedágio ('the way you experience a toll booth'). Também opinião: os números do relato (14 meses, adoção abaixo de 20%) não vão para a tela.
+
+      Fonte: references/empathy-gap.md, references/platform-illusion.md.
+    dependsOn: [cognitive-load]
+
+  - name: ai-gap
+    act: problem
+    topic: "AI needs a platform"
+    audiences: [executive]
+    message: "A IA acelerou a escrita de código, mas o retorno ainda não veio para a maioria."
+    heading: "Since adopting AI, organizations report"
+    screen: ["**Throughput:** 38% ship 2x or more", "**Return:** only 8% call it transformative"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), pp. 20-22"
+    notes: |-
+      O que queremos dizer: a IA aumentou o volume entregue, mas **quase ninguém viu o retorno no negócio**.
+
+      São duas perguntas diferentes da pesquisa (State of AI in Platform Engineering Vol. 2, Weave Intelligence, 2026).
+
+      **Throughput:** quanto a engenharia passou a entregar desde que adotou IA (Figure 7, p. 20). Os **38%** somam quem relatou 2x a 3x (29%) e 5x ou mais (9%).
+
+      **Retorno:** o impacto da IA no ciclo de vida inteiro (Figure 9, p. 22). Só **8%** o descrevem como transformador; 29% ainda estão em experimentação, sem valor realizado, e 14% têm retorno negativo quando se contam licenças, tokens e revisão.
+
+      A mensagem é a do próprio relatório: **"Throughput is not return"** (p. 22). Entregar mais features não é o mesmo que entregar mais resultado de negócio. Essa lacuna é o fio do relatório inteiro (p. 8).
+
+      **Ressalva:** dado autorrelatado, 350 respondentes.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [cognitive-load]
+
+  - name: platform-readiness
+    act: problem
+    topic: "AI needs a platform"
+    audiences: [executive]
+    message: "O obstáculo não é o modelo, é a plataforma ao redor dele."
+    heading: "Main blockers to scaling AI"
+    screen: ["**#1 Platform readiness:** cited by 27%", "**#4 Model capability:** cited by 11%"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 24"
+    notes: |-
+      O que queremos dizer: o que trava a IA é **a plataforma em volta do modelo**, não o modelo.
+
+      State of AI Vol. 2, p. 24: 'platform readiness' lidera os obstáculos para escalar IA (**27%**); 'model capability' fica em quarto (**11%**).
+
+      Citação de apoio: 'It's because they have the platform around the model.' (Rickey Zachary, Thoughtworks, p. 24). **Ninguém está esperando um modelo melhor.**
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [ai-gap]
+
+  - name: rebuild-platform
+    act: problem
+    topic: "AI needs a platform"
+    audiences: [executive]
+    message: "Agentes sem reconstruir a plataforma rendem pouco; reconstruir a plataforma rende quatro vezes mais."
+    heading: "Share that at least doubled throughput"
+    screen: ["**Agents added** (Level 1 → 2): 30% → 36%", "**Platform rebuilt** (Level 2 → 3): 36% → 60%"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), pp. 18, 21"
+    notes: |-
+      O que queremos dizer: pôr agentes sobre a mesma plataforma rende pouco; **o salto vem de reconstruir a plataforma**.
+
+      Mesma pergunta de throughput do slide anterior, agora cortada por nível de maturidade agêntica (Figure 8, p. 21): que parcela de cada nível **pelo menos dobrou a entrega** desde que adotou IA.
+
+      Os níveis medem quanto trabalho o agente carrega (Figure 5, p. 18):
+      - **Level 1:** a IA sugere e o humano executa.
+      - **Level 2:** agentes abrem PRs (pull requests) em paralelo, o humano dispara e verifica.
+      - **Level 3:** agentes trabalham continuamente a partir de sinais observados, e o review vira exceção.
+
+      **Level 1 para 2:** entram os agentes, a plataforma continua igual, **+6 p.p.** (pontos percentuais). **Level 2 para 3:** a plataforma é reconstruída, com paths governados e executáveis por máquina em código, review e teste, **+24 p.p.** A maturidade paga em degrau, não em gradiente.
+
+      **Ressalvas** (dizer ao apresentar, não pôr na tela):
+      - Os níveis e os ganhos são autorrelatados (p. 18, p. 21).
+      - A amostra do Level 3 é pequena, **n = 50** (Level 1: 143; Level 2: 110; Level 4: só 14).
+      - A Syntasso, empresa do Kratix, é parceira do relatório.
+
+      É direção, não medição precisa.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [platform-readiness]
+
+  - name: platform-amplifier
+    act: problem
+    topic: "AI needs a platform"
+    audiences: [executive]
+    message: "A IA amplifica o sistema que já existe: com plataforma fraca, o efeito some."
+    heading: "AI amplifies what exists"
+    screen: ["**Weak platform:** no effect", "**Quality platform:** strong effect"]
+    source: "DORA State of AI-assisted Software Development (2025), p. 71"
+    notes: |-
+      O que queremos dizer: a IA amplifica o sistema que já existe; **sem plataforma de qualidade, o efeito some**.
+
+      DORA 2025, p. 71: 'AI adoption has a negligible effect on organizational performance when platform quality is low, but when platform quality is high, the effect is strong and positive.' DORA = DevOps Research and Assessment.
+
+      É uma **fonte neutra** (Google/DORA, 4.867 respondentes) que confirma o slide anterior sem o viés da Syntasso.
+
+      Imagem concreta do DORA ROI (p. 13): o código gerado mais rápido 'simply piles up in front of manual security reviews or brittle deployment pipelines'.
+
+      **Ressalva:** plataforma de qualidade também traz um pouco mais de instabilidade e fricção (DORA 2025, p. 62 e p. 70).
+
+      **Contraponto** em 'The platform engineering illusion': a IA não resolve adoção, porque 'adoption was never a tooling problem to begin with — it was a trust and design problem'. A ferramenta que gera a config ficou mais esperta; a confiança do dev não anda mais rápido por isso.
+
+      Fonte: references/dora-ai-report.md, references/dora-roi-ai.md, references/platform-illusion.md.
+    dependsOn: [rebuild-platform]
+
+  - name: platform-as-product
+    act: problem
+    topic: "Platform as a product"
+    message: "Tratar a plataforma como produto: o dev é cliente, não quem abre ticket."
+    heading: "Developers are the customers"
+    screen: ["**Self-service**, not ticket queues", "**Enablement**, not enforcement"]
+    notes: |-
+      O que queremos dizer: **a plataforma é um produto, e o dev é o cliente** dela.
+
+      Volta ao primeiro slide do ato: tickets e esperas viram self-service, e o "como se faz" que era conhecimento tribal vira produto. O relatório resume: **'The model is based on enablement rather than enforcement and self-service rather than ticket queues.'** (Platform as a Product, p. 3).
+
+      Produto tem usuários, proposta de valor, feedback loop e foco em adoção (pp. 3-4, 9-11). Não é projeto de infraestrutura com data de entrega: **tem roadmap e é medido por quem usa**.
+
+      **Ressalva:** os quatro autores são da Syntasso, empresa do Kratix.
+
+      Na mesma linha, em 'The platform engineering illusion': **'A technology platform is infrastructure with an API. A developer platform is a product with users'** — com preferências, workarounds e memória de cada vez que a ferramenta os deixou mal. E: **'every manual step in a "self-service" system is really just a support queue wearing a costume.'**
+
+      Fonte: references/platform-as-a-product.md, references/platform-illusion.md.
+    dependsOn: [rebuild-platform, empathy-gap]
+
+  # ── Para onde vamos ─────────────────────────────────
+  - name: idea-to-product
+    act: direction
+    topic: "The goal"
+    message: "O objetivo vai além de provisionar mais rápido: qualquer pessoa leva uma ideia a um produto compartilhado."
+    heading: "From idea to Internal Product"
+    screen: ["**Today:** good products start as someone's idea", "**Goal:** anyone takes an idea to a shared product"]
+    notes: |-
+      O que queremos dizer: o MVP 1 facilita provisionar ambiente, mas **o objetivo é estimular a criatividade**: tornar fácil criar produto novo dentro da empresa.
+
+      Siglas:
+      - **IP** (Internal Product): aplicação ou solução criada internamente.
+
+      **Hoje:** muitos produtos internos **nascem como ideias** de alguém e viram produtos — mérito de quem os construiu. A plataforma quer tornar esse caminho **repetível** para qualquer pessoa.
+
+      **A jornada que a plataforma habilita:**
+      - **registrar** a ideia na plataforma, com dono;
+      - **provisionar** recursos e fazer **deploy**;
+      - **testar**, **monitorar** e **refinar**;
+      - **compartilhar** com o restante da organização.
+
+      **Compartilhar tem estado:** o catálogo já marca cada app com um `lifecycle` (`experimental`, `production`, `deprecated`). Um IP validado passa para `production`; voltamos a isso ao declarar uma app.
+
+      Fonte: references/internal-products.md.
+    dependsOn: [platform-as-product, one-size-environment]
+
+  - name: landscape-empty
+    act: direction
+    topic: "The proposal"
+    message: "Uma plataforma se organiza em cinco planes — três fazem o fluxo, dois sustentam os três."
+    heading: "5 planes"
+    diagram: "diagrams/landscape/landscape.svg"
+    reveal: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    dependsOn: [idea-to-product]
+    notes: |-
+      O que queremos dizer: **a plataforma se organiza em cinco planes**, e aqui eles aparecem vazios de propósito.
+
+      As setas entram com as caixas: **a intenção do dev atravessa três planes até virar software rodando**.
+      - **Developer Control:** onde o dev declara o que quer.
+      - **Integration & Delivery:** onde a declaração vira artefato e entrega.
+      - **Resource:** onde roda.
+
+      Observability e Security não são etapas do fluxo: **sustentam** os três o tempo todo.
+
+      Os planes vêm da arquitetura de referência do platformengineering.org; **a ordem da jornada é nossa**. Nenhuma ferramenta na tela de propósito: as categorias valem para qualquer escolha de stack.
+
+  # ── Developer Control Plane ─────────────────────────
+  - name: landscape-dev-1
+    act: developer-control
+    topic: "Software Catalog"
+    message: "O catálogo diz o que existe e quem é dono."
+    heading: "Software Catalog"
+    divider: "Developer Control Plane"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    start: "empty"
+    reveal: [dev.1]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **o primeiro item do Developer Control é o catálogo** — o mapa do que existe e de quem responde por cada coisa.
+
+      Diferente do landscape do platformengineering.org, **o Portal não está aqui dentro**: ele vira um cliente da plataforma, como a CLI e os agentes — mostramos isso depois dos planes.
+
+  - name: catalog-ownership
+    act: developer-control
+    topic: "Software Catalog"
+    message: "O catálogo diz o que existe e quem é dono."
+    heading: "The catalog answers"
+    screen: ["What exists?", "Who owns it?"]
+    notes: |-
+      O que queremos dizer: o catálogo responde **o que existe e quem é dono**.
+
+      O catálogo é o registro do software da organização, mantido junto do código. O portal é uma das formas de vê-lo — ele volta depois dos planes, como cliente da plataforma.
+
+      **O que existe:** o inventário de serviços, APIs, bancos e filas de hoje.
+
+      **Quem é dono:** a pergunta que mais vale. Todo Component, API, Resource e System tem `owner` (modelo do Backstage). **Sem dono, o catálogo vira lista morta.**
+
+      Volta ao conhecimento tribal do primeiro ato: "a quem eu pergunto?" deixa de depender de quem sabe e passa a ter **resposta escrita, que serve ao dev e ao agente**.
+
+      **Um relato** de 'The platform engineering illusion': um Backstage lançado com 43 serviços no catálogo, 12 deles desatualizados — e todo mundo comemorando o lançamento.
+
+      Fonte: references/backstage-catalog.md, references/platform-illusion.md.
+
+  - name: catalog-levels
+    act: developer-control
+    topic: "Software Catalog"
+    message: "O catálogo enxerga o software de dois jeitos: pelo negócio e pela engenharia."
+    heading: "The catalog has two views"
+    screen: ["**Business view:** how leadership sees it", "**Engineering view:** how teams build it"]
+    notes: |-
+      O que queremos dizer: **o mesmo catálogo serve a quem fala de negócio e a quem constrói**.
+
+      - **Visão de negócio:** como produto e liderança enxergam o software.
+      - **Visão de engenharia:** como os times o constroem.
+
+      O mesmo catálogo liga as duas: **cada peça construída pertence a uma capacidade de negócio**. Os próximos dois slides abrem cada visão.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [catalog-ownership]
+
+  - name: catalog-business-view
+    act: developer-control
+    topic: "Software Catalog"
+    message: "A visão de negócio agrupa o software por área e por capacidade."
+    heading: "Business view"
+    screen: ["**Domain:** a business area", "**System:** a capability with public APIs"]
+    notes: |-
+      O que queremos dizer: a visão de negócio **agrupa o software por área e por capacidade**.
+
+      **Domain:** agrupa Systems que compartilham terminologia, modelo e propósito de negócio — um bounded context.
+
+      **System:** o conjunto de Components e Resources que entrega uma capacidade e expõe uma ou mais APIs públicas, **escondendo a implementação de quem consome**.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [catalog-levels]
+
+  - name: catalog-engineering-view
+    act: developer-control
+    topic: "Software Catalog"
+    message: "A visão de engenharia mostra o que se constrói, como as peças conversam e do que dependem."
+    heading: "Engineering view"
+    screen: ["**Component:** what you _build_ and _deploy_", "**API:** the _boundary_ between components", "**Resource:** what it _needs_ at runtime"]
+    notes: |-
+      O que queremos dizer: **a visão de engenharia mostra o que se constrói**, como as peças conversam e do que dependem.
+
+      Siglas:
+      - **API** (Application Programming Interface): a fronteira entre Components.
+
+      **Component:** a peça de software — serviço, site, pipeline de dados.
+
+      **API:** a **fronteira entre Components**, em formato legível por máquina.
+
+      **Resource:** a infraestrutura de que o Component precisa **em runtime** — banco, fila, bucket.
+
+      Cada Component pertence a um System, que pertence a um Domain — **é aí que as duas visões se encontram**. Os próximos slides mostram cada entidade com um exemplo conhecido.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [catalog-business-view]
+
+  - name: entity-component
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "Component é uma peça de software que alguém mantém e entrega."
+    heading: "Component"
+    screen: ["**What:** software you build and deploy", "**Example:**\nThe `shuffle-api` _shuffles_ the play queue"]
+    notes: |-
+      O que queremos dizer: **Component é o software que um time mantém e entrega** — serviço, site, biblioteca, pipeline de dados.
+
+      **Exemplo:** `shuffle-api`, o serviço que embaralha a fila de reprodução. Vem do **catálogo de demonstração do Backstage**, que modela um Spotify (onde o Backstage nasceu).
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [catalog-engineering-view]
+
+  - name: entity-api
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "API é o contrato entre Components."
+    heading: "API"
+    screen: ["**What:** the contract between components", "**Example:**\n`www-artist` site _consumes_ `artist-lookup` service"]
+    notes: |-
+      O que queremos dizer: **API é o contrato**; quem consome depende dele, não da implementação.
+
+      Siglas:
+      - **API** (Application Programming Interface).
+
+      É uma **fronteira legível por máquina** (OpenAPI, AsyncAPI, gRPC, GraphQL).
+
+      **Exemplo:** o site `www-artist` (`type: website`) consome o que o microsserviço `artist-lookup` (`type: service`, em Java) expõe. O tipo vem do campo `spec.type` de cada Component no catálogo de demonstração.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [entity-component]
+
+  - name: entity-resource
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "Resource é a infraestrutura de que o Component precisa para rodar."
+    heading: "Resource"
+    screen: ["**What:** infrastructure needed at runtime", "**Example:**\nThe `artists-db` database _used by_ `artist-lookup`"]
+    notes: |-
+      O que queremos dizer: **Resource é a infraestrutura de que o Component precisa para rodar** — banco, fila, bucket.
+
+      **Exemplo:** o microsserviço `artist-lookup` (`type: service`) depende de `artists-db` (`type: database`), que guarda os dados dos artistas.
+
+      **Gancho para o Resource Plane:** aqui o Resource é descrito **pelo papel** (database); lá vira um serviço concreto.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [entity-api]
+
+  - name: entity-system
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "System junta Components, APIs e Resources que entregam uma capacidade — e esconde o resto."
+    heading: "System"
+    subitems: together
+    screen: ["**What:** components that deliver a capability", "**Example:**\nThe `artist-engagement-portal` system _groups_:\n- `www-artist` site\n- `artist-lookup` service\n- `artists-db` database"]
+    notes: |-
+      O que queremos dizer: **System junta as peças que entregam uma capacidade** e esconde o que há dentro.
+
+      **Exemplo:** o System `artist-engagement-portal` reúne o site `www-artist`, o microsserviço `artist-lookup` e o banco `artists-db` — as três peças dos slides anteriores. Um System junta **Components e Resources**.
+
+      Quem está fora enxerga **só as APIs públicas** do System; o que há dentro pode mudar sem avisar ninguém.
+
+      É a **unidade de ownership** de um time.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [entity-resource]
+
+  - name: entity-domain
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "Domain agrupa Systems da mesma área de negócio."
+    heading: "Domain"
+    subitems: together
+    screen: ["**What:** systems of one business area", "**Example:**\nThe `audio` domain _contains_:\n- `artists` subdomain\n- `playback` subdomain"]
+    notes: |-
+      O que queremos dizer: **Domain agrupa Systems da mesma área de negócio.**
+
+      Domain = **bounded context**: mesma terminologia, mesmas métricas, mesmo propósito.
+
+      **Exemplo:** `audio` tem dois subdomínios (`subdomainOf`): `artists` e `playback`.
+
+      Domain é **como a liderança conversa sobre o produto**.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [entity-system]
+
+  - name: spotify-tree
+    act: developer-control
+    topic: "Software Catalog"
+    message: "Juntando: do negócio ao banco de dados, uma árvore só."
+    align: true
+    heading: "Spotify demo catalog"
+    screen: ["**Domain:** `audio`", "**Subdomain:** `playback`", "**System:** `podcast`", "**Component:** `podcast-api`"]
+    notes: |-
+      O que queremos dizer: **do negócio ao código, o catálogo é uma árvore só.**
+
+      **Árvore:** Domain `audio` → subdomínio `playback` → System `podcast` → Component `podcast-api`. Vem de `packages/catalog-model/examples`, no repositório do Backstage.
+
+      Para o público executive, este slide **substitui os cinco anteriores**: o exemplo sem a teoria.
+
+      Possível demo ao vivo: o mesmo catálogo no Backstage vanilla (`backstage/` na raiz do repo) — não decidido.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [catalog-levels]
+
+  - name: catalog-tree
+    act: developer-control
+    topic: "Software Catalog"
+    message: "No exemplo deste repo: o Domain communication com os Systems greeter e notifier."
+    heading: "Our catalog"
+    subitems: together
+    screen: ["**Example:**\nThe `communication` domain _contains_:\n- `greeter` system\n- `notifier` system"]
+    notes: |-
+      O que queremos dizer: **a mesma árvore descreve um software real.**
+
+      É a mesma árvore, aplicada ao **catálogo de exemplo deste repo** (`idp/catalog/communication/`): o `greeter` publica saudações e um evento por saudação; o `notifier` consome esse evento e entrega notificações. Os Resources são descritos **pelo papel** (banco, tópico, fila, bucket), não pelo serviço de nuvem.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [spotify-tree]
+
+  - name: declare-name
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "No catálogo, a app é um arquivo curto junto do código — começando pelo nome e pelo que ela faz."
+    code: {file: snippets/catalog-info.yaml, focus: 3-4}
+    dependsOn: [catalog-tree]
+    notes: |-
+      O que queremos dizer: **cada app se declara no catálogo com um arquivo curto, junto do código**; as primeiras linhas dizem o nome e o que a app faz, em linguagem humana — é o que aparece na busca do catálogo.
+
+      Fonte: references/backstage-catalog.md.
+
+  - name: declare-system
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "A que sistema pertence e de que tipo é."
+    code: {file: snippets/catalog-info.yaml, focus: 6-7}
+    dependsOn: [declare-name]
+    notes: |-
+      O que queremos dizer: **`system` posiciona a app na árvore** — liga ao System `greeter`, que liga ao Domain `communication`.
+
+      `type: service` diz o tipo de Component: poderia ser `website` ou `library`.
+
+      Fonte: references/backstage-catalog.md.
+
+  - name: declare-ownership
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "De quem é e em que ponto da jornada está."
+    code: {file: snippets/catalog-info.yaml, focus: 8-9}
+    dependsOn: [declare-system]
+    notes: |-
+      O que queremos dizer: **`owner` diz quem responde pela app** — liga ao Group `team-alpha`.
+
+      `lifecycle: experimental` diz **o quanto dá para confiar** nela; para um Internal Product, em que ponto da jornada ele está.
+
+      Fonte: references/backstage-catalog.md.
+
+  - name: ip-lifecycle
+    act: developer-control
+    topic: "Software Catalog"
+    message: "O lifecycle marca a jornada de um Internal Product: de ideia a produto compartilhado, até a descontinuação."
+    heading: "Lifecycle of an Internal Product"
+    screen: ["`experimental`: _an idea_ being built", "`production`: validated, _shared_ with the org", "`deprecated`: _being retired_"]
+    notes: |-
+      O que queremos dizer: **compartilhar com a organização é uma mudança de estado**, e o catálogo já tem o campo para isso.
+
+      **Valores bem conhecidos do Backstage:** `experimental`, `production` e `deprecated`, no `spec.lifecycle` de Component, API, Resource e System. Hoje **todo o nosso catálogo está em `experimental`**.
+
+      **Proposta** (ideia, não decidida):
+      - `experimental`: o dono provisiona, testa e refina.
+      - `production`: validado e **compartilhado**; outros times podem depender dele.
+      - `deprecated`: em descontinuação; quem depende recebe aviso e prazo.
+
+      **Subir para `production` pode virar gate da plataforma:** dono, observabilidade, custo atribuído e segurança em dia.
+
+      Fonte: references/internal-products.md, https://backstage.io/docs/features/software-catalog/descriptor-format.
+    dependsOn: [declare-ownership, idea-to-product]
+
+  - name: declare-apis
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "O contrato que a app oferece."
+    code: {file: snippets/catalog-info.yaml, focus: 10-11}
+    dependsOn: [declare-ownership]
+    notes: |-
+      O que queremos dizer: **a app declara o contrato que oferece.** `providesApis` aponta para a entidade API `greeting-http`.
+
+      Quem consome declara `consumesApis` do outro lado — **o catálogo desenha a aresta.**
+
+      Fonte: references/backstage-catalog.md.
+
+  - name: declare-dependencies
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "Do que depende para rodar — descrito pelo papel."
+    code: {file: snippets/catalog-info.yaml, focus: 12-15}
+    dependsOn: [declare-apis]
+    notes: |-
+      O que queremos dizer: **a app declara do que depende pelo papel, nunca pelo serviço de nuvem.**
+
+      Um banco relacional, um tópico de eventos e um bucket de imagens. **Nenhuma linha diz qual produto de nuvem** — o mesmo princípio que reaparece na declaração da app.
+
+      Baseado em `idp/catalog/communication/catalog-info.yaml`, onde os três Resources do `greeter` declaram `dependencyOf` o `greeting-api` — a mesma aresta, vista do outro lado.
+
+      Fonte: references/backstage-catalog.md.
+
+  - name: declare-discovery
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "O portal encontra o arquivo e mantém o catálogo em dia sozinho."
+    heading: "How the file reaches the catalog"
+    screen: ["**Source:** `catalog-info.yaml` in the repository", "**Discovery:** the portal scans the GitHub organization", "**Refresh:** reprocessed on a schedule, no manual edits"]
+    dependsOn: [declare-dependencies]
+    notes: |-
+      O que queremos dizer: **ninguém edita o catálogo à mão**; o portal acha o arquivo e o mantém em dia.
+
+      Siglas:
+      - **PR** (pull request).
+
+      **Descoberta:** o arquivo mora no repositório da app. O portal o encontra de dois jeitos: por uma **location** registrada (a URL do YAML) ou **varrendo a organização no GitHub** atrás de arquivos com esse nome. O exemplo da doc roda **a cada 30 minutos**.
+
+      **Atualização:** o processing loop reprocessa cada entidade periodicamente. Mudou o arquivo no PR, o catálogo acompanha — ninguém edita o catálogo à mão.
+
+      Fonte: references/backstage-catalog.md.
+
+  - name: no-versions
+    act: developer-control
+    topic: "Software Catalog"
+    message: "O catálogo não representa versões: guarda o conceito humano de uma coisa — dado estável, curado pelo dono."
+    heading: "What the catalog stores"
+    screen: ["**Not:** versions", "**Only:** the human concept", "**Example:**\n`playback-order` _is_ 1 component, N versions running"]
+    notes: |-
+      O que queremos dizer: **o catálogo é o modelo mental humano da plataforma**, não o estado vivo dela.
+
+      Recomendação explícita da documentação do Backstage (FAQ do catálogo). `playback-order`, o serviço de ordem de reprodução do catálogo de demonstração, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [declare-discovery]
+
+  - name: major-breaking
+    act: developer-control
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    message: "A exceção é a quebra de contrato: uma major breaking vira uma entidade nova."
+    heading: "The exception: breaking change"
+    screen: ["**Rule:** a major breaking _is_ a new entity", "**Example:**\n`customerinfo` → `customerinfo2`"]
+    notes: |-
+      O que queremos dizer: **quebrou o contrato, mudou o conceito** — e os consumidores precisam migrar de forma explícita.
+
+      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [no-versions]
+
+  - name: plugins
+    act: developer-control
+    topic: "Software Catalog"
+    message: "Versões e ambientes vivem em outros sistemas e voltam ao portal por plugins."
+    heading: "Where versions live"
+    screen: ["**How:** other systems _feed_ the portal via plugins"]
+    notes: |-
+      O que queremos dizer: **versões e ambientes têm dono em outros sistemas**; o portal só os mostra.
+
+      Pergunta que volta no Integration & Delivery: **que sistemas são esses?**
+
+      Fonte: references/backstage-catalog.md.
+    dependsOn: [no-versions]
+
+  - name: landscape-dev-2
+    act: developer-control
+    topic: "App Declaration"
+    message: "A app declara do que precisa para rodar — sem dizer onde nem como."
+    heading: "App Declaration"
+    divider: false
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.1]
+    start: "empty"
+    reveal: [dev.2]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **o catálogo diz quem a app é; a declaração diz do que ela precisa** — container, porta, banco, rota.
+
+      É uma spec de workload no modelo do **Score**: o dev descreve a necessidade, e a plataforma decide onde e como atender.
+
+  - name: spec-db
+    act: developer-control
+    topic: "App Declaration"
+    audiences: [engineering, platform]
+    message: "A app declara do que precisa para rodar — começando por um banco postgres: o tipo, não o produto."
+    code: {file: snippets/app-spec.yaml, focus: 7-8}
+    dependsOn: [no-versions, declare-dependencies]
+    notes: |-
+      O que queremos dizer: **a declaração da app diz do que ela precisa, sem dizer onde nem como** — e começa pelos recursos, pedidos por **tipo**.
+
+      **O dev pede um banco postgres**, e só isso. Quem escolhe o serviço concreto é a plataforma, por ambiente — o mesmo princípio dos Resources do catálogo, descritos pelo papel.
+
+      Nenhuma linha diz qual serviço gerenciado, tamanho, versão ou rede: tudo isso vem do perfil do ambiente.
+
+      **Formato:** o modelo do Score (`score.dev/v1b1`, https://docs.score.dev/docs/score-specification/score-spec-reference/); o `apiVersion: platform/v1` do exemplo é ilustrativo. **Catálogo ≠ declaração:** o `catalog-info.yaml` diz quem a app é; o `app-spec.yaml`, do que ela precisa.
+
+      Fonte: references/score.md.
+
+  - name: spec-variables
+    act: developer-control
+    topic: "App Declaration"
+    audiences: [engineering, platform]
+    message: "O container recebe o banco por referência, não por valor."
+    code: {file: snippets/app-spec.yaml, focus: 21-25}
+    dependsOn: [spec-db]
+    notes: |-
+      O que queremos dizer: **as variáveis não têm valor, apontam para outputs do recurso** (`${resources.db.host}`).
+
+      São resolvidas **no deploy**, com o valor do ambiente de destino: o mesmo arquivo serve para dev e produção, e a senha nunca fica no repo.
+
+      Fonte: references/score.md.
+
+  - name: spec-route
+    act: developer-control
+    topic: "App Declaration"
+    audiences: [engineering, platform]
+    message: "Nome e rota: como a app é alcançada de fora."
+    code: {file: snippets/app-spec.yaml, focus: 9-16}
+    dependsOn: [spec-variables]
+    notes: |-
+      O que queremos dizer: **a app pede um nome (`dns`) e uma rota (`route`)**, e uma referência liga os dois (`${resources.dns.host}`).
+
+      Nada de ingress, load balancer ou certificado — **isso é da plataforma**.
+
+      Fonte: references/score.md.
+
+  - name: spec-service
+    act: developer-control
+    topic: "App Declaration"
+    audiences: [engineering, platform]
+    message: "A porta que o serviço expõe."
+    code: {file: snippets/app-spec.yaml, focus: 27-31}
+    dependsOn: [spec-route]
+    notes: |-
+      O que queremos dizer: **o dev só diz a porta**: porta lógica **80** encaminhada para a porta do container **8080**.
+
+      **Imagem:** `image: .` significa "a imagem que a CI acabou de buildar" — a versão é injetada na entrega, não escrita aqui.
+
+      Fonte: references/score.md.
+
+  - name: score-what-not
+    act: developer-control
+    topic: "App Declaration"
+    message: "Nenhuma linha diz onde, em qual nuvem, nem com qual ferramenta."
+    heading: "What the spec leaves out"
+    screen: ["**Where:** no cluster, no region", "**Cloud:** no Azure, no AWS", "**Tool:** no Helm, no Terraform"]
+    notes: |-
+      O que queremos dizer: **onde, em qual nuvem e com qual ferramenta são decisões da plataforma**, não do dev.
+
+      Pergunta que fica para o Integration & Delivery: **quem responde isso?** — o orquestrador.
+
+      Em 'The platform engineering illusion', os melhores times de plataforma se medem **'partly by what they refuse to expose to developers'**, não só pelo que expõem.
+
+      Fonte: references/score.md, references/platform-illusion.md.
+    dependsOn: [spec-service]
+
+  - name: landscape-dev-3
+    act: developer-control
+    topic: "Golden Paths"
+    message: "O golden path cria o repo, a declaração e a spec de uma vez."
+    heading: "Golden Paths"
+    divider: false
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.1, dev.2]
+    start: "empty"
+    reveal: [dev.3]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **ninguém escreve esses arquivos do zero** — o golden path cria o repo já com o descritor do catálogo e a declaração da app, seguindo o jeito certo.
+
+      É por isso que vem por último no Developer Control: ele **junta** catálogo e declaração, e entrega um repo — que é onde o próximo plane começa.
+
+  - name: golden-paths
+    act: developer-control
+    topic: "Golden Paths"
+    message: "O golden path junta catálogo e declaração: cria o repo já com os dois arquivos, pelo caminho pavimentado."
+    heading: "Golden paths"
+    screen: ["**Rule:** the easy way _is_ the right way", "**Shape:** optional and composable"]
+    notes: |-
+      O que queremos dizer: **o caminho certo precisa ser o mais fácil**, sem virar jaula — e **ninguém escreve o `catalog-info.yaml` e o `app-spec.yaml` do zero**: o golden path cria o repo já com os dois.
+
+      Vem por último no Developer Control porque **junta** catálogo e declaração e entrega um repo — que é onde o próximo plane começa.
+
+      **Golden path** é o caminho suportado pela plataforma para uma tarefa recorrente, como criar um serviço ou pedir um banco. Quando ele é o caminho mais fácil, seguir o padrão deixa de ser obrigação.
+
+      'abstractions should be composable and optional. They should guide without constraining. They should reduce complexity without hiding critical details.' (Platform as a Product, p. 11).
+
+      **Ressalva:** a 'golden cage' — caminho rígido imposto de cima gera shadow platforms, e não existe golden path universal (p. 11).
+
+      A pergunta que decide a adoção, segundo 'The platform engineering illusion': **'Why would a developer, mid-deadline, exhausted, half paying attention, choose your paved road over the goat trail they already know?'** Impor o caminho não resolve: 'mandated usage generates resentment rather than advocacy, and resentment metastasizes into **shadow infrastructure**' — fonte independente da Syntasso para a mesma ressalva.
+
+      Fonte: references/platform-as-a-product.md, references/platform-illusion.md.
+    dependsOn: [platform-as-product, score-what-not]
+
+  # ── Integration & Delivery Plane ────────────────────
+  - name: landscape-ind-1
+    act: integration-delivery
+    topic: "Version Control"
+    message: "Tudo começa como código versionado."
+    heading: "Version Control"
+    divider: "Integration & Delivery Plane"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    dim: [dev]
+    start: "empty"
+    reveal: [ind.1]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **a versão que o catálogo não guarda começa aqui**, no código versionado.
+
+  - name: version-control
+    act: integration-delivery
+    topic: "Version Control"
+    audiences: [engineering, platform]
+    message: "Tudo começa como código versionado."
+    heading: "Version control"
+    screen: ["**What:** source of truth for code and infra", "**Tools:** `GitHub`, `Bitbucket`"]
+    notes: |-
+      O que queremos dizer: **tudo começa como código versionado** — inclusive o estado desejado da infraestrutura.
+
+      Version Control é a **fonte da verdade** para o código e para a infra declarada.
+
+      Fonte: references/base-deck.md.
+
+  - name: landscape-ind-2
+    act: integration-delivery
+    topic: "CI · Registry"
+    message: "A CI transforma código em artefato versionado no registry."
+    heading: "CI · Registry"
+    divider: false
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, ind.1]
+    dim: [dev]
+    start: "empty"
+    reveal: [ind.2, ind.3]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **o código vira artefato**, e o registry guarda cada versão.
+
+  - name: ci-registry
+    act: integration-delivery
+    topic: "CI · Registry"
+    message: "A CI transforma código em artefato versionado no registry — é aqui que a versão mora."
+    heading: "Where versions live"
+    screen: ["**CI:** `GitHub Actions` _builds_ the image", "**Registry:** `Azure Container Registry` _stores_ the version", "**Example:**\n`vitrine:1.4.2` _is_ a version"]
+    notes: |-
+      O que queremos dizer: **a versão que o catálogo não guarda mora aqui** — é a tag da imagem no registry.
+
+      Siglas:
+      - **CI** (continuous integration): builda e testa a cada mudança.
+
+      Fecha a promessa do slide anterior ("Where versions live"). A tag `1.4.2` é **ilustrativa**: uma imagem publicada só como `:latest` **não identifica versão nenhuma**.
+
+      Fonte: references/base-deck.md.
+    dependsOn: [no-versions]
+
+  - name: landscape-ind-4
+    act: integration-delivery
+    topic: "Orchestrator"
+    message: "O orquestrador lê a declaração da app e decide o que criar."
+    heading: "Orchestrator"
+    divider: false
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, ind.1, ind.2, ind.3]
+    dim: [dev]
+    start: "empty"
+    reveal: [ind.4]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **a declaração do Developer Control chega aqui** — o orquestrador a lê junto com o artefato e decide o que criar.
+
+      O landscape de referência também tem uma caixa *App Spec* neste plane; aqui ela é a mesma declaração, então não a repetimos.
+
+  - name: orchestrator
+    act: integration-delivery
+    topic: "Orchestrator"
+    audiences: [platform]
+    message: "O orquestrador lê a declaração da app, decide o que criar e mantém os recursos em dia; a ferramenta ainda está em avaliação."
+    screen: ["**What:** _turns_ the declaration into resources", "**Keeps:** resources _in sync_ with it over time", "**Tool:** under evaluation"]
+    dependsOn: [score-what-not]
+    notes: |-
+      O que queremos dizer: **o papel do orquestrador está definido; a ferramenta, não** — e isso é uma escolha consciente.
+
+      **O papel:** é a camada de controle persistente entre a declaração e os recursos. Lê o `app-spec.yaml` do Developer Control, decide o que criar em cada ambiente e mantém os recursos em dia ao longo do tempo. Definição em Platform as a Product, **p. 16**: 'persistent control layer that coordinates capabilities across the platform, manages state, enforces policy, and enables safe evolution over time'.
+
+      **A ferramenta:** está em avaliação por uma pessoa do time, e a divisão de papéis com o IaC ainda está em aberto. Por isso não aparece na tela — a mesma regra da landscape: **categoria antes de ferramenta**, para não enviesar a decisão.
+
+      Se perguntarem "por que ainda não decidiram?": o papel não depende da ferramenta; escolhê-la é uma das frentes do time.
+
+      Fonte: references/platform-as-a-product.md, references/base-deck.md, references/poc.md.
+
+  - name: platform-facade
+    act: integration-delivery
+    topic: "Orchestrator"
+    audiences: [executive, platform]
+    message: "Portal mais pipeline parece plataforma — mas sem orquestração é só fachada."
+    heading: "Platform façade"
+    screen: ["**What:** portal + CI, no orchestration", "**Result:** a polished UI for fragile automation"]
+    notes: |-
+      O que queremos dizer: portal mais pipeline parece plataforma, mas **sem a camada que mantém estado e política é só fachada**.
+
+      **Platform as a Product** (O'Reilly), **p. 15:** 'platform façade' é o anti-padrão de ter **portal + pipeline/workflow engine** sem a camada que mantém estado, aplica política e acompanha o ciclo de vida. Sem ela, o portal vira 'a polished UI for running fragile automation' (p. 16).
+
+      **Pipelines** são 'execution tools' transientes (p. 19).
+
+      Responde a pergunta 'por que não basta Backstage + GitHub Actions?'.
+
+      **Ressalva para o apresentador:** o report é patrocinado pela **Syntasso, empresa do Kratix** — o argumento favorece a categoria orquestrador, que é exatamente o que eles vendem.
+
+      Fonte: references/platform-as-a-product.md.
+    dependsOn: [orchestrator]
+
+  - name: puppy-for-christmas
+    act: integration-delivery
+    topic: "Orchestrator"
+    audiences: [executive, platform]
+    message: "Provisionar com um clique e ninguém cuidar depois: o filhote de Natal."
+    heading: "Puppy for Christmas"
+    screen: ["**What:** one click to create, nobody to care for it", "**Result:** platform decay"]
+    notes: |-
+      O que queremos dizer: **criar é fácil; o problema é quem cuida do recurso depois**.
+
+      **Platform as a Product, p. 16:** 'puppy for Christmas' — o recurso é criado por clique e **abandonado, sem upgrade, política ou dono**. 'That is not empowerment. That is abandonment.' (p. 16).
+
+      O sintoma de longo prazo é o **platform decay** (p. 18): snowflakes, ownership obscuro, backlog de quick fixes.
+
+      Fonte: references/platform-as-a-product.md.
+    dependsOn: [orchestrator, platform-facade]
+
+  - name: landscape-ind-5
+    act: integration-delivery
+    topic: "IaC"
+    message: "Os recursos são declarados como código e reconciliados continuamente."
+    heading: "IaC"
+    divider: false
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, ind.1, ind.2, ind.3, ind.4]
+    dim: [dev]
+    start: "empty"
+    reveal: [ind.5]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **o orquestrador não cria nada na mão**: declara os recursos como código, e o IaC os provisiona e mantém.
+
+  - name: iac
+    act: integration-delivery
+    topic: "IaC"
+    audiences: [platform]
+    message: "Os recursos são declarados como código e reconciliados continuamente."
+    heading: "Infrastructure as code"
+    screen: ["**What:** declared resources, continuously reconciled", "**Tools:** `Crossplane`, `Terraform`", "**Example:**\n1 `Environment` claim _becomes_ an EKS cluster"]
+    notes: |-
+      O que queremos dizer: **a infra é declarada como código** e um reconciliador a mantém no estado declarado.
+
+      Siglas:
+      - **IaC** (infrastructure as code): a infra descrita em arquivos versionados.
+      - **EKS** (Elastic Kubernetes Service): o Kubernetes gerenciado da AWS.
+      - **GitOps**: o estado desejado vive no Git e é aplicado por reconciliação.
+
+      **Exemplo real da PoC:** um claim `Environment` vira **um cluster EKS inteiro**, com rede, DNS, certificado, identidade e GitOps (Platform/IaC).
+
+      **Reconciliação contínua:** se alguém mudar à mão, o Crossplane **devolve ao estado declarado**.
+
+      Fonte: references/base-deck.md, references/poc.md.
+    dependsOn: [puppy-for-christmas]
+
+  - name: landscape-ind-6
+    act: integration-delivery
+    topic: "Delivery"
+    message: "A entrega leva a versão da app a cada ambiente, com o estado desejado no git e o rollout em anéis."
+    heading: "Delivery"
+    divider: false
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, ind.1, ind.2, ind.3, ind.4, ind.5]
+    dim: [dev]
+    start: "empty"
+    reveal: [ind.6]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **IaC cuida dos recursos; Delivery cuida da app** — qual versão roda em qual ambiente, e como ela chega lá.
+
+      É o *CD* que a caixa de CI deixou de carregar: build e testes ficam na CI, a entrega fica aqui.
+
+  - name: gitops
+    act: integration-delivery
+    topic: "Delivery"
+    message: "A entrega é GitOps: o estado desejado de cada ambiente está no git."
+    heading: "GitOps delivery"
+    screen: ["**What:** desired state per environment _lives in_ git", "**Tool:** `Argo CD`"]
+    notes: |-
+      O que queremos dizer: **o git registra qual versão roda em qual ambiente** — fecha o fio de "Where versions live".
+
+      **CD** (continuous delivery). É aqui que 'qual versão roda em qual ambiente' fica registrado, e é daqui que **um plugin traz essa informação de volta ao portal**.
+
+      Fonte: references/base-deck.md.
+    dependsOn: [ci-registry]
+
+  - name: release-rings
+    act: integration-delivery
+    topic: "Delivery"
+    message: "Com centenas de ambientes, a versão nova chega em anéis — e a plataforma para e volta sozinha quando um sinal piora."
+    heading: "Rollout in rings"
+    screen: ["**Today:** a daily train to hundreds of environments", "**Rings:** dev → early adopters → production waves", "**Guard:** _stop_ and _roll back_ on bad signals"]
+    notes: |-
+      O que queremos dizer: um release train diário já é GitOps com muita automação; **o próximo passo é entregar por anéis**, com a plataforma vigiando os sinais entre um anel e o próximo.
+
+      **Cenário comum:** um release train diário. Versões novas se acumulam num PR, a janela abre em horário comercial e **o approve do time libera o trem**; o Argo CD aplica em **centenas de ambientes**. Segurar o trem é não aprovar. É um mecanismo que funciona.
+
+      **O que ainda é manual:** a validação depois do deploy (health checks, logs, relatos do suporte) e o **rollback**, feito por PR revertendo os manifests. O risco é o rollback parcial, quando só parte dos ambientes já foi atualizada.
+
+      **Proposta** (ideia, não decidida):
+      - **Anel 0:** dev e homolog.
+      - **Anel 1:** early adopters, times que aceitam receber primeiro.
+      - **Anéis seguintes:** produção em ondas crescentes.
+      - Entre anéis, **verificação em tempo real** (golden signals, erros): a plataforma **para o rollout** e **faz rollback** do anel afetado sozinha — duas capacidades que hoje não existem.
+
+      Fonte: references/golden-signals.md.
+    dependsOn: [gitops, one-size-environment]
+
+  - name: ci-bottleneck
+    act: integration-delivery
+    topic: "Verification before the PR"
+    audiences: [executive, platform]
+    message: "Com agentes, a CI virou o gargalo — e acelerá-la não muda o que ela verifica."
+    heading: "CI became the bottleneck"
+    screen: ["**Example:**\n`Anthropic`: CI jobs _grew_ 25x with agents", "**But:** green CI _is not_ a working system"]
+    source: "The New Stack (2026-10-04), sponsored by Signadot"
+    notes: |-
+      O que queremos dizer: agentes multiplicaram o volume de mudanças, e a **CI** (continuous integration) — que roda tarde e com o resto mockado — **não acompanha nem verifica o que importa**.
+
+      **O 25x não é pesquisa:** é o caso de uma empresa, a Anthropic, citado num artigo. Mede o volume de jobs de CI depois que agentes passaram a abrir mudanças. Arjun Iyer, The New Stack, 2026-10-04: 'Agents pushed CI job volume up 25x at Anthropic'; no Linear a suíte de testes 'has nearly quadrupled since January'.
+
+      A CI roda **depois do PR** (pull request; o agente já perdeu o contexto) e checa um repo com o resto mockado, enquanto **as falhas reais vivem nas fronteiras entre serviços**.
+
+      'Making the gate faster does not change what it checks.'
+
+      A fonte primária, **DORA** (DevOps Research and Assessment) 2025 (p. 4), confirma: 'AI adoption now improves software delivery throughput, a key shift from last year. However, it still increases delivery instability.'
+
+      Liga com o State of AI: só **17%** têm validation loops automatizados (p. 26).
+
+      **Ressalva:** post patrocinado pela Signadot, que vende a solução dos próximos slides.
+
+      Fonte: references/sandbox-routing.md, references/dora-ai-report.md.
+    dependsOn: [gitops, rebuild-platform]
+
+  - name: request-sandbox
+    act: integration-delivery
+    topic: "Verification before the PR"
+    audiences: [platform]
+    message: "Verificar antes do PR, contra o sistema real: só a requisição marcada passa pela versão em teste."
+    heading: "Request sandbox"
+    screen: ["**What:** only tagged requests _hit_ the new version", "**How:** the tag _travels in_ `OTel` baggage", "**Cost:** ~1 pod"]
+    notes: |-
+      O que queremos dizer: dá para **verificar antes do PR, contra o sistema real**, subindo só o serviço alterado.
+
+      Siglas:
+      - **OTel** (OpenTelemetry): padrão de instrumentação; o Baggage carrega o header de sandbox entre serviços.
+      - **PR** (pull request).
+
+      **Roteamento:** num cluster compartilhado com as versões estáveis, sobe só o serviço alterado (C'). A regra do mesh (Istio VirtualService + DestinationRule) manda para ele **apenas as requisições com o header de sandbox**; o resto segue para o estável.
+
+      **Custo:** cerca de **um pod**, sobe em segundos; cinquenta agentes compartilham um ambiente em vez de clonar cinquenta.
+
+      **Ponto crítico:** o header precisa ser propagado por **TODOS os serviços** (OpenTelemetry Baggage faz isso nos SDKs instrumentados). Um serviço que não propaga quebra o roteamento em silêncio, por isso vira fitness function de 'good citizen'.
+
+      Cuidados: mensageria, dados com efeito colateral, waypoint no ambient mode, gateway validando o header.
+
+      Fonte: references/sandbox-routing.md.
+    dependsOn: [ci-bottleneck]
+
+  - name: environment-vs-sandbox
+    act: integration-delivery
+    topic: "Verification before the PR"
+    audiences: [platform]
+    message: "A plataforma oferece os dois: ambiente completo para mudar a infra, sandbox por requisição para mudar o serviço."
+    heading: "Two ways to verify"
+    screen: ["**Full environment:** minutes, for infra changes", "**Request sandbox:** seconds, for service changes"]
+    notes: |-
+      O que queremos dizer: **a plataforma oferece os dois**, e o tipo de mudança escolhe qual usar.
+
+      **Ambiente efêmero completo:** o Environment do MVP 1 é um cluster EKS inteiro, **~28-30 min**. Isolamento total, caro, necessário para mudanças de infra e da própria plataforma.
+
+      **Sandbox por requisição:** **~um pod, segundos**, testa as fronteiras reais; exige propagação de contexto.
+
+      A verificação é governada pela plataforma: passos aprovados escritos uma vez, chamados pelo agente via skills e hooks (Claude Code, Cursor). O registro do que foi testado serve de evidência no review e no merge gate — **a CI vira confirmação**.
+
+      Build vs. buy (Signadot × Istio + OTel) em aberto.
+
+      Siglas:
+      - **EKS** (Elastic Kubernetes Service).
+      - **CI** (continuous integration).
+      - **OTel** (OpenTelemetry).
+
+      Fonte: references/sandbox-routing.md.
+    dependsOn: [request-sandbox, iac]
+
+  # ── Resource Plane ──────────────────────────────────
+  - name: landscape-res-1
+    act: resource
+    topic: "Cloud resources"
+    message: "No Resource Plane a app roda: compute, dados, rede e serviços."
+    heading: "Where it runs"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    dim: [dev, ind]
+    start: "empty"
+    reveal: [res.1, res.2, res.3, res.4]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **o que o catálogo descreve pelo papel vira aqui um recurso concreto**.
+
+  - name: concrete-resources
+    act: resource
+    topic: "Cloud resources"
+    audiences: [engineering, platform]
+    message: "Compute, dados, rede e serviços — os Resources do catálogo, agora concretos."
+    align: true
+    heading: "From role to service"
+    screen: ["**Compute:** `AKS`", "**Data:** `Azure SQL`", "**Network:** `Azure DNS`", "**Messaging:** `Azure Service Bus`"]
+    notes: |-
+      O que queremos dizer: **o que o catálogo descreve pelo papel vira aqui um serviço de nuvem concreto**.
+
+      Ligar de volta às entidades do catálogo: lá é 'banco relacional', aqui é Azure SQL.
+
+      A arquitetura de referência é **Azure**; o MVP 1 provisiona na **AWS** (EKS, Elastic Kubernetes Service) — mesmo princípio, outro provider, e o dev não muda nada no que declara. **AKS** é o Azure Kubernetes Service.
+
+      Fonte: references/base-deck.md.
+    dependsOn: [entity-resource]
+
+  # ── Observability & Security ────────────────────────
+  - name: landscape-obs-1
+    act: operate
+    topic: "Runtime health"
+    message: "Observability atravessa os três planes: monitoramento, custo e incidentes."
+    heading: "Seeing what runs"
+    divider: "Observability"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    dim: [dev, ind, res]
+    start: "empty"
+    reveal: [obs.1, obs.2, obs.3, obs.4]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **Observability não é uma etapa — atravessa o fluxo inteiro**, do pedido ao recurso.
+
+  - name: signals
+    act: operate
+    topic: "Runtime health"
+    audiences: [engineering, platform]
+    message: "Métricas, logs, custo e incidentes fecham o ciclo."
+    heading: "Operating signals"
+    screen: ["**Metrics:** `Azure Monitor`, `Prometheus`, `Grafana`", "**Cost:** `Kubecost`", "**Incidents:** `PagerDuty`"]
+    notes: |-
+      O que queremos dizer: **métricas, custo e incidentes fecham o ciclo** — e também voltam ao portal.
+
+      Esses sinais voltam ao portal por plugins.
+
+      Fonte: references/base-deck.md.
+    dependsOn: [plugins]
+
+  - name: golden-signals
+    act: operate
+    topic: "Runtime health"
+    audiences: [engineering, platform]
+    message: "Todo ambiente nasce observado pelos mesmos quatro sinais."
+    heading: "Four golden signals"
+    screen: ["**Latency:** time to serve a request", "**Traffic:** demand on the system", "**Errors:** rate of failed requests", "**Saturation:** how full the system is"]
+    notes: |-
+      O que queremos dizer: todo ambiente nasce observado pelos **mesmos quatro sinais**, sem o time ter de montar nada.
+
+      **Google SRE book, cap. 6 'Monitoring Distributed Systems'** (Rob Ewaschuk): 'The four golden signals of monitoring are latency, traffic, errors, and saturation.' E: 'If you measure all four golden signals and page a human when one signal is problematic … your service will be at least decently covered.'
+
+      **Alertar por sintoma** (o que quebrou), não por causa (por quê). A plataforma entrega esse mínimo pronto para todo ambiente e recurso que gera. Para um gateway de modelos como o LiteLLM: latência, requisições/tokens, erros e saturação.
+
+      Fonte: references/golden-signals.md.
+    dependsOn: [signals]
+
+  - name: fitness-functions
+    act: operate
+    topic: "Runtime health"
+    audiences: [platform]
+    message: "A plataforma e cada ambiente que ela cria precisam provar, o tempo todo, que estão no estado desejado."
+    heading: "Fitness functions"
+    screen: ["**What:** checks the system _is still_ as declared", "**Example:**\n`echo` _returns_ HTTP 200 on every IP"]
+    notes: |-
+      O que queremos dizer: a plataforma e cada ambiente precisam **provar, continuamente, que ainda estão no estado desejado**.
+
+      **Building Evolutionary Architectures** (Ford, Parsons, Kua; 2ª ed. com Sadalage), cap. 2: 'An architectural fitness function provides an objective integrity assessment of some architectural characteristic(s).'
+
+      **Fundamentals of Software Architecture** (Richards, Ford) dá o vocabulário — escolher poucas characteristics (as três mais importantes) entre operational, structural e cross-cutting. Building Evolutionary dá o mecanismo para mantê-las ao longo do tempo (guarded evolution).
+
+      **Exemplos que já existem na PoC:**
+      - Condições Ready/Synced do Crossplane (contínua).
+      - `echo` HTTP 200 em todos os IPs (holística).
+
+      Os **golden signals** viram as fitness functions de runtime de cada ambiente. Com agentes, a fitness function que hoje alerta o humano **vira o feedback do validation loop** (slide `deterministic-gate`): 'first-pass failure is convergence, not defect' (State of AI, p. 30).
+
+      Conferir a citação na edição do livro antes de pôr na tela.
+
+      Fonte: references/fitness-functions.md.
+    dependsOn: [golden-signals, iac]
+
+  - name: data-ownership
+    act: operate
+    topic: "Runtime health"
+    audiences: [platform]
+    message: "O mesmo vale para dado: sem dono e sem contrato, ele falha em silêncio."
+    heading: "Data ownership"
+    screen: ["**Owner:** someone answers for the data", "**Contract:** schema, alerts, retention", "**Gate:** CI rejects a PR without it"]
+    notes: |-
+      O que queremos dizer: **dado sem dono e sem contrato falha em silêncio**; a plataforma exige os dois.
+
+      **Tharun Mathew,** 'Platform teams own the pipeline. Nobody owns the data' (platformengineering.com, 2026-09-23): 'A service fails loudly and syntactically... A data system fails quietly and semantically.'
+
+      **Proposta:** contrato de dado como infraestrutura declarativa, com a CI/CD (continuous integration/continuous delivery) rejeitando o pull request sem schema, roteamento de alerta e retenção.
+
+      No caso do autor, achar o dono de um dataset caiu de **cerca de três dias para menos de uma hora**, e **um terço** dos datasets catalogados não tinha consumidor vivo — foram aposentados (mesmo raciocínio do ambiente ocioso, adiante).
+
+      **Ressalva:** relato de um caso, não pesquisa.
+
+      Fonte: references/data-ownership.md.
+    dependsOn: [fitness-functions, entity-resource, major-breaking]
+
+  - name: token-finops
+    act: operate
+    topic: "Cost & AI usage"
+    audiences: [executive, platform]
+    message: "Com IA, custo de token é sinal de operação como qualquer outro."
+    heading: "Token spend"
+    screen: ["**What:** an ops signal, like CPU", "**How:** tracked per team"]
+    notes: |-
+      O que queremos dizer: com IA, **gasto de token é sinal de operação**, atribuído por time.
+
+      **State of AI Vol. 2, p. 35:** **13%** não rastreiam gasto de tokens e **14%** não sabem se alguém rastreia; só **17%** distribuem o custo por time.
+
+      Gestão de custo de IA é um dos principais desejos dos times hoje — um gateway de modelos como o LiteLLM proxy entrega isso por time.
+
+      Medir **'cost per accepted output'**, não custo por token (p. 36): valor, não volume.
+
+      **DORA ROI** (p. 36): com a inferência cada vez mais barata, o custo real migrou para governança — verification tax, workflows e capacitação.
+
+      Siglas:
+      - **FinOps:** gestão financeira de custo de nuvem.
+      - **DORA** (DevOps Research and Assessment).
+      - **ROI** (return on investment).
+
+      **Ressalva:** dado autorrelatado.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md, references/dora-roi-ai.md.
+    dependsOn: [signals]
+
+  - name: ai-gateway
+    act: operate
+    topic: "Cost & AI usage"
+    audiences: [executive, platform]
+    message: "Um gateway de modelos dá visibilidade antes de restringir."
+    heading: "AI gateway"
+    screen: ["**Problem:** 27% report significant shadow AI", "**First:** see the usage", "**Then:** block what's risky"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 40"
+    notes: |-
+      O que queremos dizer: **um gateway de modelos dá visibilidade antes de restringir**.
+
+      **Shadow AI** é o uso de ferramentas e modelos de IA fora do que a organização aprovou ou enxerga. A pesquisa pergunta quanto disso existe (State of AI Vol. 2, p. 40): **27%** admitem que é significativo, **47%** dizem que é mínimo e **8%** não têm visibilidade nenhuma.
+
+      A recomendação do relatório é **'observability has to precede restriction'** (p. 41); **37%** governam por política e só **13%** bloqueiam.
+
+      Um gateway de modelos como o LiteLLM proxy deixa de ser só gestão de custo: é o **ponto único de acesso a modelos**, com atribuição por time e trilha de auditoria.
+
+      **Ressalva:** dado autorrelatado.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [token-finops]
+
+  - name: idle-environments
+    act: operate
+    topic: "Cost & AI usage"
+    audiences: [executive, platform]
+    message: "A plataforma percebe o ambiente esquecido e pergunta ao dono se ainda precisa dele."
+    heading: "Idle environments"
+    screen: ["**Signal:** unused, still costing", "**Action:** ask the owner before deleting"]
+    notes: |-
+      O que queremos dizer: a plataforma percebe o ambiente esquecido, e **o dono decide se ele fica**.
+
+      **Caso real:** o Fury, IDP (Internal Developer Platform) do Mercado Livre, monitora se um ambiente provisionado não está sendo usado e **sugere a exclusão ao owner**.
+
+      É a resposta ao 'puppy for Christmas': o recurso não fica abandonado depois do clique. Só funciona porque **o catálogo sabe quem é o dono**. A plataforma sugere, o dono decide — **guardrail, não gate**.
+
+      No MVP 1 cada Environment é um cluster EKS com custo correndo, então ambiente ocioso é **custo sem valor**.
+
+      É também um exemplo do Level 3 (ato seguinte): agir a partir de um sinal observado, com o humano decidindo por exceção.
+
+      Fonte: references/mercadolibre-fury.md, https://www.youtube.com/watch?v=aFJTxKak6sM.
+    dependsOn: [token-finops, puppy-for-christmas, catalog-ownership]
+
+  - name: platform-as-product-signals
+    act: operate
+    topic: "Platform as a product"
+    audiences: [executive, platform]
+    message: "A plataforma também se observa como produto: satisfação, onde o dev desiste e quando ele a contorna."
+    heading: "The platform measures itself"
+    align: true
+    screen: ["**Satisfaction:** NPS at key moments", "**Behavior:** session replay", "**Drop-off:** funnel per offer", "**Bypass:** how often devs route around it"]
+    notes: |-
+      O que queremos dizer: **o que a plataforma mede é a experiência do dev**, não o volume de uso.
+
+      **Caso real:** a Stone, no IDP (Internal Developer Platform) Caravela, usa Hotjar para **NPS** (Net Promoter Score) em momentos-chave, gravação de sessão e análise de cliques (31:05–35:00). Usa Amplitude para **funis de conversão de cada oferta** — os templates de provisionamento —, mostrando onde o dev abandona o fluxo (35:30–43:00).
+
+      É a **user observability** do Platform as a Product (pp. 17-18) na prática; evita **vanity metrics** (p. 35), como número de serviços no catálogo ou page views do portal.
+
+      Mesma ideia em 'The empathy gap' (platformengineering.org): **medir o sentimento do dev** junto com as métricas **DORA** (DevOps Research and Assessment).
+
+      **Bypass:** quantas vezes o dev **contorna a plataforma**. Para 'The platform engineering illusion', é 'the platform's real adoption curve', e quase nunca está no dashboard mostrado à liderança.
+
+      Fonte: references/stone-caravela.md, references/platform-as-a-product.md, references/empathy-gap.md, https://www.youtube.com/live/xACNR0cBzTQ, references/platform-illusion.md.
+    dependsOn: [platform-as-product, signals]
+
+  - name: north-star-metric
+    act: operate
+    topic: "Platform as a product"
+    audiences: [executive, platform]
+    message: "A métrica que importa: quantos dias um dev novo leva para mergear o 10º pull request."
+    heading: "Days until a new hire merges their 10th PR"
+    align: true
+    screen: ["**Spotify, before:** 60 days", "**Spotify, after Backstage:** under 20 days"]
+    source: "Spotify, How we measure Backstage success (2021, updated 2026)"
+    notes: |-
+      O que queremos dizer: a métrica que importa **mede a complexidade que o dev novo enfrenta**, não o uso do portal.
+
+      Siglas:
+      - **PR** (pull request).
+      - **KPI** (Key Performance Indicator).
+      - **MTTR** (Mean Time To Recovery).
+      - **eNPS** (employee Net Promoter Score).
+
+      **Onboarding time:** quantos dias um dev recém-chegado leva até mergear o **10º PR**. No Spotify tinha chegado a **60 dias**; com o Backstage, caiu para **menos de 20** (blog 'How we measure Backstage success at Spotify', Helen Greul, 2021, atualizado em 2026).
+
+      A doc oficial do Backstage ('Strategies for adopting', seção KPIs and metrics) cita a mesma métrica com **queda de 55%** dois anos após a adoção. **São números de momentos diferentes:** citar a fonte do número usado.
+
+      É proxy da **complexidade do ecossistema**, não de uso do portal.
+
+      **Ressalvas para o apresentador:**
+      - A própria Pia Nilsson (Spotify) disse que falta nuance e que a métrica foi copiada da Meta.
+      - É o caso de quem criou o Backstage.
+
+      **Outros KPIs da doc:** deploys, MTTR, context switching, eNPS, fragmentação.
+
+      **Para esta plataforma,** candidata: tempo do pedido de um Environment até a primeira URL respondendo.
+
+      Fonte: references/adoption-metrics.md.
+    dependsOn: [platform-as-product-signals]
+
+  - name: dora-metrics
+    act: operate
+    topic: "Platform as a product"
+    audiences: [executive, engineering, platform]
+    message: "Para a entrega, o mercado já tem a régua: as métricas DORA."
+    heading: "DORA metrics"
+    screen: ["**Lead time:** commit to production", "**Deploy frequency:** how often", "**Recovery time:** after a failed deploy", "**Change fail rate:** deploys that fail", "**Rework rate:** unplanned deploys after incidents"]
+    notes: |-
+      O que queremos dizer: para a entrega, **já existe régua de mercado**: as métricas DORA (DevOps Research and Assessment).
+
+      DORA (dora.dev, 2026):
+      - **Throughput:** change lead time, deployment frequency, failed deployment recovery time.
+      - **Instability:** change fail rate, deployment rework rate.
+
+      Eram quatro ('four keys'); **hoje são cinco**, e recovery time substituiu o **MTTR** (Mean Time To Recovery). A plataforma coleta e devolve ao portal por plugin.
+
+      **Guia do próprio DORA:** não virar meta, não comparar times nem aplicações diferentes, não medir por uma métrica só.
+
+      Complementa o **time to 10th PR** (onboarding; PR = pull request) e o **sentimento do dev** (empathy gap).
+
+      Fonte: references/dora-metrics.md.
+    dependsOn: [north-star-metric]
+
+  - name: feature-flags
+    act: operate
+    topic: "Platform as a product"
+    audiences: [platform]
+    message: "Funcionalidade nova da plataforma chega aos poucos, sem segurar o release."
+    heading: "Gradual delivery"
+    align: true
+    screen: ["**Feature flags:** turn on per user", "**A/B tests:** compare two versions", "**Rollout:** a few users first"]
+    notes: |-
+      O que queremos dizer: **funcionalidade nova da plataforma chega aos poucos**, sem segurar o release.
+
+      A Stone usa a parte de experimentação do Amplitude para **feature flags e testes A/B**: SDK (Software Development Kit) no IDP (Internal Developer Platform) e hooks no frontend condicionam o comportamento. O **rollout é gradual** e o release não espera (59:00–1:03:00).
+
+      Fonte: https://www.youtube.com/live/xACNR0cBzTQ (references/stone-caravela.md).
+    dependsOn: [platform-as-product-signals]
+
+  - name: landscape-sec-1
+    act: operate
+    topic: "Guardrails"
+    message: "Security também atravessa tudo: código, segredos, identidade, política e rede."
+    heading: "Guarding every plane"
+    divider: "Security"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    dim: [dev, ind, res, obs]
+    start: "empty"
+    reveal: [sec.1, sec.2, sec.3, sec.4, sec.5]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **segurança atravessa todos os planes**; cada risco tem seu guardrail.
+
+  - name: guardrails
+    act: operate
+    topic: "Guardrails"
+    audiences: [platform]
+    message: "Código, segredos, identidade, política e rede — cada um com seu guardrail."
+    align: true
+    heading: "One guardrail per risk"
+    screen: ["**Code:** `SonarQube`, `Snyk`", "**Secrets:** `Key Vault`", "**Identity:** `Auth0`", "**Policy:** `Kyverno`, `Azure Policy`", "**Network:** `Cilium`"]
+    notes: |-
+      O que queremos dizer: **segurança atravessa todos os planes**: cada risco tem seu guardrail.
+
+      Segurança não é um passo no fim. **Guardrails, não gates.**
+
+      **Prisma Cloud** como suíte transversal. São as tools da arquitetura de referência (slide 2 do deck base).
+
+      **Segurança entra no design, não na auditoria.** Em 'The platform engineering illusion', requisito de segurança que chega depois do lançamento é remendado e piora a experiência; o dev aprende que a plataforma é **'where good ideas go to get slower'**. Policy-as-code e segurança no template desde o primeiro desenho.
+
+      Fonte: references/base-deck.md, references/platform-illusion.md.
+
+  - name: single-sign-on
+    act: operate
+    topic: "Identity & access"
+    audiences: [platform]
+    message: "Vários clients exigem uma identidade só: quem é você e o que pode ver e fazer, igual em todo lugar."
+    heading: "Single sign-on"
+    screen: ["**What:** one login for every client", "**Result:** same permissions everywhere"]
+    notes: |-
+      O que queremos dizer: portal, CLI, Argo CD, LiteLLM e clusters precisam da **mesma identidade e dos mesmos grupos**.
+
+      Siglas:
+      - **CLI** (command-line interface).
+      - **EKS** (Elastic Kubernetes Service) e **AKS** (Azure Kubernetes Service).
+      - **OIDC** (OpenID Connect).
+
+      Vários clientes — portal, CLI, Argo CD, LiteLLM e o acesso aos clusters (**EKS hoje; AKS e GCP no futuro**) precisam da mesma autenticação e dos mesmos grupos.
+
+      **Login direto no GitHub resolve só o portal:** GitHub OAuth não é **OIDC** para usuários, e o EKS não o aceita.
+
+      Fonte: references/sso-dex.md.
+    dependsOn: [guardrails]
+
+  - name: one-issuer
+    act: operate
+    topic: "Identity & access"
+    audiences: [platform]
+    message: "Um único emissor de tokens para toda a plataforma; a origem da identidade é um conector trocável."
+    heading: "One token issuer"
+    align: true
+    screen: ["**What:** one OIDC issuer for the platform", "**Source:** a swappable connector", "**Candidate:** `Dex` _(first evaluation)_"]
+    notes: |-
+      O que queremos dizer: **um único emissor de tokens**; trocar a origem da identidade não mexe em nenhum client.
+
+      Siglas:
+      - **OIDC** (OpenID Connect).
+      - **ADR** (Architecture Decision Record): uma decisão de arquitetura.
+      - **PoC** (proof of concept).
+      - **CLI** (command-line interface).
+      - **EKS** (Elastic Kubernetes Service).
+
+      **Avaliação inicial** (ADR proposto numa PoC de referência; nesta plataforma, substituído por Keycloak — ver o fechamento): Dex standalone como único OIDC issuer, com um client por consumidor — portal, CLI (PKCE), Argo CD e clusters (EKS registra o Dex como OIDC identity provider).
+
+      **Trocar a fonte** (GitHub, Entra ID, Google Workspace, LDAP) **é trocar o connector**; nenhum client muda.
+
+      **O inverso é caro:** trocar o issuer mexe em todos os clients e clusters. Por isso o IdP de produção se escolhe antes de multiplicar clusters.
+
+      **Alternativas descartadas:** Cognito (não federa GitHub, issuer preso à AWS) e o Dex embutido do Argo CD (acoplado ao ciclo de vida dele).
+
+      Fonte: references/sso-dex.md.
+    dependsOn: [single-sign-on]
+
+  - name: who-decides
+    act: operate
+    topic: "Identity & access"
+    audiences: [platform]
+    message: "No portal, quem decide é o catálogo; no cluster, é o grupo que vem no token."
+    heading: "Who decides access"
+    screen: ["**Portal:** the catalog", "**Cluster:** the groups in the token"]
+    notes: |-
+      O que queremos dizer: **cada lado decide com o que conhece**: o portal pelo catálogo, o cluster pelo token.
+
+      **Portal:** o login casa com a entidade `User` do catálogo; o ownership sai do `memberOf` (teams ingeridos da fonte de identidade).
+
+      **Cluster:** o API server do Kubernetes não conhece o catálogo, então decide pelo **claim `groups`**. Os dois só divergem no intervalo de sync — **aceito**.
+
+      Liga de volta ao ato do catálogo: `User` e `Group` também são entidades.
+
+      Fonte: references/sso-dex.md.
+    dependsOn: [one-issuer, catalog-ownership]
+
+  - name: break-glass
+    act: operate
+    topic: "Identity & access"
+    audiences: [platform]
+    message: "O acesso de emergência nunca depende do próprio SSO."
+    heading: "Break-glass"
+    screen: ["**What:** emergency access", "**How:** via IAM, never via SSO"]
+    notes: |-
+      O que queremos dizer: **o acesso de emergência nunca depende do próprio SSO** (Single Sign-On).
+
+      **Dex:** roda no hub como componente do **Security Plane** (não acessório do portal), com issuer estável (`id.<domínio>`) independente de onde roda.
+
+      **Break-glass:** todo cluster, inclusive o hub, mantém acesso administrativo via **IAM** (Identity and Access Management; EKS access entries). Se o hub cair, **nenhum token novo é emitido**; os clusters seguem rodando e o break-glass cobre o intervalo.
+
+      Fonte: references/sso-dex.md.
+    dependsOn: [one-issuer]
+
+  - name: audit-trail
+    act: operate
+    topic: "Identity & access"
+    audiences: [executive, platform]
+    message: "Quem fez o quê fica registrado fora do catálogo, com uma chave que não muda."
+    heading: "Audit trail"
+    screen: ["**Key:** the immutable account ID", "**Where:** outside the catalog"]
+    notes: |-
+      O que queremos dizer: **quem fez o quê fica registrado fora do catálogo**, com uma chave que não muda.
+
+      **Chave:** o login pode ser renomeado e reaproveitado por outra pessoa; a chave imutável é o **ID numérico da conta**. A cada login, o par login ↔ ID vai para um **audit sink**.
+
+      **Trilha:** vive no Git (todo Environment e deploy é commit ou PR), nos audit logs do cluster, nos events do Argo CD e do Crossplane — tudo num **sink central no Observability Plane**. **O catálogo não é trilha de auditoria.**
+
+      Fonte: references/sso-dex.md.
+    dependsOn: [who-decides]
+
+  - name: agent-identity
+    act: operate
+    topic: "Identity & access"
+    audiences: [executive, platform]
+    message: "Agentes também precisam de identidade própria — e hoje a maioria empresta a de alguém."
+    heading: "Agent identity"
+    screen: ["**Today:** 25% lend agents a human's login", "**Needed:** an identity of their own"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 38"
+    notes: |-
+      O que queremos dizer: **agente precisa de identidade própria**; hoje um em cada quatro empresta a de uma pessoa.
+
+      **O que a pesquisa mostra:** como as identidades de IA são geridas na plataforma (Figure 16, State of AI Vol. 2, p. 38).
+      - **25%** entregam aos agentes as credenciais de uma pessoa.
+      - **12%** compartilham uma única service account entre todas as tools de IA.
+      - **18%** não sabem.
+      - **Menos de um em três** dá ao agente uma identidade própria com escopo; outras **19%** gerenciam essa identidade dinamicamente por política.
+
+      **Por que importa:** um agente com o login de uma pessoa **não pode ser auditado, ter o escopo limitado nem ser desligado** sem desligar quem o emprestou (p. 38).
+
+      **Identidade com escopo** é um dos quatro pré-requisitos do Level 3 (p. 10, p. 50). Reforça o slide anterior: a identidade única também precisa cobrir agentes.
+
+      **Ressalva:** dado autorrelatado.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [single-sign-on]
+
+  # ── Platform API ────────────────────────────────────
+  - name: landscape-api
+    act: api
+    topic: "One API"
+    message: "Uma Platform API envolve os cinco planes — é por ela que tudo entra."
+    heading: "One API in front of every plane"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev, ind, res, obs, sec]
+    reveal: [api]
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **uma API única na frente dos cinco planes**.
+
+      Esta camada é **proposta nossa**, não faz parte do landscape de referência: quem pede algo à plataforma fala com a API, nunca direto com uma ferramenta.
+
+  - name: landscape-clients
+    act: api
+    topic: "Clients"
+    message: "IDE, CLI, Portal e agentes são clientes da mesma API."
+    heading: "Many clients, one API"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev, ind, res, obs, sec, api]
+    reveal: [clients.1, clients.2, clients.3, clients.4]
+    accumulate: true
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **as interfaces viram clientes da API**, inclusive o Portal.
+
+      Os exemplos são **ilustrativos**: a CLI `platform` não existe com esses verbos; é a forma que propomos.
+
+      **A plataforma é o contrato, não a interface:** todos consomem a mesma API, e a plataforma **não mora em nenhuma das interfaces**. A CLI e as mensagens de erro também são UX (User Experience): **nenhum client é cidadão de segunda classe.**
+
+      Fonte: references/poc.md, references/empathy-gap.md.
+
+  - name: editor-and-agent
+    act: api
+    topic: "Clients"
+    audiences: [engineering, platform]
+    message: "O dev começa no editor — e cada vez mais com um agente ao lado."
+    heading: "Where developers work"
+    align: true
+    screen: ["**Editor:** `VS Code`", "**Terminal:** `platform CLI`", "**Agent:** `Claude Code`"]
+    dependsOn: [landscape-clients]
+    notes: |-
+      O que queremos dizer: a plataforma **encontra o dev onde ele já trabalha**: editor, terminal e agente.
+
+      Categorias IDE/CDE e Copilots/Agents/LLM do deck base, mais o terminal: a **CLI** (command line interface) da plataforma é o que o dev usa sem sair do fluxo. O agente muda a interface: **o pedido passa a ser em linguagem natural**.
+
+      São os clientes do desenho: editor, CLI e agente falam com a mesma API que o portal.
+
+      State of AI Vol. 2, p. 43: agentes já são clientes da plataforma em **29%** das organizações — a plataforma precisa servir humanos e agentes.
+
+      Fonte: references/base-deck.md, references/state-of-ai-in-platform-engineering.md.
+
+  - name: portal
+    act: api
+    topic: "Clients"
+    message: "Antes de criar, o dev precisa descobrir o que já existe: o portal é a vitrine da plataforma."
+    heading: "Discovery first"
+    screen: ["**Question:** what already exists?", "**Tool:** `Backstage`"]
+    dependsOn: [landscape-clients]
+    notes: |-
+      O que queremos dizer: **antes de criar, o dev precisa descobrir o que já existe**.
+
+      Pergunta que motiva o portal. Sem descoberta, **cada time recria o que outro já tem**.
+
+      Categoria Portal: catálogo, templates, docs e plugins.
+
+      **Atenção:** o portal é a vitrine, não a plataforma — o mesmo ponto do slide do orquestrador ('platform façade').
+
+      Fonte: references/base-deck.md.
+
+  - name: portal-is-not-platform
+    act: api
+    topic: "Clients"
+    message: "Portal e plataforma não são a mesma coisa: o portal é a interface, a plataforma é o que está atrás dela."
+    heading: "Portal is not the platform"
+    screen: ["**Portal:** the interface", "**Platform:** the capabilities behind it"]
+    notes: |-
+      O que queremos dizer: **o portal é a interface; a plataforma é o que está atrás dela**.
+
+      Guia da Port 'The practical guide to internal developer portals' (2024), pp. 6-7: **'An internal developer platform is necessary but not sufficient'** — precisa de uma interface com as abstrações certas para o dev. E: 'the portal can't dictate the organization's use cases and priorities' (p. 7).
+
+      Fecha dois fios: o portal é **um dos clientes** da API, e portal sem orquestração atrás é fachada (`platform-facade`).
+
+      Definições curtas e citáveis (configure8, 2023):
+      - **Plataforma:** 'the collection of tooling built by platform engineers and used by developers'.
+      - **Portal:** 'the singular interface to your developer platform'.
+
+      Discordar em voz alta do 'singular': aqui **o portal é uma das interfaces** (próximos slides).
+
+      Definição da Gartner, citada em internaldeveloperplatform.org: 'Internal developer portals serve as the interface through which developers can discover and access internal developer platform capabilities.'
+
+      **Ressalva:** Port e configure8 vendem portal; os dois textos são portal-cêntricos.
+
+      Fonte: references/port-portal-guide.md, references/configure8-portal-vs-platform.md, references/internaldeveloperplatform-org.md.
+    dependsOn: [portal, platform-facade]
+
+  - name: cli-example
+    act: api
+    topic: "Clients"
+    audiences: [engineering, platform]
+    message: "Uma boa CLI mostra as mesmas entidades do portal — para gente, para pipeline e para agente."
+    heading: "What a good platform CLI does"
+    screen: ["**Query:** entities by type and owner", "**Output:** a table for humans, JSON for pipelines", "**Same API:** behind the CLI and the agent (MCP)"]
+    notes: |-
+      O que queremos dizer: **a CLI não é um atalho improvisado, é um client de primeira classe**, com as mesmas entidades do portal.
+
+      Siglas:
+      - **CLI** (Command Line Interface).
+      - **IaC** (Infrastructure as Code).
+      - **MCP** (Model Context Protocol).
+
+      **Exemplo:** a CLI do formae (IaC open source da Platform Engineering Labs; a release 0.88 redesenhou a CLI).
+
+      **Comandos:**
+      - `formae inventory resources --query "type:AWS::S3::Bucket stack:prod"` lista entidades por tipo com filtro `key:value`.
+      - `--output-consumer machine` troca a tabela por **JSON para pipeline**.
+      - **O mesmo agente** atende a CLI e um servidor MCP para Claude Code.
+
+      Propriedades tipadas viram flags **validadas antes de tocar a nuvem**, e o apply **sempre simula antes**.
+
+      **Inspiração para a CLI da plataforma:** listar Environments por owner, saída JSON, simular antes de aplicar. A forma que propomos, `platform <recurso> <verbo>`, aparece na jornada a seguir — com comandos **ilustrativos**.
+
+      **Ressalva:** formae é ferramenta de IaC, não portal — o paralelo é de design de CLI.
+
+      Fonte: references/formae-cli.md.
+    dependsOn: [landscape-clients]
+
+  - name: catalog-as-context
+    act: api
+    topic: "Clients"
+    audiences: [engineering, platform]
+    message: "O mesmo catálogo serve o portal, a CLI e o agente."
+    heading: "One catalog"
+    screen: ["**Portal:** for humans", "**CLI:** for scripts and pipelines", "**MCP:** for agents"]
+    notes: |-
+      O que queremos dizer: **as três portas leem o mesmo dado**. Quem é dono, do que a app depende e quais APIs ela oferece têm **uma resposta só**, seja no browser, no terminal ou no agente.
+
+      Siglas:
+      - **MCP** (Model Context Protocol): como o agente acessa ferramentas e dados.
+      - **CLI** (command-line interface): a porta para scripts e pipelines.
+      - **LLM** (large language model): o modelo que o agente usa.
+      - **DORA ROI**: relatório do DORA (DevOps Research and Assessment) sobre retorno de investimento em IA.
+
+      **CLI:** leva o catálogo para a automação. Um script ou pipeline **consulta o owner de um serviço** para abrir um alerta, ou lista os Components de um System antes de um deploy, sem ninguém abrir o portal.
+
+      **MCP:** é Backstage **upstream (não vendor)**. Desde a **v1.40.0 (2025-06-17)** o plugin `mcp-actions-backend` expõe as actions do catálogo como MCP tools: `get-catalog-entity`, `query-catalog-entities` (inclusive filtro por `relations.ownedby`) e `get-catalog-model-description` ('useful for informing LLMs'). O mesmo permission framework do portal filtra as tools do agente.
+
+      **DORA ROI (p. 44):** o primeiro investimento é a **context layer**, para os agentes terem 'a clear, standardized map of the organization's technical landscape' — é a descrição do catálogo.
+
+      **Ressalva:** o plugin ainda é **0.x** e nasceu 'highly experimental'.
+
+      Fonte: references/mcp-platform-interface.md, references/dora-roi-ai.md.
+    dependsOn: [cli-example]
+
+  - name: context-next-to-code
+    act: api
+    topic: "Clients"
+    audiences: [engineering, platform]
+    message: "O repo diz ao agente como trabalhar no código: comandos, convenções e guardrails."
+    heading: "What the repo tells the agent"
+    screen: ["**Commands:** how to build, test and run", "**Conventions:** what is not obvious from the code", "**Guardrails:** what the platform forbids"]
+    notes: |-
+      O que queremos dizer: o agente precisa saber trabalhar no código, e isso **mora num arquivo versionado junto dele, o `AGENTS.md`**.
+
+      **`AGENTS.md`:** 'a simple, open format for guiding coding agents', mantido pela **Agentic AI Foundation** (Linux Foundation) junto com o **MCP** (Model Context Protocol) desde **2025-12-09**.
+
+      **`CLAUDE.md`:** tem hierarquia (managed policy, user, project, local) — a camada org-wide é da plataforma. O **golden path gera os dois arquivos** ao criar o repo.
+
+      **Divisão de papéis:** o `catalog-info.yaml` descreve a app para o portal; o `AGENTS.md` orienta o agente no código; o que o agente precisa saber do catálogo ele consulta pelo MCP (slide anterior). **Arquivo diz como; MCP responde o quê, agora.**
+
+      Conteúdo curto e específico (comandos, convenções não óbvias), não overview do repo.
+
+      **Ressalva honesta:** três estudos no arXiv **não mostram ganho de acerto** (Gloaguen: custo +20%; Khatri: sem efeito mensurável); o ganho medido é de **eficiência** (Lulla: runtime mediano -28,64%).
+
+      Fonte: references/agents-md.md.
+    dependsOn: [catalog-as-context, declare-name]
+
+  # ── A jornada ───────────────────────────────────────
+  - name: journey-plan
+    act: journey
+    topic: "From idea to running product"
+    message: "A ideia vira um componente no catálogo, com dono, repo e PRD, por um golden path."
+    heading: "Plan: register the idea"
+    diagram: "diagrams/journey/plan.svg"
+    show: [strip]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **o primeiro passo não é código, é registrar a ideia** — com dono, sistema e repo criados pelo golden path.
+
+      O `greeting-api` nasce `experimental` no catálogo; o PRD e o `AGENTS.md` já vêm no repo para dar contexto ao agente.
+
+      Comandos **ilustrativos**: a CLI `platform` não existe com esses verbos.
+
+  - name: journey-plan-2
+    act: journey
+    topic: "From idea to running product"
+    message: "A ideia vira um componente no catálogo, com dono, repo e PRD, por um golden path."
+    heading: "Plan: register the idea"
+    diagram: "diagrams/journey/plan-2.svg"
+    show: [strip]
+    reveal: [cmd.1, cmd.1-out]
+    accumulate: true
+    notes: |-
+      Continuação: O que queremos dizer: **o primeiro passo não é código, é registrar a ideia** — com dono, sistema e repo criados pelo golden path.
+
+      O `greeting-api` nasce `experimental` no catálogo; o PRD e o `AGENTS.md` já vêm no repo para dar contexto ao agente.
+
+      Comandos **ilustrativos**: a CLI `platform` não existe com esses verbos.
+
+  - name: journey-code
+    act: journey
+    topic: "From idea to running product"
+    message: "O agente implementa a partir do PRD; a spec já diz do que a app precisa, sem dizer onde."
+    heading: "Code: with an agent"
+    diagram: "diagrams/journey/code.svg"
+    show: [strip]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.3, cmd.4, cmd.4-editor]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **o agente trabalha com o contexto que a plataforma deu** — o PRD, o `AGENTS.md`, a spec e a entrada do catálogo.
+
+      **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no release.
+
+      **`platform app clone`** acha o repo pelo nome da app no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza.
+
+      Tudo numa branch: nada chega à `main` sem PR.
+
+  - name: journey-code-2
+    act: journey
+    topic: "From idea to running product"
+    message: "O agente implementa a partir do PRD; a spec já diz do que a app precisa, sem dizer onde."
+    heading: "Code: with an agent"
+    diagram: "diagrams/journey/code-2.svg"
+    show: [strip]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    accumulate: true
+    notes: |-
+      Continuação: O que queremos dizer: **o agente trabalha com o contexto que a plataforma deu** — o PRD, o `AGENTS.md`, a spec e a entrada do catálogo.
+
+      **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no release.
+
+      **`platform app clone`** acha o repo pelo nome da app no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza.
+
+      Tudo numa branch: nada chega à `main` sem PR.
+
+  - name: journey-build
+    act: journey
+    topic: "From idea to running product"
+    message: "Uma branch vira uma versão no registry, sem esperar o merge."
+    heading: "Build: a version from a branch"
+    diagram: "diagrams/journey/build.svg"
+    show: [strip]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **qualquer branch pode virar artefato versionado** — a versão carrega a branch e o commit.
+
+      O catálogo não guarda versões; quem guarda é o registry.
+
+      **A spec é validada no build** — gate determinístico e obrigatório: spec inválida não vira versão, e o erro volta com o motivo. O mesmo validador pode rodar localmente para errar mais cedo, mas é opcional; a garantia é a da CI. No release a plataforma valida de novo ao aplicar (`unknown field`, como no slide do gate determinístico).
+
+  - name: journey-env
+    act: journey
+    topic: "From idea to running product"
+    message: "O dev lista os ambientes e cria um novo, descartável, com prazo."
+    heading: "Environment: pick or create"
+    diagram: "diagrams/journey/env.svg"
+    show: [strip]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **ambiente é self-service** — listar o que existe e criar um novo sem ticket.
+
+      `--expires` evita ambiente ocioso: custo que ninguém vê (ver o slide de FinOps).
+
+      **O dev escolhe o tipo de ambiente, não onde ele roda.** O perfil (`ephemeral`) é o golden path do ambiente, definido pela plataforma: nuvem, região, tamanho, observabilidade e política de custo vêm nele. Pedir `--provider` ao dev contradiria a spec, que diz o que a app precisa sem dizer onde.
+
+  - name: journey-release
+    act: journey
+    topic: "From idea to running product"
+    message: "A versão da branch é promovida para o ambiente novo, e a plataforma devolve a URL."
+    heading: "Release: version to environment"
+    diagram: "diagrams/journey/release.svg"
+    show: [strip]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **release é ligar uma versão a um ambiente** — e a resposta é uma URL.
+
+      O banco aparece aqui porque **a spec pediu**: o dev não abriu ticket nem escolheu serviço de nuvem.
+
+      **Forma da CLI:** `platform <recurso> <verbo>` com a app como escopo (`--app`), como `gh release create`, `gcloud builds list`, `fly releases --app`. O deploy devolve a URL na saída, como o `gcloud run deploy`: não há comando só para buscá-la.
+
+  - name: journey-run
+    act: journey
+    topic: "From idea to running product"
+    message: "A app responde na URL, e os quatro sinais já estão sendo observados."
+    heading: "Run: it answers"
+    diagram: "diagrams/journey/run.svg"
+    show: [strip]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **da ideia ao produto rodando, sem abrir ticket** — o `curl` é a prova.
+
+      Os golden signals vêm de graça: o ambiente nasceu observado.
+
+  # ── Desenho final ───────────────────────────────────
+  - name: landscape-full
+    act: final
+    topic: "Reference architecture"
+    message: "O desenho completo: clientes, uma API e cinco planes."
+    heading: "Putting it together"
+    diagram: "diagrams/landscape/landscape.svg"
+    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev, ind, res, obs, sec, api, clients]
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **um pedido entra por qualquer cliente, passa pela API e atravessa os planes**.
+
+  - name: reference-architecture
+    act: final
+    topic: "Reference architecture"
+    message: "Juntando as peças: os cinco planes com suas tools."
+    heading: "Putting it together"
+    screen: ["**What:** the 5 planes with their tools"]
+    notes: |-
+      O que queremos dizer: **juntando as peças**, a plateia já conhece cada caixa.
+
+      Slide 2 do deck base: o mesmo desenho que montamos vazio, **agora com as tools de cada plane**.
+
+      **Ressalva** de 'The platform engineering illusion': 'Every one of those tools is legitimate. None of them, combined, constitutes a platform, any more than a stack of good ingredients constitutes a meal.' A pilha citada pelo autor — Backstage, Terraform, Crossplane, Argo CD — é a nossa: o desenho são os ingredientes; a plataforma é o produto que se constrói com eles.
+
+      Fonte: references/base-deck.md, references/platform-illusion.md.
+    dependsOn: [landscape-full]
+
+  # ── Humanos e agentes ───────────────────────────────
+  - name: agents-as-users
+    act: agentic
+    topic: "Agents as users"
+    message: "Agentes já são usuários da plataforma — e ela vira o contexto e o freio deles."
+    heading: "Agents as users"
+    screen: ["**Context:** the platform _feeds_ the agent", "**Brakes:** the platform _limits_ the agent", "**Today:** platform clients in 29% of orgs"]
+    source: "DORA ROI of AI-assisted Software Development (2026), p. 40; State of AI in Platform Engineering, Vol. 2 (2026), p. 43"
+    notes: |-
+      O que queremos dizer: **agentes já são usuários da plataforma**, e ela vira o contexto e o freio deles.
+
+      **DORA ROI** (DevOps Research and Assessment; ROI = return on investment), p. 40: 'In the agentic era, an IDP is no longer just a portal for infrastructure, it is the risk mitigator and the context provider for AI agents.' E: 'the platform provides the guardrails for the agents who are also users of the platform.'
+
+      **State of AI** (p. 43): agentes já são clientes da plataforma em **29%** das organizações.
+
+      **Ressalva:** o DORA ROI é coautorado pela consultoria do Google Cloud.
+
+      Fonte: references/dora-roi-ai.md, references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [journey-run, landscape-clients]
+
+  - name: spec-is-contract
+    act: agentic
+    topic: "Contracts & gates"
+    message: "Spec declarativa é contrato validável — por isso um agente consegue usá-la."
+    heading: "Spec as contract"
+    screen: ["**What:** a declarative spec _is_ a validated contract", "**Who writes:** a human or an agent"]
+    notes: |-
+      O que queremos dizer: **spec declarativa tem schema**, então a plataforma valida igual quem quer que a escreva — pessoa ou agente.
+
+      `catalog-info.yaml`, Score e o claim do Crossplane têm schema: quem escreve pode ser uma pessoa ou um agente, e a plataforma valida igual. É o que separa **um golden path executável por máquina de um wiki**.
+
+      Liga o catálogo e a declaração da app ao IaC (Infrastructure as Code) — agora com o agente como autor.
+
+      Fonte: references/agent-evals.md, references/poc.md.
+    dependsOn: [environment-vs-sandbox, iac]
+
+  - name: path-types
+    act: agentic
+    topic: "Contracts & gates"
+    audiences: [platform]
+    message: "Nem todo caminho é igual: determinístico, probabilístico ou híbrido."
+    heading: "Three kinds of path"
+    screen: ["**Deterministic:** same input, same output", "**Probabilistic:** an agent; evals _are_ the tests", "**Hybrid:** agent output, deterministic gates"]
+    notes: |-
+      O que queremos dizer: cada golden path tem um tipo, e **o tipo decide como ele é testado e onde precisa de gate**.
+
+      **State of AI Vol. 2, p. 29:**
+      - **Deterministic:** pipeline, mesma saída para a mesma entrada.
+      - **Probabilistic:** agente; 'Evals become the test suite'.
+      - **Hybrid:** geração probabilística com gates determinísticos em loop.
+
+      **Recomendação:** nomear o tipo de cada path e **exigir gate determinístico em efeito irreversível** (p. 51).
+
+      **Evals como regressão:** 'Regression evals ... should have a nearly 100% pass rate' (Anthropic).
+
+      Fonte: references/state-of-ai-in-platform-engineering.md, references/agent-evals.md.
+    dependsOn: [spec-is-contract]
+
+  - name: deterministic-gate
+    act: agentic
+    topic: "Contracts & gates"
+    audiences: [engineering, platform]
+    message: "O agente escreve; a plataforma recusa o que está errado e devolve o motivo."
+    heading: "Deterministic gate"
+    screen: ["**Agent:** writes the spec", "**Platform:** rejects with `unknown field`", "**Agent:** fixes and retries"]
+    notes: |-
+      O que queremos dizer: a plataforma **recusa o que está errado e diz o motivo**; é isso que deixa o agente se corrigir sozinho.
+
+      Siglas:
+      - **XRD** (Composite Resource Definition do Crossplane): o schema do `Environment`.
+      - **IaC** (Infrastructure as Code).
+
+      **Exemplo da PoC:** quando o campo `domain.parentZoneId` saiu do XRD do `Environment`, o servidor passou a rejeitar claim antigo com 'unknown field' — **falha alta, não silenciosa**.
+
+      **Kubernetes** (strict field validation, default do `kubectl`): 'rejects the request with a 400 Bad Request error' e lista os campos. `crossplane resource validate` faz a mesma checagem offline.
+
+      É o **validation loop**: 'Claude does the work, runs the check, reads the result, and iterates until the check passes' (doc do Claude Code). A falha precisa ser 'specific and actionable', não código opaco (Anthropic).
+
+      A ligação gate de IaC ↔ agente é **inferência nossa**: nenhuma fonte a faz diretamente.
+
+      Fonte: references/agent-evals.md.
+    dependsOn: [path-types]
+
+  - name: irreversible-gate
+    act: agentic
+    topic: "Contracts & gates"
+    message: "Efeito irreversível exige gate explícito — e humano decidindo."
+    heading: "Irreversible action"
+    screen: ["**Gate:** explicit `--yes-destroy` flag", "**Who decides:** a human, every time"]
+    notes: |-
+      O que queremos dizer: **o que não tem volta exige gate explícito** e uma pessoa decidindo, a cada vez.
+
+      **OpenAI, A practical guide to building agents:** 'Actions that are sensitive, irreversible, or have high stakes should trigger human oversight until confidence in the agent's reliability grows.' Risco por tool considera 'reversibility'.
+
+      **Exemplo da PoC:** o `teardown` do ambiente exige `--yes-destroy` (e `make clean` recusa sem `CONFIRM=1`), e a regra do repo é que **só o humano autoriza destruir, a cada vez**. Gate por consequência, não por categoria (State of AI, p. 51).
+
+      Fonte: references/agent-evals.md, references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [deterministic-gate]
+
+  - name: guardrails-brakes
+    act: agentic
+    topic: "Contracts & gates"
+    audiences: [executive, platform]
+    message: "Guardrails automatizados são o freio que permite ir mais rápido."
+    heading: "Guardrails as brakes"
+    screen: ["**What:** automated, non-optional gates", "**Result:** go faster, safely"]
+    source: "DORA ROI of AI-assisted Software Development (2026), p. 42"
+    notes: |-
+      O que queremos dizer: **gate automatizado não atrasa — é o freio que permite acelerar**.
+
+      **DORA ROI** (p. 42): 'shifting from manual checkpoints to automated nonoptional security and quality gates. In an agentic world, these guardrails act as the brakes that allow the engineering engine to go faster safely.'
+
+      **State of AI** (p. 41): 'tighter governance actually raises the autonomy ceiling instead of lowering it.'
+
+      Fecha o ato: a verificação sai da leitura humana (**35%** só revisam lendo, State of AI p. 26) para **gates que o agente consegue usar**.
+
+      Siglas:
+      - **DORA** (DevOps Research and Assessment).
+      - **ROI** (return on investment).
+
+      Fonte: references/dora-roi-ai.md, references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [irreversible-gate]
+
+  - name: aep-layers
+    act: agentic
+    topic: "Layers for agents"
+    message: "O IDP não é substituído: ganha duas camadas por cima dos cinco planes."
+    heading: "Two layers on top"
+    screen: ["**Tooling:** the 5 planes", "**Paths:** defined once, run by humans and agents", "**Agent infrastructure:** what agents need"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 29"
+    notes: |-
+      O que queremos dizer: **o IDP não é substituído**: ganha duas camadas por cima dos cinco planes.
+
+      Siglas:
+      - **IDP** (Internal Developer Platform).
+      - **AEP** (Agentic Engineering Platform).
+
+      **Desenho final:** os cinco planes viram a **tooling layer** e duas camadas entram por cima.
+
+      **Fonte das camadas:** State of AI Vol. 2, p. 29 (três camadas do AEP) e p. 28: 'The Agentic Engineering Platform is the evolution of the IDP, not the replacement of it.' (Kaspar von Grünberg).
+
+      **Paths:** 'Define the path once, govern it, and let everyone run it' (p. 16) — **everyone inclui agentes**. Path = 'repeatable route from intent to usable output' (p. 29). É o **golden path** do ato 1, agora com o tipo nomeado (determinístico, probabilístico, híbrido) e **gates no lugar de leitura humana**.
+
+      **Agent infrastructure:** o que o agente precisa para trabalhar com segurança — identidade, contexto, execução e avaliação, **tudo como código** (p. 29). Os próximos slides dizem quanto disso é preciso e quando.
+
+      **Ressalva:** Syntasso é parceira do relatório.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [agents-as-users, reference-architecture, golden-paths, path-types]
+
+  - name: maturity-levels
+    act: agentic
+    topic: "Maturity"
+    message: "A escala de maturidade vai do humano como loop ao humano como orquestrador."
+    heading: "AI maturity levels"
+    screen: ["**Level 0:** no agents", "**Level 1:** AI suggests, human executes", "**Level 2:** agents open PRs in parallel", "**Level 3:** agents act on signals", "**Level 4:** autonomous within guardrails"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 18"
+    notes: |-
+      O que queremos dizer: a escala vai **do humano como o próprio loop ao humano como orquestrador**.
+
+      É a escala do slide `rebuild-platform`, do primeiro ato: **o salto do Level 2 para o 3** é o que exige reconstruir a plataforma.
+
+      State of AI Vol. 2, p. 18-19 (PR = pull request):
+      - **L0:** sem agentes.
+      - **L1:** a IA sugere e o humano executa.
+      - **L2:** agentes geram PRs em paralelo.
+      - **L3:** agentes trabalham a partir de sinais observados, **review por exceção**.
+      - **L4:** autônomos dentro de guardrails desenhados por humanos.
+
+      **Distribuição:** 41% L1, 31% L2, 14% L3, 4% L4 — **só 18% acima do L2**. Previsão do relatório: **mais de 30% em L3+** no próximo ano.
+
+      **Ressalva:** autorrelatado.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [aep-layers, rebuild-platform]
+
+  - name: level3-prerequisites
+    act: agentic
+    topic: "Maturity"
+    message: "Para chegar ao Level 3, a agent infrastructure precisa de quatro peças — e elas só pagam juntas."
+    heading: "What Level 3 needs"
+    screen: ["**Dispatch path:** a request becomes work", "**Validation loop:** automatic checks", "**Scoped identity:** per agent", "**Sandboxed environments:** isolated runs"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 50"
+    notes: |-
+      O que queremos dizer: para o agente agir a partir de sinais (Level 3), a plataforma precisa de **quatro peças, e elas só dão retorno juntas**.
+
+      Siglas:
+      - **MCP** (Model Context Protocol).
+      - **XRD** (Composite Resource Definition do Crossplane).
+      - **SSO** (Single Sign-On).
+      - **PoC** (proof of concept).
+
+      São a camada de **agent infrastructure** do slide anterior, na forma de pré-requisito. **O contexto** (o catálogo via MCP) **é a base de todos**: sem ele o agente não sabe o que existe nem de quem é.
+
+      State of AI Vol. 2, p. 10 e p. 50: os quatro pré-requisitos do Level 3 só dão retorno em conjunto.
+
+      **O que a PoC já tem de cada um:**
+      - **Dispatch path:** claim `Environment` (um pedido vira infra).
+      - **Validation loop:** schema do XRD + fitness functions (Ready/Synced, echo 200).
+      - **Scoped identity:** SSO com Keycloak em proposta; o agente com identidade própria **ainda não**.
+      - **Sandboxed environments:** `Environment` efêmero e sandbox por requisição.
+
+      **Avaliação:** evals como suíte de regressão; o que se avalia é **o estado final no ambiente**, não a fala do agente (Anthropic).
+
+      Fonte: references/state-of-ai-in-platform-engineering.md, references/poc.md, references/agent-evals.md.
+    dependsOn: [maturity-levels, deterministic-gate, request-sandbox, agent-identity, catalog-as-context]
+
+  - name: coverage-check
+    act: agentic
+    topic: "Maturity"
+    audiences: [executive, platform]
+    message: "O objetivo: cada etapa da entrega tem um caminho governado pela plataforma, que pessoa ou agente executa com segurança."
+    heading: "A governed path per stage"
+    screen: ["**Plan:** a **PRD** and the app _declared_ in the catalog", "**Code:** people and agents _follow_ **ADRs** and `AGENTS.md`", "**Review:** each **PR** or **app version** _runs in_ a **shared sandbox**", "**Test:** a failed **check** _returns_ to its author", "**Deploy:** an app version _promoted_ across Environments", "**Monitor:** **golden signals** _watch_ every Environment"]
+    source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 50"
+    notes: |-
+      O que queremos dizer: **cada etapa tem um caminho governado** pela plataforma, que pessoa ou agente executa com segurança. A autonomia segue a consequência: **o irreversível continua com uma pessoa** (slide `irreversible-gate`).
+
+      Siglas:
+      - **PRD** (Product Requirements Document): o que construir e por quê.
+      - **ADR** (Architecture Decision Record): uma decisão de arquitetura, com contexto e consequências.
+      - **PR** (pull request).
+
+      **Plan e Code:** PRD, ADR e `AGENTS.md` são **contexto versionado no repo**. O agente lê o requisito antes de codar e respeita a decisão já tomada — a context layer do DORA ROI (p. 44).
+
+      **Review:** o sandbox compartilhado roda o PR — ou uma versão da app ainda sem PR — **contra os serviços reais** — é onde ficam os testes end-to-end.
+
+      **Test** é o **validation loop**: unit tests, contract tests, schema da spec e evals. Se algo falha, **o motivo volta para quem escreveu** até passar. Só **17%** têm esse loop; **35%** ainda validam só lendo (State of AI, p. 26, p. 30).
+
+      **Monitor:** além dos golden signals, as **fitness functions** provam que o Environment segue como declarado.
+
+      Pergunta para a plateia: **em quantas das seis etapas o seu time já tem caminho governado?**
+      - **0 a 2:** construir a base primeiro.
+      - **3 a 4:** o "expensive middle" — o trabalho empilha nas etapas sem caminho.
+      - **5 a 6:** o limite passa a ser custo e arquitetura.
+
+      As etapas e as faixas são do relatório (p. 50); os exemplos são a nossa proposta.
+
+      Fonte: references/state-of-ai-in-platform-engineering.md, references/agent-evals.md, references/sandbox-routing.md, references/agents-md.md, references/dora-roi-ai.md.
+    dependsOn: [level3-prerequisites]
+
+  # ── Onde estamos e próximos passos ──────────────────
+  - name: mvp1
+    act: where-we-are
+    topic: "MVP 1"
+    message: "MVP 1: quem pede um ambiente recebe um cluster pronto, com rede, DNS, certificado, identidade e GitOps — sem ticket."
+    heading: "What the dev gets"
+    screen: ["**Asks for:** an `Environment`", "**Gets:** a ready cluster with a URL", "**Without:** a ticket"]
+    notes: |-
+      O que queremos dizer: **o primeiro passo entregue é o ambiente sob demanda** — pedir e receber, sem ticket.
+
+      **Pedido:** um claim `Environment`, declarado em YAML.
+
+      **Entrega:** um cluster EKS (Elastic Kubernetes Service) com rede, DNS numa sub-zona própria, certificado, Gateway, identidade e GitOps já ligados.
+
+      É o conselho de 'The platform engineering illusion': **'Build the smallest platform that resolves a real, named problem'**. O problema nomeado aqui: ter um ambiente completo sem depender de outro time.
+
+      Fonte: references/current-state.md, references/poc.md, references/platform-illusion.md.
+    dependsOn: [journey-run]
+
+  - name: mvp1-core-component
+    act: where-we-are
+    topic: "MVP 1"
+    audiences: [executive, platform]
+    message: "O MVP 1 entrega um dos componentes centrais de qualquer IDP: ambientes sob demanda."
+    heading: "Environment management"
+    screen: ["**What:** self-service environments on demand", "**Context:** 1 of 5 core IDP components"]
+    notes: |-
+      O que queremos dizer: o MVP 1 entrega **um dos componentes centrais de qualquer IDP** (Internal Developer Platform).
+
+      **Os cinco core components** (internaldeveloperplatform.org):
+      - application configuration
+      - infrastructure orchestration
+      - **environment management**
+      - deployment management
+      - **RBAC** (role-based access control)
+
+      **Environment management:** 'developers can self-serve fully provisioned environments on demand', 'provisioned as defined by the platform team', criados por UI, **CLI** (command-line interface) ou **API** (application programming interface), com 'automated teardown or pausing' para evitar custo. É **exatamente o recorte do MVP 1**.
+
+      **Cuidado:** os cinco componentes (por capacidade) **não são os cinco planes** (por camada) — não misturar os dois 'cinco'.
+
+      **Ressalva:** o site é ligado à Humanitec, que vende platform orchestrator.
+
+      Fonte: references/internaldeveloperplatform-org.md.
+    dependsOn: [mvp1]
+
+  - name: mvp1-architecture
+    act: where-we-are
+    topic: "MVP 1"
+    audiences: [platform]
+    message: "Um control plane provisiona os Environments na AWS, numa topologia hub-and-spoke."
+    heading: "Hub and spokes"
+    screen: ["**Control plane:** runs `Crossplane`, `Argo CD`", "**Hub:** shared network and ingress", "**Spoke:** an Environment on AWS"]
+    notes: |-
+      O que queremos dizer: **um control plane provisiona os Environments**; a rede é hub-and-spoke.
+
+      Siglas:
+      - **EKS** (Elastic Kubernetes Service): o cluster de cada Environment.
+      - **DNS** (Domain Name System): nomes numa sub-zona delegada no Route 53.
+
+      **Control plane:** roda **Crossplane e Argo CD**. Hoje é um **k3d local**.
+
+      **Hub:** a conta `network` concentra conectividade e ingress; cada região tem células (spokes).
+
+      **Claim:** um claim `Environment` vira um **cluster EKS** com rede, DNS, certificado, identidade e GitOps.
+
+      As decisões de topologia estão registradas como ADRs no repo (`docs/adr/`).
+
+      Fonte: references/poc.md.
+    dependsOn: [mvp1, iac]
+
+  - name: poc-today
+    act: where-we-are
+    topic: "MVP 1"
+    message: "Já funciona hoje, em pequeno: um pedido vira uma URL."
+    heading: "Already working"
+    screen: ["**Today:** 1 claim _becomes_ a URL", "**Time:** ~30 min to HTTP 200"]
+    notes: |-
+      O que queremos dizer: **já funciona hoje, em pequeno**: um pedido vira uma URL.
+
+      **Walking skeleton da PoC:** um claim `Environment`, **~28-30 min** até o cluster EKS (Elastic Kubernetes Service) responder **HTTP 200** no echo. O control plane do EKS domina o tempo (~12-15 min).
+
+      É a **prova de ponta a ponta** antes de crescer.
+
+      Fonte: references/poc.md.
+    dependsOn: [mvp1-architecture]
+
+  - name: mvp1-level
+    act: where-we-are
+    topic: "MVP 1"
+    message: "O MVP 1 está no Level 1; o próximo passo são os pré-requisitos do Level 3."
+    heading: "Where MVP 1 stands"
+    screen: ["**Level:** 1, AI suggests", "**Next:** what Level 3 needs"]
+    notes: |-
+      O que queremos dizer: **o MVP 1 está no Level 1**; o próximo passo são **os pré-requisitos do Level 3**.
+
+      **Hoje:** o agente (Claude Code) sugere e o humano executa (**Level 1**).
+
+      **Não estamos atrasados:** **72%** da indústria está em L1 ou L2 (State of AI, p. 19).
+
+      **Próximo passo:** deixa de ser 'mais features' e vira **construir os quatro pré-requisitos juntos**.
+
+      Fonte: references/current-state.md, references/state-of-ai-in-platform-engineering.md.
+    dependsOn: [poc-today, maturity-levels]
+
+  - name: j-curve
+    act: where-we-are
+    topic: "MVP 1"
+    audiences: [executive]
+    message: "Espere a queda antes do ganho: a adoção de IA segue uma J-Curve."
+    heading: "J-Curve"
+    screen: ["**First:** a dip, then the gain", "**Why:** the verification tax", "**Plan:** budget it as tuition"]
+    source: "DORA ROI of AI-assisted Software Development (2026), pp. 4, 8-10"
+    notes: |-
+      O que queremos dizer: a adoção de IA tem **uma queda antes do ganho**, e é preciso **orçar essa queda**.
+
+      Siglas:
+      - **DORA** (DevOps Research and Assessment): o programa de pesquisa por trás do relatório.
+      - **ROI** (return on investment): retorno sobre o investimento.
+      - **CFR** (change failure rate): taxa de falha de mudanças.
+
+      **Citação** (DORA ROI, p. 4, p. 8-9): 'a temporary productivity dip and period of instability associated with early adoption. Think of this dip as the tuition cost of transformation.'
+
+      **Três causas:**
+      - learning curve
+      - **verification tax** (revisar código gerado)
+      - pipeline adaptation
+
+      **Profundidade:** depende da 'baseline health of its internal developer platforms' (p. 10). Iniciativas **falham quando a liderança corta o investimento na queda** (p. 8).
+
+      **Ressalva:** a curva é modelo conceitual; os números da calculadora (ROI 39%, CFR 5% → 6%) são **premissas ilustrativas**, não achados.
+
+      Fonte: references/dora-roi-ai.md.
+    dependsOn: [mvp1-level]
+
+  - name: platform-api-next
+    act: where-we-are
+    topic: "Next steps"
+    align: true
+    message: "Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients."
+    heading: "One API, one identity"
+    screen: ["**API:** the single boundary", "**Identity:** `Keycloak` as broker", "**State:** the Kubernetes API"]
+    notes: |-
+      O que queremos dizer: **o próximo passo é a fronteira**: uma Platform API na frente de tudo, com identidade única.
+
+      Siglas:
+      - **JWT** (JSON Web Token): o token que a API valida.
+      - **PKCE** (Proof Key for Code Exchange): login da CLI pelo navegador.
+
+      **Platform API:** CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás, como implementação.
+
+      **Identidade:** Keycloak como broker — o Google autentica, o Keycloak guarda os grupos (`platform-admins`, `platform-users`), a API valida o JWT. A avaliação inicial com Dex foi descartada: o Dex não guarda usuários nem grupos.
+
+      **Estado:** a API do Kubernetes como fonte da verdade (watch, `spec`/`status`, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
+
+      Decisões em proposta (ADR 0021 e 0022 no board).
+
+      Fonte: references/current-state.md, references/sso-dex.md.
+    dependsOn: [mvp1-level, single-sign-on, landscape-api]
+
+  - name: next-steps
+    act: where-we-are
+    topic: "Next steps"
+    align: true
+    message: "Próximo: vários clients sobre a mesma plataforma."
+    heading: "Many clients, one platform"
+    screen: ["**CLI:** `platform login`, `whoami`", "**Portal:** catalog + plugins", "**Agent:** the catalog via `MCP`"]
+    notes: |-
+      O que queremos dizer: **vários clients sobre a mesma plataforma**.
+
+      Siglas:
+      - **MCP** (Model Context Protocol): como o agente lê o catálogo.
+      - **CLI** (command-line interface): a interface de terminal.
+      - **DORA ROI**: relatório DORA (DevOps Research and Assessment) sobre ROI (return on investment) de IA.
+
+      **CLI:** a `platform` começa por `init`, `login` (PKCE e device code) e `whoami`, e cresce junto com as capacidades da API.
+
+      **Portal:** o Backstage como **developer portal**: guarda o modelo mental humano (catálogo) e conversa com a plataforma por plugins — a próxima fatia é a aba Environments na página de Component.
+
+      **Agente:** lê **o mesmo catálogo por MCP**.
+
+      O catálogo exposto por MCP é a **context layer** que o DORA ROI manda construir primeiro (p. 44).
+
+      Fonte: references/current-state.md, references/dora-roi-ai.md.
+    dependsOn: [platform-api-next, catalog-as-context]
+
+  - name: takeaways
+    act: where-we-are
+    topic: "Next steps"
+    audiences: [executive]
+    message: "Plataforma como produto, começando pela context layer, construída em fatias finas."
+    heading: "What to take away"
+    screen: ["**Build:** platform as a product", "**Start:** with the context layer", "**Grow:** in thin slices"]
+    notes: |-
+      O que queremos dizer: **três ideias para levar**.
+
+      Siglas:
+      - **DORA** (DevOps Research and Assessment): programa de pesquisa.
+      - **ROI** (return on investment): retorno sobre o investimento.
+
+      **Âncoras externas:** 'Quality internal platforms' é uma das **7 capacidades** do DORA AI Capabilities Model; DORA ROI (p. 49): 'the true risk for technology leaders is not failing at AI but failing to build the organizational system and culture that allow AI to deliver value.'
+
+      **O papel do platform engineer está mudando:** **43%** esperam foco em governança e guardrails, **36%** em plataformas para agentes (State of AI, p. 44).
+
+      **Adoção se conquista, não se impõe.** Em 'The platform engineering illusion', times que contam a outro time que a plataforma economizou um dia valem mais que um memorando — 'that word-of-mouth compounds in a way no mandate memo ever does'.
+
+      Fonte: references/dora-ai-report.md, references/dora-roi-ai.md, references/state-of-ai-in-platform-engineering.md, references/platform-illusion.md.
+    dependsOn: [next-steps]
+
+  - name: closing
+    act: where-we-are
+    animations: none
+    message: "Obrigado."
+    screen: ["Questions?"]
+    notes: |-
+      Fechamento.

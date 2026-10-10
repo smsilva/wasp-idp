@@ -1,0 +1,63 @@
+name: presentation-pages
+
+# Publishes the IDP presentation (docs/presentation/) on GitHub Pages: regenerates the HTML from
+# idp.yaml, so the site never depends on the committed HTML. One deck, so the deck is the site's
+# index.html. Links to references/*.md point to the blob on GitHub — on Pages the raw .md would
+# show as plain text.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/presentation/**
+      - .github/workflows/presentation-pages.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write # deploy-pages authenticates to Pages via OIDC
+
+# One deploy at a time; a new push does not cancel the deploy in progress.
+concurrency:
+  group: presentation-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs/presentation
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Build the site
+        env:
+          TOPICS_URL: https://github.com/${{ github.repository }}/blob/${{ github.sha }}/docs/presentation/references
+        run: |
+          site="${RUNNER_TEMP}/site"
+          mkdir -p "${site}"
+          ./render-outline idp.yaml \
+            --output "${site}/index.html" \
+            --topics-url "${TOPICS_URL}"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

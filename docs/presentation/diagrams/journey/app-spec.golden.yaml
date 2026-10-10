@@ -1,0 +1,31 @@
+apiVersion: platform/v1
+
+metadata:
+  name: greeting-api
+
+containers:
+  api:
+    image: .
+    variables:
+      LOG_LEVEL: info
+      DB_HOST: ${resources.db.host}
+      DB_USER: ${resources.db.username}
+      DB_PASSWORD: ${resources.db.password}
+
+service:
+  ports:
+    http:
+      port: 80
+      targetPort: 8080
+
+resources:
+  db:
+    type: postgres
+  dns:
+    type: dns
+  route:
+    type: route
+    params:
+      host: ${resources.dns.host}
+      path: /
+      port: 80

@@ -1,0 +1,15 @@
+kind: Component
+metadata:
+  name: greeting-api
+  description: HTTP API that publishes greetings
+spec:
+  system: greeter
+  type: service
+  owner: team-alpha
+  lifecycle: experimental
+  providesApis:
+    - greeting-http
+  dependsOn:
+    - resource:greeting-db
+    - resource:greeting-events
+    - resource:greeting-avatars
