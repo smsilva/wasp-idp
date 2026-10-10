@@ -14,6 +14,8 @@ google-chrome "file://${PWD}/idp.html"
 
 No HTML: `P` apresenta, `I` abre o índice (agenda por partes), `N` mostra as notas, `S` abre a janela do apresentador.
 
+Link direto para um slide: `idp.html#present-<name>` (o `name` do slide no `idp.yaml`) abre o primeiro passo dele e continua válido quando o deck muda. `#present-<N>` abre o passo N, que muda sempre que um slide entra ou sai antes dele.
+
 ## Conteúdo
 
 | Caminho | O que é |

@@ -306,8 +306,12 @@ items.forEach((item) => item.addEventListener('click', (event) => {
   show(Number(item.dataset.go));
 }));
 deck.querySelector('.index').addEventListener('click', (event) => event.stopPropagation());
-const start = location.hash.match(/^#present-(\\d+)$/);
-if (start) present(Number(start[1]) - 1);
+// #present-N opens step N; #present-<slide name> opens that slide's first step (stable when steps shift).
+const start = location.hash.match(/^#present-([\\w-]+)$/);
+if (start) {
+  const named = /^\\d+$/.test(start[1]) ? null : deck.querySelector(`.stage[data-slide='${start[1]}']`);
+  present(named ? Number(named.dataset.step) : Number(start[1]) - 1);
+}
 if (start && location.search.includes('index')) openIndex();
 document.addEventListener('keydown', (event) => {
   if (!deck.classList.contains('on')) {
@@ -736,7 +740,10 @@ def render_html(outline, base):
 
   steps = build_steps(outline)
   stages = [render_stage(step, base, outline) for step in steps]
-  deck_html = "".join(f"<div class='stage' data-step='{i}'>{stage}</div>" for i, stage in enumerate(stages))
+  # data-slide on a slide's first step lets #present-<slide name> link to it while step numbers shift.
+  first_of = lambda i: steps[i]["slide"] is not None and (i == 0 or steps[i - 1]["slide"] is not steps[i]["slide"])
+  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}'" if first_of(i) else "") + f">{stage}</div>"
+                      for i, stage in enumerate(stages))
   note_blocks = []
   for step in steps:
     slide, act = step["slide"], step["act"]
@@ -807,7 +814,7 @@ def render_html(outline, base):
 
   return f"""<!doctype html>
 <html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{' — '.join(esc(x) for x in (deck['title'], deck.get('iteration')) if x)}</title>
-<style>{CSS}</style><script>if (/^#present-\\d+$/.test(location.hash)) document.documentElement.classList.add('presenting');</script></head>
+<style>{CSS}</style><script>if (/^#present-[\\w-]+$/.test(location.hash)) document.documentElement.classList.add('presenting');</script></head>
 <body><div id='deck'>{deck_html}<div class='notes-panel'></div><div class='hint'>{home_link}<span class='keys'>{" · " if home_link else ""}← → avançar · I índice · N notas · L posição das notas · S janela do apresentador · F tela cheia · Esc sair</span></div><div class='counter'></div></div><button id='toggle-nav' type='button'>«</button><nav>{''.join(nav)}</nav><main>{''.join(body)}</main>
 <script>{SCRIPT}</script></body></html>
 """
