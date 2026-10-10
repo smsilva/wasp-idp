@@ -101,3 +101,18 @@ def test_init_rejects_azure():
   result = runner.invoke(app, ["init", "--target", "azure"])
   assert result.exit_code == 1
   assert "not supported yet" in result.output
+
+
+def test_save_kubeconfig_writes_private_file(tmp_path, monkeypatch):
+  import stat
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  env = environment.save_kubeconfig({"name": "vc", "status": "ready", "kubeconfigData": "apiVersion: v1\n"})
+  path = tmp_path / "platform" / "environments" / "vc.kubeconfig"
+  assert env["kubeconfig"] == str(path) and "kubeconfigData" not in env
+  assert path.read_text() == "apiVersion: v1\n"
+  assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_save_kubeconfig_without_data_changes_nothing():
+  env = environment.save_kubeconfig({"name": "pending", "status": "Provisioning"})
+  assert "kubeconfig" not in env

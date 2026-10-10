@@ -112,7 +112,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   @app.get("/v1/environments/{name}")
   def get_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
-      return environments.view(state.get(ENVIRONMENTS, name))
+      return environments.view(state.get(ENVIRONMENTS, name), with_kubeconfig=True)
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
 

@@ -48,9 +48,12 @@ spec:
             status:
               type: object
               properties:
-                kubeconfig:
-                  description: Local path of the environment kubeconfig (local target only).
+                kubeconfigData:
+                  description: Kubeconfig of the environment, for providers that run inside the cluster (local_vcluster); the CLI writes it locally.
                   type: string
+                port:
+                  description: Host port of the environment API server (provider local_vcluster).
+                  type: integer
                 conditions:
                   type: array
                   items:

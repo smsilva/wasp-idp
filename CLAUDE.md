@@ -39,7 +39,7 @@
 
 ## Platform CLI and Platform API
 
-- `cli/` (package `wasp_platform`, script `platform`), `platform/api/` and `platform/providers/local_k3d/` are three separate `uv` projects: run `uv sync` and `uv run pytest` inside each. Usage guide in `cli/docs/index.md`, published at `/cli/` by `.github/workflows/pages.yaml`.
+- `cli/` (package `wasp_platform`, script `platform`), `platform/api/` and `platform/providers/local_vcluster/` are three separate `uv` projects: run `uv sync` and `uv run pytest` inside each. Usage guide in `cli/docs/index.md`, published at `/cli/` by `.github/workflows/pages.yaml`.
 - The repo has a single GitHub Pages site: `pages.yaml` builds the deck (root) and the CLI guide (`/cli/`) into one artifact. Add new sites as another build step there, never as a second deploy workflow — it would replace the whole site.
 - The Platform API validates the Keycloak JWT on every `/v1/*` route (`platform/api/src/platform_api/auth.py`): `iss` is the public `http://localhost:8180/realms/platform` (KC_HOSTNAME) while the JWKS comes through the in-cluster Service. `TrustedHostMiddleware` (`127.0.0.1`/`localhost`) stays as defense in depth against DNS rebinding; keep the readiness probe sending `Host: localhost`.
 - Keycloak's `platform-cli` client enforces PKCE, and Keycloak applies it to the device grant too: `--use-device-code` sends `code_challenge` on the device authorization request and `code_verifier` when polling.

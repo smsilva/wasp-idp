@@ -30,8 +30,11 @@ def no_provider_status() -> dict:
   }
 
 
-def view(obj: dict) -> dict:
-  """The API view of an Environment: clients never couple to the CR shape."""
+def view(obj: dict, with_kubeconfig: bool = False) -> dict:
+  """The API view of an Environment: clients never couple to the CR shape.
+
+  kubeconfigData is a credential: only the single-environment read returns it, never the list.
+  """
   metadata = obj.get("metadata", {})
   spec = obj.get("spec", {})
   status = obj.get("status") or {}
@@ -44,12 +47,15 @@ def view(obj: dict) -> dict:
     state = "ready"
   else:
     state = ready.get("reason") or "pending"
-  return {
+  result = {
     "name": metadata.get("name"),
     "profile": spec.get("profile"),
     "expiresAt": spec.get("expiresAt"),
     "status": state,
     "message": ready.get("message") if ready else None,
-    "kubeconfig": status.get("kubeconfig"),
+    "port": status.get("port"),
     "createdAt": metadata.get("creationTimestamp"),
   }
+  if with_kubeconfig and status.get("kubeconfigData"):
+    result["kubeconfigData"] = status["kubeconfigData"]
+  return result

@@ -157,3 +157,11 @@ def test_rejects_unexpected_host_header(state, journal_path, tokens, host, statu
   client = TestClient(create_app(state, Journal(journal_path), tokens.verifier(), ["127.0.0.1", "localhost"]))
   headers = {"Host": host, "Authorization": f"Bearer {tokens.issue()}"}
   assert client.get("/v1/environments", headers=headers).status_code == status
+
+
+def test_kubeconfig_data_only_on_single_get(client, state):
+  client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
+  state.objects["vc"]["status"] = {"port": 7100, "kubeconfigData": "apiVersion: v1\n", "conditions": [{"type": "Ready", "status": "True"}]}
+  assert "kubeconfigData" not in client.get("/v1/environments").json()["items"][0]
+  single = client.get("/v1/environments/vc").json()
+  assert single["kubeconfigData"] == "apiVersion: v1\n" and single["port"] == 7100
