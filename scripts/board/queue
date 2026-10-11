@@ -1,0 +1,199 @@
+#!/bin/bash
+set -e
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} <command> [arguments]
+
+Reads and orders the work queue of board #6 (smsilva/wasp-idp). The order is the
+position of each item on the board: the top of a column comes first.
+
+Commands:
+  next                         the items In Progress, else the top of Todo
+  list [--status <status>]     open items in board order, all columns or one
+  move <issue> --top           move the issue to the top of the board
+  move <issue> --after <issue> move the issue right after another one
+  status <issue> <status>      set the Status: Backlog, Todo, "In Progress", Done
+
+Examples:
+  ${0##*/} next
+  ${0##*/} list --status Todo
+  ${0##*/} move 206 --after 204
+  ${0##*/} status 204 Todo
+USAGE
+}
+
+OWNER="smsilva"
+PROJECT_NUMBER="6"
+PROJECT_ID="PVT_kwHOAARkfs4Bh2xz"
+STATUS_FIELD_ID="PVTSSF_lAHOAARkfs4Bh2xzzhgw8QM"
+
+items_json() {
+  gh api graphql --paginate \
+    --field owner="${OWNER}" \
+    --field number="${PROJECT_NUMBER}" \
+    --raw-field query='
+      query($owner: String!, $number: Int!, $endCursor: String) {
+        user(login: $owner) {
+          projectV2(number: $number) {
+            items(first: 100, after: $endCursor, orderBy: {field: POSITION, direction: ASC}) {
+              pageInfo { hasNextPage endCursor }
+              nodes {
+                id
+                status: fieldValueByName(name: "Status") {
+                  ... on ProjectV2ItemFieldSingleSelectValue { name }
+                }
+                content {
+                  ... on Issue { number title state }
+                  ... on PullRequest { number title state }
+                }
+              }
+            }
+          }
+        }
+      }' \
+    --jq '.data.user.projectV2.items.nodes[]
+      | {id, status: (.status.name // "No Status"), number: .content.number,
+         title: .content.title, state: .content.state}' \
+    | jq --slurp '.'
+}
+
+item_id() {
+  local issue="${1?}"
+  local id
+
+  id="$(items_json | jq --raw-output --argjson n "${issue}" '.[] | select(.number == $n) | .id')"
+
+  if [[ -z "${id}" ]]; then
+    echo "Issue #${issue} is not on board #${PROJECT_NUMBER}" >&2
+    exit 1
+  fi
+
+  echo "${id}"
+}
+
+print_items() {
+  jq --raw-output '.[] | "\(.status)\t#\(.number)\t\(.title)"' \
+    | column -t -s $'\t'
+}
+
+list_items() {
+  local status="${1}"
+
+  items_json \
+    | jq --arg status "${status}" \
+      '[.[] | select(.state == "OPEN") | select($status == "" or .status == $status)]' \
+    | print_items
+}
+
+next_items() {
+  local items
+  local in_progress
+
+  items="$(items_json | jq '[.[] | select(.state == "OPEN")]')"
+  in_progress="$(jq '[.[] | select(.status == "In Progress")]' <<< "${items}")"
+
+  if [[ "$(jq 'length' <<< "${in_progress}")" -gt 0 ]]; then
+    print_items <<< "${in_progress}"
+  else
+    jq '[.[] | select(.status == "Todo")] | .[:1]' <<< "${items}" | print_items
+  fi
+}
+
+move_item() {
+  local issue="${1?}"
+  local after="${2}"
+  local id
+  local after_id=""
+
+  id="$(item_id "${issue}")"
+
+  if [[ -n "${after}" ]]; then
+    after_id="$(item_id "${after}")"
+  fi
+
+  if [[ -n "${after_id}" ]]; then
+    gh api graphql \
+      --field project="${PROJECT_ID}" \
+      --field item="${id}" \
+      --field after="${after_id}" \
+      --raw-field query='
+        mutation($project: ID!, $item: ID!, $after: ID!) {
+          updateProjectV2ItemPosition(input: {projectId: $project, itemId: $item, afterId: $after}) {
+            clientMutationId
+          }
+        }' > /dev/null
+    echo "#${issue} moved after #${after}"
+  else
+    gh api graphql \
+      --field project="${PROJECT_ID}" \
+      --field item="${id}" \
+      --raw-field query='
+        mutation($project: ID!, $item: ID!) {
+          updateProjectV2ItemPosition(input: {projectId: $project, itemId: $item}) {
+            clientMutationId
+          }
+        }' > /dev/null
+    echo "#${issue} moved to the top"
+  fi
+}
+
+set_status() {
+  local issue="${1?}"
+  local status="${2?}"
+  local option
+
+  case "${status}" in
+    Backlog) option="2841e349" ;;
+    Todo) option="1346028c" ;;
+    "In Progress") option="d9b40b84" ;;
+    Done) option="1168c952" ;;
+    *) echo "Unknown status: ${status}" >&2; exit 1 ;;
+  esac
+
+  gh project item-edit \
+    --id "$(item_id "${issue}")" \
+    --project-id "${PROJECT_ID}" \
+    --field-id "${STATUS_FIELD_ID}" \
+    --single-select-option-id "${option}" > /dev/null
+  echo "#${issue} is ${status}"
+}
+
+command="${1}"
+shift || true
+
+case "${command}" in
+  next)
+    next_items
+    ;;
+  list)
+    status=""
+    while [[ "$#" -gt 0 ]]; do
+      case "${1}" in
+        --status) status="${2?}"; shift 2 ;;
+        *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+      esac
+    done
+    list_items "${status}"
+    ;;
+  move)
+    issue="${1?}"
+    shift
+    case "${1}" in
+      --top) move_item "${issue}" "" ;;
+      --after) move_item "${issue}" "${2?}" ;;
+      *) show_usage >&2; exit 1 ;;
+    esac
+    ;;
+  status)
+    set_status "${1?}" "${2?}"
+    ;;
+  --help | help | "")
+    show_usage
+    ;;
+  *)
+    echo "Unknown command: ${command}" >&2
+    show_usage >&2
+    exit 1
+    ;;
+esac
