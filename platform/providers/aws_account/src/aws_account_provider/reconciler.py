@@ -48,6 +48,12 @@ def error_code(error: Exception) -> str:
   return ""
 
 
+def summary(error: Exception) -> str:
+  """What the status may show: the error code only. AWS messages name the base identity and other
+  accounts, and the status is read by whoever registered the role, which may not be theirs."""
+  return error_code(error) or type(error).__name__
+
+
 class Reconciler:
   def __init__(self, store, sts, now=utcnow, revalidate: timedelta = REVALIDATE):
     self.store = store
@@ -109,24 +115,30 @@ class Reconciler:
     except ClientError as error:
       if error_code(error) in DENIED:
         return failed("TrustNotEstablished", f"the role does not trust the platform with this ExternalId yet: apply the trust policy from 'platform cloud account get {name}'")
-      return failed("VerificationFailed", f"AssumeRole: {error}")
+      log.warning("cloud account %s: AssumeRole: %s", name, error)
+      return failed("VerificationFailed", f"AssumeRole failed: {summary(error)}")
     except BotoCoreError as error:
-      return failed("VerificationFailed", f"AssumeRole: {error}")
+      log.warning("cloud account %s: AssumeRole: %s", name, error)
+      return failed("VerificationFailed", f"AssumeRole failed: {summary(error)}")
 
     try:
       caller = self.sts.caller_identity(credentials)
     except (ClientError, BotoCoreError) as error:
-      return failed("VerificationFailed", f"GetCallerIdentity: {error}")
+      log.warning("cloud account %s: GetCallerIdentity: %s", name, error)
+      return failed("VerificationFailed", f"GetCallerIdentity failed: {summary(error)}")
     if caller["Account"] != expected:
-      return failed("AccountMismatch", f"the assumed role is in account {caller['Account']}, not in {expected}")
+      log.warning("cloud account %s: assumed role is in account %s, not %s", name, caller["Account"], expected)
+      return failed("AccountMismatch", f"the assumed role is not in account {expected}")
 
     try:
       self.sts.assume_role(role_arn, f"{session}-no-external-id")
     except ClientError as error:
       if error_code(error) not in DENIED:
-        return failed("VerificationFailed", f"AssumeRole without ExternalId: {error}")
+        log.warning("cloud account %s: AssumeRole without ExternalId: %s", name, error)
+        return failed("VerificationFailed", f"AssumeRole without ExternalId failed: {summary(error)}")
     except BotoCoreError as error:
-      return failed("VerificationFailed", f"AssumeRole without ExternalId: {error}")
+      log.warning("cloud account %s: AssumeRole without ExternalId: %s", name, error)
+      return failed("VerificationFailed", f"AssumeRole without ExternalId failed: {summary(error)}")
     else:
       return failed("ExternalIdNotEnforced", "the role trusts the platform without requiring the ExternalId: add the sts:ExternalId condition of the trust policy")
 

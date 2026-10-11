@@ -88,6 +88,19 @@ def account_id(role_arn: str) -> str:
   return ROLE_ARN.fullmatch(role_arn).group(2)
 
 
+def role_key(role_arn: str) -> tuple[str, str, str]:
+  """The role an ARN names: IAM role names are unique per account case-insensitively and regardless
+  of path, so role/Platform and role/team/platform are the same role as role/platform."""
+  match = ROLE_ARN.fullmatch(role_arn)
+  if not match:
+    return ("", "", role_arn)
+  return (match.group(1) or "", match.group(2), role_arn.rsplit("/", 1)[1].lower())
+
+
+def same_role(obj: dict, key: tuple[str, str, str]) -> bool:
+  return role_key(((obj.get("spec") or {}).get("aws") or {}).get("roleArn", "")) == key
+
+
 def trust_policy(base_arn: str, external_id: str) -> dict:
   """What the account owner applies to the role: trust the base identity, only with our ExternalId."""
   return {
@@ -173,8 +186,8 @@ def router(state, journal: Journal, base_identity) -> APIRouter:
     base = base_arn()
     if not base:
       raise HTTPException(409, "no AWS base credential: an admin runs 'platform init --target local --aws-profile <profile>' first")
-    taken = next((obj for obj in state.list(CLOUD_ACCOUNTS) if ((obj.get("spec") or {}).get("aws") or {}).get("roleArn") == request.roleArn), None)
-    if taken:
+    key = role_key(request.roleArn)
+    if any(same_role(obj, key) for obj in state.list(CLOUD_ACCOUNTS)):
       raise HTTPException(409, f"role {request.roleArn} is already registered")
     body = manifest(request, secrets.token_urlsafe(24), principal.sub, principal.email)
     # The ExternalId is not a secret, but it stays out of the journal anyway.
@@ -183,6 +196,14 @@ def router(state, journal: Journal, base_identity) -> APIRouter:
       created = state.create(CLOUD_ACCOUNTS, body)
     except AlreadyExists:
       raise HTTPException(409, f"cloud account '{request.name}' already exists")
+    # The kube API has no unique index: a concurrent create of the same role is caught here, and
+    # this one steps back (if both step back, both callers retry).
+    if any(same_role(obj, key) and obj["metadata"]["name"] != request.name for obj in state.list(CLOUD_ACCOUNTS)):
+      try:
+        state.delete(CLOUD_ACCOUNTS, request.name, uid=created["metadata"].get("uid"))
+      except (NotFound, Conflict):
+        pass
+      raise HTTPException(409, f"role {request.roleArn} is already registered")
     journal.mark_applied(entry)
     return view(created, base)
 
