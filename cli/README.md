@@ -12,7 +12,7 @@ uv sync
 uv run platform --help
 ```
 
-Ou, para ter `platform` no `PATH`: `uv tool install --editable cli/`. A instalação precisa ser editable a partir do checkout: o `init` aplica CRDs, manifests e scripts versionados no repo (ou aponte `PLATFORM_REPO` para o checkout).
+Ou, para ter `platform` no `PATH`: `make cli` na raiz do repo (`uv tool install --force --editable cli/`). A instalação precisa ser editable a partir do checkout: o `init` aplica CRDs, manifests e scripts versionados no repo (ou aponte `PLATFORM_REPO` para o checkout).
 
 ## Uso (target local)
 
