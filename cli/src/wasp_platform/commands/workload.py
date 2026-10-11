@@ -4,7 +4,8 @@ The Workload Spec is the app-spec.yaml (Score) of a version, immutable, kept in 
 the build. spec validate runs the same gate as the build on a local file, before any build. A Workload
 Instance is a Workload Spec live in an environment, as a Helm release is a chart installed: each deploy
 is a new revision, and its short name is <instance>@<environment> (in phase 1 the instance is the
-component).
+component). apply takes the plan of an environment, a file with every instance it runs, and writes a
+revision for each one that changes, as helmfile does for releases.
 """
 import time
 from pathlib import Path
@@ -202,6 +203,86 @@ def remove(
   except ApiError as error:
     fail(str(error))
   _report(created, wait, output, "removing …")
+
+
+PLAN_KEYS = {"environment", "workloads"}
+
+
+def _plan(file: Path) -> tuple[str, dict]:
+  """environment and workloads of a plan file: {instance: {version | branch, replicas?}}."""
+  try:
+    document = yaml.safe_load(file.read_text(encoding="utf-8"))
+  except OSError as error:
+    fail(f"cannot read {file}: {error.strerror}")
+  except yaml.YAMLError as error:
+    fail(f"{file}: not YAML: {error}")
+  if not isinstance(document, dict):
+    fail(f"{file}: a plan is a mapping with environment and workloads")
+  unknown = sorted(set(document) - PLAN_KEYS)
+  if unknown:
+    fail(f"{file}: unknown key(s) {', '.join(unknown)}; a plan has environment and workloads")
+  environment = document.get("environment")
+  if not isinstance(environment, str) or not environment:
+    fail(f"{file}: environment is required")
+  workloads = document.get("workloads")
+  # An empty plan is written as workloads: {}, so that it is never a forgotten key.
+  if not isinstance(workloads, dict) or not all(isinstance(entry, dict) for entry in workloads.values()):
+    fail(f"{file}: workloads is a mapping of instance to {{version | branch, replicas}}; an empty plan is workloads: {{}}")
+  return environment, workloads
+
+
+def _target(state: dict | None) -> str:
+  return f"{state['version']} ×{state['replicas']}" if state else "—"
+
+
+@app.command("apply")
+def apply(
+  file: Annotated[Path, typer.Option(help="The plan: environment, and workloads by instance with version or branch and replicas.")],
+  dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would change and exit.")] = False,
+  prune: Annotated[bool, typer.Option("--prune", help="Remove the workloads of the environment that the plan leaves out.")] = False,
+  wait: Annotated[bool, typer.Option("--wait", help="Wait until every rollout ends.")] = False,
+  timeout: Annotated[int, typer.Option(help="Seconds to wait for each revision with --wait.")] = 300,
+  output: OutputOption = Format.table,
+):
+  """Apply the plan of an environment: a revision for each workload that changes."""
+  environment, workloads = _plan(file)
+  client = _client()
+  try:
+    plan = client.apply_workloads(environment, workloads, dry_run, prune)
+    written = [item for item in plan["items"] if item.get("revision") is not None]
+    ended = []
+    if wait and not dry_run:
+      for item in written:
+        revision = next(entry for entry in client.workload_history(environment, item["instance"]) if entry["revision"] == item["revision"])
+        ended.append(_wait(client, revision, timeout))
+  except ApiError as error:
+    fail(str(error))
+  failed = [revision for revision in ended if revision["status"] != "Succeeded"]
+  if output == Format.json:
+    print_json({**plan, "revisions": ended} if ended else plan)
+    if failed:
+      raise typer.Exit(1)
+    return
+  print_table(
+    ["WORKLOAD", "ACTION", "FROM", "TO", "REVISION"],
+    [[f"{item['instance']}@{environment}", item["action"], _target(item["from"]), _target(item["to"]), str(item.get("revision") or "—")] for item in plan["items"]],
+  )
+  summary = plan["summary"]
+  typer.echo(f"{environment}: {summary['add']} to add, {summary['change']} to change, {summary['remove']} to remove")
+  if dry_run:
+    typer.echo("dry run: nothing applied")
+  elif written and not wait:
+    typer.echo(f"follow it with: platform workload list --environment {environment}")
+  for revision in ended:
+    heading = f"{revision['instance']}@{environment} revision {revision['revision']}"
+    if revision["status"] != "Succeeded":
+      typer.secho(f"✗ {heading}: {revision['status']}: {revision.get('message') or '—'}", fg=typer.colors.RED, err=True)
+    elif revision["action"] == "remove":
+      success(f"{heading}: removed from {environment}")
+    else:
+      success(f"{heading}: {revision['version']} running · {revision.get('message') or '—'}")
+  if failed:
+    fail(f"{environment}: {len(failed)} of {len(ended)} revision(s) did not succeed")
 
 
 @app.command("list")
