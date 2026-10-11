@@ -27,8 +27,8 @@ PLURALS = {kind.name: plural for plural, kind in KINDS.items()}
 SKIPPED = {
   "Component": "lives in the repo catalog-info.yaml; indexed by discovery (#205)",
   "API": "lives in the repo catalog-info.yaml; indexed by discovery (#205)",
-  "Group": "identity lives in Keycloak (#186)",
-  "User": "identity lives in Keycloak (#186)",
+  "Group": "identity lives in Keycloak (#236)",
+  "User": "users live in Keycloak: they sign in, never imported",
   # Templates become catalog entities (ADR of #200); the import learns them in #201.
   "Template": "templates arrive with #201",
   "Location": "Backstage configuration, not a catalog entity",

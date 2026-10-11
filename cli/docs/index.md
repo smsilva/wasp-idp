@@ -317,13 +317,33 @@ platform catalog import idp/catalog/ --yes      # sem perguntar (pipeline)
 | `create` | não existe na plataforma |
 | `update` | existe e muda; o detalhe mostra `campo: antes → depois` |
 | `unchanged` | existe igual |
-| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), Group e User no Keycloak, Template chega com a #201 |
+| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), Group vira time com a #236 e User fica no Keycloak, Template chega com a #201 |
 | `forbidden` | sem permissão: domínio só `platform-admins`; sistema e recurso só quem criou |
 | `error` | campo faltando ou referência quebrada; o detalhe diz o campo e o arquivo |
 
 Com `forbidden` ou `error` nada é aplicado. O import nunca apaga: o que existe na plataforma e não está nos arquivos fica como está. Um campo ausente no arquivo (a `description`, por exemplo) é removido da entidade. Se o catálogo mudar entre o plano e a confirmação, a API recusa e a CLI mostra o plano novo.
 
-## 12. Desmontar tudo
+## 12. Times
+
+Um time é um grupo do Keycloak que a Platform API mantém (ADR 0026). É ele que compartilha ambientes e é dono de entidades do catálogo. Qualquer usuário lista e vê os times; criar, apagar e mudar membros é só para `platform-admins`.
+
+```bash
+platform team create team-alpha
+platform team member add team-alpha voce@example.com
+platform team get team-alpha
+```
+
+```
+✓ team team-alpha created
+✓ voce@example.com added to team-alpha
+team-alpha: 1 member(s)
+EMAIL             USERNAME
+voce@example.com  voce@example.com
+```
+
+O membro precisa ter entrado na plataforma uma vez: antes disso, o Keycloak não o conhece e a API responde `404`. O time chega ao token no próximo `platform login`, e o `platform whoami` passa a mostrá-lo junto dos grupos.
+
+## 13. Desmontar tudo
 
 ```bash
 platform environment list --output json | jq -r '.[].name' \
@@ -352,6 +372,9 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform catalog list [--kind domain\|system\|resource] [--owner <time>]` | KIND, NAME, PARENT, OWNER |
 | `platform catalog <kind> list\|get\|delete` | por kind; `get` mostra os dependentes |
 | `platform catalog import <caminho>... [--dry-run] [--yes]` | importa Domain, System e Resource de arquivos Backstage, depois de revisar o plano |
+| `platform team list\|get <time>` | times e membros |
+| `platform team create\|delete <time>` | cria ou apaga um time (só `platform-admins`) |
+| `platform team member add\|remove <time> <email>` | muda membros (só `platform-admins`); vale no próximo `platform login` |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |

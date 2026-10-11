@@ -227,9 +227,9 @@ Resource  notification-reports  create  system notifier
 Resource  production            create  system platform
 —         —                     skip    not a Backstage entity (idp/catalog/communication/greeter/mkdocs.yml#1)
 —         —                     skip    not a Backstage entity (idp/catalog/communication/mkdocs.yml#1)
-Group     team-alpha            skip    identity lives in Keycloak (#186)
-Group     team-beta             skip    identity lives in Keycloak (#186)
-Group     team-platform         skip    identity lives in Keycloak (#186)
+Group     team-alpha            skip    identity lives in Keycloak (#236)
+Group     team-beta             skip    identity lives in Keycloak (#236)
+Group     team-platform         skip    identity lives in Keycloak (#236)
 
 17 to create, 0 to update, 0 unchanged, 5 skipped.
 Apply? [y/N]: y
@@ -266,7 +266,34 @@ System  orphan  error   spec.domain: domain 'nowhere' not found (/tmp/orphan.yam
 ✗ fix the errors above; nothing was applied
 ```
 
-## 15. Limpar e sair
+## 15. Times
+
+Como admin, crie um time e entre nele (ADR 0026). O time chega ao token no próximo login.
+
+```bash
+platform team create team-alpha
+platform team member add team-alpha voce@example.com
+platform team get team-alpha
+platform login
+platform whoami
+```
+
+```
+✓ team team-alpha created
+✓ voce@example.com added to team-alpha
+team-alpha: 1 member(s)
+EMAIL             USERNAME
+voce@example.com  voce@example.com
+voce@example.com (platform-admins, platform-users, team-alpha)
+```
+
+Para limpar:
+
+```bash
+platform team delete team-alpha
+```
+
+## 16. Limpar e sair
 
 ```bash
 platform environment delete demo

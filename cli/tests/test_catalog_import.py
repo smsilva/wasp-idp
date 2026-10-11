@@ -12,7 +12,7 @@ runner = CliRunner()
 ACTIONS = ("create", "update", "unchanged", "skip", "forbidden", "error")
 CREATE = {"kind": "Domain", "name": "messaging", "action": "create", "source": "c.yaml#2", "spec": {"owner": "team-alpha", "parent": "communication"}}
 UPDATE = {"kind": "Resource", "name": "greeting-db", "action": "update", "source": "c.yaml#3", "spec": {}, "changes": {"owner": ["team-beta", "team-alpha"], "description": ["old", None]}}
-SKIP = {"kind": "Group", "name": "team-alpha", "action": "skip", "source": "o.yaml#1", "reason": "identity lives in Keycloak (#186)"}
+SKIP = {"kind": "Group", "name": "team-alpha", "action": "skip", "source": "o.yaml#1", "reason": "identity lives in Keycloak (#236)"}
 ERROR = {"kind": "System", "name": "orphan", "action": "error", "source": "x.yaml#1", "field": "spec.domain", "reason": "domain 'nowhere' not found"}
 UNCHANGED = {"kind": "Domain", "name": "communication", "action": "unchanged", "source": "c.yaml#1"}
 
@@ -103,7 +103,7 @@ def test_review_table(api, files):
   assert lines[0].split() == ["KIND", "NAME", "ACTION", "DETAIL"]
   assert "parent communication" in lines[1]
   assert "description: old → —; owner: team-beta → team-alpha" in lines[2]
-  assert "identity lives in Keycloak (#186)" in lines[3]
+  assert "identity lives in Keycloak (#236)" in lines[3]
   assert "1 to create, 1 to update, 0 unchanged, 1 skipped." in result.output
   assert [call["dryRun"] for call in api.calls] == [True]
 

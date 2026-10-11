@@ -54,12 +54,13 @@ def test_realm_uses_platform_theme():
 
 
 SMOKE = yaml.safe_load((Path(__file__).parents[2] / "platform" / "keycloak" / "realm-smoke.yaml").read_text())
+SMOKE_USERS = [u["username"] for u in SMOKE["users"]]
 
 
 def test_realm_without_smoke_has_no_test_client_nor_users():
   realm = render_realm(REALM, google=True, admin=True)
   assert "platform-smoke" not in [c["clientId"] for c in realm["clients"]]
-  assert "users" not in realm
+  assert [u["username"] for u in realm["users"]] == ["service-account-platform-api-admin"]
 
 
 def test_smoke_adds_password_client_and_two_users():
@@ -71,9 +72,9 @@ def test_smoke_adds_password_client_and_two_users():
   assert users["platform-smoke"]["groups"] == ["/platform-users"]
   assert set(users["platform-smoke-admin"]["groups"]) == {"/platform-admins", "/platform-users"}
   # Passwords come from the Secret keycloak-smoke-user, never from the file.
-  assert all(u["credentials"][0]["value"].startswith("$(env:") for u in realm["users"])
+  assert all(users[name]["credentials"][0]["value"].startswith("$(env:") for name in SMOKE_USERS)
   # The base realm is not mutated: a later render without smoke stays clean.
-  assert "users" not in REALM
+  assert [u["username"] for u in REALM["users"]] == ["service-account-platform-api-admin"]
 
 
 def test_cli_client_never_gets_password_grant():
@@ -86,3 +87,17 @@ def test_smoke_passwords_match_the_secret_keys():
   from wasp_platform.bootstrap.local import SMOKE_KEYS
   values = {u["username"]: u["credentials"][0]["value"] for u in SMOKE["users"]}
   assert values == {user: f"$(env:{key})" for user, key in SMOKE_KEYS.items()}
+
+
+def test_api_admin_client_manages_only_users_and_groups():
+  client = next(c for c in REALM["clients"] if c["clientId"] == "platform-api-admin")
+  assert client["serviceAccountsEnabled"] is True and client["publicClient"] is False
+  assert not client["standardFlowEnabled"] and not client["directAccessGrantsEnabled"]
+  assert client["secret"] == "$(env:PLATFORM_API_ADMIN_SECRET)"
+  account = next(u for u in REALM["users"] if u.get("serviceAccountClientId") == "platform-api-admin")
+  assert set(account["clientRoles"]["realm-management"]) == {"manage-users", "view-users", "query-users", "query-groups"}
+
+
+def test_realm_declares_no_teams():
+  # Teams live under /teams, created by the API: keycloak-config-cli must never own that tree.
+  assert "teams" not in [g["name"] for g in REALM["groups"]]
