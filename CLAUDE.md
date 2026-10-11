@@ -54,7 +54,9 @@
 - Name validation in the API uses `re.fullmatch`: `re.match` with `$` accepts a trailing `\n`, which the kube API then rejects as a 500 with an unapplied journal entry.
 - `scripts/demo/cli-smoke` runs the CLI flow without a browser (`platform login --test-user`/`--test-admin`, local target only, #179): run it to validate any CLI change, and add each new command's step to it. It uses its own `XDG_CONFIG_HOME`, so it never touches the real login.
 - Tokens remember the client that issued them (`client_id` in the credentials file): refresh and revoke must go to that same client, or Keycloak refuses them.
-- `platform catalog import` (#190) lives in `platform/api/src/platform_api/catalog_import.py`: the API computes the plan from raw Backstage documents, so every client gets the same plan. Skip reasons point to the issue that will import the kind (`Template` → #201, `Component`/`API` → #205); update them when that issue lands.
+- `platform catalog import` (#190) lives in `platform/api/src/platform_api/catalog_import.py`: the API computes the plan from raw Backstage documents, so every client gets the same plan. Skip reasons point to the issue that will import the kind (`Component`/`API` → #205); update them when that issue lands. Templates (#201) go through the same plan: `templates:import` is that route filtered to templates, so a template's owner team must already exist or come as a `Group` via `catalog import`.
+- `platform catalog template render` fetches the registered `source.ref` from GitHub with git on the caller's machine: treat template content as untrusted (sandboxed Jinja2, no symlinks, https only, `--` before repo/ref). `platform init` registers the seed at the last commit present on the remote, so render works from an unpushed branch.
+- The team-in-use check (`users_of` in `platform/api/src/platform_api/teams.py`) must list every kind with an `owner`: add each new owned kind there, or deleting its team orphans it.
 - keycloak-config-cli manages `clients` fully (removes ones missing from the file) but never deletes `users`: removing a user from the realm file leaves it in Keycloak.
 
 ## IDP Tool (Backstage)
