@@ -90,13 +90,14 @@ def test_smoke_passwords_match_the_secret_keys():
   assert values == {user: f"$(env:{key})" for user, key in SMOKE_KEYS.items()}
 
 
-def test_api_admin_client_manages_only_users_and_groups():
+def test_api_admin_client_only_reads_through_roles():
   client = next(c for c in REALM["clients"] if c["clientId"] == "platform-api-admin")
   assert client["serviceAccountsEnabled"] is True and client["publicClient"] is False
   assert not client["standardFlowEnabled"] and not client["directAccessGrantsEnabled"]
   assert client["secret"] == "$(env:PLATFORM_API_ADMIN_SECRET)"
   account = next(u for u in REALM["users"] if u.get("serviceAccountClientId") == "platform-api-admin")
-  assert set(account["clientRoles"]["realm-management"]) == {"manage-users", "view-users", "query-users", "query-groups"}
+  # Read-only: the writes come from the fine-grained admin permissions init applies (#238).
+  assert set(account["clientRoles"]["realm-management"]) == {"view-users", "query-users", "query-groups"}
 
 
 def test_realm_declares_no_teams():

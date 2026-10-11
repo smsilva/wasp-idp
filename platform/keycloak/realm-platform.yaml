@@ -86,16 +86,15 @@ clients:
     serviceAccountsEnabled: true
     secret: $(env:PLATFORM_API_ADMIN_SECRET)
 
-# Service account of platform-api-admin: no realm settings, but manage-users still reaches every user
-# and group, platform-admins included. Only the API code confines it to /teams; narrowing the grant
-# to that subtree (fine-grained admin permissions) is #238.
+# Service account of platform-api-admin: read-only roles. Its writes (teams and memberships) come from
+# fine-grained admin permissions that `platform init` applies (bootstrap/admin_permissions.py, #238):
+# never platform-admins nor platform-users, never a user's credentials or roles.
 users:
   - username: service-account-platform-api-admin
     enabled: true
     serviceAccountClientId: platform-api-admin
     clientRoles:
       realm-management:
-        - manage-users
         - view-users
         - query-users
         - query-groups

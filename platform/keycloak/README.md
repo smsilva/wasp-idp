@@ -36,6 +36,23 @@ O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado
 
 Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o realm sobe sem o Identity Provider e o `init` avisa. Sem `--admin`, o mapper `bootstrap-admin` fica de fora.
 
+## Client da Platform API (`platform-api-admin`)
+
+A Platform API cria times (`/teams/<nome>`) e muda membros pela admin API, com o client confidencial `platform-api-admin` (ADR 0026, #231). A conta de serviço dele só tem roles de leitura (`view-users`, `query-users`, `query-groups`). A escrita vem das fine-grained admin permissions (v2), que o `platform init` aplica como admin bootstrap depois de cada realm import (`cli/src/wasp_platform/bootstrap/admin_permissions.py`, #238):
+
+- grupos: `view`, `manage`, `view-members` e `manage-membership` em todos os grupos, com deny explícito em `platform-admins` e `platform-users`;
+- usuários: `view` e `manage-group-membership`;
+- nunca `manage-members`, que permitiria editar os membros, credenciais incluídas.
+
+O que o Keycloak `26.5.5` mostrou ao desenhar isso, para não reaprender:
+
+- Uma permissão em `/teams` não vale para os filhos, e as listagens de grupos (busca, `children`, `group-by-path`) só mostram grupos com permissão própria. Por isso a escrita vale para todos os grupos e a leitura vem do `view-users`.
+- Política de usuário apontando para a conta de serviço nunca casou; a política de client casa.
+- Criar grupo de nível raiz continua permitido, e é inofensivo: a API autoriza pelo path completo (`group_paths`), então um grupo fora de `/teams` não dá direito a nada.
+- O keycloak-config-cli não declara essas permissões, mas o realm import as mantém, junto com o client `admin-permissions`.
+
+O `scripts/demo/cli-smoke` confere que, com o token desse client, pôr alguém em `platform-admins` responde `403`.
+
 ## Identidades de teste (só no target local)
 
 O `platform init --target local` junta ao realm o `realm-smoke.yaml` (#179). Ele não existe em nenhum outro target.
