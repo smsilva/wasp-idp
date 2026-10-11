@@ -113,8 +113,11 @@ class KeycloakTeams:
   def names(self) -> list[str]:
     return sorted(group["name"] for group in self._children())
 
+  def _member_accounts(self, team: str) -> list[dict]:
+    return self._admin("GET", f"/groups/{team}/members", params={"briefRepresentation": "true", "max": "1000"}).json()
+
   def members(self, name: str) -> list[dict]:
-    users = self._admin("GET", f"/groups/{self._team_id(name)}/members", params={"briefRepresentation": "true", "max": "1000"}).json()
+    users = self._member_accounts(self._team_id(name))
     return sorted(({"email": user.get("email"), "username": user["username"]} for user in users), key=lambda user: user["username"])
 
   def create(self, name: str) -> None:
@@ -134,11 +137,15 @@ class KeycloakTeams:
     self._admin("PUT", f"/users/{self._user_id(email)}/groups/{team}")
 
   def remove_member(self, name: str, email: str) -> None:
+    # Removes the accounts the team lists under this e-mail, not the one an e-mail lookup would pick:
+    # what is checked and what is removed must be the same account. Taking access away needs no
+    # verified e-mail, so every listed account with it goes.
     team = self._team_id(name)
-    user = self._user_id(email)
-    if not any(member["email"] == email for member in self.members(name)):
+    accounts = [user["id"] for user in self._member_accounts(team) if (user.get("email") or "").lower() == email.lower()]
+    if not accounts:
       raise NotMember(email)
-    self._admin("DELETE", f"/users/{user}/groups/{team}")
+    for account in accounts:
+      self._admin("DELETE", f"/users/{account}/groups/{team}")
 
 
 class TeamRequest(BaseModel):

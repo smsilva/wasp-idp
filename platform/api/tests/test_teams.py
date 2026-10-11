@@ -64,7 +64,7 @@ class FakeKeycloak:
         return httpx.Response(201)
       return httpx.Response(200, json=[self._view(g) for g in self.groups.values() if g["parent"] == parts[1]])
     if parts[0] == "groups" and len(parts) == 3 and parts[2] == "members":
-      return httpx.Response(200, json=[{"username": self.users[u]["username"], "email": self.users[u]["email"]} for u in self.members[parts[1]]])
+      return httpx.Response(200, json=[{"id": u, "username": self.users[u]["username"], "email": self.users[u]["email"]} for u in self.members[parts[1]]])
     if parts[0] == "groups" and len(parts) == 2 and request.method == "DELETE":
       del self.groups[parts[1]]
       return httpx.Response(204)
@@ -178,6 +178,19 @@ def test_add_refuses_unverified_or_ambiguous_email(client, keycloak, accounts):
     keycloak.add_user(username, email, verified)
   client.post("/v1/teams", json={"name": "team-alpha"})
   assert client.post("/v1/teams/team-alpha/members", json={"email": "victim@example.com"}).status_code == 404
+  assert client.get("/v1/teams/team-alpha").json()["members"] == []
+
+
+def test_remove_takes_out_the_listed_account(client, keycloak):
+  # A member added outside the API (Keycloak console) with an unverified e-mail, next to a verified
+  # account with the same e-mail that is not in the team: the listed one is the one removed.
+  keycloak.add_user("console-added", "shared@example.com", verified=False)
+  keycloak.add_user("verified", "shared@example.com", verified=True)
+  client.post("/v1/teams", json={"name": "team-alpha"})
+  team = keycloak.group_by_path("/teams/team-alpha")["id"]
+  listed = next(uid for uid, user in keycloak.users.items() if user["username"] == "console-added")
+  keycloak.members[team].add(listed)
+  assert client.delete("/v1/teams/team-alpha/members/Shared@Example.com").status_code == 204
   assert client.get("/v1/teams/team-alpha").json()["members"] == []
 
 
