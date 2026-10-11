@@ -32,3 +32,4 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0022](0022-kube-api-as-platform-source-of-truth.md) | API do Kubernetes como fonte da verdade da plataforma; Platform API como fachada; Postgres como journal e projeção |
 | [0023](0023-platform-catalog-ownership.md) | Catálogo da plataforma: Domain, System e Resource como CRDs, Component e API no repo, Backstage como leitor; resolvedor Forager |
 | [0024](0024-component-templates-in-catalog.md) | Templates de component como entidade do catálogo: conteúdo no Git, um padrão por tipo, renderização compatível com o Backstage, import do scaffolder |
+| [0025](0025-scm-connections-in-platform-api.md) | SCM connections na Platform API: CRD `ScmConnection` neutro de vendor, GitHub App por manifest flow, segredos atrás de um `SecretStore` |
