@@ -1,0 +1,71 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: templates.catalog.platform.wasp.silvios.me
+spec:
+  group: catalog.platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: Template
+    listKind: TemplateList
+    plural: templates
+    singular: template
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Type
+          type: string
+          jsonPath: .spec.type
+        - name: Default
+          type: boolean
+          jsonPath: .spec.default
+        - name: Ref
+          type: string
+          jsonPath: .spec.source.ref
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              description: A component template (ADR 0024); the content stays in Git, at source.
+              type: object
+              required: [owner, type, source]
+              properties:
+                owner:
+                  description: Owner team of the template.
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                description:
+                  type: string
+                type:
+                  type: string
+                  enum: [service, website, library]
+                default:
+                  description: The template used when only the type is given; at most one per type.
+                  type: boolean
+                source:
+                  type: object
+                  required: [repo, path, ref]
+                  properties:
+                    repo:
+                      description: https URL of the Git repository.
+                      type: string
+                      pattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)+$'
+                    path:
+                      description: Folder of the content, relative to the repo root.
+                      type: string
+                    ref:
+                      description: Tag or commit; a branch only for templates in development.
+                      type: string
+                      pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$'
+                parameters:
+                  description: JSON Schema of the extra parameters (name, owner, system and description come from the platform).
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                copyWithoutRendering:
+                  description: Glob patterns of files copied as they are.
+                  type: array
+                  items:
+                    type: string

@@ -95,8 +95,27 @@ class PlatformClient:
   def remove_team_member(self, name: str, email: str) -> None:
     self._request("DELETE", f"/v1/teams/{name}/members/{quote(email, safe='@')}")
 
-  def import_catalog(self, documents: list[dict], dry_run: bool, plan_hash: str | None = None) -> dict:
-    return self._request("POST", "/v1/catalog/import", json={"documents": documents, "dryRun": dry_run, "planHash": plan_hash})
+  def import_catalog(self, documents: list[dict], dry_run: bool, plan_hash: str | None = None, source: dict | None = None, templates_only: bool = False) -> dict:
+    body = {"documents": documents, "dryRun": dry_run, "planHash": plan_hash}
+    if source:
+      body["source"] = source
+    path = "/v1/catalog/templates:import" if templates_only else "/v1/catalog/import"
+    return self._request("POST", path, json=body)
+
+  def list_templates(self) -> list[dict]:
+    return self._request("GET", "/v1/catalog/templates")["items"]
+
+  def get_template(self, name: str) -> dict:
+    return self._request("GET", f"/v1/catalog/templates/{name}")
+
+  def create_template(self, body: dict) -> dict:
+    return self._request("POST", "/v1/catalog/templates", json=body)
+
+  def make_default_template(self, name: str) -> dict:
+    return self._request("POST", f"/v1/catalog/templates/{name}/default")
+
+  def delete_template(self, name: str) -> None:
+    self._request("DELETE", f"/v1/catalog/templates/{name}")
 
 
 def _detail(response: httpx.Response) -> str:

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, catalog_import, environments, teams as team_routes
+from . import catalog, catalog_import, environments, templates, teams as team_routes
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -215,8 +215,9 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   def unshare_environment(name: str, team: str, principal: Principal = Depends(current_principal)):
     return change_share(name, team, principal, add=False)
 
-  # Before the catalog router: its POST /{plural} would otherwise take "import" as a kind.
+  # Before the catalog router: its /{plural} routes would otherwise take "import" and "templates" as kinds.
   app.include_router(catalog_import.router(state, journal, teams))
+  app.include_router(templates.router(state, journal, teams))
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state))
   return app

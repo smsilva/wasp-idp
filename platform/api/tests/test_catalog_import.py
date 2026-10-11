@@ -58,7 +58,7 @@ def test_invalid_owner_is_error(owner, reason):
   (doc("Component"), "lives in the repo catalog-info.yaml; indexed by discovery (#205)"),
   (doc("API"), "lives in the repo catalog-info.yaml; indexed by discovery (#205)"),
   (doc("User"), "users live in Keycloak: they sign in, never imported"),
-  (doc("Template"), "templates arrive with #201"),
+  (doc("Template"), "a template needs apiVersion scaffolder.backstage.io/v1beta3"),
   (doc("Location"), "Backstage configuration, not a catalog entity"),
   (doc("Widget"), "not a catalog kind"),
   (doc("System", namespace="acme"), "namespace 'acme': the platform catalog has no namespaces"),

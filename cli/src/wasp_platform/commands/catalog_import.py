@@ -4,6 +4,8 @@ The API computes the plan; this module only reads the files, shows the plan and 
 """
 import json
 import os
+import subprocess
+from functools import cache
 from pathlib import Path
 from typing import Annotated
 
@@ -47,8 +49,39 @@ def _as_json(document, shown: str):
     raise ImportFileError(f"{shown}: not representable as JSON ({error})")
 
 
-def read_documents(paths: list[Path]) -> list[dict]:
-  """Every non-empty YAML document, with its source as `<path relative to cwd>#<position>`."""
+@cache
+def _repo_root(folder: Path) -> Path | None:
+  try:
+    result = subprocess.run(["git", "-C", str(folder), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+  except (FileNotFoundError, subprocess.CalledProcessError):
+    return None
+  return Path(result.stdout.strip())
+
+
+def repo_path(file: Path) -> str:
+  """The file relative to the root of its Git repo (cwd outside one): a template's content is
+  registered by this path, so it must not depend on where the CLI runs."""
+  resolved = file.resolve()
+  root = _repo_root(resolved.parent) or Path.cwd().resolve()
+  try:
+    return resolved.relative_to(root).as_posix()
+  except ValueError:
+    return resolved.as_posix()
+
+
+def is_template(file: Path, document) -> bool:
+  """A Backstage scaffolder template, or template.yaml in the platform format (ADR 0024)."""
+  if not isinstance(document, dict):
+    return False
+  if str(document.get("apiVersion", "")).startswith("scaffolder.backstage.io/"):
+    return document.get("kind") == "Template"
+  return file.name == "template.yaml" and "apiVersion" not in document and bool(document.get("type"))
+
+
+def read_documents(paths: list[Path], templates_only: bool = False) -> list[dict]:
+  """Every non-empty YAML document, with its source as `<path relative to cwd>#<position>` and its
+  path from the repo root. templates_only keeps template definitions and skips any other file,
+  including what does not parse: template content may hold `{% %}` blocks."""
   documents = []
   for file in _files(paths):
     shown = os.path.relpath(file)
@@ -57,16 +90,21 @@ def read_documents(paths: list[Path]) -> list[dict]:
       shown = str(file.resolve())
     try:
       loaded = [document for document in yaml.safe_load_all(file.read_text(encoding="utf-8")) if document is not None]
-    except UnicodeDecodeError:
-      raise ImportFileError(f"{shown}: not UTF-8")
-    except yaml.YAMLError as error:
+    except (UnicodeDecodeError, yaml.YAMLError) as error:
+      if templates_only:
+        continue
+      if isinstance(error, UnicodeDecodeError):
+        raise ImportFileError(f"{shown}: not UTF-8")
       mark = getattr(error, "problem_mark", None)
       line = f":{mark.line + 1}" if mark else ""
       raise ImportFileError(f"{shown}{line}: invalid YAML: {getattr(error, 'problem', None) or error}")
     for index, document in enumerate(loaded, 1):
-      documents.append({"source": f"{shown}#{index}", "document": _as_json(document, shown)})
+      if templates_only and not is_template(file, document):
+        continue
+      documents.append({"source": f"{shown}#{index}", "path": repo_path(file), "document": _as_json(document, shown)})
   if not documents:
-    raise ImportFileError(f"no YAML documents found in {', '.join(str(path) for path in paths)}")
+    what = "templates" if templates_only else "YAML documents"
+    raise ImportFileError(f"no {what} found in {', '.join(str(path) for path in paths)}")
   return documents
 
 
@@ -78,6 +116,8 @@ def _detail(item: dict) -> str:
   action = item["action"]
   if item.get("failed"):
     return f"failed: {item['failed']}"
+  if action == "create" and item["kind"] == "Template":
+    return f"ref {item['spec']['source']['ref']}"
   if action == "create":
     field = PARENT_FIELDS.get(item["kind"])
     parent = (item.get("spec") or {}).get(field)
@@ -117,18 +157,39 @@ def _show(plan: dict, output: Format) -> None:
   print_json(plan) if output == Format.json else _print_plan(plan)
 
 
+Repo = Annotated[str | None, typer.Option(help="https URL of the repo where the files are published; required for templates.")]
+Ref = Annotated[str | None, typer.Option(help="Tag or commit of that repo the templates are registered at.")]
+
+
+def origin(repo: str | None, ref: str | None) -> dict | None:
+  if bool(repo) != bool(ref):
+    fail("--repo and --ref go together")
+  return {"repo": repo, "ref": ref} if repo else None
+
+
 def import_catalog(
   paths: Annotated[list[Path], typer.Argument(help="Backstage catalog files or folders (recursive: *.yaml, *.yml).")],
+  repo: Repo = None,
+  ref: Ref = None,
   dry_run: Annotated[bool, typer.Option("--dry-run", help="Show the plan and exit.")] = False,
   yes: Annotated[bool, typer.Option("--yes", help="Apply without asking.")] = False,
   output: OutputOption = Format.table,
 ):
-  """Import Domains, Systems and Resources from Backstage catalog files, after reviewing the plan."""
+  """Import Domains, Systems, Resources and Templates from Backstage catalog files, after reviewing the plan."""
+  source = origin(repo, ref)
   try:
     documents = read_documents(paths)
+  except ImportFileError as error:
+    fail(str(error))
+  run_import(documents, source, dry_run, yes, output, templates_only=False)
+
+
+def run_import(documents: list[dict], source: dict | None, dry_run: bool, yes: bool, output: Format, templates_only: bool) -> None:
+  """Review the plan the API computes, ask, then apply that same plan (planHash)."""
+  try:
     client = PlatformClient()
-    plan = client.import_catalog(documents, dry_run=True)
-  except (ImportFileError, ApiError) as error:
+    plan = client.import_catalog(documents, dry_run=True, source=source, templates_only=templates_only)
+  except ApiError as error:
     fail(str(error))
   summary = plan["summary"]
   blocked = summary["error"] + summary["forbidden"] > 0
@@ -150,7 +211,7 @@ def import_catalog(
       typer.echo("nothing was applied")
       return
   try:
-    result = client.import_catalog(documents, dry_run=False, plan_hash=None if yes else plan["planHash"])
+    result = client.import_catalog(documents, dry_run=False, plan_hash=None if yes else plan["planHash"], source=source, templates_only=templates_only)
   except ApiError as error:
     if error.plan:
       _show(error.plan, output)
