@@ -101,6 +101,21 @@ class PlatformClient:
   def remove_team_member(self, name: str, email: str) -> None:
     self._request("DELETE", f"/v1/teams/{name}/members/{quote(email, safe='@')}")
 
+  def add_cloud_account(self, name: str, vendor: str, role_arn: str, regions: list[str] | None = None) -> dict:
+    return self._request("POST", "/v1/cloud/accounts", json={"name": name, "vendor": vendor, "roleArn": role_arn, "regions": regions or []})
+
+  def list_cloud_accounts(self) -> list[dict]:
+    return self._request("GET", "/v1/cloud/accounts")["items"]
+
+  def get_cloud_account(self, name: str) -> dict:
+    return self._request("GET", f"/v1/cloud/accounts/{name}")
+
+  def verify_cloud_account(self, name: str) -> dict:
+    return self._request("POST", f"/v1/cloud/accounts/{name}/verify")
+
+  def remove_cloud_account(self, name: str) -> dict:
+    return self._request("DELETE", f"/v1/cloud/accounts/{name}")
+
   def import_catalog(self, documents: list[dict], dry_run: bool, plan_hash: str | None = None, source: dict | None = None, templates_only: bool = False) -> dict:
     body = {"documents": documents, "dryRun": dry_run, "planHash": plan_hash}
     if source:

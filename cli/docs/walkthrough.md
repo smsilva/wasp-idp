@@ -403,7 +403,59 @@ Step      python-service/register      skip    catalog:register: the platform di
 
 Com o mesmo nome do seed, aplicar trocaria a fonte do `python-service`: por isso o `--dry-run`. Criar, importar, mudar o padrão e apagar são só para `platform-admins`; listar, ver e renderizar, para todos.
 
-## 17. Limpar e sair
+## 17. Contas de nuvem
+
+Só com a credencial base: rode o `init` uma vez com um profile do `~/.aws` (o `init` lembra a credencial nas execuções seguintes). Use um IAM user dedicado, com permissão só para `sts:AssumeRole` e `sts:GetCallerIdentity`; com SSO, o `init` avisa quando a credencial expira.
+
+```bash
+platform init --target local --aws-profile <profile-da-plataforma>
+```
+
+```
+…
+deploying the cloud account provider (aws_account) …
+✓ cloud accounts verified by the aws_account provider
+```
+
+Registre uma conta pela role que a plataforma vai assumir nela:
+
+```bash
+platform cloud account add demo-aws --role-arn arn:aws:iam::<conta>:role/platform
+```
+
+```
+✓ cloud account demo-aws added (pending)
+Trust policy of arn:aws:iam::<conta>:role/platform:
+{ … "sts:ExternalId": "<gerado pela API>" … }
+Apply it as the trust policy of the role, then run: platform cloud account verify demo-aws --wait
+```
+
+Antes de aplicar a policy, a conta fica em `TrustNotEstablished`. Grave a policy do `get --output json` num arquivo e aplique-a na role, com o profile de quem administra a conta:
+
+```bash
+platform cloud account get demo-aws --output json | jq .trustPolicy > /tmp/trust.json
+aws iam update-assume-role-policy --role-name platform --policy-document file:///tmp/trust.json --profile <admin-da-conta>
+platform cloud account verify demo-aws --wait
+platform cloud account list
+```
+
+```
+✓ demo-aws ready (account <conta>)
+NAME      VENDOR  ACCOUNT  STATUS  VALIDATED            OWNER
+demo-aws  aws     <conta>  ready   2026-10-11T12:00:00Z voce@example.com
+```
+
+Tire a condição `sts:ExternalId` da policy e rode o `verify --wait` de novo: a conta vai para `ExternalIdNotEnforced`, porque sem a condição qualquer um que conheça a role e confie na mesma credencial base a registraria. Volte a policy original e remova a conta:
+
+```bash
+platform cloud account remove demo-aws
+```
+
+```
+✓ cloud account demo-aws removed
+```
+
+## 18. Limpar e sair
 
 ```bash
 platform environment delete demo
@@ -422,7 +474,7 @@ O `platform-local` continua no ar para a próxima rodada; para desmontar tudo, v
 
 ## Sem navegador: `scripts/demo/cli-smoke`
 
-O roteiro acima tem um passo humano, o login. O `scripts/demo/cli-smoke` (#179) roda o fluxo sem ninguém: `init`, login com o usuário de teste (`platform-users`), a recusa `403` ao criar um domínio, um ambiente criado com `--wait` e apagado, login com o admin de teste, `catalog import idp/catalog/` (aplicado e depois `nothing to do`), os templates (`list` como usuário comum, recusa `403` no `create`, `render` do seed sem nenhum `${{` restante, plano do import do template do Backstage com os `steps` ignorados) e `logout`. Ele para na primeira falha, com código diferente de zero.
+O roteiro acima tem um passo humano, o login. O `scripts/demo/cli-smoke` (#179) roda o fluxo sem ninguém: `init`, login com o usuário de teste (`platform-users`), a recusa `403` ao criar um domínio, um ambiente criado com `--wait` e apagado, login com o admin de teste, `catalog import idp/catalog/` (aplicado e depois `nothing to do`), os templates (`list` como usuário comum, recusa `403` no `create`, `render` do seed sem nenhum `${{` restante, plano do import do template do Backstage com os `steps` ignorados), uma cloud account (`409` pedindo `--aws-profile` sem credencial base; com ela, uma role que a plataforma não assume fica `TrustNotEstablished`, e outro usuário não a vê nem registra a mesma role) e `logout`. Ele para na primeira falha, com código diferente de zero.
 
 ```bash
 scripts/demo/cli-smoke              # do zero, com platform init

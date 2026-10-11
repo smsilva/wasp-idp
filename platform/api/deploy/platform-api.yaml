@@ -21,6 +21,17 @@ rules:
   - apiGroups: [platform.wasp.silvios.me]
     resources: [environments/status]
     verbs: [get, update, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [cloudaccounts]
+    verbs: [get, list, watch, create, update, delete] # update: verify-requested-at (ADR 0029)
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [cloudaccounts/status]
+    verbs: [get]
+  # The base identity the aws_account controller publishes: the principal of every trust policy.
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [aws-base-identity]
+    verbs: [get]
   - apiGroups: [catalog.platform.wasp.silvios.me]
     resources: [domains, systems, resources, templates]
     verbs: [get, list, watch, create, update, delete]

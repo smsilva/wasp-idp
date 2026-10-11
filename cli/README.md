@@ -32,6 +32,8 @@ Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em
 
 Cada ambiente é um vcluster dentro do `platform-local`, criado pelo provider `local_vcluster` (`platform/providers/local_vcluster/`), que o `init` instala no cluster. Não há processo para manter aberto no host.
 
+Contas AWS entram com `platform cloud account add <nome> --role-arn <arn>` (ADR 0029), depois de um `init --aws-profile <profile>` que guarda a credencial base no cluster e sobe o provider `aws_account`.
+
 ## Documentação
 
 Guia passo a passo com exemplos em `docs/index.md` e roteiro de demonstração do zero em `docs/walkthrough.md` (MkDocs), publicado em https://smsilva.github.io/wasp-idp/cli/ pelo workflow `.github/workflows/pages.yaml` a cada push na `main`. Para ver localmente:

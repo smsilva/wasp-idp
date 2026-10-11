@@ -42,6 +42,9 @@ API_ADMIN_KEY = "PLATFORM_API_ADMIN_SECRET"
 # platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py.
 ENV_PORTS = "7100-7119"
 PROVIDER_IMAGE = "local-vcluster-provider"
+# Cloud accounts (ADR 0029): the base credential the aws_account controller assumes roles from.
+AWS_PROVIDER_IMAGE = "aws-account-provider"
+AWS_BASE_SECRET = "aws-base-credential"
 # Factory templates (ADR 0024): read from this public repo, so no credential is needed.
 SEED_REPO = "https://github.com/smsilva/wasp-idp"
 SEED_FOLDER = Path("platform") / "templates"
@@ -250,9 +253,47 @@ def wait_issuer(issuer: str, timeout: int = 60) -> None:
     time.sleep(2)
 
 
-def install(admin_email: str | None = None, log=None) -> dict:
+def aws_base_credential(profile: str) -> dict:
+  """The profile's credential as the controller's environment; SSO and assumed roles carry an Expiration."""
+  exported = json.loads(_run("aws", "configure", "export-credentials", "--profile", profile, "--format", "process"))
+  values = {"AWS_ACCESS_KEY_ID": exported["AccessKeyId"], "AWS_SECRET_ACCESS_KEY": exported["SecretAccessKey"]}
+  if exported.get("SessionToken"):
+    values["AWS_SESSION_TOKEN"] = exported["SessionToken"]
+  return {"values": values, "expiration": exported.get("Expiration")}
+
+
+def install_aws_account(root: Path, aws_profile: str | None, log) -> dict:
+  """With --aws-profile, store the base credential; with it stored (now or by an earlier init), deploy
+  the controller. Without one, cloud accounts stay NoProviderForCapability."""
+  expiration = None
+  if aws_profile:
+    credential = aws_base_credential(aws_profile)
+    expiration = credential["expiration"]
+    # Replaced whole: a long-lived key must not keep the session token of an earlier temporary one.
+    _kubectl("delete", "secret", AWS_BASE_SECRET, "--namespace", NAMESPACE, "--ignore-not-found")
+    _apply_secret(NAMESPACE, AWS_BASE_SECRET, credential["values"])
+    if expiration:
+      log(f"warning: the credential of profile {aws_profile} expires at {expiration}: run init again after that, or use a dedicated IAM user")
+  values = {key: _secret_value(NAMESPACE, AWS_BASE_SECRET, key) for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}
+  if not values["AWS_ACCESS_KEY_ID"]:
+    return {"cloud_account": False}
+
+  provider_dir = root / "platform" / "providers" / "aws_account"
+  log("building the cloud account provider image …")
+  image = _build_and_import(AWS_PROVIDER_IMAGE, provider_dir)
+  log("deploying the cloud account provider (aws_account) …")
+  _deploy(provider_dir / "deploy" / "aws-account-provider.yaml", AWS_PROVIDER_IMAGE, image)
+  # The credential reaches the pod as environment: a new one needs a new pod, an unchanged one keeps it.
+  digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()[:16]
+  patch = {"spec": {"template": {"metadata": {"annotations": {"platform.wasp.silvios.me/credential": digest}}}}}
+  _kubectl("patch", "deployment", AWS_PROVIDER_IMAGE, "--namespace", NAMESPACE, "--type", "merge", "--patch", json.dumps(patch))
+  _kubectl("rollout", "status", f"deployment/{AWS_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
+  return {"cloud_account": True, "aws_base_expires": expiration}
+
+
+def install(admin_email: str | None = None, log=None, aws_profile: str | None = None) -> dict:
   log = log or (lambda message: None)
-  for tool in ("docker", "k3d", "kubectl"):
+  for tool in ("docker", "k3d", "kubectl", *(("aws",) if aws_profile else ())):
     if not shutil.which(tool):
       raise BootstrapError(f"'{tool}' not found in PATH")
   root = repo_root()
@@ -296,6 +337,7 @@ def install(admin_email: str | None = None, log=None) -> dict:
   _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
   _kubectl("rollout", "status", "deployment/local-vcluster-provider", "--namespace", NAMESPACE, "--timeout", "180s")
 
+  cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)
 
   path = config.save({
@@ -303,7 +345,7 @@ def install(admin_email: str | None = None, log=None) -> dict:
     "target": "local", "api_url": API_URL, "context": CONTEXT,
     "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
   })
-  return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": image, "config": str(path), **identity}
+  return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": image, "config": str(path), **identity, **cloud}
 
 
 def seed_templates(root: Path, ref: str, existing: list[dict]) -> list[dict]:

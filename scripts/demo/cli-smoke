@@ -12,7 +12,10 @@ idp/catalog/, a team with two test users, checked in the token, an
 environment shared with that team (the teammate gets a personal kubeconfig whose
 token the Platform API issues (ADR 0028), cannot delete the environment nor get
 its admin kubeconfig, and loses access after unshare, in kubectl too), and the
-templates (list, render, import plan). Stops at the first failure with a
+templates (list, render, import plan), and a cloud account (ADR 0029): refused
+with a clear message without an AWS base credential; with one, the role the
+platform cannot assume stays TrustNotEstablished, and another user neither sees it
+nor registers the same role. Stops at the first failure with a
 non-zero exit code.
 
 It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
@@ -36,6 +39,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 environment="smoke-${RANDOM}"
 team="smoke-team-${RANDOM}"
 shared_environment="smoke-shared-${RANDOM}"
+cloud_account="smoke-aws-${RANDOM}"
+# Documentation account ID: AssumeRole there is always denied, which is what the step checks.
+cloud_role="arn:aws:iam::123456789012:role/platform-smoke-${RANDOM}"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -86,6 +92,7 @@ cleanup() {
   platform environment delete "${environment}" > /dev/null 2>&1 || true
   platform environment delete "${shared_environment}" > /dev/null 2>&1 || true
   platform team delete "${team}" > /dev/null 2>&1 || true
+  platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}" "${render_directory}"
 }
 trap cleanup EXIT
@@ -257,6 +264,30 @@ output="$(expect_failure "team 'guests' not found" \
     --dry-run)"
 expect_output "publish:github: the platform creates the repo" "${output}"
 expect_output "publish:github:pull-request: GitOps belongs to the release" "${output}"
+
+step "cloud account: trust policy, TrustNotEstablished, private to its owner (#193)"
+platform login --test-user
+if output="$(platform cloud account add "${cloud_account}" --role-arn "${cloud_role}" 2>&1)"; then
+  echo "${output}"
+  expect_output '"sts:ExternalId"' "${output}"
+  output="$(expect_failure "TrustNotEstablished" platform cloud account verify "${cloud_account}" --wait)"
+  platform login --test-member
+  output="$(platform cloud account list)"
+  if grep --quiet --fixed-strings -- "${cloud_account}" <<< "${output}"; then
+    echo "${cloud_account} listed for another user" >&2
+    exit 1
+  fi
+  expect_failure "403" platform cloud account remove "${cloud_account}"
+  expect_failure "already registered" \
+    platform cloud account add "${cloud_account}-again" \
+      --role-arn "${cloud_role}"
+  platform login --test-user
+  platform cloud account remove "${cloud_account}"
+else
+  # init ran without --aws-profile: the capability has no provider.
+  expect_output "--aws-profile" "${output}"
+  echo "${output}"
+fi
 
 step "logout"
 platform logout
