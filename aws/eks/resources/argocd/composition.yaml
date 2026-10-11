@@ -22,7 +22,7 @@ spec:
   #       `namespace` no resourceRef → não apontam para o Secret.
   #   (2) a protection Usage exige `spec.by` quando `of` é cross-namespace — e o `by` natural (o
   #       Release do ArgoCD) tem nome com hash não-determinístico, impatchável.
-  # → Proteger o Secret é inviável de forma limpa. Alternativas p/ retomar (ver HANDOFF): (a)
+  # → Proteger o Secret é inviável de forma limpa. Alternativas p/ retomar: (a)
   #   `apiextensions Usage` protegendo o MR ClusterAuth (cluster-scoped, nome determinístico
   #   poc-eks-env01-cluster-auth) em vez do Secret; (c) adiar p/ a fatia de entrega de infra no
   #   spoke, onde o Usage protege recursos AWS cluster-scoped naturais.

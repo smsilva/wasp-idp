@@ -190,7 +190,7 @@ as evitam por desenho:**
 
 **A coluna `Exercitada` diz se a raiz já foi aplicada na AWS ao menos uma vez e teve o resultado
 verificado — não se está de pé agora.** O que está de pé neste momento é pergunta de sessão, não de
-repositório: vive em `HANDOFF.md`, e a resposta confiável é `terraform state list` por raiz.
+repositório: a resposta confiável é `terraform state list` por raiz.
 
 | Raiz | Contas | State key | Entrega | Exercitada |
 |---|---|---|---|---|
