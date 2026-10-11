@@ -7,7 +7,7 @@ time platform environment create greetings-test \
   --wait
 ```
 
-``` { .text .output title="saída" }
+``` { .text .output title="output" }
 provisioning greetings-test (profile: ephemeral) …
   NoProviderForCapability
   Provisioning
@@ -17,4 +17,4 @@ real    0m32s
 ```
 
 !!! note
-    O pedido começa em `NoProviderForCapability` e o provider `local_vcluster`, que roda dentro do `platform-local`, o assume em seguida. **Não há segundo terminal.**
+    The request starts at `NoProviderForCapability` and the `local_vcluster` provider, which runs inside `platform-local`, picks it up right after. **There is no second terminal.**

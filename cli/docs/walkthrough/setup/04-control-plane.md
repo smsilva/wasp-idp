@@ -3,12 +3,12 @@
 ```bash
 time platform init \
   --target local \
-  --admin voce@example.com
+  --admin you@example.com
 
 cat ~/.config/platform/config.yaml
 ```
 
-``` { .text .output title="saída" }
+``` { .text .output title="output" }
 creating cluster platform-local …
 applying CRDs …
 deploying Keycloak …

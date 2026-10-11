@@ -301,3 +301,38 @@
 .md-typeset details > summary + .highlight {
   margin-top: 1em;
 }
+
+/* A command followed by its output reads as one terminal: the output continues the command panel after a
+   blank line, without its own label nor copy button (the copy button keeps copying the commands only). */
+.md-typeset .highlight.language-bash:has(+ .highlight.output) pre {
+  margin-bottom: 0;
+}
+
+.md-typeset .highlight.language-bash:has(+ .highlight.output) pre > code {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-bottom: 0;
+}
+
+.md-typeset .highlight.language-bash + .highlight.output {
+  margin-top: 0;
+}
+
+.md-typeset .highlight.language-bash + .highlight.output > .filename,
+.md-typeset .highlight.language-bash + .highlight.output .md-clipboard {
+  display: none;
+}
+
+.md-typeset .highlight.language-bash + .highlight.output pre {
+  margin-top: 0;
+}
+
+.md-typeset .highlight.language-bash + .highlight.output pre > code {
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--wasp-term-border);
+  border-top: 0;
+  border-left: 3px solid var(--md-typeset-a-color);
+  border-radius: 0 0 8px 8px;
+  padding-top: 1.2em;
+}

@@ -7,4 +7,4 @@ platform whoami --output json
 ```
 
 !!! note
-    O `sub` é o **ID imutável** do usuário no Keycloak; é ele que vai para a trilha de auditoria.
+    The `sub` is the user's **immutable ID** in Keycloak; it is what goes into the audit trail.

@@ -12,4 +12,4 @@ platform environment list --output json
 ```
 
 !!! note
-    Cada ambiente ganha a **próxima porta livre** da faixa `7100`–`7119` (`demo` fica na `7101`).
+    Each environment gets the **next free port** in the `7100`–`7119` range (`demo` gets `7101`).

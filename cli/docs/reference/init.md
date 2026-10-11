@@ -1,0 +1,48 @@
+# Control plane
+
+`platform init` brings up the local control plane: the `platform-local` k3d cluster, the CRDs, Keycloak, the Platform API, the `local_vcluster` and `scm_github` providers and, with an AWS credential, the `aws_account` provider.
+
+```bash
+platform init \
+  --target local \
+  --admin you@example.com
+```
+
+| Flag | Meaning |
+|---|---|
+| `--target local` | the only target today |
+| `--admin <email>` | joins `platform-admins` on its first Google sign-in; other users land only in `platform-users` |
+| `--aws-profile <profile>` | the credential of that `~/.aws` profile becomes the platform base credential for [cloud accounts](cloud-accounts.md) |
+
+## Google sign-in
+
+Export the OAuth client before `init`; the Google side is in `platform/keycloak/README.md`. Without it, `init` brings everything up and warns that Google sign-in is disabled.
+
+```bash
+export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
+
+export GOOGLE_CLIENT_SECRET=<secret>
+```
+
+## What `init` remembers
+
+`--admin`, the Google credentials and the AWS base credential are stored in the cluster, so later runs do not repeat them. Running `init` again is safe: the cluster is reused.
+
+If the AWS credential is temporary (SSO or an assumed role), `init` warns when it expires and must be run again. Prefer a dedicated IAM user with permission only for `sts:AssumeRole` and `sts:GetCallerIdentity`.
+
+## Config file
+
+```bash
+cat ~/.config/platform/config.yaml
+```
+
+``` { .yaml .output title="output" }
+target: local
+api_url: http://127.0.0.1:9090
+context: k3d-platform-local
+issuer: http://localhost:8180/realms/platform
+client_id: platform-cli
+```
+
+!!! warning
+    Do not run `init` with a changed Keycloak theme while someone is mid sign-in: the sign-in session lives in the Keycloak pod memory, and the Google callback hits a server that forgot it.
