@@ -2,7 +2,7 @@
 import base64
 import copy
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from scm_github_provider.component_creation import TRAILER, CreationReconciler, summarize_app_spec
+from scm_github_provider.reconciler import format_time
 from scm_github_provider.github import GitHubApp
 from scm_github_provider.store import AlreadyExists
 
@@ -31,7 +32,8 @@ class FakeGitHub:
     self.refs = {}  # full name -> sha of main
     self.objects = {}  # sha -> blob, tree or commit
     self.calls = []
-    self.fail = {}  # "METHOD /path suffix" -> status, while set
+    self.fail = {}  # "METHOD /path suffix" -> status, or (status, body, headers), while set
+    self.protected = set()  # full names whose main is protected
 
   def _sha(self, value) -> str:
     sha = f"{len(self.objects) + 1:040x}"
@@ -45,9 +47,10 @@ class FakeGitHub:
   def handler(self, request: httpx.Request) -> httpx.Response:
     method, path = request.method, request.url.path
     self.calls.append(f"{method} {path}")
-    for key, status in self.fail.items():
+    for key, answer in self.fail.items():
       if f"{method} {path}".endswith(key):
-        return httpx.Response(status, json={"message": "Server Error"})
+        status, message, headers = answer if isinstance(answer, tuple) else (answer, "Server Error", {})
+        return httpx.Response(status, json={"message": message}, headers=headers)
     body = json.loads(request.content) if request.content else {}
     if path.endswith("/access_tokens"):
       return httpx.Response(201, json={"token": "ghs_fake"})
@@ -81,6 +84,12 @@ class FakeGitHub:
       return httpx.Response(201, json={"sha": self._sha({"message": body["message"], "tree": body["tree"], "parents": body["parents"]})})
     if method == "PATCH" and rest == "git/refs/heads/main":
       self.refs[full_name] = body["sha"]
+      return httpx.Response(200, json={})
+    if method == "PUT" and rest == "branches/main/protection":
+      if self.repos[full_name].get("private"):  # GitHub Free: no protection for private repos
+        return httpx.Response(403, json={"message": "Upgrade to GitHub Pro or make this repository public to enable this feature."})
+      assert body["required_pull_request_reviews"] == {"required_approving_review_count": 0}
+      self.protected.add(full_name)
       return httpx.Response(200, json={})
     if method == "POST" and rest == "git/refs":
       self.refs[full_name] = body["sha"]
@@ -118,6 +127,9 @@ class FakeObjects:
       raise AlreadyExists(body["metadata"]["name"])
     self.version += 1
     self.items[body["metadata"]["name"]] = {**copy.deepcopy(body), "metadata": {**body["metadata"], "resourceVersion": str(self.version)}}
+
+  def delete(self, name):
+    self.items.pop(name, None)
 
   def replace(self, body):
     assert body["metadata"]["resourceVersion"] == self.items[body["metadata"]["name"]]["metadata"]["resourceVersion"]
@@ -158,6 +170,8 @@ class World:
     self.components = FakeObjects()
     self.tmp_path = tmp_path
     self.fetches = 0
+    self.now = NOW
+    self.clock = 0.0
     self.restart()
 
   def restart(self):
@@ -170,12 +184,14 @@ class World:
 
     self.reconciler = CreationReconciler(
       self.creations, self.connections, self.components, FakeSecrets(), self.workdir,
-      github_factory=self.github.factory, fetch_source=fetch, now=lambda: NOW,
+      github_factory=self.github.factory, fetch_source=fetch, now=lambda: self.now, clock=lambda: self.clock,
     )
 
-  def run(self):
+  def run(self, wait=3600):
+    """One pass, `wait` seconds after the previous one: by default past any backoff."""
+    self.clock += wait
     self.reconciler.reconcile(self.creations.get("greeting-api"))
-    return self.creations.get("greeting-api")["status"]
+    return (self.creations.get("greeting-api") or {}).get("status")
 
 
 def conditions(status) -> dict:
@@ -191,9 +207,10 @@ def test_every_step_runs_in_order(world):
   status = world.run()
   assert conditions(status) == {
     "Validated": ("True", "Validated"), "Rendered": ("True", "Rendered"), "RepoCreated": ("True", "Created"),
-    "Pushed": ("True", "Pushed"), "Registered": ("True", "Registered"), "Ready": ("True", "Created"),
+    "Pushed": ("True", "Pushed"), "Protected": ("True", "Protected"), "Registered": ("True", "Registered"), "Ready": ("True", "Created"),
   }
-  assert [item["type"] for item in status["conditions"]] == ["Validated", "Rendered", "RepoCreated", "Pushed", "Registered", "Ready"]
+  assert [item["type"] for item in status["conditions"]] == ["Validated", "Rendered", "RepoCreated", "Pushed", "Protected", "Registered", "Ready"]
+  assert "wasp-foundry/greeting-api" in world.github.protected
   assert status["repo"] == {"fullName": "wasp-foundry/greeting-api", "url": "https://github.com/wasp-foundry/greeting-api", "nodeId": "R_greeting-api"}
   assert world.github.repos["wasp-foundry/greeting-api"]["private"] is False
   # The rendered content leaves the volume once the creation is Ready.
@@ -243,8 +260,8 @@ def test_resumes_between_repo_created_and_pushed(world):
   world.github.fail["/git/blobs"] = 502
   status = world.run()
   assert conditions(status)["RepoCreated"] == ("True", "Created")
-  assert conditions(status)["Pushed"] == ("False", "GitHubError")
-  assert conditions(status)["Ready"] == ("False", "GitHubError")
+  assert conditions(status)["Pushed"] == ("False", "GitHubUnavailable")
+  assert conditions(status)["Ready"] == ("False", "GitHubUnavailable")
   assert status["repo"]["nodeId"] == "R_greeting-api"
 
   # The controller dies: the volume is gone, the CR keeps its status.
@@ -315,3 +332,107 @@ def test_ready_creations_are_left_alone(world):
 def test_summarize_app_spec_of_the_seed():
   assert summarize_app_spec((SEED / "app-spec.yaml").read_text()) == {"containers": ["api"], "resources": ["postgres"], "routes": ["/"]}
   assert summarize_app_spec("- not a mapping") == {}
+
+
+def test_a_private_repo_without_protection_still_ends_ready(tmp_path):
+  world = World(tmp_path, creation(visibility="private"))
+  status = world.run()
+  assert conditions(status)["Protected"] == ("False", "ProtectionUnavailable")
+  assert "Upgrade to GitHub Pro" in next(item["message"] for item in status["conditions"] if item["type"] == "Protected")
+  assert conditions(status)["Registered"] == ("True", "Registered")
+  assert conditions(status)["Ready"] == ("True", "Created")
+  assert "main not protected" in next(item["message"] for item in status["conditions"] if item["type"] == "Ready")
+  assert world.components.get("greeting-api") is not None
+
+
+def test_a_rate_limit_waits_for_retry_after(world):
+  world.github.fail["/git/blobs"] = (403, "You have exceeded a secondary rate limit.", {"retry-after": "900"})
+  status = world.run()
+  assert conditions(status)["Pushed"] == ("False", "RateLimited")
+  assert conditions(status)["Ready"] == ("False", "RateLimited")
+  del world.github.fail["/git/blobs"]
+  # Past the backoff cap (600 s) but before retry-after: no call to GitHub.
+  calls = len(world.github.calls)
+  world.run(wait=700)
+  assert len(world.github.calls) == calls
+  status = world.run(wait=300)
+  assert conditions(status)["Ready"] == ("True", "Created")
+
+
+def test_primary_rate_limit_waits_for_the_reset(world, monkeypatch):
+  monkeypatch.setattr("scm_github_provider.github.time.time", lambda: 1_000_000)
+  world.github.fail["POST /orgs/wasp-foundry/repos"] = (403, "API rate limit exceeded", {"x-ratelimit-remaining": "0", "x-ratelimit-reset": str(1_000_000 + 1200)})
+  status = world.run()
+  assert conditions(status)["RepoCreated"] == ("False", "RateLimited")
+  assert world.reconciler.backoff["greeting-api"][1] == world.clock + 1200
+
+
+def test_github_outage_backs_off_and_doubles(world):
+  world.github.fail["/git/blobs"] = 503
+  world.run()
+  assert world.reconciler.backoff["greeting-api"][0] == 30
+  calls = len(world.github.calls)
+  world.run(wait=10)  # still waiting
+  assert len(world.github.calls) == calls
+  world.run(wait=30)
+  assert world.reconciler.backoff["greeting-api"][0] == 60
+  del world.github.fail["/git/blobs"]
+  status = world.run(wait=60)
+  assert conditions(status)["Ready"] == ("True", "Created")
+  assert "greeting-api" not in world.reconciler.backoff
+
+
+def test_github_unreachable_is_transient(world):
+  def unreachable(request):
+    raise httpx.ConnectError("connection refused", request=request)
+
+  world.github.handler = unreachable
+  status = world.run()
+  assert conditions(status)["Ready"] == ("False", "GitHubUnavailable")
+  assert "greeting-api" in world.reconciler.backoff
+
+
+def test_a_definitive_failure_stops(world):
+  world.github.fail["/git/trees"] = (422, "tree.path contains a malformed path component", {})
+  status = world.run()
+  assert conditions(status)["Pushed"] == ("False", "GitHubRejected")
+  assert conditions(status)["Ready"] == ("False", "GitHubRejected")
+  assert "malformed path" in next(item["message"] for item in status["conditions"] if item["type"] == "Ready")
+  del world.github.fail["/git/trees"]
+  calls = len(world.github.calls)
+  world.run()
+  assert len(world.github.calls) == calls
+
+
+def test_ready_creation_is_removed_after_24h_and_the_index_stays(world):
+  world.run()
+  world.now = NOW + timedelta(hours=23)
+  world.run()
+  assert world.creations.get("greeting-api") is not None
+  world.now = NOW + timedelta(hours=24)
+  world.reconciler.reconcile(world.creations.get("greeting-api"))
+  assert world.creations.get("greeting-api") is None
+  assert world.components.get("greeting-api") is not None
+
+
+def test_a_final_failure_is_removed_after_24h(world):
+  world.github.outside("wasp-foundry/greeting-api")
+  world.run()
+  world.now = NOW + timedelta(hours=24, minutes=1)
+  world.run()
+  assert world.creations.get("greeting-api") is None
+  assert world.github.writes() == []
+
+
+def test_a_transient_failure_is_never_removed(world):
+  world.github.fail["/git/blobs"] = 502
+  world.run()
+  world.now = NOW + timedelta(days=3)
+  world.run()
+  assert world.creations.get("greeting-api") is not None
+
+
+def test_ready_since_is_the_transition_time(world):
+  status = world.run()
+  ready = next(item for item in status["conditions"] if item["type"] == "Ready")
+  assert ready["lastTransitionTime"] == format_time(NOW)

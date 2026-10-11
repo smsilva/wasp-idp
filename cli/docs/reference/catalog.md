@@ -46,10 +46,26 @@ platform catalog component get <name>
 | `Validated` | `ConnectionNotFound`, `ConnectionNotReady` |
 | `Rendered` | `StepFailed` (fetch or render of the template) |
 | `RepoCreated` | `RepoAlreadyExists`: a repo with that name that this request did not create; it is never touched. `RepoGone`: created, then deleted outside the platform |
-| `Pushed` | `GitHubError` |
+| `Pushed` | a GitHub failure (below) |
+| `Protected` | never fails the creation: `ProtectionUnavailable` is a warning, `main` stays unprotected (GitHub Free has no branch protection for private repos) |
 | `Registered` | `ComponentExists`: the index has that name for another repo |
 
-`GitHubError` and `StepFailed` are retried every 15 s; `--wait` keeps waiting on them and stops at the others. The index is a read mirror of the repo's `catalog-info.yaml`: no command changes or deletes a component, and deleting the repo is done on GitHub.
+`Protected` makes `main` change only through a pull request, with no approval required: the org may have a single member, who cannot approve their own PR (ADR 0017). On a private repo of a GitHub Free org, `--wait` ends with the warning:
+
+``` { .text .output title="output" }
+⚠ main of wasp-foundry/hello-api is not protected: GitHub answered 403: PUT /repos/wasp-foundry/hello-api/branches/main/protection: Upgrade to GitHub Pro or make this repository public to enable this feature.
+```
+
+A GitHub failure in any step is one of:
+
+| Reason | Meaning | Retried |
+|---|---|---|
+| `RateLimited` | GitHub's rate limit | after the `retry-after` or `x-ratelimit-reset` GitHub sends |
+| `GitHubUnavailable` | GitHub answered 5xx, or could not be reached | with backoff, from 30 s doubling up to 10 min |
+| `GitHubRejected` | any other 4xx, with GitHub's message | no: the creation stops |
+| `StepFailed` | the cluster unavailable, or an unexpected error | with backoff |
+
+The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` shows only the index, and a stopped name is free to request again. The index is a read mirror of the repo's `catalog-info.yaml`: no command changes or deletes a component, and deleting the repo is done on GitHub.
 
 ## Import from Backstage
 

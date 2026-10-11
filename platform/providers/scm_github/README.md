@@ -25,9 +25,15 @@ Cada `ComponentCreation` passa por um passo idempotente por condition, retomáve
 2. `Rendered`: busca o template no `source.ref` copiado para o CR (`git`, na imagem), renderiza com `wasp_templates` num `emptyDir` (`/work/<uid>`), anota `platform.wasp.silvios.me/template` e `github.com/project-slug` no `catalog-info.yaml` e troca o `docs/prd.md` pelo `spec.prd`. Grava `status.files` e `status.appSpec`. Depois de um restart, renderiza de novo: o ref é fixo.
 3. `RepoCreated`: `POST /orgs/{org}/repos` com `auto_init: true` e grava `status.repo` (com o `nodeId`) na hora. Repo existente cujo `node_id` não é o do status → `RepoAlreadyExists`, sem tocar no repo.
 4. `Pushed`: Git Data API (blobs → tree → commit sem parent → `refs/heads/main` com `force`). O `auto_init` existe porque a Git Data API recusa repo vazio (`409`); o commit sem parent substitui o do README, e o repo fica com um commit só. Se a `main` já aponta para um commit com o trailer `Platform-Component-Creation: <nome>`, o passo está feito.
-5. `Registered`: cria ou atualiza o `Component` do grupo `catalog.platform.wasp.silvios.me` com os dados do `catalog-info.yaml` renderizado, `lifecycle: experimental` e `source` (`repo`, `template`, `origin: created`). Um índice com esse nome para outro repo → `ComponentExists`.
+5. `Protected`: `PUT /repos/{repo}/branches/main/protection` com PR obrigatório, `required_approving_review_count: 0` e `enforce_admins: false` (a org pode ter um só membro, ADR 0017). Um `403` que não é rate limit (repo privado numa org GitHub Free) → `Protected=False, reason=ProtectionUnavailable`: é aviso, o `Ready` não espera por ele.
+6. `Registered`: cria ou atualiza o `Component` do grupo `catalog.platform.wasp.silvios.me` com os dados do `catalog-info.yaml` renderizado, `lifecycle: experimental` e `source` (`repo`, `template`, `origin: created`). Um índice com esse nome para outro repo → `ComponentExists`.
 
-Falha de GitHub ou do cluster vira `GitHubError`/`StepFailed` no primeiro passo pendente e repete no resync (15 s); o status só é gravado quando muda. Backoff, a proteção da `main` e a remoção após 24 h são a #280.
+Uma falha vira `reason` no primeiro passo pendente e no `Ready`; o status só é gravado quando muda.
+
+- **Transitória:** `RateLimited` (`403`/`429` com `retry-after` ou `x-ratelimit-remaining: 0`), `GitHubUnavailable` (5xx, ou GitHub inalcançável) e `StepFailed` (cluster, erro inesperado), além dos reasons da connection. Repete com backoff de 30 s dobrando até 10 min, em memória como o das connections; um rate limit espera pelo menos até o `retry-after`/`x-ratelimit-reset`.
+- **Definitiva:** `GitHubRejected` (qualquer outro 4xx, com a mensagem do GitHub), `RepoAlreadyExists`, `RepoGone` e `ComponentExists`. A criação para.
+
+Uma criação `Ready`, ou parada num reason definitivo, é removida 24 h depois (`lastTransitionTime` do `Ready`); o índice `Component` fica.
 
 ## Quando revalida
 

@@ -1,7 +1,8 @@
 # The request to create a component through the golden path (#204): the Platform API writes it after
 # the synchronous checks, and the scm_github provider runs one idempotent step per condition
-# (Validated, Rendered, RepoCreated, Pushed, Registered), then Ready. The rendered content lives in the
-# controller's volume, never in this CR.
+# (Validated, Rendered, RepoCreated, Pushed, Protected, Registered), then Ready; Protected=False with
+# reason ProtectionUnavailable is a warning. Removed 24 h after Ready or a final failure (#280), the
+# component index stays. The rendered content lives in the controller's volume, never in this CR.
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:

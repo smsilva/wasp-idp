@@ -67,6 +67,13 @@ class ObjectStore:
         raise AlreadyExists(body["metadata"]["name"]) from error
       raise
 
+  def delete(self, name: str) -> None:
+    try:
+      self.api.delete_namespaced_custom_object(self.group, VERSION, self.namespace, self.plural, name)
+    except client.ApiException as error:
+      if error.status != 404:
+        raise
+
   def replace(self, body: dict) -> dict:
     """body.metadata.resourceVersion makes a concurrent change a 409."""
     return self.api.replace_namespaced_custom_object(self.group, VERSION, self.namespace, self.plural, body["metadata"]["name"], body)
