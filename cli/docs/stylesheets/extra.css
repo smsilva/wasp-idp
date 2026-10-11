@@ -304,6 +304,9 @@
 
 /* A command followed by its output reads as one terminal: the output continues the command panel after a
    blank line, without its own label nor copy button (the copy button keeps copying the commands only). */
+/* On narrow screens Material puts the block margin on the .highlight div (full bleed), not on the pre:
+   both go to zero, or a band of page background splits the terminal on phones. */
+.md-typeset .highlight.language-bash:has(+ .highlight.output),
 .md-typeset .highlight.language-bash:has(+ .highlight.output) pre {
   margin-bottom: 0;
 }
@@ -320,7 +323,8 @@
 }
 
 .md-typeset .highlight.language-bash + .highlight.output > .filename,
-.md-typeset .highlight.language-bash + .highlight.output .md-clipboard {
+.md-typeset .highlight.language-bash + .highlight.output .md-clipboard,
+.md-typeset .highlight.language-bash + .highlight.output .md-code__nav {
   display: none;
 }
 
