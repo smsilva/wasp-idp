@@ -2,15 +2,22 @@ from typing import Annotated
 
 import typer
 
-from .. import auth
+from .. import auth, config
+from ..bootstrap import local
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, fail, print_json, success
 
 
 def login(
   use_device_code: Annotated[bool, typer.Option("--use-device-code", help="Sign in from another device (SSH, containers, no browser).")] = False,
+  # Local test identities (#179): hidden, they exist only in the realm of the local target.
+  test_user: Annotated[bool, typer.Option("--test-user", hidden=True)] = False,
+  test_admin: Annotated[bool, typer.Option("--test-admin", hidden=True)] = False,
 ):
   """Sign in to the platform with your Google account."""
+  if test_user or test_admin:
+    _login_test_user(local.SMOKE_ADMIN if test_admin else local.SMOKE_USER)
+    return
   try:
     oidc = auth.Oidc()
     if use_device_code:
@@ -28,12 +35,29 @@ def login(
   success(f"Logged in as {_who(me)}")
 
 
+def _login_test_user(username: str) -> None:
+  """Password grant on the local test client: the CLI flow without a browser (scripts/demo/cli-smoke)."""
+  flag = "--test-admin" if username == local.SMOKE_ADMIN else "--test-user"
+  if config.load().get("target") != "local":
+    fail(f"{flag} is only supported on the local target")
+  try:
+    password = local.smoke_password(username)
+    tokens = auth.Oidc(client_id=local.SMOKE_CLIENT_ID).login_password(username, password)
+    auth.save_credentials(tokens, client_id=local.SMOKE_CLIENT_ID)
+    me = PlatformClient(token=lambda: tokens["access_token"]).me()
+  except (local.BootstrapError, auth.AuthError, ApiError) as error:
+    fail(str(error))
+  success(f"Logged in as {_who(me)}")
+
+
 def logout():
   """Sign out and revoke the session."""
   credentials = auth.load_credentials()
   if credentials and credentials.get("refresh_token"):
     try:
-      auth.Oidc().revoke(credentials["refresh_token"])
+      client_id = credentials.get("client_id")
+      oidc = auth.Oidc(client_id=client_id) if client_id else auth.Oidc()
+      oidc.revoke(credentials["refresh_token"])
     except auth.AuthError:
       pass
   auth.delete_credentials()

@@ -1,0 +1,106 @@
+#!/bin/bash
+set -e
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} [--skip-init]
+
+Runs the CLI walkthrough end to end without a browser (#179), on the local target:
+init, login as the test user, the refusals a non-admin gets, an environment
+created and deleted, then login as the test admin and the catalog import of
+idp/catalog/. Stops at the first failure with a non-zero exit code.
+
+  --skip-init  reuse the running platform-local instead of running 'platform init'
+USAGE
+}
+
+skip_init="false"
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --skip-init) skip_init="true"; shift ;;
+    --help) show_usage; exit 0 ;;
+    *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+  esac
+done
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+environment="smoke-${RANDOM}"
+
+# The CLI of this checkout, not whatever 'platform' is installed.
+platform() {
+  uv run --quiet --project "${repo_root}/cli" platform "$@"
+}
+
+step() {
+  printf '\n\033[1m== %s\033[0m\n' "$*"
+}
+
+expect_output() {
+  local expected="${1?}"
+  local output="${2?}"
+  if ! grep --quiet --fixed-strings -- "${expected}" <<< "${output}"; then
+    echo "expected '${expected}' in:" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
+}
+
+# Runs a command that must fail, and checks its message.
+expect_failure() {
+  local expected="${1?}"
+  shift
+  local output
+  if output="$("$@" 2>&1)"; then
+    echo "expected '$*' to fail, it succeeded:" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
+  expect_output "${expected}" "${output}"
+  echo "${output}"
+}
+
+cleanup() {
+  # An environment left behind keeps a vcluster and a host port busy.
+  platform environment delete "${environment}" > /dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+cd "${repo_root}"
+
+if [[ "${skip_init}" == "false" ]]; then
+  step "platform init --target local"
+  platform init --target local
+fi
+
+step "login as the test user (platform-users)"
+platform login --test-user
+expect_output "platform-smoke@platform.local (platform-users)" "$(platform whoami)"
+
+step "a non-admin cannot create a domain"
+expect_failure "403" \
+  platform catalog domain create smoke-forbidden \
+    --owner team-platform
+
+step "environment create --wait"
+platform environment create "${environment}" \
+  --profile ephemeral \
+  --wait
+expect_output "${environment}" "$(platform environment list)"
+
+step "environment delete"
+platform environment delete "${environment}"
+
+step "login as the test admin (platform-admins)"
+platform login --test-admin
+expect_output "platform-smoke-admin@platform.local (platform-admins, platform-users)" "$(platform whoami)"
+
+step "catalog import idp/catalog/"
+platform catalog import idp/catalog/ --yes
+expect_output "nothing to do" "$(platform catalog import idp/catalog/)"
+
+step "logout"
+platform logout
+expect_failure "not logged in" platform whoami
+
+printf '\n\033[32m✓ cli-smoke passed\033[0m\n'

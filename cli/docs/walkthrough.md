@@ -283,10 +283,20 @@ platform whoami
 
 O `platform-local` continua no ar para a próxima rodada; para desmontar tudo, volte ao passo 0.
 
+## Sem navegador: `scripts/demo/cli-smoke`
+
+O roteiro acima tem um passo humano, o login. O `scripts/demo/cli-smoke` (#179) roda o fluxo sem ninguém: `init`, login com o usuário de teste (`platform-users`), a recusa `403` ao criar um domínio, um ambiente criado com `--wait` e apagado, login com o admin de teste, `catalog import idp/catalog/` (aplicado e depois `nothing to do`) e `logout`. Ele para na primeira falha, com código diferente de zero.
+
+```bash
+scripts/demo/cli-smoke              # do zero, com platform init
+scripts/demo/cli-smoke --skip-init  # reaproveita o platform-local que já está no ar
+```
+
+Os usuários `platform-smoke` e `platform-smoke-admin` e o client `platform-smoke` existem só no target local. A justificativa do password grant está em `platform/keycloak/README.md`.
+
 ## Ideias para tornar o roteiro repetível
 
 - **Script `scripts/demo/cli-walkthrough` (#178):** roda os passos em sequência, pausa antes de cada um (Enter para seguir) e para no login esperando o device code. Serve para apresentar e para conferir antes de um merge.
-- **Teste de fumaça sem humano (#179):** o login é o único passo manual. Um usuário local de teste no realm (só no target local, criado pelo `init` com senha aleatória num Secret) e o grant de senha desligado para todos os outros clients permitiriam um `platform login --test-user` e, com ele, rodar o roteiro inteiro em CI.
 - **Medir (#180):** guardar o tempo de cada etapa (como na tabela acima) para perceber quando o `init` ou o provider ficam mais lentos.
 - **Gravar (#181):** `asciinema rec` durante o roteiro gera um vídeo de terminal leve para o README e para o deck.
 - **Evoluir junto com a CLI (#182):** cada comando novo (`release create`, `catalog component create`) entra aqui como um passo, com a saída esperada.

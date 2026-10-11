@@ -36,6 +36,21 @@ O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado
 
 Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o realm sobe sem o Identity Provider e o `init` avisa. Sem `--admin`, o mapper `bootstrap-admin` fica de fora.
 
+## Identidades de teste (só no target local)
+
+O `platform init --target local` junta ao realm o `realm-smoke.yaml` (#179). Ele não existe em nenhum outro target.
+
+| Item | Valor |
+|---|---|
+| Client `platform-smoke` | público, só password grant (`directAccessGrantsEnabled`), mesmos scopes do `platform-cli` |
+| Usuário `platform-smoke` | `platform-users` |
+| Usuário `platform-smoke-admin` | `platform-admins` e `platform-users` |
+| Senhas | aleatórias, geradas uma vez no Secret `keycloak-smoke-user` (`platform-auth`) e lidas pelo keycloak-config-cli via `$(env:…)` |
+
+`platform login --test-user` e `--test-admin` (ocultos no `--help`) leem a senha do Secret pelo `kubectl` e fazem o password grant nesse client. Fora do target local, o comando recusa. É o que deixa o `scripts/demo/cli-smoke` rodar o fluxo da CLI sem navegador e sem conta Google.
+
+**Por que o password grant aqui:** o OAuth 2.1 desaconselha esse grant, e o `platform-cli` continua sem ele. Ele é aceitável neste caso porque o client é dedicado, existe só no cluster local de quem roda o `init`, serve só a teste, e as senhas nunca saem do Secret nem entram no repo.
+
 ## Lado do Google (uma vez, manual)
 
 1. No Google Cloud, configure a tela de consentimento OAuth como External, em modo **Testing**, com os e-mails que vão logar em **Test users**. Assim não há processo de verificação.
