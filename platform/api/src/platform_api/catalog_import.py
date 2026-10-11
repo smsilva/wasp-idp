@@ -7,12 +7,16 @@ it matches the one the caller reviewed (planHash).
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import Any
 
-from pydantic import ValidationError
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .catalog import CREATED_BY_ANNOTATION, KINDS, EntityRequest, InvalidRequest, Kind, spec_from
+from .auth import Principal, current_principal
+from .catalog import CREATED_BY_ANNOTATION, KINDS, EntityRequest, InvalidRequest, Kind, manifest, spec_from
 from .environments import ADMIN_GROUP, is_owner_or_admin
-from .state import NotFound
+from .journal import Journal
+from .state import AlreadyExists, Conflict, NotFound
 
 MAX_DOCUMENTS = 500
 ACTIONS = ("create", "update", "unchanged", "skip", "forbidden", "error")
@@ -281,3 +285,73 @@ def make_plan(documents: list[dict], state, principal) -> Plan:
     if item.action is None:
       decide(item, declared, state, principal)
   return Plan(items)
+
+
+FAILURES = {
+  AlreadyExists: "created by someone else since the plan was made",
+  Conflict: "changed since the plan was made",
+  NotFound: "deleted since the plan was made",
+}
+
+
+class PlanRejected(Exception):
+  """An apply that wrote nothing, or stopped midway; the error body carries the plan."""
+
+  def __init__(self, status: int, message: str, plan: dict):
+    super().__init__(message)
+    self.status = status
+    self.message = message
+    self.plan = plan
+
+
+class SourceDocument(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  source: str
+  document: Any = None
+
+
+class ImportRequest(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  documents: list[SourceDocument] = Field(max_length=MAX_DOCUMENTS)
+  dryRun: bool = True
+  planHash: str | None = None
+
+
+def apply(plan: Plan, state, journal: Journal, principal: Principal) -> None:
+  """Writes in plan order and stops at the first failure. Not transactional: what was written stays,
+  and importing again converges, because it shows up as unchanged."""
+  for item in plan.writes:
+    kind = KINDS[item.plural]
+    entry = journal.record(item.action, kind.name, item.name, item.spec, principal.actor)
+    try:
+      if item.action == "create":
+        state.create(item.plural, manifest(kind, item.name, item.spec, principal.sub))
+      else:
+        # The object as read, spec replaced: created-by and resourceVersion stay.
+        state.replace(item.plural, {**item.current, "spec": item.spec})
+    except Exception as error:
+      item.failed = FAILURES.get(type(error), str(error))
+      done = sum(1 for written in plan.writes if written.applied)
+      raise PlanRejected(409, f"{kind.singular} '{item.name}': {item.failed}; {done} applied before it, import again to converge", plan.view(applied=False))
+    journal.mark_applied(entry)
+    item.applied = True
+
+
+def router(state, journal: Journal) -> APIRouter:
+  routes = APIRouter(prefix="/v1/catalog")
+
+  @routes.post("/import")
+  def import_catalog(request: ImportRequest, principal: Principal = Depends(current_principal)):
+    plan = make_plan([document.model_dump() for document in request.documents], state, principal)
+    if request.dryRun:
+      return plan.view(applied=False)
+    if plan.blocked:
+      raise PlanRejected(422, "the plan has entities that cannot be imported: nothing was applied", plan.view(applied=False))
+    if request.planHash is not None and request.planHash != plan.hash:
+      raise PlanRejected(409, "catalog changed since the plan was made: review the plan again", plan.view(applied=False))
+    apply(plan, state, journal, principal)
+    return plan.view(applied=True)
+
+  return routes

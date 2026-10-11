@@ -1,4 +1,14 @@
 ---
+# The platform team's own area: the shared infrastructure every product deploys to.
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-domain
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: platform
+  description: The platform team's own area — shared infrastructure for every product
+spec:
+  owner: group:default/team-platform
+---
 # Shared platform infrastructure. The k3d environment clusters are not part of any
 # product System: every Component created by the python-service template depends on
 # them (#118).
@@ -10,6 +20,7 @@ metadata:
   description: Shared platform infrastructure — the environment clusters every app deploys to
 spec:
   owner: group:default/team-platform
+  domain: platform
 ---
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-resource
 apiVersion: backstage.io/v1alpha1
