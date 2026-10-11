@@ -39,3 +39,10 @@ def test_stores_are_per_plural():
   state.create("systems", {"metadata": {"name": "greeter"}, "spec": {}})
   assert state.get("domains", "greeter")["metadata"]["uid"] != state.get("systems", "greeter")["metadata"]["uid"]
   assert state.list("environments") == []
+
+
+def test_api_role_can_update_catalog():
+  deploy = Path(__file__).parents[1] / "deploy" / "platform-api.yaml"
+  role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
+  rule = next(rule for rule in role["rules"] if CATALOG_GROUP in rule["apiGroups"])
+  assert {"create", "update", "delete"} <= set(rule["verbs"])

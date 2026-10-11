@@ -32,6 +32,8 @@ class Conflict(Exception):
 class StateWriter(Protocol):
   def create(self, plural: str, body: dict) -> dict: ...
 
+  def replace(self, plural: str, body: dict) -> dict: ...
+
   def replace_status(self, plural: str, body: dict) -> dict: ...
 
   def delete(self, plural: str, name: str, uid: str | None = None) -> None: ...
@@ -63,6 +65,18 @@ class KubeApplyWriter:
     except self._api_exception as error:
       if error.status == 409:
         raise AlreadyExists(body["metadata"]["name"]) from error
+      raise
+
+  def replace(self, plural: str, body: dict) -> dict:
+    """Writes the whole object; body.metadata.resourceVersion makes a concurrent change a 409."""
+    name = body["metadata"]["name"]
+    try:
+      return self.api.replace_namespaced_custom_object(group_of(plural), VERSION, self.namespace, plural, name, body)
+    except self._api_exception as error:
+      if error.status == 409:
+        raise Conflict(name) from error
+      if error.status == 404:
+        raise NotFound(name) from error
       raise
 
   def replace_status(self, plural: str, body: dict) -> dict:

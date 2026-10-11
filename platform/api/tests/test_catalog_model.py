@@ -6,6 +6,7 @@ from platform_api.catalog import (
   CREATED_BY_ANNOTATION, KINDS, EntityRequest, InvalidRequest, dependents, manifest, spec_from, view,
 )
 from platform_api.environments import is_owner_or_admin
+from platform_api.state import Conflict, NotFound
 
 DOMAINS, SYSTEMS, RESOURCES = KINDS["domains"], KINDS["systems"], KINDS["resources"]
 
@@ -82,3 +83,22 @@ def test_is_owner_or_admin_reads_the_given_annotation():
   obj = {"metadata": {"annotations": {CREATED_BY_ANNOTATION: "user-1"}}}
   assert is_owner_or_admin(obj, P(), CREATED_BY_ANNOTATION)
   assert not is_owner_or_admin(obj, P())
+
+
+def test_spec_from_names_missing_fields():
+  with pytest.raises(InvalidRequest) as raised:
+    spec_from(KINDS["resources"], EntityRequest(name="db", owner="team-alpha"))
+  assert raised.value.fields == ["type", "system"]
+  assert str(raised.value) == "type, system: required for resource"
+
+
+def test_fake_replace_checks_resource_version():
+  state = FakeState()
+  created = state.create("systems", {"metadata": {"name": "greeter"}, "spec": {"owner": "team-alpha", "domain": "messaging"}})
+  replaced = state.replace("systems", {**created, "spec": {"owner": "team-beta", "domain": "messaging"}})
+  assert replaced["spec"]["owner"] == "team-beta"
+  assert replaced["metadata"]["uid"] == created["metadata"]["uid"]
+  with pytest.raises(Conflict):
+    state.replace("systems", {**created, "spec": {"owner": "team-gamma", "domain": "messaging"}})
+  with pytest.raises(NotFound):
+    state.replace("systems", {"metadata": {"name": "nope", "resourceVersion": "1"}, "spec": {}})
