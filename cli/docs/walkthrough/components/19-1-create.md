@@ -1,0 +1,40 @@
+# Create a component
+
+With the connection `ready` (step 18.3), and the system recreated after the cleanup of step 13.5, `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays:
+
+```bash
+cat > /tmp/idea.md <<'IDEA'
+# Problem
+
+People want to be greeted by name.
+IDEA
+
+platform catalog domain create communication \
+  --owner team-alpha
+
+platform catalog system create greeter \
+  --domain communication \
+  --owner team-alpha
+
+platform catalog component create greeting-api \
+  --system greeter \
+  --prd /tmp/idea.md \
+  --wait
+```
+
+``` { .text .output title="output" }
+  ✓ Validated: scm connection 'wasp-foundry' is ready
+  ✓ Rendered: 16 files from python-service@0b81690231edcd5920c1f774efc0325c80a4b0a4
+  ✓ RepoCreated: wasp-foundry/greeting-api created (public)
+  ✓ Pushed: first commit 3f9c2a1 on main
+  ✓ Registered: in the catalog (lifecycle: experimental)
+✓ golden path “python-service” (default for service): repo wasp-foundry/greeting-api created
+✓ registered in the catalog (lifecycle: experimental)
+✓ docs/prd.md and AGENTS.md added to the repo
+✓ app-spec.yaml generated: container, postgres, route /
+```
+
+- The owner is your team when you have only one (`team-alpha`, joined in step 15.1); otherwise pass `--owner`.
+- `--template` picks another template, `--type` the default of another type, `--param key=value` fills the template's extra parameters.
+- The visibility comes from the connection (`public` unless it says otherwise); `--visibility private` overrides it. On a GitHub Free org, branch protection only exists on public repos.
+- Without `--wait`, the command returns at once and `platform catalog component get greeting-api` shows the steps.

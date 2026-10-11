@@ -60,8 +60,12 @@ nav:
           - 18.2 Install on the org: walkthrough/scm-connection/18-2-install.md
           - 18.3 Verify: walkthrough/scm-connection/18-3-verify.md
           - 18.4 The key stays off this machine: walkthrough/scm-connection/18-4-private-key.md
-          - 18.5 Remove: walkthrough/scm-connection/18-5-remove.md
-      - 19. Clean up and sign out: walkthrough/19-cleanup.md
+      - Components:
+          - 19.1 Create a component: walkthrough/components/19-1-create.md
+          - 19.2 The component in the catalog: walkthrough/components/19-2-list.md
+          - 19.3 What is refused before GitHub: walkthrough/components/19-3-refused.md
+      - 20. Remove the GitHub connection: walkthrough/scm-connection/20-remove.md
+      - 21. Clean up and sign out: walkthrough/21-cleanup.md
       - Without a browser: walkthrough/cli-smoke.md
   - Reference:
       - reference/index.md
