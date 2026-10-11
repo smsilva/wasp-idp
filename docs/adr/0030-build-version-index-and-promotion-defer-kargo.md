@@ -1,6 +1,6 @@
 # Build the version index and Promotion; defer Kargo
 
-**Status:** Aceito (2026-10-11)
+**Status:** Aceito (2026-10-11). A parte de promoção (CRD `Promotion`, palavra `promote`) foi substituída pelo ADR 0033.
 
 ## Contexto
 
