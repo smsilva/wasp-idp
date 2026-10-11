@@ -9,6 +9,7 @@ Plataforma AWS multi-tenant (hub-and-spoke, EKS) com um IDP (Backstage) por cima
 |---|---|
 | Apresentação do IDP, em modo de apresentação (setas navegam, `Esc` volta ao índice) | https://smsilva.github.io/wasp-idp/#present-1 |
 | Apresentação, direto na jornada "da ideia ao produto rodando" | https://smsilva.github.io/wasp-idp/#present-journey-plan |
+| Apresentação, direto no desenho completo: clientes, Platform API e os cinco planes | https://smsilva.github.io/wasp-idp/#present-landscape-full |
 | Guia da CLI `platform` (MkDocs) | https://smsilva.github.io/wasp-idp/cli/ |
 
 Os links da apresentação usam o `name` do slide em `docs/presentation/idp.yaml` (`#present-<name>`), que não muda quando slides entram ou saem antes dele; `#present-<N>` também funciona, mas aponta para o passo N. Os dois sites são publicados no GitHub Pages pelo workflow `.github/workflows/pages.yaml` a cada push na `main`.
