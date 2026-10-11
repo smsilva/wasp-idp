@@ -48,12 +48,13 @@ def create(
   expires: Annotated[str | None, typer.Option(help="Lifetime such as 30m, 12h, 3d or 1w.")] = None,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the environment is ready.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 600,
+  share_with: Annotated[list[str] | None, typer.Option("--share-with", help="Team whose members also use it; repeat for more teams.")] = None,
   output: OutputOption = Format.table,
 ):
-  """Create an environment."""
+  """Create an environment, private unless shared with teams."""
   client = _client()
   try:
-    environment = client.create_environment(name, profile.value, expires)
+    environment = client.create_environment(name, profile.value, expires, share_with)
     if output == Format.table:
       typer.echo(f"provisioning {name} (profile: {profile.value}) …")
     if wait:
@@ -98,17 +99,52 @@ def save_kubeconfig(environment: dict) -> dict:
 
 
 @app.command("list")
-def list_(output: OutputOption = Format.table):
-  """List environments."""
+def list_(
+  all: Annotated[bool, typer.Option("--all", help="Every environment, not only yours and your teams'.")] = False,
+  output: OutputOption = Format.table,
+):
+  """List your environments and the ones shared with your teams."""
   try:
-    items = _client().list_environments()
+    items = _client().list_environments(all)
   except ApiError as error:
     fail(str(error))
   if output == Format.json:
     print_json(items)
     return
-  rows = [[item["name"], item["profile"], item["status"], remaining(item.get("expiresAt"))] for item in items]
-  print_table(["NAME", "PROFILE", "STATUS", "EXPIRES"], rows)
+  rows = [
+    [item["name"], item["profile"], item["status"], remaining(item.get("expiresAt")), item.get("owner") or "—", ", ".join(item.get("sharedWith") or []) or "—"]
+    for item in items
+  ]
+  print_table(["NAME", "PROFILE", "STATUS", "EXPIRES", "OWNER", "SHARED"], rows)
+
+
+Team = Annotated[str, typer.Option("--team", help="Team name, such as team-alpha.")]
+
+
+@app.command("share")
+def share(name: str, team: Team, output: OutputOption = Format.table):
+  """Share an environment with a team you belong to (owner or platform-admins)."""
+  try:
+    environment = _client().share_environment(name, team)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(environment)
+  else:
+    success(f"{name} shared with {team}")
+
+
+@app.command("unshare")
+def unshare(name: str, team: Team, output: OutputOption = Format.table):
+  """Stop sharing an environment with a team (owner or platform-admins)."""
+  try:
+    environment = _client().unshare_environment(name, team)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(environment)
+  else:
+    success(f"{name} no longer shared with {team}")
 
 
 @app.command("get")

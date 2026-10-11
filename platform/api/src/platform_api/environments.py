@@ -6,17 +6,24 @@ from .state import GROUP, VERSION
 NO_PROVIDER = "NoProviderForCapability"
 # Who asked for the environment (token `sub`), set by the API on create; the CR spec stays the user's intent.
 OWNER_ANNOTATION = f"{GROUP}/owner"
+# The owner's e-mail, for display only: authorization always goes by OWNER_ANNOTATION (ADR 0026).
+OWNER_NAME_ANNOTATION = f"{GROUP}/owner-name"
 ADMIN_GROUP = "platform-admins"
 
 
-def manifest(name: str, profile: str, expires_at: str | None, owner: str) -> dict:
+def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_name: str | None = None, shared_with: list[str] | None = None) -> dict:
   spec = {"profile": profile}
   if expires_at:
     spec["expiresAt"] = expires_at
+  if shared_with:
+    spec["sharedWith"] = sorted(set(shared_with))
+  annotations = {OWNER_ANNOTATION: owner}
+  if owner_name:
+    annotations[OWNER_NAME_ANNOTATION] = owner_name
   return {
     "apiVersion": f"{GROUP}/{VERSION}",
     "kind": "Environment",
-    "metadata": {"name": name, "annotations": {OWNER_ANNOTATION: owner}},
+    "metadata": {"name": name, "annotations": annotations},
     "spec": spec,
   }
 
@@ -35,17 +42,26 @@ def no_provider_status() -> dict:
 
 def is_owner_or_admin(obj: dict, principal, annotation: str = OWNER_ANNOTATION) -> bool:
   """True for whoever the annotation names and for platform admins. Environments use the owner
-  annotation (kubeconfig and delete); catalog entities pass their created-by annotation. Without the
+  annotation (delete, share); catalog entities pass their created-by annotation. Without the
   annotation (objects created before it existed), only admins pass."""
   person = (obj.get("metadata", {}).get("annotations") or {}).get(annotation)
   return principal.sub == person or ADMIN_GROUP in principal.groups
+
+
+def shared_with(obj: dict) -> list[str]:
+  return list((obj.get("spec") or {}).get("sharedWith") or [])
+
+
+def can_use(obj: dict, principal) -> bool:
+  """Owner, admins, and members of a team the environment is shared with (ADR 0026): they get the kubeconfig."""
+  return is_owner_or_admin(obj, principal) or bool(set(principal.groups) & set(shared_with(obj)))
 
 
 def view(obj: dict, with_kubeconfig: bool = False) -> dict:
   """The API view of an Environment: clients never couple to the CR shape.
 
   kubeconfigData is a credential: never in the list, and in the single read only when the caller
-  passed is_owner_or_admin.
+  passed can_use.
   """
   metadata = obj.get("metadata", {})
   spec = obj.get("spec", {})
@@ -67,6 +83,8 @@ def view(obj: dict, with_kubeconfig: bool = False) -> dict:
     "message": ready.get("message") if ready else None,
     "port": status.get("port"),
     "createdAt": metadata.get("creationTimestamp"),
+    "owner": (metadata.get("annotations") or {}).get(OWNER_NAME_ANNOTATION),
+    "sharedWith": shared_with(obj),
   }
   if with_kubeconfig and status.get("kubeconfigData"):
     result["kubeconfigData"] = status["kubeconfigData"]

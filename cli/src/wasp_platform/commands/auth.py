@@ -13,10 +13,11 @@ def login(
   # Local test identities (#179): hidden, they exist only in the realm of the local target.
   test_user: Annotated[bool, typer.Option("--test-user", hidden=True)] = False,
   test_admin: Annotated[bool, typer.Option("--test-admin", hidden=True)] = False,
+  test_member: Annotated[bool, typer.Option("--test-member", hidden=True)] = False,
 ):
   """Sign in to the platform with your Google account."""
-  if test_user or test_admin:
-    _login_test_user(local.SMOKE_ADMIN if test_admin else local.SMOKE_USER)
+  if test_user or test_admin or test_member:
+    _login_test_user(local.SMOKE_ADMIN if test_admin else local.SMOKE_MEMBER if test_member else local.SMOKE_USER)
     return
   try:
     oidc = auth.Oidc()
@@ -37,7 +38,7 @@ def login(
 
 def _login_test_user(username: str) -> None:
   """Password grant on the local test client: the CLI flow without a browser (scripts/demo/cli-smoke)."""
-  flag = "--test-admin" if username == local.SMOKE_ADMIN else "--test-user"
+  flag = {local.SMOKE_ADMIN: "--test-admin", local.SMOKE_MEMBER: "--test-member"}.get(username, "--test-user")
   if config.load().get("target") != "local":
     fail(f"{flag} is only supported on the local target")
   try:

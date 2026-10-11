@@ -12,6 +12,8 @@ from wasp_platform.commands.environment import remaining
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
 runner = CliRunner()
+# The api fixture's request log, for tests that check what the CLI sent.
+environments_calls = {}
 
 
 @pytest.mark.parametrize("expires_at,expected", [
@@ -36,11 +38,26 @@ def api(monkeypatch):
     path = request.url.path
     if request.method == "POST" and path == "/v1/environments":
       body = json.loads(request.content)
-      item = {"name": body["name"], "profile": body["profile"], "expiresAt": None, "status": "NoProviderForCapability"}
+      item = {
+        "name": body["name"], "profile": body["profile"], "expiresAt": None, "status": "NoProviderForCapability",
+        "owner": "dev@example.com", "sharedWith": sorted(body.get("sharedWith", [])),
+      }
       environments[body["name"]] = item
       return httpx.Response(202, json=item)
     if request.method == "GET" and path == "/v1/environments":
+      calls["list_params"] = dict(request.url.params)
       return httpx.Response(200, json={"items": list(environments.values())})
+    if "/shares/" in path:
+      name, team = path.split("/")[3], path.split("/")[5]
+      shared = set(environments[name]["sharedWith"])
+      if request.method == "PUT":
+        shared.add(team)
+      elif team in shared:
+        shared.discard(team)
+      else:
+        return httpx.Response(404, json={"error": {"code": "not_found", "message": f"environment '{name}' is not shared with '{team}'"}})
+      environments[name]["sharedWith"] = sorted(shared)
+      return httpx.Response(200, json=environments[name])
     name = path.rsplit("/", 1)[-1]
     if name not in environments:
       return httpx.Response(404, json={"error": {"code": "not_found", "message": f"environment '{name}' not found"}})
@@ -61,6 +78,7 @@ def api(monkeypatch):
     lambda self, base_url=None, transport_=None, token=None: original(self, "http://api.test", transport, token or (lambda: "test-token")),
   )
   monkeypatch.setattr(environment.time, "sleep", lambda seconds: None)
+  environments_calls.update(calls=calls)
   return environments
 
 
@@ -80,10 +98,36 @@ def test_create_wait_until_ready(api):
 def test_list_table_and_json(api):
   runner.invoke(app, ["environment", "create", "dev", "--profile", "shared"])
   table = runner.invoke(app, ["environment", "list"]).output.splitlines()
-  assert table[0].split() == ["NAME", "PROFILE", "STATUS", "EXPIRES"]
-  assert table[1].split() == ["dev", "shared", "NoProviderForCapability", "—"]
+  assert table[0].split() == ["NAME", "PROFILE", "STATUS", "EXPIRES", "OWNER", "SHARED"]
+  assert table[1].split() == ["dev", "shared", "NoProviderForCapability", "—", "dev@example.com", "—"]
   as_json = json.loads(runner.invoke(app, ["environment", "list", "--output", "json"]).output)
   assert as_json[0]["name"] == "dev"
+
+
+def test_create_shared_with_teams(api):
+  result = runner.invoke(app, ["environment", "create", "dev", "--profile", "shared", "--share-with", "team-alpha", "--share-with", "team-beta"])
+  assert result.exit_code == 0, result.output
+  assert api["dev"]["sharedWith"] == ["team-alpha", "team-beta"]
+  assert runner.invoke(app, ["environment", "list"]).output.splitlines()[1].split()[-2:] == ["team-alpha,", "team-beta"]
+
+
+def test_share_and_unshare(api):
+  runner.invoke(app, ["environment", "create", "dev", "--profile", "shared"])
+  result = runner.invoke(app, ["environment", "share", "dev", "--team", "team-alpha"])
+  assert result.exit_code == 0, result.output
+  assert "✓ dev shared with team-alpha" in result.output
+  assert api["dev"]["sharedWith"] == ["team-alpha"]
+  assert "✓ dev no longer shared with team-alpha" in runner.invoke(app, ["environment", "unshare", "dev", "--team", "team-alpha"]).output
+  result = runner.invoke(app, ["environment", "unshare", "dev", "--team", "team-alpha"])
+  assert result.exit_code == 1
+  assert "is not shared with 'team-alpha'" in result.output
+
+
+def test_list_all_asks_the_api_for_everything(api):
+  runner.invoke(app, ["environment", "list"])
+  assert environments_calls["calls"]["list_params"] == {}
+  runner.invoke(app, ["environment", "list", "--all"])
+  assert environments_calls["calls"]["list_params"] == {"all": "true"}
 
 
 def test_delete_missing_fails(api):

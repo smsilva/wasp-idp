@@ -17,7 +17,7 @@ metadata:
 rules:
   - apiGroups: [platform.wasp.silvios.me]
     resources: [environments]
-    verbs: [get, list, watch, create, delete]
+    verbs: [get, list, watch, create, update, delete] # update: share/unshare (ADR 0026)
   - apiGroups: [platform.wasp.silvios.me]
     resources: [environments/status]
     verbs: [get, update, patch]

@@ -30,8 +30,10 @@ CLI_CLIENT_ID = "platform-cli"
 SMOKE_CLIENT_ID = "platform-smoke"
 SMOKE_USER = "platform-smoke"
 SMOKE_ADMIN = "platform-smoke-admin"
+# A second plain user, for sharing an environment with a teammate (#232).
+SMOKE_MEMBER = "platform-smoke-member"
 SMOKE_SECRET = "keycloak-smoke-user"
-SMOKE_KEYS = {SMOKE_USER: "SMOKE_USER_PASSWORD", SMOKE_ADMIN: "SMOKE_ADMIN_PASSWORD"}
+SMOKE_KEYS = {SMOKE_USER: "SMOKE_USER_PASSWORD", SMOKE_ADMIN: "SMOKE_ADMIN_PASSWORD", SMOKE_MEMBER: "SMOKE_MEMBER_PASSWORD"}
 # Secret of the platform-api-admin client (teams, #231): read by the realm import and by the API.
 API_ADMIN_SECRET = "platform-api-keycloak"
 API_ADMIN_KEY = "PLATFORM_API_ADMIN_SECRET"

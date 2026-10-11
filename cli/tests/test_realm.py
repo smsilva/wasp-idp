@@ -63,7 +63,7 @@ def test_realm_without_smoke_has_no_test_client_nor_users():
   assert [u["username"] for u in realm["users"]] == ["service-account-platform-api-admin"]
 
 
-def test_smoke_adds_password_client_and_two_users():
+def test_smoke_adds_password_client_and_three_users():
   realm = render_realm(REALM, google=True, admin=True, smoke=SMOKE)
   client = next(c for c in realm["clients"] if c["clientId"] == "platform-smoke")
   assert client["directAccessGrantsEnabled"] is True and client["publicClient"] is True
@@ -71,6 +71,7 @@ def test_smoke_adds_password_client_and_two_users():
   users = {u["username"]: u for u in realm["users"]}
   assert users["platform-smoke"]["groups"] == ["/platform-users"]
   assert set(users["platform-smoke-admin"]["groups"]) == {"/platform-admins", "/platform-users"}
+  assert users["platform-smoke-member"]["groups"] == ["/platform-users"]
   # Passwords come from the Secret keycloak-smoke-user, never from the file.
   assert all(users[name]["credentials"][0]["value"].startswith("$(env:") for name in SMOKE_USERS)
   # The base realm is not mutated: a later render without smoke stays clean.
