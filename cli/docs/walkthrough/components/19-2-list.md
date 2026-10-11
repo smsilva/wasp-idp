@@ -6,32 +6,32 @@ The component shows up in the catalog right after the create:
 platform catalog component list \
   --system greeter
 
-platform catalog component get greeting-api
+platform catalog component get hello-api
 ```
 
 ``` { .text .output title="output" }
 NAME          SYSTEM   OWNER       LIFECYCLE     TEMPLATE
-greeting-api  greeter  team-alpha  experimental  python-service@0b81690231edcd5920c1f774efc0325c80a4b0a4
-component/greeting-api
+hello-api  greeter  team-alpha  experimental  python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+component/hello-api
   system       greeter
   owner        team-alpha
   type         service
   lifecycle    experimental
-  repo         wasp-foundry/greeting-api
-  template     python-service@0b81690231edcd5920c1f774efc0325c80a4b0a4
+  repo         wasp-foundry/hello-api
+  template     python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
   description  —
 ```
 
-The repo has a single commit, and its `catalog-info.yaml` carries where it came from:
+The repo has a single commit (the README of `auto_init` is replaced), and its `catalog-info.yaml` carries where it came from:
 
 ```bash
-gh api repos/wasp-foundry/greeting-api/contents/catalog-info.yaml \
+gh api repos/wasp-foundry/hello-api/contents/catalog-info.yaml \
   --jq .content | base64 --decode | grep --extended-regexp 'template:|project-slug:'
 ```
 
 ``` { .text .output title="output" }
-    platform.wasp.silvios.me/template: python-service@0b81690231edcd5920c1f774efc0325c80a4b0a4
-    github.com/project-slug: wasp-foundry/greeting-api
+    platform.wasp.silvios.me/template: python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+    github.com/project-slug: wasp-foundry/hello-api
 ```
 
 !!! note

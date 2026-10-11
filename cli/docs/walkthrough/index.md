@@ -3,7 +3,7 @@
 A walkthrough to demonstrate the `platform` CLI **starting from scratch**: no cluster, no config and no CLI installed. Follow it in order, one step per page: each step builds on the previous ones. To look up a command, a flag or a status, use the [reference](../reference/index.md).
 
 !!! info "Last run"
-    Run end to end on 2026-10-10; steps 8 to 11 were redone with the `local_vcluster` provider (#183) and step 14 (#190) on `platform-local`, on the same day. Step 18 (#199) was run on 2026-10-11, with the `wasp-foundry-platform` App created and installed in the `wasp-foundry` org. Step 19 (#279) has not been run against `wasp-foundry` yet: its outputs follow the code and its tests.
+    Run end to end on 2026-10-10; steps 8 to 11 were redone with the `local_vcluster` provider (#183) and step 14 (#190) on `platform-local`, on the same day. Step 18 (#199) was run on 2026-10-11, with the `wasp-foundry-platform` App created and installed in the `wasp-foundry` org. Step 19 (#279) was run on 2026-10-11 against the same org, creating `wasp-foundry/hello-api`.
 
 ## Preparation
 
