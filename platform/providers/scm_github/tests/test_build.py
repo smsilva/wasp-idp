@@ -257,6 +257,19 @@ def test_an_invalid_artifact_breaks_the_contract(world, archive):
   assert ready(world.run()) == ("False", "ContractViolation")
 
 
+def test_an_inflating_artifact_is_read_with_a_bound(world):
+  buffer = io.BytesIO()
+  with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+    archive.writestr("platform-build.json", b" " * (64 * 1024 * 1024))  # 64 MiB of spaces, a few KiB zipped
+  assert len(buffer.getvalue()) < 1024 * 1024
+  world.github.artifacts["platform-build"] = buffer.getvalue()
+  world.run()
+  world.github.finish()
+  status = world.run()
+  assert ready(status) == ("False", "ContractViolation")
+  assert "larger than" in status["conditions"][-1]["message"]
+
+
 def test_a_run_that_never_shows_up_breaks_the_contract(world):
   world.github.run_name = "build {request_id}"
   status = world.run()

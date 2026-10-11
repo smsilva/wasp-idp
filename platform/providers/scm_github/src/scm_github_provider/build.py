@@ -39,6 +39,7 @@ RUN_NAME = "platform-build {request_id}"
 ARTIFACT = "platform-build"
 RESULT_FILE = "platform-build.json"
 ARTIFACT_LIMIT = 1024 * 1024
+RESULT_LIMIT = 64 * 1024
 # A dispatched run that does not show up by its run-name in this long breaks the contract.
 RUN_LOOKUP = timedelta(minutes=10)
 APP_SPEC = "app-spec.yaml"
@@ -85,8 +86,12 @@ def version_name(component: str, version: str) -> str:
 
 def read_result(archive: bytes) -> dict:
   try:
-    with zipfile.ZipFile(io.BytesIO(archive)) as files:
-      return json.loads(files.read(RESULT_FILE))
+    with zipfile.ZipFile(io.BytesIO(archive)) as files, files.open(RESULT_FILE) as result:
+      # Read with a bound, never by the size the zip declares: a small artifact may inflate to gigabytes.
+      content = result.read(RESULT_LIMIT + 1)
+    if len(content) > RESULT_LIMIT:
+      raise Outcome("ContractViolation", f"{RESULT_FILE} in the {ARTIFACT} artifact is larger than {RESULT_LIMIT} bytes")
+    return json.loads(content)
   except KeyError:
     raise Outcome("ContractViolation", f"the {ARTIFACT} artifact has no {RESULT_FILE}")
   except (zipfile.BadZipFile, ValueError) as error:
