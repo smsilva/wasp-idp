@@ -27,14 +27,18 @@ spec:
                 type: object
                 required: [cloudAccount]
                 properties:
+                  # Patterns added after the spike run: these fields are interpolated into the
+                  # rendered manifests, so they must be plain names.
                   cloudAccount:
                     type: string
+                    pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
                   method:
                     type: string
                     enum: [crossplane, opentofu]
                     default: crossplane
                   region:
                     type: string
+                    pattern: '^[a-z]{2}(-[a-z]+)+-[0-9]$'
                     default: us-east-1
   workflows:
     resource:
