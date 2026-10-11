@@ -1,6 +1,9 @@
 import pytest
 
-from platform_api.catalog_import import classify, owner_of
+from fakes import FakeState
+from platform_api.auth import Principal
+from platform_api.catalog import KINDS, manifest
+from platform_api.catalog_import import classify, make_plan, owner_of
 
 
 def doc(kind, name="x", spec=None, api_version="backstage.io/v1alpha1", **metadata):
@@ -86,3 +89,168 @@ def test_skip_keeps_kind_and_name_when_present():
 def test_errors_name_the_backstage_field(document, field, reason):
   item = classify("f.yaml#1", document)
   assert (item.action, item.field, item.reason) == ("error", field, reason)
+
+ADMIN = Principal("admin-1", None, ["platform-admins"])
+USER = Principal("user-1", "dev@example.com", ["platform-users"])
+OTHER = Principal("user-2", "other@example.com", ["platform-users"])
+
+
+def sourced(*documents):
+  return [{"source": f"t.yaml#{index}", "document": document} for index, document in enumerate(documents, 1)]
+
+
+def seed(state, plural, name, spec, created_by="admin-1"):
+  state.create(plural, manifest(KINDS[plural], name, spec, created_by))
+
+
+def actions(plan):
+  return [(item.kind, item.name, item.action) for item in plan.items]
+
+
+COMMUNICATION = [
+  doc("Resource", "greeting-db", {"owner": "group:default/team-alpha", "system": "greeter", "type": "database"}),
+  doc("System", "greeter", {"owner": "group:default/team-alpha", "domain": "messaging"}),
+  doc("Domain", "messaging", {"owner": "group:default/team-alpha", "subdomainOf": "communication"}),
+  doc("Domain", "communication", {"owner": "group:default/team-alpha"}),
+  doc("Group", "team-alpha"),
+]
+
+
+def test_parents_first_regardless_of_file_order():
+  plan = make_plan(sourced(*COMMUNICATION), FakeState(), ADMIN)
+  assert actions(plan) == [
+    ("Domain", "communication", "create"),
+    ("Domain", "messaging", "create"),
+    ("System", "greeter", "create"),
+    ("Resource", "greeting-db", "create"),
+    ("Group", "team-alpha", "skip"),
+  ]
+  assert plan.view(applied=False)["summary"] == {"create": 4, "update": 0, "unchanged": 0, "skip": 1, "forbidden": 0, "error": 0}
+
+
+def test_unchanged_and_update_with_changes():
+  state = FakeState()
+  seed(state, "domains", "communication", {"owner": "team-alpha"})
+  seed(state, "domains", "messaging", {"owner": "team-beta", "parent": "communication", "description": "old"})
+  plan = make_plan(sourced(COMMUNICATION[3], COMMUNICATION[2]), state, ADMIN)
+  assert actions(plan) == [("Domain", "communication", "unchanged"), ("Domain", "messaging", "update")]
+  assert plan.items[1].view()["changes"] == {"description": ["old", None], "owner": ["team-beta", "team-alpha"]}
+  assert "spec" not in plan.items[0].view()
+
+
+def test_update_can_move_to_another_parent():
+  state = FakeState()
+  seed(state, "domains", "communication", {"owner": "team-alpha"})
+  seed(state, "domains", "bookstore", {"owner": "team-alpha"})
+  seed(state, "systems", "greeter", {"owner": "team-alpha", "domain": "communication"})
+  plan = make_plan(sourced(doc("System", "greeter", {"owner": "team-alpha", "domain": "bookstore"})), state, ADMIN)
+  assert plan.items[0].changes == {"domain": ["communication", "bookstore"]}
+
+
+def test_parent_found_in_the_platform():
+  state = FakeState()
+  seed(state, "domains", "messaging", {"owner": "team-alpha"})
+  plan = make_plan(sourced(COMMUNICATION[1]), state, USER)
+  assert actions(plan) == [("System", "greeter", "create")]
+
+
+def test_broken_reference_names_entity_and_field():
+  plan = make_plan(sourced(doc("System", "orphan", {"owner": "team-alpha", "domain": "nowhere"})), FakeState(), ADMIN)
+  item = plan.items[0]
+  assert (item.action, item.field, item.reason) == ("error", "spec.domain", "domain 'nowhere' not found")
+  assert plan.blocked
+
+
+def test_children_of_an_unimportable_parent_cascade():
+  documents = sourced(
+    doc("Domain", "messaging", {"owner": "team-alpha", "subdomainOf": "communication"}),
+    doc("System", "greeter", {"owner": "team-alpha", "domain": "messaging"}),
+    doc("Domain", "communication", {}),  # no owner: error
+  )
+  plan = make_plan(documents, FakeState(), ADMIN)
+  reasons = {item.name: (item.action, item.field, item.reason) for item in plan.items}
+  assert reasons["communication"] == ("error", "spec.owner", "required for domain")
+  assert reasons["messaging"] == ("error", "spec.subdomainOf", "domain 'communication' is not importable")
+  assert reasons["greeter"] == ("error", "spec.domain", "domain 'messaging' is not importable")
+
+
+def test_duplicates_are_errors_in_both_documents():
+  plan = make_plan(sourced(COMMUNICATION[3], COMMUNICATION[3]), FakeState(), ADMIN)
+  assert [(item.action, item.field, item.reason) for item in plan.items] == [
+    ("error", "metadata.name", "domain 'communication' also declared in t.yaml#2"),
+    ("error", "metadata.name", "domain 'communication' also declared in t.yaml#1"),
+  ]
+
+
+def test_same_name_in_two_kinds_is_not_a_duplicate():
+  documents = sourced(doc("Domain", "platform", {"owner": "team-platform"}), doc("System", "platform", {"owner": "team-platform", "domain": "platform"}))
+  assert actions(make_plan(documents, FakeState(), ADMIN)) == [("Domain", "platform", "create"), ("System", "platform", "create")]
+
+
+def test_domain_cycle_is_an_error():
+  documents = sourced(
+    doc("Domain", "a", {"owner": "team-alpha", "subdomainOf": "b"}),
+    doc("Domain", "b", {"owner": "team-alpha", "subdomainOf": "a"}),
+    doc("Domain", "c", {"owner": "team-alpha", "subdomainOf": "c"}),
+  )
+  plan = make_plan(documents, FakeState(), ADMIN)
+  assert all(item.action == "error" and item.field == "spec.subdomainOf" for item in plan.items)
+  assert plan.items[0].reason.startswith("cycle: ")
+
+
+def test_user_cannot_create_domain_and_children_cascade():
+  plan = make_plan(sourced(*COMMUNICATION[:4]), FakeState(), USER)
+  reasons = {item.name: (item.action, item.reason) for item in plan.items}
+  assert reasons["communication"] == ("forbidden", "creating a domain requires group 'platform-admins'")
+  assert reasons["messaging"][0] == "error"
+  assert reasons["greeter"] == ("error", "domain 'messaging' is not importable")
+
+
+def test_user_reimporting_unchanged_domains_imports_own_systems():
+  state = FakeState()
+  seed(state, "domains", "communication", {"owner": "team-alpha"})
+  seed(state, "domains", "messaging", {"owner": "team-alpha", "parent": "communication"})
+  plan = make_plan(sourced(*COMMUNICATION[:4]), state, USER)
+  assert actions(plan) == [
+    ("Domain", "communication", "unchanged"),
+    ("Domain", "messaging", "unchanged"),
+    ("System", "greeter", "create"),
+    ("Resource", "greeting-db", "create"),
+  ]
+  assert not plan.blocked
+
+
+def test_user_cannot_update_domain():
+  state = FakeState()
+  seed(state, "domains", "communication", {"owner": "team-beta"})
+  item = make_plan(sourced(COMMUNICATION[3]), state, USER).items[0]
+  assert (item.action, item.reason) == ("forbidden", "updating a domain requires group 'platform-admins'")
+
+
+def test_update_of_a_system_created_by_someone_else_is_forbidden():
+  state = FakeState()
+  seed(state, "domains", "messaging", {"owner": "team-alpha"})
+  seed(state, "systems", "greeter", {"owner": "team-beta", "domain": "messaging"}, created_by="user-1")
+  document = sourced(COMMUNICATION[1])
+  assert make_plan(document, state, USER).items[0].action == "update"
+  assert make_plan(document, state, ADMIN).items[0].action == "update"
+  item = make_plan(document, state, OTHER).items[0]
+  assert (item.action, item.reason) == ("forbidden", "system 'greeter' can only be updated by who created it or platform-admins")
+
+
+def test_hash_is_stable_and_follows_the_state():
+  state = FakeState()
+  seed(state, "domains", "communication", {"owner": "team-beta"})
+  documents = sourced(*COMMUNICATION[:4])
+  first = make_plan(documents, state, ADMIN).hash
+  assert first.startswith("sha256:")
+  assert make_plan(documents, state, ADMIN).hash == first
+  seed(state, "domains", "messaging", {"owner": "team-alpha", "parent": "communication"})
+  assert make_plan(documents, state, ADMIN).hash != first
+
+
+def test_view_shape():
+  view = make_plan(sourced(COMMUNICATION[3], doc("Group", "team-alpha")), FakeState(), ADMIN).view(applied=False)
+  assert view["items"][0] == {"kind": "Domain", "name": "communication", "action": "create", "source": "t.yaml#1", "spec": {"owner": "team-alpha"}}
+  assert view["applied"] is False
+  assert set(view) == {"items", "summary", "planHash", "applied"}

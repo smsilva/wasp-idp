@@ -4,11 +4,15 @@ The API computes the plan from the raw Backstage documents, so the CLI, Backstag
 same plan without converting anything themselves. Applying re-computes the plan and writes only when
 it matches the one the caller reviewed (planHash).
 """
+import hashlib
+import json
 from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from .catalog import KINDS, EntityRequest, InvalidRequest, Kind, spec_from
+from .catalog import CREATED_BY_ANNOTATION, KINDS, EntityRequest, InvalidRequest, Kind, spec_from
+from .environments import ADMIN_GROUP, is_owner_or_admin
+from .state import NotFound
 
 MAX_DOCUMENTS = 500
 ACTIONS = ("create", "update", "unchanged", "skip", "forbidden", "error")
@@ -144,3 +148,136 @@ def classify(source: str, document) -> Item:
     except Invalid as error:
       item.reject("error", error.field, error.reason)
   return item
+
+
+KIND_ORDER = {"Domain": 0, "System": 1, "Resource": 2}
+
+
+@dataclass
+class Plan:
+  items: list[Item]
+
+  @property
+  def writes(self) -> list[Item]:
+    return [item for item in self.items if item.action in WRITES]
+
+  @property
+  def blocked(self) -> bool:
+    return any(item.action in BLOCKING for item in self.items)
+
+  @property
+  def hash(self) -> str:
+    """What applying would write, and on top of which version: any change in between changes it."""
+    payload = [
+      {
+        "kind": item.kind, "name": item.name, "action": item.action, "spec": item.spec,
+        "resourceVersion": ((item.current or {}).get("metadata") or {}).get("resourceVersion"),
+      }
+      for item in self.writes
+    ]
+    return "sha256:" + hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+  def view(self, applied: bool) -> dict:
+    summary = dict.fromkeys(ACTIONS, 0)
+    for item in self.items:
+      summary[item.action] += 1
+    return {"items": [item.view() for item in self.items], "summary": summary, "planHash": self.hash, "applied": applied}
+
+
+def mark_duplicates(pending: list[Item]) -> None:
+  by_key = {}
+  for item in pending:
+    by_key.setdefault((item.kind, item.name), []).append(item)
+  for (kind, name), items in by_key.items():
+    if len(items) > 1:
+      for item in items:
+        others = ", ".join(other.source for other in items if other is not item)
+        item.reject("error", "metadata.name", f"{kind.lower()} '{name}' also declared in {others}")
+
+
+def mark_cycles(domains: dict[str, Item]) -> None:
+  for name in domains:
+    chain, current = [], name
+    while current in domains and current not in chain:
+      chain.append(current)
+      current = domains[current].spec.get("parent")
+    if current in chain:
+      loop = chain[chain.index(current):] + [current]
+      for member in loop[:-1]:
+        if domains[member].action is None:
+          domains[member].reject("error", "spec.subdomainOf", "cycle: " + " > ".join(loop))
+
+
+def depth(item: Item, domains: dict[str, Item]) -> int:
+  """How many importable ancestors a domain has in the import: subdomains go after their parent."""
+  if item.kind != "Domain" or item.action is not None:
+    return 0
+  count, current = 0, item.spec.get("parent")
+  while current in domains and domains[current].action is None:
+    count += 1
+    current = domains[current].spec.get("parent")
+  return count
+
+
+def exists(state, plural: str, name: str) -> bool:
+  try:
+    state.get(plural, name)
+    return True
+  except NotFound:
+    return False
+
+
+def denied(kind: Kind, item: Item, principal) -> str | None:
+  """The same rules as the single-entity routes: domains need admin, updates need the creator."""
+  verb = "creating" if item.action == "create" else "updating"
+  if kind.plural == "domains" and ADMIN_GROUP not in principal.groups:
+    return f"{verb} a domain requires group '{ADMIN_GROUP}'"
+  if item.action == "update" and kind.plural != "domains" and not is_owner_or_admin(item.current, principal, CREATED_BY_ANNOTATION):
+    return f"{kind.singular} '{item.name}' can only be updated by who created it or {ADMIN_GROUP}"
+  return None
+
+
+def decide(item: Item, declared: dict, state, principal) -> None:
+  kind = KINDS[item.plural]
+  parent = item.spec.get(kind.parent_field) if kind.parent_field else None
+  if parent is not None:
+    parent_kind = KINDS[kind.parent_plural]
+    in_import = declared.get((parent_kind.name, parent))
+    field = SOURCE_FIELDS[kind.parent_field]
+    # Items are sorted parents first, so a parent in the import is already decided.
+    if in_import is not None and in_import.action in BLOCKING:
+      return item.reject("error", field, f"{parent_kind.singular} '{parent}' is not importable")
+    if in_import is None and not exists(state, parent_kind.plural, parent):
+      return item.reject("error", field, f"{parent_kind.singular} '{parent}' not found")
+  try:
+    item.current = state.get(item.plural, item.name)
+  except NotFound:
+    item.current = None
+  if item.current is None:
+    item.action = "create"
+  else:
+    old = item.current.get("spec") or {}
+    item.changes = {
+      field: [old.get(field), item.spec.get(field)]
+      for field in sorted(set(old) | set(item.spec))
+      if old.get(field) != item.spec.get(field)
+    } or None
+    item.action = "update" if item.changes else "unchanged"
+  if item.action in WRITES:
+    reason = denied(kind, item, principal)
+    if reason:
+      item.reject("forbidden", None, reason)
+
+
+def make_plan(documents: list[dict], state, principal) -> Plan:
+  items = [classify(document["source"], document["document"]) for document in documents]
+  mark_duplicates([item for item in items if item.action is None])
+  domains = {item.name: item for item in items if item.kind == "Domain" and item.action is None}
+  mark_cycles(domains)
+  items.sort(key=lambda item: (KIND_ORDER.get(item.kind, len(KIND_ORDER)), depth(item, domains), item.name or "", item.source))
+  # Skips are not entities of the import: a child pointing at one resolves against the platform.
+  declared = {(item.kind, item.name): item for item in items if item.plural and item.action != "skip"}
+  for item in items:
+    if item.action is None:
+      decide(item, declared, state, principal)
+  return Plan(items)
