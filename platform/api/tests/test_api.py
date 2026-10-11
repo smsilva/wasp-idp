@@ -183,3 +183,8 @@ def test_kubeconfig_visible_to_platform_admins(client, state, tokens):
   ready_with_kubeconfig(state, "vc")
   admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
   assert client.get("/v1/environments/vc", headers=admin).json()["kubeconfigData"] == "apiVersion: v1\n"
+
+
+def test_environment_name_with_trailing_newline_is_rejected(client):
+  response = client.post("/v1/environments", json={"name": "vc\n", "profile": "ephemeral"})
+  assert response.status_code == 422

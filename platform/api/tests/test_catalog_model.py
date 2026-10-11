@@ -36,7 +36,7 @@ def test_spec_requires_parent_and_type():
     spec_from(RESOURCES, EntityRequest(name="greeting-db", owner="team-alpha"))
 
 
-@pytest.mark.parametrize("field,value", [("name", "Greeter"), ("owner", "group:default/team-alpha"), ("name", "-x"), ("name", "a" * 64)])
+@pytest.mark.parametrize("field,value", [("name", "Greeter"), ("owner", "group:default/team-alpha"), ("name", "-x"), ("name", "a" * 64), ("name", "greeter\n"), ("owner", "team-alpha\n")])
 def test_request_rejects_invalid_labels(field, value):
   fields = {"name": "greeter", "owner": "team-alpha", field: value}
   with pytest.raises(ValidationError):

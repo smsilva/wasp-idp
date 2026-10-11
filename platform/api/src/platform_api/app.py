@@ -27,7 +27,7 @@ class EnvironmentRequest(BaseModel):
   @field_validator("name")
   @classmethod
   def check_name(cls, value: str) -> str:
-    if not NAME_PATTERN.match(value):
+    if not NAME_PATTERN.fullmatch(value):
       raise ValueError("lowercase letters, digits and '-', starting with a letter, at most 28 characters")
     return value
 

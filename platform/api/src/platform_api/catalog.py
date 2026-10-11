@@ -60,7 +60,7 @@ class EntityRequest(BaseModel):
   @field_validator("name", "owner", "parent", "domain", "system", "type")
   @classmethod
   def check_label(cls, value: str | None) -> str | None:
-    if value is not None and not LABEL.match(value):
+    if value is not None and not LABEL.fullmatch(value):
       raise ValueError("lowercase letters, digits and '-', starting and ending with a letter or digit, at most 63 characters")
     return value
 
