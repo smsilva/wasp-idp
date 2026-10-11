@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from wasp_templates.render import RenderError, annotate_origin, load_template, render as render_files
+from wasp_templates.source import SourceError, coerce, fetch
 
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, fail, print_json, print_table, success
-from ..templates.render import RenderError, annotate_origin, load_template, render as render_files
-from ..templates.source import SourceError, coerce, fetch
 from .catalog_import import ImportFileError, Ref, Repo, origin, read_documents, run_import
 
 app = typer.Typer(help="Templates a component is created from; one default per type.", no_args_is_help=True)

@@ -253,12 +253,15 @@ expect_output "yes" "${output}"
 step "catalog template render python-service (fetched at the registered ref)"
 platform catalog template render python-service \
   --name smoke-demo \
+  --system smoke-system \
   --output "${render_directory}/smoke-demo"
 if grep --recursive --fixed-strings --quiet '${{' --exclude-dir .github "${render_directory}/smoke-demo"; then
   echo "unrendered expression left in ${render_directory}/smoke-demo" >&2
   exit 1
 fi
 expect_output "platform.wasp.silvios.me/template: python-service@" "$(cat "${render_directory}/smoke-demo/catalog-info.yaml")"
+expect_output "system: smoke-system" "$(cat "${render_directory}/smoke-demo/catalog-info.yaml")"
+expect_output "# smoke-demo: product requirements" "$(cat "${render_directory}/smoke-demo/docs/prd.md")"
 
 step "catalog template import idp/templates/python-service --dry-run"
 # Dry run: the Backstage template has the seed's name, and applying would repoint the seed. Its

@@ -94,9 +94,11 @@ def _ensure_port(ports: str, log) -> None:
   _run("k3d", "cluster", "edit", CLUSTER, "--port-add", f"127.0.0.1:{ports}:{ports}@loadbalancer")
 
 
-def _build_and_import(name: str, context: Path) -> str:
-  """Build, tag by image id and import into platform-local: an unchanged build keeps the tag, so the rollout is a no-op."""
-  _run("docker", "build", "--quiet", "--tag", f"{name}:dev", str(context))
+def _build_and_import(name: str, context: Path, dockerfile: Path | None = None) -> str:
+  """Build, tag by image id and import into platform-local: an unchanged build keeps the tag, so the rollout is a no-op.
+  dockerfile: when the context is wider than the project folder (a project with path dependencies)."""
+  file = ["--file", str(dockerfile)] if dockerfile else []
+  _run("docker", "build", "--quiet", *file, "--tag", f"{name}:dev", str(context))
   image_id = _run("docker", "image", "inspect", "--format", "{{.Id}}", f"{name}:dev").strip()
   image = f"{name}:{image_id.removeprefix('sha256:')[:12]}"
   _run("docker", "tag", f"{name}:dev", image)
@@ -325,7 +327,8 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
 
   api_dir = root / "platform" / "api"
   log("building the Platform API image …")
-  image = _build_and_import(IMAGE, api_dir)
+  # Context platform/: the API depends on platform/libs/templates by path.
+  image = _build_and_import(IMAGE, api_dir.parent, api_dir / "Dockerfile")
 
   log("deploying the Platform API …")
   _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, image)
