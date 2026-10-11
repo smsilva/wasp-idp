@@ -18,26 +18,29 @@ flowchart LR
     direction LR
     keycloak["Keycloak<br/><small>login com Google</small>"]
     api["Platform API<br/><small>valida o token, grava o pedido</small>"]
-    crds[("CRDs<br/><small>Environment, catálogo,<br/>CloudAccount</small>")]
+    crds[("CRDs<br/><small>Environment, catálogo,<br/>ScmConnection, CloudAccount</small>")]
     subgraph providers["providers"]
       vcluster["local_vcluster"]
+      scm["scm_github"]
       aws["aws_account"]
     end
     envs["vcluster env-&lt;nome&gt;<br/><small>um por ambiente</small>"]
   end
 
+  github(["GitHub"])
   awscloud(["AWS"])
 
   cli -- "HTTP + token" --> api
   cli -. login .-> browser -.-> keycloak
   api --> crds
-  crds <-- watch --> vcluster & aws
+  crds <-- watch --> vcluster & scm & aws
   vcluster --> envs
+  scm --> github
   aws --> awscloud
   cli -- kubeconfig --> envs
 ```
 
-A CLI só fala com a **Platform API**, que grava cada pedido como um recurso Kubernetes (**CRD**). Os **providers** observam esses recursos e fazem o trabalho: criar o vcluster ou falar com a AWS. Tudo roda dentro do `platform-local`, instalado pelo `init`; **não há processo para manter aberto no host**.
+A CLI só fala com a **Platform API**, que grava cada pedido como um recurso Kubernetes (**CRD**). Os **providers** observam esses recursos e fazem o trabalho: criar o vcluster, falar com o GitHub ou com a AWS. Tudo roda dentro do `platform-local`, instalado pelo `init`; **não há processo para manter aberto no host**.
 
 ## Passo a passo
 
@@ -54,13 +57,14 @@ A CLI só fala com a **Platform API**, que grava cada pedido como um recurso Kub
 11. [Catálogo](guide/11-catalog.md)
 12. [Times](guide/12-teams.md)
 13. [Contas de nuvem](guide/13-cloud-accounts.md)
-14. [Desmontar tudo](guide/14-teardown.md)
+14. [Connections com plataformas de código](guide/14-scm-connections.md)
+15. [Desmontar tudo](guide/15-teardown.md)
 
 ## Referência rápida
 
 | Comando | O que faz |
 |---|---|
-| `platform init --target local [--admin <email>] [--aws-profile <profile>]` | cria `platform-local`, CRDs, Keycloak, Platform API e o provider `local_vcluster`; com credencial AWS, também o `aws_account` |
+| `platform init --target local [--admin <email>] [--aws-profile <profile>]` | cria `platform-local`, CRDs, Keycloak, Platform API e os providers `local_vcluster` e `scm_github`; com credencial AWS, também o `aws_account` |
 | `platform login [--use-device-code]` | entra com a conta Google |
 | `platform whoami` | e-mail e grupos, vistos pela API |
 | `platform logout` | revoga a sessão e apaga as credenciais |
@@ -88,6 +92,10 @@ A CLI só fala com a **Platform API**, que grava cada pedido como um recurso Kub
 | `platform cloud account list\|get <nome>` | NAME, VENDOR, ACCOUNT, STATUS, VALIDATED (OWNER para admins); `get` mostra a trust policy |
 | `platform cloud account verify <nome> [--wait]` | pede ao provider uma nova verificação |
 | `platform cloud account remove <nome>` | tira a conta da plataforma; só o dono ou `platform-admins` |
+| `platform scm connection add <nome> --vendor github --org <org> [--default] [--app-id <id> --private-key-file <pem>] [--no-browser] [--wait]` | conecta uma org do GitHub (só `platform-admins`) |
+| `platform scm connection list\|get <nome>` | NAME, VENDOR, ORG, STATUS, DEFAULT, VALIDATED; `get` mostra o link de instalação |
+| `platform scm connection verify <nome> [--wait]` | pede a revalidação |
+| `platform scm connection default\|remove <nome>` | muda a padrão; remove a connection e a chave |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |

@@ -45,6 +45,8 @@ PROVIDER_IMAGE = "local-vcluster-provider"
 # Cloud accounts (ADR 0029): the base credential the aws_account controller assumes roles from.
 AWS_PROVIDER_IMAGE = "aws-account-provider"
 AWS_BASE_SECRET = "aws-base-credential"
+
+SCM_PROVIDER_IMAGE = "scm-github-provider"
 # Factory templates (ADR 0024): read from this public repo, so no credential is needed.
 SEED_REPO = "https://github.com/smsilva/wasp-idp"
 SEED_FOLDER = Path("platform") / "templates"
@@ -336,6 +338,13 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   log("deploying the environment provider (local_vcluster) …")
   _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
   _kubectl("rollout", "status", "deployment/local-vcluster-provider", "--namespace", NAMESPACE, "--timeout", "180s")
+
+  scm_dir = root / "platform" / "providers" / "scm_github"
+  log("building the SCM provider image …")
+  scm_image = _build_and_import(SCM_PROVIDER_IMAGE, scm_dir)
+  log("deploying the SCM provider (scm_github) …")
+  _deploy(scm_dir / "deploy" / "scm-github-provider.yaml", SCM_PROVIDER_IMAGE, scm_image)
+  _kubectl("rollout", "status", "deployment/scm-github-provider", "--namespace", NAMESPACE, "--timeout", "180s")
 
   cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)

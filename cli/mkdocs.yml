@@ -21,7 +21,8 @@ nav:
       - Catálogo: guide/11-catalog.md
       - Times: guide/12-teams.md
       - Contas de nuvem: guide/13-cloud-accounts.md
-      - Desmontar tudo: guide/14-teardown.md
+      - Connections com plataformas de código: guide/14-scm-connections.md
+      - Desmontar tudo: guide/15-teardown.md
   - Walkthrough:
       - walkthrough/index.md
       - Preparar o ambiente:
@@ -46,7 +47,8 @@ nav:
       - 15. Times: walkthrough/15-teams.md
       - 16. Templates de component: walkthrough/16-templates.md
       - 17. Contas de nuvem: walkthrough/17-cloud-accounts.md
-      - 18. Limpar e sair: walkthrough/18-cleanup.md
+      - 18. Connection com o GitHub: walkthrough/18-scm-connection.md
+      - 19. Limpar e sair: walkthrough/19-cleanup.md
       - Sem navegador: walkthrough/cli-smoke.md
 theme:
   name: material

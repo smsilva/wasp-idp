@@ -1,6 +1,6 @@
 # Platform API
 
-Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments` e as entidades do catálogo (`domains`, `systems`, `resources`, `templates`) no namespace `platform-system`.
+Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments`, `scmconnections` e as entidades do catálogo (`domains`, `systems`, `resources`, `templates`) no namespace `platform-system`, e escreve `secrets` sem poder lê-los.
 
 ## Endpoints
 
@@ -30,6 +30,13 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `POST` | `/v1/cloud/accounts/{name}/verify` | `202`; grava `verify-requested-at`, e `verifyPending` fica `true` até o provider responder |
 | `DELETE` | `/v1/cloud/accounts/{name}` | `202`; só o dono ou `platform-admins` |
 | `GET` | `/v1/catalog/entities` | `200`, todos os kinds com `parent` normalizado; filtros `?kind=domain\|system\|resource` e `?owner=` |
+| `POST` | `/v1/scm/connections` | `202`; só `platform-admins`; body `{"name", "vendor": "github", "org", "default"}` devolve `next` (manifest flow); com `appId` e `privateKeyPem`, grava a chave e pula o manifest flow |
+| `GET` | `/v1/scm/connections` | `200`, `{"items": [...]}`; só `platform-admins`; nunca segredos |
+| `GET` | `/v1/scm/connections/{name}` | `200`; só `platform-admins`; `installUrl` enquanto `NotInstalled` |
+| `POST` | `/v1/scm/connections/{name}/verify` | `202`; só `platform-admins`; pede a revalidação ao controller |
+| `POST` | `/v1/scm/connections/{name}/default` | `200`; só `platform-admins`; desmarca a padrão anterior |
+| `DELETE` | `/v1/scm/connections/{name}` | `200`; só `platform-admins`; remove o CR e o Secret, o App continua no GitHub |
+| `GET` | `/v1/scm/connections/{name}/github/start\|callback\|installed` | páginas HTML do navegador, sem JWT (ver abaixo) |
 
 `GET /v1/environments/{name}` traz também `kubeconfigData`, mas só para quem pode usar o ambiente: quem o criou (anotação `platform.wasp.silvios.me/owner`, gravada pela API com o `sub` do token no create), quem está em `platform-admins` e os membros dos times de `spec.sharedWith`. É um kubeconfig pessoal sem credencial (ADR 0028): o usuário dele roda `platform environment credential <nome>`, que chama `POST /v1/environments/{name}/credentials`. A rota confere `can_use`, garante a ServiceAccount da pessoa (o `sub`) no namespace `platform-identities` do vcluster e devolve um token de 10 minutos. A API fala com o vcluster em `https://vcluster.env-<nome>:<porta>` (`PLATFORM_VCLUSTER_SERVER`), com o kubeconfig de administrador que o provider publica no status. Esse kubeconfig de administrador sai só em `GET /v1/environments/{name}/admin-kubeconfig`, e só para `platform-admins`. A lista nunca traz kubeconfig.
 
@@ -64,6 +71,22 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 
 `CloudAccount` é um CRD de `platform.wasp.silvios.me` (ADR 0029, `platform/crds/cloudaccount.yaml`): `spec.vendor` (`aws`) e `spec.aws.{roleArn,externalId,regions}`. A API gera o `externalId` (`secrets.token_urlsafe(24)`), nunca o aceita do cliente e o deixa fora do journal. A trust policy devolvida tem como principal o ARN da credencial base, que o provider `aws_account` publica no ConfigMap `aws-base-identity`. Sem esse ConfigMap, a capacidade `cloud-account` fica `NoProviderForCapability` e o registro responde `409`. A validação é do provider (`platform/providers/aws_account/`), que escreve as conditions. A mesma role não entra duas vezes: a comparação é por conta e nome da role sem caixa nem path, como o IAM os trata (`role/Platform` e `role/team/platform` são a `role/platform`). A kube API não tem índice único, então o `create` relista depois de gravar e desiste com `409` se outra conta da mesma role entrou ao mesmo tempo.
 
+## SCM connections
+
+`ScmConnection` (`platform/crds/scm-connection.yaml`, short name `scm`) é uma connection com uma plataforma de código (ADR 0025): nesta fatia, uma org do GitHub com o App da plataforma. Só `platform-admins` usam as rotas autenticadas. O controller `platform/providers/scm_github/` valida a instalação e escreve a condition `Ready` (`Verified`, `AppNotCreated`, `NotInstalled`, `NotAllRepositories`, `MissingPermissions`).
+
+O manifest flow passa por três rotas que o navegador chama sem JWT:
+
+- `start?state=…`: página que faz `POST` automático do manifesto para `https://github.com/organizations/<org>/settings/apps/new`. O manifesto pede `administration`, `contents`, `workflows`, `pull_requests` e `actions` em escrita e `metadata` em leitura, sem webhook, App privado.
+- `callback?code=…&state=…`: consome o `state`, troca o `code` pela chave (`POST /app-manifests/{code}/conversions`), grava a chave pelo `SecretStore` e `appId`/`appSlug` no spec, e passa a `NotInstalled`.
+- `installed?installation_id=…`: o `setup_url` do App. Não tem `state`: grava o id como dica e pede a revalidação; o controller só aceita uma instalação deste App na org, e uma connection `ready` não é tocada.
+
+O `state` é de uso único, vale 10 min e fica na memória da réplica única da API: reiniciar a API só obriga a rodar o `add` de novo. O GitHub redireciona para `PLATFORM_PUBLIC_URL` (`http://127.0.0.1:9090`), o mesmo endereço em que a CLI fala com a API, então o `Host` passa pelo `TrustedHostMiddleware`.
+
+### Segredos
+
+A chave do App vai do GitHub (ou do `--private-key-file`) direto para o `SecretStore` (`secrets.py`): no target local, um Secret `scm-<nome>` em `platform-system` com a label `platform.wasp.silvios.me/secret-of=ScmConnection.<nome>`. A interface só tem `put` e `delete`, e a Role da API não tem `get` em `secrets`: nenhuma rota devolve a chave. Quem lê é o controller.
+
 ## Escrita
 
 - Toda escrita passa pela interface `StateWriter` (`state.py`); a implementação é `KubeApplyWriter`, que aplica direto na kube API.
@@ -74,6 +97,8 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 Nesta fatia, o journal é um arquivo append-only JSON Lines em `/var/lib/platform/journal.jsonl`, num PVC (`platform-api-journal`). Cada pedido aceito gera uma linha com `applied: false` **antes** de ser aplicado e outra com o mesmo `id` e `applied: true` depois. O Postgres substitui o arquivo com a #172.
 
 A expiração de um ambiente é aplicada pelo provider direto no CR e não passa pelo journal.
+
+Nenhum segredo chega ao arquivo: `redact()` troca o valor de chaves sensíveis (`privateKeyPem`, `token`, `secret`, `password`…) e qualquer bloco PEM por `<redacted, sha256:<8 primeiros>>`, o bastante para comparar dois registros sem recuperar o valor.
 
 ## Autenticação
 

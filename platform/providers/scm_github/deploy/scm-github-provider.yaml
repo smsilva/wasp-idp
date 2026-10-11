@@ -1,0 +1,66 @@
+# Provider scm_github (#199): validates each GitHub ScmConnection with the App's key and records the
+# installation. Installed by `platform init`. The only reader of the credential Secrets (ADR 0025).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scm-github-provider
+  namespace: platform-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scm-github-provider
+  namespace: platform-system
+rules:
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [scmconnections]
+    verbs: [get, list, watch, patch] # patch: appSlug and installationId
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [scmconnections/status]
+    verbs: [get, patch]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scm-github-provider
+  namespace: platform-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: scm-github-provider
+subjects:
+  - kind: ServiceAccount
+    name: scm-github-provider
+    namespace: platform-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scm-github-provider
+  namespace: platform-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one reconciler at a time
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: scm-github-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scm-github-provider
+    spec:
+      serviceAccountName: scm-github-provider
+      containers:
+        - name: provider
+          image: scm-github-provider:dev
+          imagePullPolicy: Never
+          args: [--namespace, platform-system]
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 192Mi

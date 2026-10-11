@@ -75,3 +75,27 @@ def test_cloud_account_crd_matches_the_api():
   assert tuple(spec["vendor"]["enum"]) == VENDORS
   assert sorted(spec["aws"]["required"]) == ["externalId", "roleArn"]
   assert "observedVerifyRequest" in version["schema"]["openAPIV3Schema"]["properties"]["status"]["properties"]
+
+
+def test_scm_connection_crd():
+  from platform_api.scm import ORG, PLURAL
+
+  crd = yaml.safe_load((CRDS / "scm-connection.yaml").read_text())
+  assert crd["metadata"]["name"] == f"{PLURAL}.{GROUP}"
+  assert crd["spec"]["names"]["shortNames"] == ["scm"]
+  version = crd["spec"]["versions"][0]
+  assert version["subresources"] == {"status": {}}
+  spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]
+  assert spec["vendor"]["enum"] == ["github"]
+  assert spec["github"]["properties"]["org"]["pattern"] == ORG.pattern
+  assert [column["name"] for column in version["additionalPrinterColumns"]] == ["Vendor", "Org", "Default", "Ready", "Reason"]
+
+
+def test_api_role_writes_secrets_but_never_reads_them():
+  deploy = Path(__file__).parents[1] / "deploy" / "platform-api.yaml"
+  role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
+  verbs = {verb for rule in role["rules"] if "secrets" in rule["resources"] for verb in rule["verbs"]}
+  assert verbs == {"create", "update", "patch", "delete"}
+  scm = next(rule for rule in role["rules"] if "scmconnections" in rule["resources"])
+  assert {"get", "list", "create", "update", "delete"} <= set(scm["verbs"])
+  assert any("scmconnections/status" in rule["resources"] for rule in role["rules"])

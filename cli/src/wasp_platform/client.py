@@ -138,6 +138,24 @@ class PlatformClient:
   def delete_template(self, name: str) -> None:
     self._request("DELETE", f"/v1/catalog/templates/{name}")
 
+  def create_scm_connection(self, body: dict) -> dict:
+    return self._request("POST", "/v1/scm/connections", json=body)
+
+  def list_scm_connections(self) -> list[dict]:
+    return self._request("GET", "/v1/scm/connections")["items"]
+
+  def get_scm_connection(self, name: str) -> dict:
+    return self._request("GET", f"/v1/scm/connections/{name}")
+
+  def verify_scm_connection(self, name: str) -> dict:
+    return self._request("POST", f"/v1/scm/connections/{name}/verify")
+
+  def make_default_scm_connection(self, name: str) -> dict:
+    return self._request("POST", f"/v1/scm/connections/{name}/default")
+
+  def delete_scm_connection(self, name: str) -> dict:
+    return self._request("DELETE", f"/v1/scm/connections/{name}")
+
 
 def _detail(response: httpx.Response) -> str:
   """The API answers every error as {"error": {"code", "message"}}."""

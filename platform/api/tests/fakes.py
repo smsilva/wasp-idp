@@ -150,3 +150,16 @@ class FakeCredentials:
     revoked = sorted(name for name in current if name not in keep and (only is None or name in only))
     current.difference_update(revoked)
     return revoked
+
+
+class FakeSecrets:
+  """The SecretStore in memory: put and delete only, like the real one seen from the API."""
+
+  def __init__(self):
+    self.items = {}
+
+  def put(self, name, data, owner):
+    self.items[name] = {"data": dict(data), "owner": owner}
+
+  def delete(self, name):
+    self.items.pop(name, None)

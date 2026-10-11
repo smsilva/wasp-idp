@@ -2,6 +2,7 @@ import os
 import re
 from typing import Literal
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -9,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, catalog_import, cloud_accounts, credentials as personal, environments, templates, teams as team_routes
+from . import catalog, catalog_import, cloud_accounts, credentials as personal, environments, scm, templates, teams as team_routes
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -53,6 +54,7 @@ CAPABILITIES = {
   "identity": "Active",
   "environment": "Active",
   "catalog": "Active",
+  "scm": "Active",
   "build": "NoProviderForCapability",
   "release": "NoProviderForCapability",
   # Active once the aws_account controller publishes the base identity (ADR 0029).
@@ -69,7 +71,11 @@ def _error(status: int, message, headers=None, plan: dict | None = None) -> JSON
   return JSONResponse({"error": body}, status, headers=headers)
 
 
-def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None, base_identity=None) -> FastAPI:
+def create_app(
+  state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None,
+  base_identity=None, secrets=None, github: httpx.Client | None = None, public_url: str = "http://127.0.0.1:9090",
+  scm_states: scm.States | None = None,
+) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.2.0")
   app.state.verifier = verifier
   if allowed_hosts:
@@ -260,10 +266,13 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
   app.include_router(cloud_accounts.router(state, journal, base_identity))
+  github = github or httpx.Client(base_url=scm.GITHUB_API, timeout=15)
+  app.include_router(scm.router(state, journal, secrets, github, public_url, scm_states or scm.States()))
   return app
 
 
 def build() -> FastAPI:
+  from .secrets import KubeSecretStore
   from .state import KubeApplyWriter
 
   namespace = os.environ.get("PLATFORM_NAMESPACE", "platform-system")
@@ -277,4 +286,9 @@ def build() -> FastAPI:
   # The writer loads the in-cluster config: build it before any other kubernetes client.
   state = KubeApplyWriter(namespace)
   base_identity = cloud_accounts.KubeBaseIdentity(namespace)
-  return create_app(state, Journal(journal_path), verifier, allowed_hosts, teams, credentials, base_identity)
+  # Where the browser reaches the API: GitHub redirects there at the end of the manifest flow.
+  public_url = os.environ.get("PLATFORM_PUBLIC_URL", "http://127.0.0.1:9090")
+  return create_app(
+    state, Journal(journal_path), verifier, allowed_hosts, teams, credentials, base_identity,
+    secrets=KubeSecretStore(namespace), public_url=public_url,
+  )
