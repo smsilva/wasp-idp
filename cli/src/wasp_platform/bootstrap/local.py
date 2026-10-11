@@ -327,7 +327,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
 
   api_dir = root / "platform" / "api"
   log("building the Platform API image …")
-  # Context platform/: the API depends on platform/libs/templates by path.
+  # Context platform/: the API depends on platform/libs/templates and platform/libs/score by path.
   image = _build_and_import(IMAGE, api_dir.parent, api_dir / "Dockerfile")
 
   log("deploying the Platform API …")

@@ -9,8 +9,9 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 
-from scm_github_provider.build import BUILDING, RETENTION, RUN_LOOKUP, BuildReconciler, spec_errors, score_schema, version_name
+from scm_github_provider.build import BUILDING, RETENTION, RUN_LOOKUP, BuildReconciler, version_name
 from scm_github_provider.github import GitHubApp
 
 from test_component_creation import NOW, FakeObjects, FakeSecrets, connection, conditions
@@ -163,8 +164,23 @@ def test_dispatch_follow_and_register(world):
   assert version["spec"] == {
     "component": "greeting-api", "version": "0.3.0-greetings.86a7c08", "image": "ghcr.io/wasp-foundry/greeting-api",
     "digest": DIGEST, "commit": COMMIT, "branch": "feat/greetings", "createdAt": "2026-10-11T12:00:00Z", "build": "greeting-api-a1b2c3",
+    "appSpec": yaml.safe_load(APP_SPEC),
   }
   assert len(world.github.dispatches) == 1
+
+
+def test_a_spec_validated_in_an_earlier_pass_is_read_again_at_the_commit(world):
+  world.run()
+  world.github.finish()
+  world.run()
+  status = world.builds.get("greeting-api-a1b2c3")["status"]
+  # A status saved after the validation and before the registration.
+  status["conditions"] = [item for item in status["conditions"] if item["type"] != "Ready"]
+  world.builds.items["greeting-api-a1b2c3"]["status"] = status
+  world.versions.items.clear()
+  world.restart()
+  assert ready(world.run()) == ("True", "Registered")
+  assert world.versions.get("greeting-api.0.3.0-greetings.86a7c08")["spec"]["appSpec"] == yaml.safe_load(APP_SPEC)
 
 
 def test_the_requested_version_goes_to_the_workflow():
@@ -376,12 +392,6 @@ def test_ready_build_is_removed_after_retention_and_the_version_stays(world):
   world.run()
   assert world.builds.get("greeting-api-a1b2c3") is None
   assert world.versions.get("greeting-api.0.3.0-greetings.86a7c08") is not None
-
-
-def test_spec_errors_of_the_seed_is_empty():
-  errors, declared = spec_errors(APP_SPEC, score_schema(), ("postgres", "dns", "route"), lambda name: False)
-  assert errors == []
-  assert [item["type"] for item in declared] == ["postgres", "dns", "route"]
 
 
 def test_version_name():

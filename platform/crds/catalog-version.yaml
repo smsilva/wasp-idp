@@ -1,6 +1,7 @@
 # The version index (#206, ADR 0030). A READ MIRROR: a version is an image the platform built from a
-# branch, whose app-spec.yaml passed the Score gate. Written only by the scm_github provider when a Build
-# ends Ready; named <component>.<version>, never overwritten (VersionConflict).
+# branch, whose app-spec.yaml passed the Score gate and is kept in spec.appSpec (the Workload Spec,
+# ADR 0033). Written only by the scm_github provider when a Build ends Ready; named
+# <component>.<version>, never overwritten (VersionConflict).
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -57,3 +58,7 @@ spec:
                 build:
                   description: The Build that registered it (removed after 24 h).
                   type: string
+                appSpec:
+                  description: The Workload Spec (ADR 0033), the app-spec.yaml (Score) of the commit as the build validated it. Absent from versions indexed before #291.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true

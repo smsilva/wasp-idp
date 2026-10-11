@@ -151,3 +151,7 @@ def test_version_index_crd():
   role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
   verbs = {verb for rule in role["rules"] if VERSIONS in rule["resources"] for verb in rule["verbs"]}
   assert verbs == {"get", "list", "watch"}
+  # The Workload Spec (#291): any Score, kept as written, and absent from versions indexed before it.
+  spec = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+  assert spec["properties"]["appSpec"]["x-kubernetes-preserve-unknown-fields"] is True
+  assert "appSpec" not in spec["required"]
