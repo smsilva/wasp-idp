@@ -32,6 +32,9 @@ SMOKE_USER = "platform-smoke"
 SMOKE_ADMIN = "platform-smoke-admin"
 SMOKE_SECRET = "keycloak-smoke-user"
 SMOKE_KEYS = {SMOKE_USER: "SMOKE_USER_PASSWORD", SMOKE_ADMIN: "SMOKE_ADMIN_PASSWORD"}
+# Secret of the platform-api-admin client (teams, #231): read by the realm import and by the API.
+API_ADMIN_SECRET = "platform-api-keycloak"
+API_ADMIN_KEY = "PLATFORM_API_ADMIN_SECRET"
 # One host port per vcluster environment (provider local_vcluster, #183); must match PORTS in
 # platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py.
 ENV_PORTS = "7100-7119"
@@ -111,6 +114,10 @@ def _apply_secret(namespace: str, name: str, values: dict[str, str]) -> None:
   _kubectl("apply", "--filename", "-", input=json.dumps(manifest))
 
 
+def _ensure_namespace(name: str) -> None:
+  _kubectl("apply", "--filename", "-", input=json.dumps({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name}}))
+
+
 def smoke_password(username: str) -> str:
   """The test user's password, from the Secret init generated (the CLI never stores it)."""
   password = _secret_value(AUTH_NAMESPACE, SMOKE_SECRET, SMOKE_KEYS[username])
@@ -162,6 +169,12 @@ def install_keycloak(root: Path, admin_email: str | None, log) -> dict:
   smoke_secret = {key: _secret_value(AUTH_NAMESPACE, SMOKE_SECRET, key) or secrets.token_urlsafe(24) for key in SMOKE_KEYS.values()}
   _apply_secret(AUTH_NAMESPACE, SMOKE_SECRET, smoke_secret)
   smoke = yaml.safe_load((keycloak_dir / "realm-smoke.yaml").read_text())
+
+  # Generated once; the Platform API namespace may not exist yet on a fresh cluster.
+  admin_secret = _secret_value(AUTH_NAMESPACE, API_ADMIN_SECRET, API_ADMIN_KEY) or secrets.token_urlsafe(32)
+  for namespace in (AUTH_NAMESPACE, NAMESPACE):
+    _ensure_namespace(namespace)
+    _apply_secret(namespace, API_ADMIN_SECRET, {API_ADMIN_KEY: admin_secret})
 
   realm = render_realm(yaml.safe_load((keycloak_dir / "realm-platform.yaml").read_text()), google, bool(admin_email), smoke)
   configmap = {

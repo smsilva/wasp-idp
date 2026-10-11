@@ -37,6 +37,9 @@ spec:
             # Keep Keycloak's built-in client scopes (profile, email, basic…): the file only adds ours.
             - name: IMPORT_MANAGED_CLIENTSCOPE
               value: no-delete
+            # Teams are groups the Platform API creates under /teams (ADR 0026): never prune them.
+            - name: IMPORT_MANAGED_GROUP
+              value: no-delete
           envFrom:
             - secretRef:
                 name: keycloak-google
@@ -44,6 +47,9 @@ spec:
             - secretRef:
                 name: keycloak-smoke-user
                 optional: true
+            # Secret of the platform-api-admin client (#231).
+            - secretRef:
+                name: platform-api-keycloak
           volumeMounts:
             - name: realm
               mountPath: /config

@@ -1,4 +1,6 @@
 """HTTP client of the Platform API: the only way commands other than init reach the platform."""
+from urllib.parse import quote
+
 import httpx
 
 from . import auth, config
@@ -65,6 +67,24 @@ class PlatformClient:
   def list_catalog_entities(self, kind: str | None = None, owner: str | None = None) -> list[dict]:
     params = {key: value for key, value in {"kind": kind, "owner": owner}.items() if value}
     return self._request("GET", "/v1/catalog/entities", params=params)["items"]
+
+  def list_teams(self) -> list[dict]:
+    return self._request("GET", "/v1/teams")["items"]
+
+  def get_team(self, name: str) -> dict:
+    return self._request("GET", f"/v1/teams/{name}")
+
+  def create_team(self, name: str) -> dict:
+    return self._request("POST", "/v1/teams", json={"name": name})
+
+  def delete_team(self, name: str) -> None:
+    self._request("DELETE", f"/v1/teams/{name}")
+
+  def add_team_member(self, name: str, email: str) -> dict:
+    return self._request("POST", f"/v1/teams/{name}/members", json={"email": email})
+
+  def remove_team_member(self, name: str, email: str) -> None:
+    self._request("DELETE", f"/v1/teams/{name}/members/{quote(email, safe='@')}")
 
   def import_catalog(self, documents: list[dict], dry_run: bool, plan_hash: str | None = None) -> dict:
     return self._request("POST", "/v1/catalog/import", json={"documents": documents, "dryRun": dry_run, "planHash": plan_hash})

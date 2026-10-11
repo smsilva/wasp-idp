@@ -7,8 +7,9 @@ Usage: ${0##*/} [--skip-init]
 
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
 init, login as the test user, the refusals a non-admin gets, an environment
-created and deleted, then login as the test admin and the catalog import of
-idp/catalog/. Stops at the first failure with a non-zero exit code.
+created and deleted, then login as the test admin, the catalog import of
+idp/catalog/ and a team with the test user as member, checked in the user's
+token. Stops at the first failure with a non-zero exit code.
 
 It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
 your own login in ~/.config/platform/credentials is never touched.
@@ -29,6 +30,7 @@ done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 environment="smoke-${RANDOM}"
+team="smoke-team-${RANDOM}"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
 # The test logins replace the credentials file; a private config dir keeps the user's session.
@@ -76,6 +78,7 @@ cleanup() {
   # An environment left behind keeps a vcluster and a host port busy. After a successful run it is
   # already gone and this fails silently; bash keeps the script's own exit status.
   platform environment delete "${environment}" > /dev/null 2>&1 || true
+  platform team delete "${team}" > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}"
 }
 trap cleanup EXIT
@@ -116,6 +119,27 @@ step "catalog import idp/catalog/"
 platform catalog import idp/catalog/ --yes
 output="$(platform catalog import idp/catalog/ --dry-run)"
 expect_output "nothing to do" "${output}"
+
+step "team create and member add (platform-admins)"
+platform team create "${team}"
+platform team member add "${team}" platform-smoke@platform.local
+output="$(platform team get "${team}")"
+expect_output "platform-smoke@platform.local" "${output}"
+
+step "the test user gets the team in its token, and cannot manage teams"
+platform login --test-user
+output="$(platform whoami)"
+expect_output "${team}" "${output}"
+expect_failure "403" platform team create smoke-forbidden
+
+step "team delete"
+platform login --test-admin
+platform team delete "${team}"
+output="$(platform team list)"
+if grep --quiet --fixed-strings -- "${team}" <<< "${output}"; then
+  echo "team ${team} still listed after delete" >&2
+  exit 1
+fi
 
 step "logout"
 platform logout

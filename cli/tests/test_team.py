@@ -1,0 +1,89 @@
+import json
+
+import httpx
+import pytest
+from typer.testing import CliRunner
+
+from wasp_platform import client as client_module
+from wasp_platform.cli import app
+
+runner = CliRunner()
+
+
+@pytest.fixture
+def api(monkeypatch):
+  teams = {}
+  requests = []
+
+  def error(status, code, message):
+    return httpx.Response(status, json={"error": {"code": code, "message": message}})
+
+  def handler(request: httpx.Request) -> httpx.Response:
+    requests.append(request)
+    parts = request.url.path.split("/")[3:]
+    if parts == [] and request.method == "GET":
+      return httpx.Response(200, json={"items": [{"name": name} for name in sorted(teams)]})
+    if parts == [] and request.method == "POST":
+      name = json.loads(request.content)["name"]
+      if name in teams:
+        return error(409, "conflict", f"team '{name}' already exists")
+      teams[name] = []
+      return httpx.Response(201, json={"name": name, "members": []})
+    name = parts[0]
+    if name not in teams:
+      return error(404, "not_found", f"team '{name}' not found")
+    if len(parts) == 1 and request.method == "GET":
+      return httpx.Response(200, json={"name": name, "members": teams[name]})
+    if len(parts) == 1:
+      del teams[name]
+      return httpx.Response(204)
+    if request.method == "POST":
+      email = json.loads(request.content)["email"]
+      teams[name].append({"email": email, "username": email.split("@")[0]})
+      return httpx.Response(201, json={"team": name, "email": email})
+    teams[name] = [member for member in teams[name] if member["email"] != parts[2]]
+    return httpx.Response(204)
+
+  transport = httpx.MockTransport(handler)
+  original = client_module.PlatformClient.__init__
+  monkeypatch.setattr(
+    client_module.PlatformClient, "__init__",
+    lambda self, base_url=None, transport_=None, token=None: original(self, "http://api.test", transport, token or (lambda: "test-token")),
+  )
+  return requests
+
+
+def run(*args):
+  return runner.invoke(app, ["team", *args])
+
+
+def test_create_list_get_delete(api):
+  assert "✓ team team-alpha created" in run("create", "team-alpha").output
+  assert run("list").output.split() == ["NAME", "team-alpha"]
+  assert "team-alpha: 0 member(s)" in run("get", "team-alpha").output
+  assert "✓ team team-alpha deleted" in run("delete", "team-alpha").output
+  assert run("list").output.split() == ["NAME"]
+
+
+def test_member_add_and_remove(api):
+  run("create", "team-alpha")
+  result = run("member", "add", "team-alpha", "dev@example.com")
+  assert result.exit_code == 0, result.output
+  assert json.loads(api[-1].content) == {"email": "dev@example.com"}
+  output = run("get", "team-alpha").output
+  assert "1 member(s)" in output and "dev@example.com" in output
+  assert run("member", "remove", "team-alpha", "dev@example.com").exit_code == 0
+  assert api[-1].method == "DELETE" and api[-1].url.path.endswith("/members/dev@example.com")
+
+
+def test_errors_exit_non_zero_with_api_message(api):
+  run("create", "team-alpha")
+  result = run("create", "team-alpha")
+  assert result.exit_code == 1
+  assert "409: team 'team-alpha' already exists" in result.output
+  assert "404: team 'missing' not found" in run("get", "missing").output
+
+
+def test_json_output(api):
+  run("create", "team-alpha")
+  assert json.loads(run("list", "--output", "json").output) == [{"name": "team-alpha"}]

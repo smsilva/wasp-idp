@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, catalog_import, environments
+from . import catalog, catalog_import, environments, teams as team_routes
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -48,7 +48,7 @@ CAPABILITIES = {
   "release": "NoProviderForCapability",
 }
 
-ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 422: "invalid_request"}
+ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 422: "invalid_request", 503: "unavailable"}
 
 
 def _error(status: int, message, headers=None, plan: dict | None = None) -> JSONResponse:
@@ -58,7 +58,7 @@ def _error(status: int, message, headers=None, plan: dict | None = None) -> JSON
   return JSONResponse({"error": body}, status, headers=headers)
 
 
-def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None) -> FastAPI:
+def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.2.0")
   app.state.verifier = verifier
   if allowed_hosts:
@@ -145,6 +145,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   # Before the catalog router: its POST /{plural} would otherwise take "import" as a kind.
   app.include_router(catalog_import.router(state, journal))
   app.include_router(catalog.router(state, journal))
+  app.include_router(team_routes.router(teams, journal))
   return app
 
 
@@ -155,4 +156,7 @@ def build() -> FastAPI:
   journal_path = os.environ.get("PLATFORM_JOURNAL", "/var/lib/platform/journal.jsonl")
   allowed_hosts = os.environ.get("PLATFORM_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
   verifier = Verifier(issuer=os.environ["PLATFORM_OIDC_ISSUER"], jwks_url=os.environ["PLATFORM_OIDC_JWKS_URL"])
-  return create_app(KubeApplyWriter(namespace), Journal(journal_path), verifier, allowed_hosts)
+  # Without the admin client the API still serves everything else; /v1/teams answers 503.
+  admin_secret = os.environ.get("PLATFORM_KEYCLOAK_ADMIN_SECRET")
+  teams = team_routes.KeycloakTeams(os.environ["PLATFORM_KEYCLOAK_URL"], admin_secret) if admin_secret else None
+  return create_app(KubeApplyWriter(namespace), Journal(journal_path), verifier, allowed_hosts, teams)
