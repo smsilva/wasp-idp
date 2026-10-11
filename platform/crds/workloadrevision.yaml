@@ -1,0 +1,137 @@
+# A revision of a Workload Instance (ADR 0033): one act on an instance in an Environment (deploy,
+# rollback, remove), immutable, with its result in the Ready condition. The Platform API writes only
+# revisions, named <environment>.<instance>.<n>: two concurrent requests collide on the name. The
+# workload provider applies the newest revision of each instance in the vcluster, closes older open
+# ones as Superseded and keeps the WorkloadInstance. Owned by the Environment, not the instance: the
+# history outlives a remove and goes away with the environment.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workloadrevisions.platform.wasp.silvios.me
+spec:
+  group: platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: WorkloadRevision
+    listKind: WorkloadRevisionList
+    plural: workloadrevisions
+    singular: workloadrevision
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Environment
+          type: string
+          jsonPath: .spec.environment
+        - name: Instance
+          type: string
+          jsonPath: .spec.instance
+        - name: Revision
+          type: integer
+          jsonPath: .spec.revision
+        - name: Action
+          type: string
+          jsonPath: .spec.action
+        - name: Version
+          type: string
+          jsonPath: .spec.version
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Reason
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [environment, instance, component, revision, action, requestedBy, requestId]
+              x-kubernetes-validations:
+                - rule: self == oldSelf
+                  message: a revision is immutable
+                - rule: self.action == 'remove' || (has(self.version) && has(self.image) && has(self.digest))
+                  message: deploy and rollback carry the version, its image and digest
+                - rule: (self.action == 'rollback') == has(self.rollbackOf)
+                  message: rollbackOf is set on rollbacks only
+              properties:
+                environment:
+                  type: string
+                  pattern: '^[a-z]([-a-z0-9]{0,26}[a-z0-9])?$'
+                instance:
+                  description: The instance name; in phase 1 it is the component name.
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                component:
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                revision:
+                  description: The <n> of the name, from 1.
+                  type: integer
+                  minimum: 1
+                action:
+                  type: string
+                  enum: [deploy, rollback, remove]
+                version:
+                  description: The version from the index, resolved by the API (a --branch is pinned here).
+                  type: string
+                  pattern: '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+                image:
+                  type: string
+                digest:
+                  type: string
+                  pattern: '^sha256:[0-9a-f]{64}$'
+                commit:
+                  type: string
+                overrides:
+                  description: Per-environment values, never part of the Workload Spec.
+                  type: object
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 0
+                      maximum: 20
+                requestedBy:
+                  description: Who asked, for display (e-mail, or the token sub without one).
+                  type: string
+                requestId:
+                  type: string
+                rollbackOf:
+                  description: The revision whose version and overrides a rollback copies.
+                  type: integer
+                  minimum: 1
+            status:
+              type: object
+              properties:
+                startedAt:
+                  type: string
+                  format: date-time
+                finishedAt:
+                  type: string
+                  format: date-time
+                conditions:
+                  description: >-
+                    Ready: Unknown while open (Pending, EnvironmentNotReady); True with Succeeded; False
+                    with SpecNotIndexed, ResourcesNotSupported, UnsupportedSpec, ApplyFailed,
+                    RolloutFailed or Superseded.
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

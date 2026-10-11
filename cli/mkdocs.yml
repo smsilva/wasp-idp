@@ -71,6 +71,8 @@ nav:
       - Workloads:
           - 21.1 Validate a spec before the build: walkthrough/workloads/21-1-validate.md
           - 21.2 The spec of a version: walkthrough/workloads/21-2-spec.md
+          - 21.3 Deploy a version to an environment: walkthrough/workloads/21-3-deploy.md
+          - 21.4 The history of a workload: walkthrough/workloads/21-4-history.md
       - 22. Remove the GitHub connection: walkthrough/scm-connection/22-remove.md
       - 23. Clean up and sign out: walkthrough/23-cleanup.md
       - Without a browser: walkthrough/cli-smoke.md

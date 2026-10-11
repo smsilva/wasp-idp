@@ -115,6 +115,19 @@ class PlatformClient:
     params = {key: value for key, value in (("version", version), ("branch", branch)) if value is not None}
     return self._request("GET", f"/v1/catalog/components/{quote(component, safe='')}/spec", params=params)
 
+  def deploy_workload(self, environment: str, instance: str, body: dict) -> dict:
+    return self._request("POST", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}/revisions", json=body)
+
+  def list_workloads(self, environment: str) -> list[dict]:
+    return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads")["items"]
+
+  def get_workload(self, environment: str, instance: str) -> dict:
+    return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}")
+
+  def workload_history(self, environment: str, instance: str | None = None) -> list[dict]:
+    params = {"instance": instance} if instance else {}
+    return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/revisions", params=params)["items"]
+
   def list_teams(self) -> list[dict]:
     return self._request("GET", "/v1/teams")["items"]
 

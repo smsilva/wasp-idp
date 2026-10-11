@@ -19,7 +19,9 @@ schema, a name already in the index, a connection that is not ready), the
 refusals of build create (outside the owner team, unknown component, a malformed
 version, an org with no connection), the Workload Spec (spec validate of a
 valid and an invalid Score, spec get of a Version written by kubectl, refused outside the owner team,
-by version and by branch, and SpecNotIndexed for a Version without it), and a cloud account (ADR 0029): refused with a clear message without an
+by version and by branch, and SpecNotIndexed for a Version without it), a Workload Instance
+(deploy of a public image by digest with --wait, list, get, history; refused outside the owner team,
+for a version outside the index, and ResourcesNotSupported for a Score with resources), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -54,6 +56,9 @@ taken_component="smoke-taken-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
 workload_component="smoke-workload-${RANDOM}"
 workload_directory="$(mktemp --directory)"
+workload_environment="smoke-workload-${RANDOM}"
+# ghcr.io/stefanprodan/podinfo:6.7.1, public: the vcluster pulls it without credentials.
+workload_digest="sha256:862ca45e61b32392f7941a1bdfdbe5ff8b6899070135f1bdca1c287d0057fc94"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -103,6 +108,7 @@ cleanup() {
   # already gone and this fails silently; bash keeps the script's own exit status.
   platform environment delete "${environment}" > /dev/null 2>&1 || true
   platform environment delete "${shared_environment}" > /dev/null 2>&1 || true
+  platform environment delete "${workload_environment}" > /dev/null 2>&1 || true
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
@@ -468,6 +474,106 @@ expect_failure "no version built from branch 'main' in the index" \
   platform workload spec get \
     --component "${workload_component}" \
     --branch main
+step "workload deploy|list|get|history: a version from the index in an environment (#292)"
+# A public image by digest the vcluster can pull, and a Score without resources (the Forager is #263);
+# the next version declares a database, which phase 1 refuses as ResourcesNotSupported.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.3.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.3.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '3%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${workload_component}
+    containers:
+      app:
+        image: .
+        variables:
+          PODINFO_UI_MESSAGE: \${metadata.name}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9898
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.4.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.4.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '4%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T13:00:00Z"
+  appSpec:
+$(sed 's/^/    /' "${workload_directory}/app-spec.yaml")
+MANIFEST
+# The test user owns the environment but is not in team-platform, the owner team of the component.
+platform login --test-user
+platform environment create "${workload_environment}" \
+  --profile ephemeral \
+  --wait
+expect_failure "only members of its owner team (team-platform)" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${workload_environment}" \
+    --version 0.3.0
+platform login --test-admin
+expect_failure "no version 9.9.9 in the index" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${workload_environment}" \
+    --version 9.9.9
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --replicas 2 \
+  --wait)"
+echo "${output}"
+expect_output "${workload_component}@${workload_environment} revision 1: 0.3.0 running · 2/2 replicas available" "${output}"
+output="$(platform workload list --environment "${workload_environment}")"
+echo "${output}"
+expect_output "Available" "${output}"
+expect_output "http://${workload_component}.apps:80" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
+expect_output "ghcr.io/stefanprodan/podinfo@${workload_digest}" "${output}"
+expect_failure "revision 2: ResourcesNotSupported" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${workload_environment}" \
+    --version 0.4.0 \
+    --wait
+output="$(platform workload history --environment "${workload_environment}" --component "${workload_component}")"
+echo "${output}"
+expect_output "ResourcesNotSupported" "${output}"
+# The failed revision changes nothing: the instance still runs revision 1.
+output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
+expect_output "(Available)" "${output}"
+expect_output "newest        revision 2" "${output}"
+platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
 
