@@ -1,8 +1,8 @@
 # Provider de SCM connection do GitHub
 
-Valida cada `ScmConnection` com `vendor: github` do namespace `platform-system` contra o GitHub App dela (ADR 0025, #199) e executa cada `ComponentCreation` (`platform catalog component create`, #279). Roda **dentro do cluster**, como Deployment `scm-github-provider` em `platform-system`, instalado pelo `platform init --target local`.
+Valida cada `ScmConnection` com `vendor: github` do namespace `platform-system` contra o GitHub App dela (ADR 0025, #199) e executa cada `ComponentCreation` (`platform catalog component create`, #279) e cada `Build` (`platform build create`, #206). Roda **dentro do cluster**, como Deployment `scm-github-provider` em `platform-system`, instalado pelo `platform init --target local`.
 
-É o único leitor dos Secrets de credencial: a Platform API grava a chave pelo `SecretStore` e não tem `get` em `secrets`; a Role deste controller tem só `get` em `secrets`, e `get`/`list`/`watch`/`patch` em `scmconnections`. Por isso a criação de repos roda aqui, num segundo watch do mesmo processo, e não num controller à parte.
+É o único leitor dos Secrets de credencial: a Platform API grava a chave pelo `SecretStore` e não tem `get` em `secrets`; a Role deste controller tem só `get` em `secrets`, e `get`/`list`/`watch`/`patch` em `scmconnections`. Por isso a criação de repos e os builds rodam aqui, em outros dois watches do mesmo processo, e não em controllers à parte.
 
 ## Reconciliação
 
@@ -34,6 +34,18 @@ Uma falha vira `reason` no primeiro passo pendente e no `Ready`; o status só é
 - **Definitiva:** `GitHubRejected` (qualquer outro 4xx, com a mensagem do GitHub), `RepoAlreadyExists`, `RepoGone` e `ComponentExists`. A criação para.
 
 Uma criação `Ready`, ou parada num reason definitivo, é removida 24 h depois (`lastTransitionTime` do `Ready`); o índice `Component` fica.
+
+## Build
+
+Cada `Build` (#206, ADR 0030) segue o contrato `platform-build` (`cli/docs/reference/builds.md`). O token da instalação é reaproveitado por 50 min, e o status só é gravado quando muda.
+
+1. `Dispatched`: `GET …/actions/workflows/platform-build.yaml` (`404` → `WorkflowNotFound`), `GET …/branches/{branch}` (`404` → `BranchNotFound`), e `POST …/dispatches` com `request-id` e `version`. Antes do dispatch procura o run pelo `run-name`: um restart entre o dispatch e o status gravado não dispara de novo. `422` no dispatch → `ContractViolation`. O status é gravado na hora.
+2. `Running`: acha o run em `GET …/actions/runs?event=workflow_dispatch&branch=…` pelo `display_title` `platform-build <requestId>` e grava `runUrl` e `run.headSha`. Enquanto o run não termina, `Ready=False, reason=Building`, e o resync (15 s) olha de novo. Sem run 10 min depois do dispatch → `ContractViolation`. Run sem sucesso → `BuildFailed`.
+3. `Succeeded`: baixa o zip do artefato `platform-build` (no máximo 1 MiB; o `httpx` tira o `Authorization` no redirect para o blob storage) e confere o `platform-build.json` → `status.result`, ou `ContractViolation`.
+4. `SpecValidated`: lê o `app-spec.yaml` no `commit` (`GET …/contents/app-spec.yaml?ref=`) e valida o schema do Score vendorizado (`schemas/score-v1b1.json`, de `score-spec/spec@f29aafc`), os tipos de recurso (`--resource-types`, padrão `postgres,dns,route`) e cada `resources.<nome>.id` contra os `Resource` do catálogo → `status.errors` e `InvalidSpec`.
+5. `Ready`: cria o `Version` `<component>.<version>` em `catalog.platform.wasp.silvios.me`. Já existe com outro `commit` → `VersionConflict`, sem sobrescrever; com o mesmo `commit`, é a mesma versão.
+
+Os reasons transitórios e o backoff são os da criação de component. Definitivos: `WorkflowNotFound`, `BranchNotFound`, `BuildFailed`, `ContractViolation`, `InvalidSpec`, `VersionConflict` e `GitHubRejected`. Um build `Ready`, ou parado num reason definitivo, é removido 24 h depois; a versão fica no índice.
 
 ## Quando revalida
 

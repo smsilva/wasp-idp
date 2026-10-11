@@ -10,7 +10,7 @@ GROUP = "platform.wasp.silvios.me"
 CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
 ENVIRONMENTS = "environments"
-CATALOG_PLURALS = ("domains", "systems", "resources", "templates", "components")
+CATALOG_PLURALS = ("domains", "systems", "resources", "templates", "components", "versions")
 
 
 def group_of(plural: str) -> str:

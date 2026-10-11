@@ -1,6 +1,7 @@
 """The slice of the GitHub REST API the controller uses: as the App (RS256 JWT), and as its installation on the org."""
 import base64
 import time
+from urllib.parse import quote
 
 import httpx
 import jwt
@@ -62,7 +63,7 @@ class Client:
       except ValueError:
         message = response.text
       raise GitHubError(response.status_code, f"{method} {path}: {message}", retry_after(response))
-    return response.json()
+    return response.json() if response.content else None
 
 
 class GitHubApp(Client):
@@ -150,3 +151,59 @@ class Installation(Client):
       self._send("PATCH", f"/repos/{full_name}/git/refs/heads/{branch}", json={"sha": sha, "force": True})
     else:
       self._send("POST", f"/repos/{full_name}/git/refs", expected=201, json={"ref": f"refs/heads/{branch}", "sha": sha})
+
+  # --- builds (#206): the platform-build workflow of a component repo ---
+
+  def workflow(self, full_name: str, file_name: str) -> dict | None:
+    try:
+      return self._send("GET", f"/repos/{full_name}/actions/workflows/{file_name}")
+    except GitHubError as error:
+      if error.status == 404:
+        return None
+      raise
+
+  def branch_exists(self, full_name: str, branch: str) -> bool:
+    try:
+      self._send("GET", f"/repos/{full_name}/branches/{quote(branch, safe='')}")
+      return True
+    except GitHubError as error:
+      if error.status == 404:
+        return False
+      raise
+
+  def dispatch(self, full_name: str, file_name: str, ref: str, inputs: dict) -> None:
+    self._send("POST", f"/repos/{full_name}/actions/workflows/{file_name}/dispatches", expected=204, json={"ref": ref, "inputs": inputs})
+
+  def dispatched_runs(self, full_name: str, branch: str) -> list[dict]:
+    """The latest workflow_dispatch runs on the branch, newest first: a run just dispatched is on the first page."""
+    params = {"event": "workflow_dispatch", "branch": branch, "per_page": 100}
+    return self._send("GET", f"/repos/{full_name}/actions/runs", params=params)["workflow_runs"]
+
+  def run_artifacts(self, full_name: str, run_id: int) -> list[dict]:
+    return self._send("GET", f"/repos/{full_name}/actions/runs/{run_id}/artifacts", params={"per_page": 100})["artifacts"]
+
+  def download_artifact(self, full_name: str, artifact_id: int, limit: int) -> bytes:
+    """The zip of an artifact. GitHub answers with a redirect to its blob storage; httpx drops the
+    Authorization header when the redirect leaves the API's origin."""
+    path = f"/repos/{full_name}/actions/artifacts/{artifact_id}/zip"
+    with self.http.stream("GET", path, follow_redirects=True) as response:
+      if response.status_code != 200:
+        response.read()
+        raise GitHubError(response.status_code, f"GET {path}", retry_after(response))
+      content = b""
+      for chunk in response.iter_bytes():
+        content += chunk
+        if len(content) > limit:
+          raise ValueError(f"artifact {artifact_id} is larger than {limit} bytes")
+      return content
+
+  def file_at(self, full_name: str, path: str, ref: str) -> bytes | None:
+    try:
+      found = self._send("GET", f"/repos/{full_name}/contents/{path}", params={"ref": ref})
+    except GitHubError as error:
+      if error.status == 404:
+        return None
+      raise
+    if not isinstance(found, dict) or found.get("type") != "file":
+      return None
+    return base64.b64decode(found.get("content") or "")

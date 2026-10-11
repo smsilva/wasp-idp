@@ -27,6 +27,10 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `GET` | `/v1/catalog/components` | `200`, o índice; filtros `?system=` e `?owner=` |
 | `GET` | `/v1/catalog/components/{name}` | `200` |
 | `GET` | `/v1/catalog/components/{name}/creation` | `200`, as conditions da criação; só quem pediu (anotação `created-by`) ou `platform-admins` |
+| `POST` | `/v1/builds` | `202`, o build (#206); só o time dono e `platform-admins` (`403`); body `{"component", "branch", "version"}`; `422` para component fora do índice ou sem repo, `version` ou `branch` malformados; `409` para `version` já no índice ou sem connection `ready` da org do repo |
+| `GET` | `/v1/builds` | `200`, do mais novo ao mais antigo; filtro `?component=` |
+| `GET` | `/v1/builds/{name}` | `200`, as conditions, `runUrl`, o `platform-build.json` (`result`) e os erros do `app-spec.yaml` |
+| `GET` | `/v1/versions` | `200`, o índice de versões, da mais nova à mais antiga; filtro `?component=` |
 | `POST` | `/v1/catalog/templates:import` | `200`, o mesmo plano do `/v1/catalog/import`, só com templates |
 | `POST` | `/v1/cloud/accounts` | `202`, body `{"name", "vendor": "aws", "roleArn", "regions"}`; resposta com `trustPolicy`; `409` sem credencial base ou com `roleArn` já registrado |
 | `GET` | `/v1/cloud/accounts` | `200`, `{"items": [...]}`; as próprias, ou todas para `platform-admins` |
@@ -74,6 +78,10 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 ## Cloud accounts
 
 `CloudAccount` é um CRD de `platform.wasp.silvios.me` (ADR 0029, `platform/crds/cloudaccount.yaml`): `spec.vendor` (`aws`) e `spec.aws.{roleArn,externalId,regions}`. A API gera o `externalId` (`secrets.token_urlsafe(24)`), nunca o aceita do cliente e o deixa fora do journal. A trust policy devolvida tem como principal o ARN da credencial base, que o provider `aws_account` publica no ConfigMap `aws-base-identity`. Sem esse ConfigMap, a capacidade `cloud-account` fica `NoProviderForCapability` e o registro responde `409`. A validação é do provider (`platform/providers/aws_account/`), que escreve as conditions. A mesma role não entra duas vezes: a comparação é por conta e nome da role sem caixa nem path, como o IAM os trata (`role/Platform` e `role/team/platform` são a `role/platform`). A kube API não tem índice único, então o `create` relista depois de gravar e desiste com `409` se outra conta da mesma role entrou ao mesmo tempo.
+
+## Builds
+
+`Build` (`platform/crds/build.yaml`) é o pedido de build de uma branch (#206, ADR 0030). Quem dispara e lê o repo é o App, não a pessoa, então o GitHub não decide quem faz build: só membros do time dono do component e `platform-admins` criam (`403` para os demais, antes de qualquer chamada ao GitHub). Ler builds e versões fica aberto a qualquer autenticado, como o índice de components. A API resolve o repo pelo índice de components e a connection pela org do repo, gera o `requestId` e grava o `Build`; quem dispara o `platform-build.yaml`, acompanha o run, lê o artefato, valida o `app-spec.yaml` (Score) e registra a versão é o controller `platform/providers/scm_github/`, o único que lê a chave do App (ADR 0025). O índice de versões (`versions.catalog.platform.wasp.silvios.me`, nome `<component>.<version>`) é um espelho de leitura: a Role da API só tem `get`, `list` e `watch` nele. O contrato com o CI está em `cli/docs/reference/builds.md`.
 
 ## SCM connections
 

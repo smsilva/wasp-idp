@@ -125,3 +125,29 @@ def test_component_index_crd():
   role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
   verbs = {verb for rule in role["rules"] if COMPONENTS in rule["resources"] for verb in rule["verbs"]}
   assert verbs == {"get", "list", "watch"}
+
+
+def test_build_crd_matches_the_api():
+  from platform_api.builds import BUILDS, VERSION_PATTERN
+
+  crd = yaml.safe_load((CRDS / "build.yaml").read_text())
+  assert crd["metadata"]["name"] == f"{BUILDS}.{GROUP}"
+  assert group_of(BUILDS) == GROUP
+  version = crd["spec"]["versions"][0]
+  assert version["subresources"] == {"status": {}}
+  spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]
+  assert spec["properties"]["version"]["pattern"] == f"^{VERSION_PATTERN.pattern}$"
+  assert sorted(spec["required"]) == ["branch", "component", "repo", "requestId", "scmConnection"]
+
+
+def test_version_index_crd():
+  from platform_api.builds import VERSIONS
+
+  crd = load(VERSIONS)
+  assert crd["metadata"]["name"] == f"{VERSIONS}.{CATALOG_GROUP}"
+  assert group_of(VERSIONS) == CATALOG_GROUP
+  # A read mirror: the API never writes it.
+  deploy = Path(__file__).parents[1] / "deploy" / "platform-api.yaml"
+  role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
+  verbs = {verb for rule in role["rules"] if VERSIONS in rule["resources"] for verb in rule["verbs"]}
+  assert verbs == {"get", "list", "watch"}

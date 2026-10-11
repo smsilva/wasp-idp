@@ -43,6 +43,13 @@ rules:
     resources: [componentcreations]
     verbs: [get, list, watch, create]
   - apiGroups: [platform.wasp.silvios.me]
+    resources: [builds]
+    verbs: [get, list, watch, create]
+  # The version index is a read mirror (#206): the scm_github provider writes it, the API reads.
+  - apiGroups: [catalog.platform.wasp.silvios.me]
+    resources: [versions]
+    verbs: [get, list, watch]
+  - apiGroups: [platform.wasp.silvios.me]
     resources: [scmconnections]
     verbs: [get, list, watch, create, update, delete]
   - apiGroups: [platform.wasp.silvios.me]
