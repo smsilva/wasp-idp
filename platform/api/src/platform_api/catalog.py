@@ -6,9 +6,13 @@ later slice); this module owns only the entities the platform stores itself.
 import re
 from dataclasses import dataclass
 
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from .state import CATALOG_GROUP, GROUP, VERSION
+from .auth import Principal, current_principal
+from .environments import ADMIN_GROUP, is_owner_or_admin
+from .journal import Journal
+from .state import CATALOG_GROUP, GROUP, VERSION, AlreadyExists, Conflict, NotFound
 
 # Who created the entity (token `sub`). Not the owner: the owner is a team, the creator a person.
 CREATED_BY_ANNOTATION = f"{GROUP}/created-by"
@@ -106,3 +110,96 @@ def dependents(state, kind: Kind, name: str) -> list[str]:
       if obj.get("spec", {}).get(child.parent_field) == name:
         found.append(f"{child.singular}/{obj['metadata']['name']}")
   return found
+
+
+def router(state, journal: Journal) -> APIRouter:
+  routes = APIRouter(prefix="/v1/catalog")
+
+  def kind_of(plural: str) -> Kind:
+    if plural not in KINDS:
+      raise HTTPException(404, f"unknown catalog kind '{plural}': use {', '.join(KINDS)}")
+    return KINDS[plural]
+
+  def fetch(kind: Kind, name: str) -> dict:
+    try:
+      return state.get(kind.plural, name)
+    except NotFound:
+      raise HTTPException(404, f"{kind.singular} '{name}' not found")
+
+  def sorted_objects(kind: Kind) -> list[dict]:
+    return sorted(state.list(kind.plural), key=lambda obj: obj["metadata"]["name"])
+
+  def require_admin(kind: Kind, principal: Principal, verb: str) -> None:
+    # Domains are the structure of the organisation: only platform admins shape it.
+    if kind.plural == "domains" and ADMIN_GROUP not in principal.groups:
+      raise HTTPException(403, f"{verb} a domain requires group '{ADMIN_GROUP}'")
+
+  # Declared before /{plural}, which would otherwise take "entities" as a kind.
+  @routes.get("/entities")
+  def list_entities(kind: str | None = None, owner: str | None = None, principal: Principal = Depends(current_principal)):
+    selected = [item for item in KINDS.values() if kind is None or item.singular == kind]
+    if not selected:
+      raise HTTPException(422, f"unknown kind '{kind}': use domain, system or resource")
+    items = []
+    for item_kind in selected:
+      for obj in sorted_objects(item_kind):
+        entity = view(item_kind, obj)
+        if owner is None or entity["owner"] == owner:
+          items.append({**entity, "parent": entity.get(item_kind.parent_field)})
+    return {"items": items}
+
+  @routes.post("/{plural}", status_code=201)
+  def create(plural: str, request: EntityRequest, principal: Principal = Depends(current_principal)):
+    kind = kind_of(plural)
+    require_admin(kind, principal, "creating")
+    try:
+      spec = spec_from(kind, request)
+    except InvalidRequest as error:
+      raise HTTPException(422, str(error))
+    parent = spec.get(kind.parent_field) if kind.parent_field else None
+    if parent is not None:
+      try:
+        state.get(kind.parent_plural, parent)
+      except NotFound:
+        raise HTTPException(422, f"{kind.singular} '{request.name}': {KINDS[kind.parent_plural].singular} '{parent}' not found")
+    entry = journal.record("create", kind.name, request.name, spec, principal.actor)
+    try:
+      created = state.create(kind.plural, manifest(kind, request.name, spec, principal.sub))
+    except AlreadyExists:
+      raise HTTPException(409, f"{kind.singular} '{request.name}' already exists")
+    journal.mark_applied(entry)
+    return view(kind, created)
+
+  @routes.get("/{plural}")
+  def list_kind(plural: str, principal: Principal = Depends(current_principal)):
+    kind = kind_of(plural)
+    return {"items": [view(kind, obj) for obj in sorted_objects(kind)]}
+
+  @routes.get("/{plural}/{name}")
+  def get(plural: str, name: str, principal: Principal = Depends(current_principal)):
+    kind = kind_of(plural)
+    return {**view(kind, fetch(kind, name)), "dependents": dependents(state, kind, name)}
+
+  @routes.delete("/{plural}/{name}", status_code=204)
+  def delete(plural: str, name: str, principal: Principal = Depends(current_principal)):
+    kind = kind_of(plural)
+    obj = fetch(kind, name)
+    require_admin(kind, principal, "deleting")
+    if kind.plural != "domains" and not is_owner_or_admin(obj, principal, CREATED_BY_ANNOTATION):
+      raise HTTPException(403, f"{kind.singular} '{name}' can only be deleted by who created it or {ADMIN_GROUP}")
+    # Not atomic: a child created between this check and the delete keeps a dangling reference.
+    # Accepted for slice 1 (single writer, low volume); a finalizer on the parent would close it.
+    found = dependents(state, kind, name)
+    if found:
+      raise HTTPException(409, f"{kind.singular} '{name}' has dependents: {', '.join(found)}")
+    entry = journal.record("delete", kind.name, name, None, principal.actor)
+    try:
+      state.delete(kind.plural, name, uid=obj["metadata"].get("uid"))
+    except NotFound:
+      raise HTTPException(404, f"{kind.singular} '{name}' not found")
+    except Conflict:
+      raise HTTPException(409, f"{kind.singular} '{name}' changed while deleting: try again")
+    journal.mark_applied(entry)
+    return Response(status_code=204)
+
+  return routes

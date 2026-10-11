@@ -83,7 +83,7 @@ def test_every_v1_route_requires_a_token(app):
   routes = [(route.path, method) for route in app.routes for method in getattr(route, "methods", []) if route.path.startswith("/v1/")]
   assert routes
   for path, method in routes:
-    response = TestClient(app).request(method, path.replace("{name}", "x"))
+    response = TestClient(app).request(method, path.replace("{name}", "x").replace("{plural}", "domains"))
     assert response.status_code == 401, f"{method} {path}"
 
 
@@ -91,6 +91,7 @@ def test_capabilities(app, tokens):
   items = {item["name"]: item["status"] for item in call(app, "/v1/capabilities", tokens.issue()).json()["items"]}
   assert items["identity"] == "Active"
   assert items["build"] == "NoProviderForCapability"
+  assert items["catalog"] == "Active"
 
 
 def test_validation_error_shape(app, tokens):
