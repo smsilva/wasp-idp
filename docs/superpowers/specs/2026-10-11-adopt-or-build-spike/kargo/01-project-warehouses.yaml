@@ -1,0 +1,33 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: kargo-spike
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: releases
+  namespace: kargo-spike
+spec:
+  interval: 1m
+  subscriptions:
+  - image:
+      repoURL: ghcr.io/smsilva/kargo-spike
+      imageSelectionStrategy: SemVer
+      constraint: ">=0.0.0"
+      discoveryLimit: 10
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: branch-feat-x
+  namespace: kargo-spike
+spec:
+  interval: 1m
+  subscriptions:
+  - image:
+      repoURL: ghcr.io/smsilva/kargo-spike
+      imageSelectionStrategy: SemVer
+      constraint: ">=0.0.0-0"
+      allowTagsRegexes: ["^\\d+\\.\\d+\\.\\d+-feat-x\\.\\d+$"]
+      discoveryLimit: 10
