@@ -76,10 +76,12 @@ spec:
       template: |
         import "strings"
 
+        // Constraints added after the spike run: these values are interpolated into a
+        // shell command and SQL below, so only plain identifiers and tokens are accepted.
         parameter: {
           secretName: string
-          password:   string
-          database:   string
+          password:   =~"^[A-Za-z0-9_-]{8,64}$"
+          database:   =~"^[a-z][a-z0-9_]{0,62}$"
         }
         _dbName: parameter.database
         output: {
