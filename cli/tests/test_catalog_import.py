@@ -173,3 +173,9 @@ def test_skip_of_a_non_entity_shows_its_source(api, files):
   api.responses["review"] = (200, plan(CREATE, {"kind": None, "name": None, "action": "skip", "source": "docs/mkdocs.yml#1", "reason": "not a Backstage entity"}))
   result = run("catalog", "--dry-run")
   assert "not a Backstage entity (docs/mkdocs.yml#1)" in result.output
+
+
+def test_source_outside_cwd_is_absolute(files, tmp_path_factory):
+  outside = tmp_path_factory.mktemp("outside") / "orphan.yaml"
+  outside.write_text("kind: System\nmetadata:\n  name: orphan\n")
+  assert read_documents([outside])[0]["source"] == f"{outside}#1"

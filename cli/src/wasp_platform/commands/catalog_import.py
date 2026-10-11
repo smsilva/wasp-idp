@@ -41,6 +41,9 @@ def read_documents(paths: list[Path]) -> list[dict]:
   documents = []
   for file in _files(paths):
     shown = os.path.relpath(file)
+    if shown.startswith(".."):
+      # Outside the current folder, a chain of ../ says less than the absolute path.
+      shown = str(file.resolve())
     try:
       loaded = [document for document in yaml.safe_load_all(file.read_text()) if document is not None]
     except yaml.YAMLError as error:
