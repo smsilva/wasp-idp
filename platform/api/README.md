@@ -24,6 +24,11 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `POST` | `/v1/catalog/templates/{name}/default` | `200`; só `platform-admins`; desmarca o padrão anterior do tipo |
 | `DELETE` | `/v1/catalog/templates/{name}` | `204`; só `platform-admins`; `409` para o padrão de um tipo com outros templates |
 | `POST` | `/v1/catalog/templates:import` | `200`, o mesmo plano do `/v1/catalog/import`, só com templates |
+| `POST` | `/v1/cloud/accounts` | `202`, body `{"name", "vendor": "aws", "roleArn", "regions"}`; resposta com `trustPolicy`; `409` sem credencial base ou com `roleArn` já registrado |
+| `GET` | `/v1/cloud/accounts` | `200`, `{"items": [...]}`; as próprias, ou todas para `platform-admins` |
+| `GET` | `/v1/cloud/accounts/{name}` | `200`, com `trustPolicy`; `403` para quem não é o dono nem `platform-admins` |
+| `POST` | `/v1/cloud/accounts/{name}/verify` | `202`; grava `verify-requested-at`, e `verifyPending` fica `true` até o provider responder |
+| `DELETE` | `/v1/cloud/accounts/{name}` | `202`; só o dono ou `platform-admins` |
 | `GET` | `/v1/catalog/entities` | `200`, todos os kinds com `parent` normalizado; filtros `?kind=domain\|system\|resource` e `?owner=` |
 
 `GET /v1/environments/{name}` traz também `kubeconfigData`, mas só para quem pode usar o ambiente: quem o criou (anotação `platform.wasp.silvios.me/owner`, gravada pela API com o `sub` do token no create), quem está em `platform-admins` e os membros dos times de `spec.sharedWith`. É um kubeconfig pessoal sem credencial (ADR 0028): o usuário dele roda `platform environment credential <nome>`, que chama `POST /v1/environments/{name}/credentials`. A rota confere `can_use`, garante a ServiceAccount da pessoa (o `sub`) no namespace `platform-identities` do vcluster e devolve um token de 10 minutos. A API fala com o vcluster em `https://vcluster.env-<nome>:<porta>` (`PLATFORM_VCLUSTER_SERVER`), com o kubeconfig de administrador que o provider publica no status. Esse kubeconfig de administrador sai só em `GET /v1/environments/{name}/admin-kubeconfig`, e só para `platform-admins`. A lista nunca traz kubeconfig.
@@ -54,6 +59,10 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 - Um padrão por tipo: criar com `default` ou chamar `/default` desmarca o anterior na mesma operação, e cada mudança entra no journal.
 - O import converte o `kind: Template` do Backstage: as páginas de `spec.parameters` viram um JSON Schema sem os campos da plataforma nem as dicas `ui:*`; o `url` do `fetch:template` vira `source.path`, relativo ao arquivo (o `path` de cada documento no body); `copyWithoutTemplating` vira `copyWithoutRendering`. Os outros `steps` viram itens `skip` de kind `Step`, com o motivo. Arquivos dentro das pastas de um template (`fetch:template.url`) viram `skip` (`part of template <nome>`): o `catalog-info.yaml` do conteúdo não é um Component.
 - Reimportar mantém o `default`; o diff do plano é por campo (`source.ref: v1 → v2`).
+
+## Cloud accounts
+
+`CloudAccount` é um CRD de `platform.wasp.silvios.me` (ADR 0029, `platform/crds/cloudaccount.yaml`): `spec.vendor` (`aws`) e `spec.aws.{roleArn,externalId,regions}`. A API gera o `externalId` (`secrets.token_urlsafe(24)`), nunca o aceita do cliente e o deixa fora do journal. A trust policy devolvida tem como principal o ARN da credencial base, que o provider `aws_account` publica no ConfigMap `aws-base-identity`. Sem esse ConfigMap, a capacidade `cloud-account` fica `NoProviderForCapability` e o registro responde `409`. A validação é do provider (`platform/providers/aws_account/`), que escreve as conditions.
 
 ## Escrita
 

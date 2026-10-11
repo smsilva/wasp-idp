@@ -60,6 +60,8 @@ applying the realm platform …
 
 O e-mail do `--admin` entra no grupo `platform-admins` no primeiro login com Google; os demais usuários caem só em `platform-users`. O `init` lembra o `--admin` e as credenciais do Google, então as execuções seguintes não precisam repeti-los.
 
+Para registrar contas AWS (seção 13), passe também `--aws-profile <profile>`: a credencial desse profile do `~/.aws` vira a credencial base da plataforma, e o `init` sobe o provider `aws_account`. O `init` também lembra essa credencial. Se ela for temporária (SSO ou role assumida), o `init` avisa quando expira e precisa ser refeito; o recomendado é um IAM user dedicado, com permissão só para `sts:AssumeRole` e `sts:GetCallerIdentity`.
+
 Rodar de novo é seguro: o cluster é reaproveitado.
 
 ```bash
@@ -412,7 +414,64 @@ Os membros do time veem o ambiente no `environment list` e recebem o kubeconfig 
 
 Cada pessoa usa a própria identidade no vcluster (seção 6). Descompartilhar apaga as identidades de quem não é o dono, e tirar alguém do time apaga a dessa pessoa nos ambientes compartilhados com ele. Em segundos, o kubectl dessas pessoas passa a receber `environment 'greetings-test' is not yours nor shared with your teams`. Quem continua com acesso por outro time ganha um token novo no comando seguinte, sem perceber.
 
-## 13. Desmontar tudo
+## 13. Contas de nuvem
+
+Uma cloud account é uma conta AWS em que a plataforma pode criar coisas (ADR 0029). A plataforma não guarda segredo por conta: ela assume uma role da conta a partir da credencial base do `init --aws-profile`. Qualquer usuário registra as próprias contas, sem aprovação; a posse é provada pela trust policy que só quem administra a conta consegue aplicar.
+
+```bash
+platform cloud account add nonprod-aws --role-arn arn:aws:iam::123456789012:role/platform
+```
+
+```
+✓ cloud account nonprod-aws added (pending)
+Trust policy of arn:aws:iam::123456789012:role/platform:
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::<conta-da-plataforma>:user/<credencial-base>"
+      },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": {
+          "sts:ExternalId": "<gerado pela API>"
+        }
+      }
+    }
+  ]
+}
+Apply it as the trust policy of the role, then run: platform cloud account verify nonprod-aws --wait
+```
+
+O ExternalId é gerado pela API, um por conta, e impede que alguém registre a role de outra pessoa. Aplique a policy na role (console ou `aws iam update-assume-role-policy --role-name platform --policy-document file://trust.json`) e peça a verificação:
+
+```bash
+platform cloud account verify nonprod-aws --wait
+platform cloud account list
+```
+
+```
+✓ nonprod-aws ready (account 123456789012)
+NAME         VENDOR  ACCOUNT       STATUS  VALIDATED
+nonprod-aws  aws     123456789012  ready   2026-10-11T12:00:00Z
+```
+
+O provider assume a role duas vezes: com o ExternalId tem que funcionar, e sem ele tem que falhar. Uma trust policy sem a condição de `sts:ExternalId` aceita qualquer ExternalId, e a conta fica em `ExternalIdNotEnforced`, nunca `ready`. Ele revalida a cada 6 horas, e enquanto a conta não está `ready` tenta de novo com intervalos crescentes, até 15 minutos.
+
+| Status | Significado |
+|---|---|
+| `pending` | o provider ainda não verificou |
+| `TrustNotEstablished` | a role não confia na plataforma com esse ExternalId; aplique a trust policy do `get` |
+| `ExternalIdNotEnforced` | a role confia sem exigir o ExternalId; acrescente a condição |
+| `AccountMismatch` | a role assumida está em outra conta |
+| `VerificationFailed` | outro erro da AWS, na `message` (por exemplo, a credencial base expirou) |
+| `ready` | a plataforma assume a role, e só com o ExternalId |
+
+Cada conta é de quem a registrou: os outros usuários não a veem nem a removem (`403`), e `platform-admins` veem todas, com a coluna OWNER. A mesma role não é registrada duas vezes (`409`). Sem credencial base, o `add` responde `409` pedindo o `init --aws-profile`. Remover a conta tira o registro da plataforma; a role continua na conta AWS.
+
+## 14. Desmontar tudo
 
 ```bash
 platform environment list --output json | jq -r '.[].name' \
@@ -427,7 +486,7 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 
 | Comando | O que faz |
 |---|---|
-| `platform init --target local [--admin <email>]` | cria `platform-local`, CRDs, Keycloak, Platform API e o provider `local_vcluster` |
+| `platform init --target local [--admin <email>] [--aws-profile <profile>]` | cria `platform-local`, CRDs, Keycloak, Platform API e o provider `local_vcluster`; com credencial AWS, também o `aws_account` |
 | `platform login [--use-device-code]` | entra com a conta Google |
 | `platform whoami` | e-mail e grupos, vistos pela API |
 | `platform logout` | revoga a sessão e apaga as credenciais |
@@ -451,6 +510,10 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform catalog template import <caminho> --repo <url> --ref <ref> [--dry-run] [--yes]` | importa templates do Backstage ou do formato da plataforma |
 | `platform catalog template default\|delete <nome>` | muda o padrão do tipo; apaga (só `platform-admins`) |
 | `platform catalog template render [<nome>\|--from <pasta>] --name <component> --output <pasta> [--param k=v]` | renderiza localmente |
+| `platform cloud account add <nome> --role-arn <arn> [--region <região>]...` | registra uma conta AWS e imprime a trust policy |
+| `platform cloud account list\|get <nome>` | NAME, VENDOR, ACCOUNT, STATUS, VALIDATED (OWNER para admins); `get` mostra a trust policy |
+| `platform cloud account verify <nome> [--wait]` | pede ao provider uma nova verificação |
+| `platform cloud account remove <nome>` | tira a conta da plataforma; só o dono ou `platform-admins` |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |

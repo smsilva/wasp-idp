@@ -62,3 +62,16 @@ def test_api_role_can_update_catalog():
   role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
   rule = next(rule for rule in role["rules"] if CATALOG_GROUP in rule["apiGroups"])
   assert {"create", "update", "delete"} <= set(rule["verbs"])
+
+
+def test_cloud_account_crd_matches_the_api():
+  from platform_api.cloud_accounts import CLOUD_ACCOUNTS, VENDORS
+
+  crd = yaml.safe_load((CRDS / "cloudaccount.yaml").read_text())
+  assert crd["metadata"]["name"] == f"{CLOUD_ACCOUNTS}.{GROUP}"
+  assert group_of(CLOUD_ACCOUNTS) == GROUP
+  version = crd["spec"]["versions"][0]
+  spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]
+  assert tuple(spec["vendor"]["enum"]) == VENDORS
+  assert sorted(spec["aws"]["required"]) == ["externalId", "roleArn"]
+  assert "observedVerifyRequest" in version["schema"]["openAPIV3Schema"]["properties"]["status"]["properties"]

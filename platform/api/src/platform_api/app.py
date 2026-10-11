@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, catalog_import, credentials as personal, environments, templates, teams as team_routes
+from . import catalog, catalog_import, cloud_accounts, credentials as personal, environments, templates, teams as team_routes
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -55,6 +55,8 @@ CAPABILITIES = {
   "catalog": "Active",
   "build": "NoProviderForCapability",
   "release": "NoProviderForCapability",
+  # Active once the aws_account controller publishes the base identity (ADR 0029).
+  cloud_accounts.CAPABILITY: "NoProviderForCapability",
 }
 
 ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 422: "invalid_request", 503: "unavailable"}
@@ -67,7 +69,7 @@ def _error(status: int, message, headers=None, plan: dict | None = None) -> JSON
   return JSONResponse({"error": body}, status, headers=headers)
 
 
-def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None) -> FastAPI:
+def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None, base_identity=None) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.2.0")
   app.state.verifier = verifier
   if allowed_hosts:
@@ -99,7 +101,10 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
 
   @app.get("/v1/capabilities")
   def capabilities(principal: Principal = Depends(current_principal)):
-    return {"items": [{"name": name, "status": status} for name, status in CAPABILITIES.items()]}
+    current = dict(CAPABILITIES)
+    if base_identity and base_identity.arn():
+      current[cloud_accounts.CAPABILITY] = "Active"
+    return {"items": [{"name": name, "status": status} for name, status in current.items()]}
 
   @app.post("/v1/environments", status_code=202)
   def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
@@ -254,6 +259,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   app.include_router(templates.router(state, journal, teams))
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
+  app.include_router(cloud_accounts.router(state, journal, base_identity))
   return app
 
 
@@ -268,4 +274,7 @@ def build() -> FastAPI:
   admin_secret = os.environ.get("PLATFORM_KEYCLOAK_ADMIN_SECRET")
   teams = team_routes.KeycloakTeams(os.environ["PLATFORM_KEYCLOAK_URL"], admin_secret) if admin_secret else None
   credentials = personal.VclusterCredentials(os.environ.get("PLATFORM_VCLUSTER_SERVER", personal.SERVER))
-  return create_app(KubeApplyWriter(namespace), Journal(journal_path), verifier, allowed_hosts, teams, credentials)
+  # The writer loads the in-cluster config: build it before any other kubernetes client.
+  state = KubeApplyWriter(namespace)
+  base_identity = cloud_accounts.KubeBaseIdentity(namespace)
+  return create_app(state, Journal(journal_path), verifier, allowed_hosts, teams, credentials, base_identity)
