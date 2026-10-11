@@ -241,6 +241,27 @@ def denied(kind: Kind, item: Item, principal) -> str | None:
   return None
 
 
+def cycle_through(item: Item, declared: dict, state) -> list[str] | None:
+  """The chain back to item when its new parent descends from it, reading each ancestor from the
+  import when declared there and from the platform otherwise; None when there is no such cycle."""
+  chain, current = [item.name], item.spec.get("parent")
+  while current is not None:
+    chain.append(current)
+    if current == item.name:
+      return chain
+    if current in chain[:-1]:
+      return None  # a cycle above item that does not pass through it: reported on its own members
+    in_import = declared.get(("Domain", current))
+    if in_import is not None and in_import.spec is not None:
+      current = in_import.spec.get("parent")
+    else:
+      try:
+        current = (state.get("domains", current).get("spec") or {}).get("parent")
+      except NotFound:
+        current = None
+  return None
+
+
 def decide(item: Item, declared: dict, state, principal) -> None:
   kind = KINDS[item.plural]
   parent = item.spec.get(kind.parent_field) if kind.parent_field else None
@@ -253,6 +274,11 @@ def decide(item: Item, declared: dict, state, principal) -> None:
       return item.reject("error", field, f"{parent_kind.singular} '{parent}' is not importable")
     if in_import is None and not exists(state, parent_kind.plural, parent):
       return item.reject("error", field, f"{parent_kind.singular} '{parent}' not found")
+    # mark_cycles sees only the import; a parent that descends from item in the platform closes a
+    # cycle that no other route can create and that nothing could delete afterwards.
+    loop = cycle_through(item, declared, state) if kind.plural == "domains" else None
+    if loop:
+      return item.reject("error", field, "cycle: " + " > ".join(loop))
   try:
     item.current = state.get(item.plural, item.name)
   except NotFound:

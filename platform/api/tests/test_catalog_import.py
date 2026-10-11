@@ -254,3 +254,22 @@ def test_view_shape():
   assert view["items"][0] == {"kind": "Domain", "name": "communication", "action": "create", "source": "t.yaml#1", "spec": {"owner": "team-alpha"}}
   assert view["applied"] is False
   assert set(view) == {"items", "summary", "planHash", "applied"}
+
+
+def test_update_under_a_descendant_in_the_platform_is_a_cycle():
+  state = FakeState()
+  seed(state, "domains", "a", {"owner": "team-alpha"})
+  seed(state, "domains", "b", {"owner": "team-alpha", "parent": "a"})
+  seed(state, "domains", "c", {"owner": "team-alpha", "parent": "b"})
+  item = make_plan(sourced(doc("Domain", "a", {"owner": "team-alpha", "subdomainOf": "c"})), state, ADMIN).items[0]
+  assert (item.action, item.field, item.reason) == ("error", "spec.subdomainOf", "cycle: a > c > b > a")
+
+
+def test_cycle_through_the_import_and_the_platform():
+  state = FakeState()
+  seed(state, "domains", "a", {"owner": "team-alpha"})
+  seed(state, "domains", "b", {"owner": "team-alpha", "parent": "a"})
+  documents = sourced(doc("Domain", "a", {"owner": "team-alpha", "subdomainOf": "x"}), doc("Domain", "x", {"owner": "team-alpha", "subdomainOf": "b"}))
+  plan = make_plan(documents, state, ADMIN)
+  assert {item.name: item.action for item in plan.items} == {"a": "error", "x": "error"}
+  assert plan.blocked
