@@ -7,59 +7,7 @@ from fastapi.testclient import TestClient
 from platform_api.app import create_app
 from platform_api.journal import Journal
 from tokens import ISSUER, TokenFactory
-from platform_api.state import AlreadyExists, Conflict, NotFound
-
-
-class FakeState:
-  def __init__(self):
-    self.objects = {}
-    self.version = 0
-    self.on_create = None
-    self.before_delete = None
-
-  def _bump(self, obj):
-    self.version += 1
-    obj["metadata"]["resourceVersion"] = str(self.version)
-
-  def create(self, plural, body):
-    name = body["metadata"]["name"]
-    if name in self.objects:
-      raise AlreadyExists(name)
-    obj = json.loads(json.dumps(body))
-    obj["metadata"]["creationTimestamp"] = "2026-10-10T00:00:00Z"
-    obj["metadata"]["uid"] = f"uid-{self.version + 1}"
-    self._bump(obj)
-    self.objects[name] = obj
-    created = json.loads(json.dumps(obj))
-    if self.on_create:
-      self.on_create(obj)
-    return created
-
-  def replace_status(self, plural, body):
-    name = body["metadata"]["name"]
-    current = self.objects[name]
-    if current["metadata"]["resourceVersion"] != body["metadata"]["resourceVersion"]:
-      raise Conflict(name)
-    current["status"] = body["status"]
-    self._bump(current)
-    return json.loads(json.dumps(current))
-
-  def delete(self, plural, name, uid=None):
-    if self.before_delete:
-      self.before_delete(self)
-    if name not in self.objects:
-      raise NotFound(name)
-    if uid is not None and self.objects[name]["metadata"]["uid"] != uid:
-      raise Conflict(name)
-    del self.objects[name]
-
-  def get(self, plural, name):
-    if name not in self.objects:
-      raise NotFound(name)
-    return json.loads(json.dumps(self.objects[name]))
-
-  def list(self, plural):
-    return [json.loads(json.dumps(obj)) for obj in self.objects.values()]
+from fakes import FakeState
 
 
 @pytest.fixture

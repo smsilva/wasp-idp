@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from platform_api.app import create_app
 from platform_api.auth import require_group
 from platform_api.journal import Journal
-from test_api import FakeState
+from fakes import FakeState
 from tokens import TokenFactory
 
 
