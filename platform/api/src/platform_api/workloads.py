@@ -8,6 +8,10 @@ owner team (or platform-admins); reading needs can_use. In phase 1 the instance 
 name, so a second instance of the same component cannot be asked for. A rollback is a new revision
 with the version and overrides of an earlier one; a remove is a revision too, and the history stays
 until the environment goes.
+
+apply (#293) takes the plan of an environment (the helmfile of its instances) and diffs it against the
+newest revision of each instance: one revision per instance that changes, and with prune a remove for
+each instance the plan leaves out. Every instance is authorized and resolved before the first write.
 """
 import uuid
 
@@ -29,6 +33,9 @@ COMPONENT_LABEL = f"{GROUP}/component"
 INSTANCE_LABEL = f"{GROUP}/instance"
 # Ready=Unknown: the provider has not closed the revision yet.
 OPEN = "Unknown"
+MAX_PLAN = 100
+# Without the override the provider runs one replica.
+DEFAULT_REPLICAS = 1
 
 
 class RevisionRequest(BaseModel):
@@ -46,6 +53,26 @@ class RevisionRequest(BaseModel):
     if value is not None and not VERSION_PATTERN.fullmatch(value):
       raise ValueError("<major>.<minor>.<patch>[-<pre-release>], e.g. 1.0.0-rc.1")
     return value
+
+
+class PlanEntry(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  # Phase 1: the instance is named after its component, so only the key itself is accepted (#294).
+  component: str | None = None
+  version: str | None = None
+  branch: str | None = None
+  replicas: int | None = Field(default=None, ge=0, le=20)
+
+  check_version = field_validator("version")(RevisionRequest.check_version.__func__)
+
+
+class ApplyRequest(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  workloads: dict[str, PlanEntry] = Field(max_length=MAX_PLAN)
+  dryRun: bool = True
+  prune: bool = False
 
 
 def ready_of(obj: dict) -> dict | None:
@@ -193,6 +220,50 @@ def router(state, journal: Journal) -> APIRouter:
     journal.mark_applied(entry)
     return revision_view(created)
 
+  def wanted(revision: dict) -> dict:
+    return {"version": revision["version"], "replicas": DEFAULT_REPLICAS if revision["replicas"] is None else revision["replicas"]}
+
+  def live(environment: str) -> dict[str, dict]:
+    """The newest revision of each instance that runs or is on its way: a remove, or a failed first
+    deploy, leaves nothing to diff against."""
+    return {view["instance"]: view["latestRevision"] for view in instances_of(environment) if view["latestRevision"]["action"] != "remove"}
+
+  def plan_of(environment: str, request: "ApplyRequest", principal: Principal) -> tuple[dict, list[dict]]:
+    """The environment and one item per instance of the plan, and with prune per instance left out.
+    Raises before anything is written when one cannot be applied."""
+    env = usable(environment, principal)
+    newest = live(environment)
+    items = []
+    for instance, entry in sorted(request.workloads.items()):
+      if entry.component is not None and entry.component != instance:
+        raise HTTPException(422, f"apply of '{instance}': component '{entry.component}' differs from the instance name; more than one instance of a component is #294")
+      if (entry.version is None) == (entry.branch is None):
+        raise HTTPException(422, f"apply of '{instance}': give either version or branch")
+      _, component = authorize(environment, instance, principal, "deploy")
+      version = resolve(component, RevisionRequest(version=entry.version, branch=entry.branch))
+      to = {"version": version["spec"]["version"], "replicas": entry.replicas if entry.replicas is not None else DEFAULT_REPLICAS}
+      current = newest.get(instance)
+      if current is None:
+        action = "add"
+      # An open revision is on its way; a failed one is tried again.
+      elif wanted(current) == to and (current["open"] or current["status"] == "Succeeded"):
+        action = "unchanged"
+      else:
+        action = "change"
+      spec = {"action": "deploy", **{field: version["spec"][field] for field in ("version", "image", "digest")}}
+      if version["spec"].get("commit"):
+        spec["commit"] = version["spec"]["commit"]
+      if entry.replicas is not None:
+        spec["overrides"] = {"replicas": entry.replicas}
+      items.append({"instance": instance, "component": component, "action": action, "from": wanted(current) if current else None, "to": to, "spec": spec})
+    if request.prune:
+      for instance, current in sorted(newest.items()):
+        if instance in request.workloads:
+          continue
+        _, component = authorize(environment, instance, principal, "remove")
+        items.append({"instance": instance, "component": component, "action": "remove", "from": wanted(current), "to": None, "spec": {"action": "remove"}})
+    return env, items
+
   def rollback_source(environment: str, instance: str, number: int) -> dict:
     try:
       source = state.get(REVISIONS, f"{environment}.{instance}.{number}")
@@ -223,6 +294,27 @@ def router(state, journal: Journal) -> APIRouter:
     if request.replicas is not None:
       spec["overrides"] = {"replicas": request.replicas}
     return write(env, instance, component, spec, principal)
+
+  @routes.post("/workloads:apply")
+  def apply(environment: str, request: ApplyRequest, principal: Principal = Depends(current_principal)):
+    env, items = plan_of(environment, request, principal)
+    applied = 0
+    for item in items:
+      item["revision"] = None
+      if request.dryRun or item["action"] == "unchanged":
+        continue
+      try:
+        item["revision"] = write(env, item["instance"], item["component"], item["spec"], principal)["revision"]
+      except HTTPException as error:
+        # Not transactional: what was written stays, and applying again converges.
+        raise HTTPException(error.status_code, f"{error.detail}; {applied} applied before it, apply again to converge")
+      applied += 1
+    return {
+      "environment": environment,
+      "applied": not request.dryRun,
+      "summary": {action: sum(1 for item in items if item["action"] == action) for action in ("add", "change", "remove", "unchanged")},
+      "items": [{key: item[key] for key in ("instance", "component", "action", "from", "to", "revision")} for item in items],
+    }
 
   @routes.delete("/workloads/{instance}", status_code=202)
   def remove(environment: str, instance: str, principal: Principal = Depends(current_principal)):

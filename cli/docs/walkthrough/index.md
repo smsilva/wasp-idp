@@ -106,6 +106,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [21.3 Deploy a version to an environment](workloads/21-3-deploy.md)
 - [21.4 The history of a workload](workloads/21-4-history.md)
 - [21.5 Roll back and remove](workloads/21-5-rollback.md)
+- [21.6 The plan of an environment](workloads/21-6-apply.md)
 
 - [22. Remove the GitHub connection](scm-connection/22-remove.md)
 - [23. Clean up and sign out](23-cleanup.md)

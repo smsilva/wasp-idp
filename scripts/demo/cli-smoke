@@ -22,7 +22,8 @@ valid and an invalid Score, spec get of a Version written by kubectl, refused ou
 by version and by branch, and SpecNotIndexed for a Version without it), a Workload Instance
 (deploy of a public image by digest with --wait, list, get, history, rollback to the previous
 success, runningIn in catalog component get, remove; refused outside the owner team, for a version
-outside the index, a rollback to a failed revision, and ResourcesNotSupported for a Score with resources), and a cloud account (ADR 0029): refused with a clear message without an
+outside the index, a rollback to a failed revision, and ResourcesNotSupported for a Score with resources), the plan
+of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -610,6 +611,49 @@ output="$(platform workload history --environment "${workload_environment}")"
 echo "${output}"
 expect_output "rollback" "${output}"
 expect_output "remove" "${output}"
+
+step "workload apply: the plan of an environment, with --dry-run and --prune (#293)"
+cat > "${workload_directory}/plan.yaml" <<PLAN
+environment: ${workload_environment}
+workloads:
+  ${workload_component}:
+    version: 0.3.0
+    replicas: 2
+PLAN
+output="$(platform workload apply --file "${workload_directory}/plan.yaml" --dry-run)"
+echo "${output}"
+expect_output "${workload_environment}: 1 to add, 0 to change, 0 to remove" "${output}"
+expect_output "dry run: nothing applied" "${output}"
+# The environment's owner is not in the component's owner team: the whole plan is refused.
+platform login --test-user
+expect_failure "only members of its owner team (team-platform)" \
+  platform workload apply \
+    --file "${workload_directory}/plan.yaml"
+platform login --test-admin
+output="$(platform workload apply \
+  --file "${workload_directory}/plan.yaml" \
+  --wait)"
+echo "${output}"
+expect_output "${workload_component}@${workload_environment} revision 6: 0.3.0 running · 2/2 replicas available" "${output}"
+output="$(platform workload apply --file "${workload_directory}/plan.yaml" --dry-run)"
+expect_output "${workload_environment}: 0 to add, 0 to change, 0 to remove" "${output}"
+expect_output "unchanged" "${output}"
+sed --in-place 's/replicas: 2/replicas: 1/' "${workload_directory}/plan.yaml"
+output="$(platform workload apply --file "${workload_directory}/plan.yaml" --dry-run)"
+expect_output "${workload_environment}: 0 to add, 1 to change, 0 to remove" "${output}"
+cat > "${workload_directory}/empty.yaml" <<PLAN
+environment: ${workload_environment}
+workloads: {}
+PLAN
+output="$(platform workload apply --file "${workload_directory}/empty.yaml")"
+expect_output "${workload_environment}: 0 to add, 0 to change, 0 to remove" "${output}"
+output="$(platform workload apply \
+  --file "${workload_directory}/empty.yaml" \
+  --prune \
+  --wait)"
+echo "${output}"
+expect_output "${workload_environment}: 0 to add, 0 to change, 1 to remove" "${output}"
+expect_output "revision 7: removed from ${workload_environment}" "${output}"
 platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"

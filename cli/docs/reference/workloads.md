@@ -9,6 +9,7 @@ platform workload get --component <component> --environment <environment>
 platform workload history --environment <environment> [--component <component>]
 platform workload rollback --component <component> --environment <environment> [--revision <n>] [--wait] [--timeout <seconds>]
 platform workload remove --component <component> --environment <environment> [--wait] [--timeout <seconds>]
+platform workload apply --file <plan.yaml> [--dry-run] [--prune] [--wait] [--timeout <seconds>]
 ```
 
 A **Workload Spec** is the `app-spec.yaml` ([Score](https://score.dev), `score.dev/v1b1`) of a version, immutable, kept by the build in the version index (`spec.appSpec` of the `Version`). `spec validate` is open to any authenticated user. `spec get` is for members of the component's owner team and `platform-admins`: a Score may carry plain values from a private repo.
@@ -44,7 +45,7 @@ The `workload` provider renders a Deployment and a Service named after the insta
 
 | Access | Who |
 |---|---|
-| `deploy`, `rollback`, `remove` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
+| `deploy`, `rollback`, `remove`, `apply` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
 | `list`, `get`, `history` | access to the environment |
 
 Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variables`, `resources`, `livenessProbe`/`readinessProbe` with `httpGet`) and `service.ports`. The only placeholder resolved is `${metadata.<key>}`. Declared `resources` end as `ResourcesNotSupported` until the platform provisions them (#263), any other field as `UnsupportedSpec`. The image must be pullable by the vcluster without credentials.
@@ -96,3 +97,32 @@ Writes a new revision (`action: rollback`, `rollbackOf: <n>`) with the version a
 ## remove
 
 Writes a revision `action: remove`: the provider deletes the Deployment and the Service from the vcluster, then the `WorkloadInstance`. The revisions stay until the environment is deleted, so `history` still shows them and `rollback` cannot target the remove itself. A later `deploy` starts the instance again, with the next revision number. With `--wait`: `✓ <instance>@<environment> revision <n>: removed from <environment>`. `404` when the environment has no such workload.
+
+## apply
+
+Applies the **plan** of an environment, the set of its workloads, as a helmfile does for Helm releases. There is no plan object in the platform: the plan is the sum of the instances.
+
+```yaml
+environment: demo
+workloads:
+  productpage:
+    version: 1.4.0
+  reviews:
+    branch: feat/v3
+    replicas: 2
+```
+
+The environment comes from the file. Each key under `workloads` is an instance; in phase 1 it is named after its component, and a `component:` that differs from the key is refused (`422`, more instances per component is #294). Each entry takes `version` or `branch` and optionally `replicas` (1 by default). An empty plan is written `workloads: {}`.
+
+`POST /v1/environments/{environment}/workloads:apply` (`{"workloads": ..., "dryRun": true, "prune": false}`) diffs the plan against the newest revision of each instance:
+
+| Action | When |
+|---|---|
+| `add` | the instance does not run (never deployed, removed, or its first deploy failed) |
+| `change` | the version or the replicas differ, or the newest revision failed: applying tries it again |
+| `unchanged` | same version and replicas, and the newest revision succeeded or is still open |
+| `remove` | with `--prune`, an instance that runs and the plan leaves out |
+
+Each `add` and `change` is a `deploy` revision, each `remove` a remove revision, as `deploy` and `remove` write them. Every instance is authorized and resolved (version in the index, branch to its newest version, `SpecNotIndexed`) before the first write: one refusal (`403`, `404`, `409`, `422`) applies nothing. The writes are not transactional: a revision number taken by a concurrent request stops the apply with `409` and the number of revisions applied before it; applying again converges.
+
+The output lists each workload with its action, `FROM`/`TO` as `<version> ×<replicas>` and the revision written, then `<environment>: N to add, N to change, N to remove`. `--dry-run` writes nothing. `--wait` follows every revision written, prints one line per revision as `deploy` and `remove` do, and exits `1` when one does not succeed; `--timeout` applies to each revision.
