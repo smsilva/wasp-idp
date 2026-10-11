@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from platform_api.app import create_app
 from platform_api.journal import Journal
 from platform_api.teams import KeycloakTeams
-from fakes import FakeState
+from fakes import ADMIN_KUBECONFIG, FakeCredentials, FakeState
 from tokens import TokenFactory
 
 
@@ -260,3 +260,19 @@ def test_without_admin_client_teams_are_unavailable(journal_path, tokens):
   response = client.get("/v1/teams", headers={"Authorization": f"Bearer {tokens.issue()}"})
   assert response.status_code == 503
   assert "no Keycloak admin client" in response.json()["error"]["message"]
+
+
+def test_removing_a_member_revokes_their_environment_credentials(keycloak, journal_path, tokens):
+  state, credentials = FakeState(), FakeCredentials()
+  teams = KeycloakTeams("http://keycloak", "secret", transport=httpx.MockTransport(keycloak.handler))
+  client = TestClient(create_app(state, Journal(journal_path), tokens.verifier(), teams=teams, credentials=credentials))
+  admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
+  client.post("/v1/teams", json={"name": "team-alpha"}, headers=admin)
+  client.post("/v1/teams/team-alpha/members", json={"email": "dev@example.com"}, headers=admin)
+  dev = next(iter(keycloak.users))
+  for name, shared in (("shared-env", ["team-alpha"]), ("private-env", [])):
+    client.post("/v1/environments", json={"name": name, "profile": "ephemeral", "sharedWith": shared}, headers=admin)
+    state.objects[name]["status"] = {"port": 7100, "kubeconfigData": ADMIN_KUBECONFIG}
+    credentials.identities[name] = {dev, "admin-1"}
+  assert client.delete("/v1/teams/team-alpha/members/dev@example.com", headers=admin).status_code == 204
+  assert credentials.identities == {"shared-env": {"admin-1"}, "private-env": {dev, "admin-1"}}

@@ -1,10 +1,13 @@
 import os
+import sys
 import time
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Annotated
 
 import typer
+import yaml
 
 from .. import config
 from ..client import ApiError, PlatformClient
@@ -13,6 +16,7 @@ from ..output import Format, OutputOption, fail, print_json, print_table, succes
 app = typer.Typer(help="Environments where releases run.", no_args_is_help=True)
 
 FAILED = {"ProvisioningFailed"}
+EXEC_API_VERSION = "client.authentication.k8s.io/v1"
 
 
 class Profile(str, Enum):
@@ -85,11 +89,30 @@ def _wait_ready(client: PlatformClient, environment: dict, timeout: int, quiet: 
   return save_kubeconfig(environment)
 
 
-def save_kubeconfig(environment: dict) -> dict:
+def executable() -> str:
+  """This CLI's own path, so kubectl runs the same installation that wrote the kubeconfig (uv run, venvs)."""
+  path = Path(sys.argv[0])
+  return str(path.resolve()) if path.name == "platform" and path.is_file() else "platform"
+
+
+def with_executable(data: str) -> str:
+  """The API names the credential plugin `platform`; point it at this CLI (ADR 0028)."""
+  kubeconfig = yaml.safe_load(data)
+  users = (kubeconfig.get("users") or []) if isinstance(kubeconfig, dict) else []
+  plugins = [user["user"]["exec"] for user in users if (user.get("user") or {}).get("exec", {}).get("command") == "platform"]
+  if not plugins:
+    return data
+  for plugin in plugins:
+    plugin["command"] = executable()
+  return yaml.safe_dump(kubeconfig, sort_keys=False)
+
+
+def save_kubeconfig(environment: dict, suffix: str = "") -> dict:
   """The provider runs inside the cluster and returns the kubeconfig in the API: the CLI writes it locally."""
   data = environment.pop("kubeconfigData", None)
   if data:
-    path = config.config_dir() / "environments" / f"{environment['name']}.kubeconfig"
+    data = with_executable(data)
+    path = config.config_dir() / "environments" / f"{environment['name']}{suffix}.kubeconfig"
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w") as file:
@@ -148,10 +171,19 @@ def unshare(name: str, team: Team, output: OutputOption = Format.table):
 
 
 @app.command("get")
-def get(name: str, output: OutputOption = Format.table):
-  """Show an environment and write its kubeconfig when it is ready."""
+def get(
+  name: str,
+  admin: Annotated[bool, typer.Option("--admin", help="Write the vcluster admin kubeconfig instead (platform-admins only).")] = False,
+  output: OutputOption = Format.table,
+):
+  """Show an environment and write your kubeconfig when it is ready."""
   try:
-    environment = save_kubeconfig(_client().get_environment(name))
+    client = _client()
+    environment = client.get_environment(name)
+    if admin:
+      environment = save_kubeconfig({**environment, **client.admin_kubeconfig(name)}, suffix="-admin")
+    else:
+      environment = save_kubeconfig(environment)
   except ApiError as error:
     fail(str(error))
   if output == Format.json:
@@ -162,6 +194,19 @@ def get(name: str, output: OutputOption = Format.table):
     typer.echo(f"  {environment['message']}")
   if environment["status"] == "ready" and environment.get("kubeconfig"):
     typer.echo(f"  kubectl --kubeconfig {environment['kubeconfig']} get nodes")
+
+
+@app.command("credential")
+def credential(name: str):
+  """Print a short-lived token for the environment, as a kubectl ExecCredential.
+
+  The kubeconfig that `get` writes runs this command: kubectl calls it, never a person.
+  """
+  try:
+    issued = _client().environment_credential(name)
+  except ApiError as error:
+    fail(str(error))
+  print_json({"apiVersion": EXEC_API_VERSION, "kind": "ExecCredential", "status": issued})
 
 
 @app.command("delete")

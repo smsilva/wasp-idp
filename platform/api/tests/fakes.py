@@ -102,3 +102,51 @@ class FakeTeams:
 
 # The teams of idp/catalog/org.yaml, which most catalog tests use as owners.
 CATALOG_TEAMS = ("team-alpha", "team-beta", "team-platform")
+
+
+# The shape of the kubeconfig the local_vcluster provider publishes in status.kubeconfigData.
+ADMIN_KUBECONFIG = """apiVersion: v1
+kind: Config
+clusters:
+- name: my-vcluster
+  cluster:
+    server: https://127.0.0.1:7100
+    certificate-authority-data: Q0EtREFUQQ==
+users:
+- name: my-vcluster
+  user:
+    client-certificate-data: Q0VSVA==
+    client-key-data: S0VZ
+contexts:
+- name: my-vcluster
+  context:
+    cluster: my-vcluster
+    user: my-vcluster
+current-context: my-vcluster
+"""
+
+
+class FakeCredentials:
+  """The vcluster side of personal credentials (VclusterCredentials), in memory."""
+
+  def __init__(self):
+    self.identities = {}  # environment -> set of identity names
+    self.down = False
+
+  def issue(self, obj, sub, email):
+    from platform_api.credentials import VclusterUnavailable, identity_name
+
+    if self.down:
+      raise VclusterUnavailable("vcluster unreachable")
+    self.identities.setdefault(obj["metadata"]["name"], set()).add(identity_name(sub))
+    return {"token": f"token-of-{sub}", "expirationTimestamp": "2026-10-11T12:10:00Z"}
+
+  def revoke(self, obj, keep=frozenset(), only=None):
+    from platform_api.credentials import VclusterUnavailable
+
+    if self.down:
+      raise VclusterUnavailable("vcluster unreachable")
+    current = self.identities.get(obj["metadata"]["name"], set())
+    revoked = sorted(name for name in current if name not in keep and (only is None or name in only))
+    current.difference_update(revoked)
+    return revoked

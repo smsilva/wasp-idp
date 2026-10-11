@@ -160,3 +160,84 @@ def test_save_kubeconfig_writes_private_file(tmp_path, monkeypatch):
 def test_save_kubeconfig_without_data_changes_nothing():
   env = environment.save_kubeconfig({"name": "pending", "status": "Provisioning"})
   assert "kubeconfig" not in env
+
+
+PERSONAL = """apiVersion: v1
+kind: Config
+clusters:
+- name: vc
+  cluster:
+    server: https://127.0.0.1:7100
+users:
+- name: vc
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      command: platform
+      args: [environment, credential, vc]
+      interactiveMode: Never
+"""
+
+
+def test_save_kubeconfig_points_the_plugin_at_this_cli(tmp_path, monkeypatch):
+  import yaml
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  installed = tmp_path / "venv" / "bin" / "platform"
+  installed.parent.mkdir(parents=True)
+  installed.touch()
+  monkeypatch.setattr(environment.sys, "argv", [str(installed), "environment", "get", "vc"])
+  env = environment.save_kubeconfig({"name": "vc", "status": "ready", "kubeconfigData": PERSONAL})
+  plugin = yaml.safe_load(open(env["kubeconfig"]))["users"][0]["user"]["exec"]
+  assert plugin["command"] == str(installed)
+  assert plugin["args"] == ["environment", "credential", "vc"]
+
+
+def test_executable_falls_back_to_path_lookup(monkeypatch):
+  monkeypatch.setattr(environment.sys, "argv", ["/usr/bin/pytest"])
+  assert environment.executable() == "platform"
+
+
+def credential_api(monkeypatch, handler):
+  original = client_module.PlatformClient.__init__
+  monkeypatch.setattr(
+    client_module.PlatformClient, "__init__",
+    lambda self, base_url=None, transport_=None, token=None: original(self, "http://api.test", httpx.MockTransport(handler), lambda: "test-token"),
+  )
+
+
+def test_credential_prints_exec_credential(monkeypatch):
+  def handler(request):
+    assert (request.method, request.url.path) == ("POST", "/v1/environments/vc/credentials")
+    return httpx.Response(200, json={"token": "sa-token", "expirationTimestamp": "2026-10-11T12:10:00Z"})
+
+  credential_api(monkeypatch, handler)
+  result = runner.invoke(app, ["environment", "credential", "vc"])
+  assert result.exit_code == 0
+  assert json.loads(result.stdout) == {
+    "apiVersion": "client.authentication.k8s.io/v1", "kind": "ExecCredential",
+    "status": {"token": "sa-token", "expirationTimestamp": "2026-10-11T12:10:00Z"},
+  }
+
+
+def test_credential_refused_goes_to_stderr(monkeypatch):
+  credential_api(monkeypatch, lambda request: httpx.Response(403, json={"error": {"code": "forbidden", "message": "environment 'vc' is not yours nor shared with your teams"}}))
+  result = runner.invoke(app, ["environment", "credential", "vc"])
+  assert result.exit_code == 1
+  assert result.stdout == ""
+  assert "not yours nor shared" in result.stderr
+
+
+def test_get_admin_writes_admin_kubeconfig(tmp_path, monkeypatch):
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+  def handler(request):
+    if request.url.path.endswith("/admin-kubeconfig"):
+      return httpx.Response(200, json={"name": "vc", "kubeconfigData": "apiVersion: v1\nkind: Config\n"})
+    return httpx.Response(200, json={"name": "vc", "status": "ready", "kubeconfigData": PERSONAL})
+
+  credential_api(monkeypatch, handler)
+  result = runner.invoke(app, ["environment", "get", "vc", "--admin"])
+  assert result.exit_code == 0
+  path = tmp_path / "platform" / "environments" / "vc-admin.kubeconfig"
+  assert path.read_text() == "apiVersion: v1\nkind: Config\n"
+  assert str(path) in result.stdout

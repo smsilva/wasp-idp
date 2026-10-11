@@ -183,6 +183,24 @@ k3d-platform-local-server-0   Ready    <none>   17s   v1.36.0
 
 O nó que aparece é o do `platform-local`: o vcluster tem API, etcd e controllers próprios, e os pods rodam no cluster de fora, no namespace `env-greetings-test`. Cada ambiente ganha uma porta da faixa `7100`–`7119`, mapeada pelo `init` em `127.0.0.1`.
 
+O kubeconfig não guarda credencial (ADR 0028). A cada comando, o kubectl chama `platform environment credential greetings-test`, e a Platform API confere se você ainda tem acesso ao ambiente e devolve um token de 10 minutos. Por isso a CLI precisa estar instalada e logada na máquina onde o kubectl roda; o `get` grava no kubeconfig o caminho da própria CLI. Dentro do vcluster, você é a ServiceAccount `platform-identities/<sub>`, com `cluster-admin`:
+
+```bash
+kubectl auth whoami
+```
+
+```
+ATTRIBUTE   VALUE
+Username    system:serviceaccount:platform-identities:6f1c9a8e-2b1d-4c3e-9f00-123456789abc
+Groups      [system:serviceaccounts system:serviceaccounts:platform-identities system:authenticated]
+```
+
+Quem está em `platform-admins` também pode gravar o kubeconfig de administrador do vcluster, com certificado e sem passar pela API, em `~/.config/platform/environments/<nome>-admin.kubeconfig`:
+
+```bash
+platform environment get greetings-test --admin
+```
+
 ## 7. Saída em JSON
 
 ```bash
@@ -203,7 +221,7 @@ platform environment list --output json
 ]
 ```
 
-A lista nunca traz o kubeconfig, que é uma credencial. O `platform environment get` o recebe só para quem criou o ambiente ou para quem está em `platform-admins`; os demais veem o status, sem o acesso.
+A lista nunca traz o kubeconfig. O `platform environment get` o recebe só para quem pode usar o ambiente: quem o criou, quem está em `platform-admins` ou nos times com que ele foi compartilhado. Os demais veem o status, sem o acesso.
 
 ```bash
 platform environment list --output json | jq -r '.[].name'
@@ -392,7 +410,7 @@ platform environment unshare greetings-test --team team-alpha
 
 Os membros do time veem o ambiente no `environment list` e recebem o kubeconfig no `environment get`. Apagar, compartilhar e descompartilhar continuam com o dono e os admins.
 
-Todos recebem o mesmo kubeconfig de administrador do vcluster. Tirar alguém do time, ou descompartilhar, corta o acesso pela API, mas quem já baixou o kubeconfig continua com ele até o ambiente ser recriado. A identidade por pessoa no vcluster é a #233.
+Cada pessoa usa a própria identidade no vcluster (seção 6). Descompartilhar apaga as identidades de quem não é o dono, e tirar alguém do time apaga a dessa pessoa nos ambientes compartilhados com ele. Em segundos, o kubectl dessas pessoas passa a receber `environment 'greetings-test' is not yours nor shared with your teams`. Quem continua com acesso por outro time ganha um token novo no comando seguinte, sem perceber.
 
 ## 13. Desmontar tudo
 
@@ -416,7 +434,8 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform environment create <nome> --profile ephemeral\|shared [--expires 3d] [--share-with <time>]... [--wait]` | pede um ambiente, privado se não compartilhado |
 | `platform environment list [--all]` | NAME, PROFILE, STATUS, EXPIRES, OWNER, SHARED; os seus e os dos seus times, ou todos |
 | `platform environment share\|unshare <nome> --team <time>` | compartilha ou deixa de compartilhar; só o dono ou `platform-admins` |
-| `platform environment get <nome>` | status e mensagem; grava o kubeconfig quando pronto |
+| `platform environment get <nome> [--admin]` | status e mensagem; grava o seu kubeconfig quando pronto, ou o de administrador (só `platform-admins`) |
+| `platform environment credential <nome>` | token de 10 minutos como `ExecCredential`; quem chama é o kubectl, pelo kubeconfig |
 | `platform environment delete <nome>` | remove o ambiente e o vcluster; só o dono ou `platform-admins` |
 | `platform catalog domain create <nome> --owner <time> [--parent <domínio>]` | cria um domínio ou subdomínio (só `platform-admins`) |
 | `platform catalog system create <nome> --domain <domínio> --owner <time>` | cria um sistema |

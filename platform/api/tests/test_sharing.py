@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
 from platform_api.journal import Journal
-from fakes import FakeState, FakeTeams
+from fakes import ADMIN_KUBECONFIG, FakeState, FakeTeams
 from tokens import TokenFactory
 
 
@@ -49,7 +49,7 @@ def as_(tokens):
 
 
 def ready(state, name):
-  state.objects[name]["status"] = {"kubeconfigData": "apiVersion: v1", "conditions": [{"type": "Ready", "status": "True"}]}
+  state.objects[name]["status"] = {"port": 7100, "kubeconfigData": ADMIN_KUBECONFIG, "conditions": [{"type": "Ready", "status": "True"}]}
 
 
 def create(client, as_, name="shared-env", who="owner", **extra):
@@ -127,7 +127,7 @@ def test_share_and_unshare(client, as_, state, journal_path):
   assert "sharedWith" not in state.objects["shared-env"]["spec"]
   assert "kubeconfigData" not in client.get("/v1/environments/shared-env", headers=as_("teammate")).json()
   # The provider's status survives the spec change.
-  assert state.objects["shared-env"]["status"]["kubeconfigData"] == "apiVersion: v1"
+  assert state.objects["shared-env"]["status"]["kubeconfigData"] == ADMIN_KUBECONFIG
   entries = [json.loads(line) for line in journal_path.read_text().splitlines()]
   assert [(e["action"], e["spec"]) for e in entries if "action" in e][1:] == [("share", {"team": "team-alpha"}), ("unshare", {"team": "team-alpha"})]
 

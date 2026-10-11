@@ -1,6 +1,6 @@
 # Environment sharing with teams: teams as Keycloak groups owned by the Platform API, sharedWith on the Environment
 
-**Status:** Aceito (2026-10-11)
+**Status:** Aceito (2026-10-11). A fatia 2 ("Kubeconfig") foi substituída pelo ADR 0028.
 
 ## Contexto
 

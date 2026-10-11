@@ -2,12 +2,13 @@ import json
 import re
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
 from platform_api.journal import Journal
 from tokens import ISSUER, TokenFactory
-from fakes import FakeState
+from fakes import ADMIN_KUBECONFIG, FakeState
 
 
 @pytest.fixture
@@ -154,7 +155,7 @@ def test_rejects_unexpected_host_header(state, journal_path, tokens, host, statu
 
 
 def ready_with_kubeconfig(state, name):
-  state.objects[name]["status"] = {"port": 7100, "kubeconfigData": "apiVersion: v1\n", "conditions": [{"type": "Ready", "status": "True"}]}
+  state.objects[name]["status"] = {"port": 7100, "kubeconfigData": ADMIN_KUBECONFIG, "conditions": [{"type": "Ready", "status": "True"}]}
 
 
 def test_create_records_owner(client, state):
@@ -167,7 +168,12 @@ def test_kubeconfig_data_only_on_single_get_for_owner(client, state):
   ready_with_kubeconfig(state, "vc")
   assert "kubeconfigData" not in client.get("/v1/environments").json()["items"][0]
   single = client.get("/v1/environments/vc").json()
-  assert single["kubeconfigData"] == "apiVersion: v1\n" and single["port"] == 7100
+  assert single["port"] == 7100
+  # The personal kubeconfig (ADR 0028): the vcluster's address and CA, no certificate of its own.
+  personal = yaml.safe_load(single["kubeconfigData"])
+  assert personal["clusters"][0]["cluster"]["server"] == "https://127.0.0.1:7100"
+  assert personal["users"][0]["user"]["exec"]["args"] == ["environment", "credential", "vc"]
+  assert "client-key-data" not in single["kubeconfigData"]
 
 
 def test_kubeconfig_hidden_from_other_users(client, state, tokens):
@@ -182,7 +188,7 @@ def test_kubeconfig_visible_to_platform_admins(client, state, tokens):
   client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
   ready_with_kubeconfig(state, "vc")
   admin = {"Authorization": f"Bearer {tokens.issue(sub='admin-1', groups=['platform-admins'])}"}
-  assert client.get("/v1/environments/vc", headers=admin).json()["kubeconfigData"] == "apiVersion: v1\n"
+  assert "exec" in yaml.safe_load(client.get("/v1/environments/vc", headers=admin).json()["kubeconfigData"])["users"][0]["user"]
 
 
 def test_environment_name_with_trailing_newline_is_rejected(client):

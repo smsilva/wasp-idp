@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, catalog_import, environments, templates, teams as team_routes
+from . import catalog, catalog_import, credentials as personal, environments, templates, teams as team_routes
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -67,7 +67,7 @@ def _error(status: int, message, headers=None, plan: dict | None = None) -> JSON
   return JSONResponse({"error": body}, status, headers=headers)
 
 
-def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None) -> FastAPI:
+def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.2.0")
   app.state.verifier = verifier
   if allowed_hosts:
@@ -132,9 +132,39 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   def get_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
       obj = state.get(ENVIRONMENTS, name)
-      return environments.view(obj, with_kubeconfig=environments.can_use(obj, principal))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
+    # The personal kubeconfig holds no credential: kubectl asks /credentials for one (ADR 0028).
+    return environments.view(obj, kubeconfig=personal.personal_kubeconfig(obj) if environments.can_use(obj, principal) else None)
+
+  def usable(name: str, principal: Principal) -> dict:
+    try:
+      obj = state.get(ENVIRONMENTS, name)
+    except NotFound:
+      raise HTTPException(404, f"environment '{name}' not found")
+    if not environments.can_use(obj, principal):
+      raise HTTPException(403, f"environment '{name}' is not yours nor shared with your teams")
+    if not (obj.get("status") or {}).get("kubeconfigData"):
+      raise HTTPException(409, f"environment '{name}' is not ready yet")
+    return obj
+
+  @app.post("/v1/environments/{name}/credentials")
+  def issue_credential(name: str, principal: Principal = Depends(current_principal)):
+    obj = usable(name, principal)
+    if credentials is None:
+      raise HTTPException(503, "personal credentials are not configured in the Platform API")
+    try:
+      return credentials.issue(obj, principal.sub, principal.email)
+    except personal.VclusterUnavailable as error:
+      raise HTTPException(503, str(error))
+
+  @app.get("/v1/environments/{name}/admin-kubeconfig")
+  def admin_kubeconfig(name: str, principal: Principal = Depends(current_principal)):
+    # The vcluster's own admin credential: a certificate that cannot be revoked, so admins only.
+    if environments.ADMIN_GROUP not in principal.groups:
+      raise HTTPException(403, "the admin kubeconfig is only for platform-admins")
+    obj = usable(name, principal)
+    return {"name": name, "kubeconfigData": obj["status"]["kubeconfigData"]}
 
   @app.delete("/v1/environments/{name}", status_code=202)
   def delete_environment(name: str, principal: Principal = Depends(current_principal)):
@@ -203,6 +233,10 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
     except Conflict:
       raise HTTPException(409, f"environment '{name}' changed while sharing: try again")
     journal.mark_applied(entry)
+    if not add:
+      # Whoever still has access through another team gets a new token on the next kubectl call.
+      owner = (replaced["metadata"].get("annotations") or {}).get(environments.OWNER_ANNOTATION)
+      personal.revoke_quietly(credentials, replaced, keep={personal.identity_name(owner)} if owner else set())
     return environments.view(replaced)
 
   @app.put("/v1/environments/{name}/shares/{team}")
@@ -219,7 +253,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   app.include_router(catalog_import.router(state, journal, teams))
   app.include_router(templates.router(state, journal, teams))
   app.include_router(catalog.router(state, journal, teams))
-  app.include_router(team_routes.router(teams, journal, state))
+  app.include_router(team_routes.router(teams, journal, state, credentials))
   return app
 
 
@@ -233,4 +267,5 @@ def build() -> FastAPI:
   # Without the admin client the API still serves everything else; /v1/teams answers 503.
   admin_secret = os.environ.get("PLATFORM_KEYCLOAK_ADMIN_SECRET")
   teams = team_routes.KeycloakTeams(os.environ["PLATFORM_KEYCLOAK_URL"], admin_secret) if admin_secret else None
-  return create_app(KubeApplyWriter(namespace), Journal(journal_path), verifier, allowed_hosts, teams)
+  credentials = personal.VclusterCredentials(os.environ.get("PLATFORM_VCLUSTER_SERVER", personal.SERVER))
+  return create_app(KubeApplyWriter(namespace), Journal(journal_path), verifier, allowed_hosts, teams, credentials)

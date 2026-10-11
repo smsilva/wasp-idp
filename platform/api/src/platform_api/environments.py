@@ -57,11 +57,11 @@ def can_use(obj: dict, principal) -> bool:
   return is_owner_or_admin(obj, principal) or bool(set(principal.teams) & set(shared_with(obj)))
 
 
-def view(obj: dict, with_kubeconfig: bool = False) -> dict:
+def view(obj: dict, kubeconfig: str | None = None) -> dict:
   """The API view of an Environment: clients never couple to the CR shape.
 
-  kubeconfigData is a credential: never in the list, and in the single read only when the caller
-  passed can_use.
+  kubeconfigData is the caller's personal kubeconfig (ADR 0028): never in the list, and in the single
+  read only when the caller passed can_use. The admin kubeconfig in the status never goes out here.
   """
   metadata = obj.get("metadata", {})
   spec = obj.get("spec", {})
@@ -86,6 +86,6 @@ def view(obj: dict, with_kubeconfig: bool = False) -> dict:
     "owner": (metadata.get("annotations") or {}).get(OWNER_NAME_ANNOTATION),
     "sharedWith": shared_with(obj),
   }
-  if with_kubeconfig and status.get("kubeconfigData"):
-    result["kubeconfigData"] = status["kubeconfigData"]
+  if kubeconfig:
+    result["kubeconfigData"] = kubeconfig
   return result
