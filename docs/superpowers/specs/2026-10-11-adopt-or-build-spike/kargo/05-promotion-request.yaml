@@ -1,0 +1,10 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: PromotionRequest
+metadata:
+  generateName: previews-
+  namespace: kargo-spike
+spec:
+  stage: previews
+  freight: 06cf584db7e7dfb880309d2544310aa6788957be
+  targets:
+  - name: kargo-pr1

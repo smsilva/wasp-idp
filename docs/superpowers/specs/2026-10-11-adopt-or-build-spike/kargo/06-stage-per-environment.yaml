@@ -1,0 +1,43 @@
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: env-kargo-pr1
+  namespace: kargo-spike
+spec:
+  requestedFreight:
+  - origin:
+      kind: Warehouse
+      name: releases
+    sources:
+      stages: [dev]
+  promotionTemplate:
+    spec:
+      vars:
+      - name: imageRepo
+        value: ghcr.io/smsilva/kargo-spike
+      - name: apiServer
+        value: https://vcluster.env-kargo-pr1.svc.cluster.local:7102
+      - name: secretName
+        value: vcluster-kargo-pr1
+      steps:
+      - uses: http
+        as: patch-image
+        config:
+          method: PATCH
+          url: ${{ vars.apiServer }}/apis/apps/v1/namespaces/app/deployments/kargo-spike
+          # Spike shortcut only: the http step has no CA field, so TLS to the
+          # self-signed vcluster API is not verified. Do not copy.
+          insecureSkipTLSVerify: true
+          headers:
+          - name: Authorization
+            value: Bearer ${{ secret(vars.secretName).token }}
+          - name: Content-Type
+            value: application/strategic-merge-patch+json
+          body: '${{ quote({"spec": {"template": {"spec": {"containers": [{"name": "kargo-spike", "image": vars.imageRepo + ":" + imageFrom(vars.imageRepo).Tag } ] } } } } ) }}'
+          successExpression: response.status == 200
+          failureExpression: response.status != 200
+          errorExpression: 'string(response.status) + " " + string(response.body)'
+          outputs:
+          - name: image
+            fromExpression: response.body.spec.template.spec.containers[0].image

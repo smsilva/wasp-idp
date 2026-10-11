@@ -1,0 +1,8 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Promotion
+metadata:
+  generateName: dev-
+  namespace: kargo-spike
+spec:
+  stage: dev
+  freight: 06cf584db7e7dfb880309d2544310aa6788957be
