@@ -3,7 +3,7 @@
 Roteiro para demonstrar a CLI `platform` **partindo do zero**: sem cluster, sem config e sem a CLI instalada. Esta página é a sequência para apresentar ou para conferir que tudo continua funcionando; o guia de uso, com cada comando explicado, é a [página principal](../index.md).
 
 !!! info "Última execução"
-    Rodado de ponta a ponta em 2026-10-10; os passos 8 a 11 foram refeitos com o provider `local_vcluster` (#183) e o passo 14 (#190) no `platform-local`, no mesmo dia.
+    Rodado de ponta a ponta em 2026-10-10; os passos 8 a 11 foram refeitos com o provider `local_vcluster` (#183) e o passo 14 (#190) no `platform-local`, no mesmo dia. O passo 18 (#199) foi rodado em 2026-10-11, com o App `wasp-foundry-platform` criado e instalado na org `wasp-foundry`.
 
 ## Preparação
 
@@ -51,7 +51,8 @@ Cada passo mostra o comando e, logo abaixo, a **saída** esperada.
 - [15. Times](15-teams.md)
 - [16. Templates de component](16-templates.md)
 - [17. Contas de nuvem](17-cloud-accounts.md)
-- [18. Limpar e sair](18-cleanup.md)
+- [18. Connection com o GitHub](18-scm-connection.md)
+- [19. Limpar e sair](19-cleanup.md)
 
 Sem navegador: [`scripts/demo/cli-smoke`](cli-smoke.md).
 

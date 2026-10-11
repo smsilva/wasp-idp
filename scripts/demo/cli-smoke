@@ -11,12 +11,13 @@ created and deleted, then login as the test admin, the catalog import of
 idp/catalog/, a team with two test users, checked in the token, an
 environment shared with that team (the teammate gets a personal kubeconfig whose
 token the Platform API issues (ADR 0028), cannot delete the environment nor get
-its admin kubeconfig, and loses access after unshare, in kubectl too), and the
-templates (list, render, import plan), and a cloud account (ADR 0029): refused
-with a clear message without an AWS base credential; with one, the role the
-platform cannot assume stays TrustNotEstablished, and another user neither sees it
-nor registers the same role. Stops at the first failure with a
-non-zero exit code.
+its admin kubeconfig, and loses access after unshare, in kubectl too), the
+templates (list, render, import plan), an SCM connection up to the GitHub
+manifest page (creating the App needs a browser and an org owner, so it stays
+out), and a cloud account (ADR 0029): refused with a clear message without an
+AWS base credential; with one, the role the platform cannot assume stays
+TrustNotEstablished, and another user neither sees it nor registers the same
+role. Stops at the first failure with a non-zero exit code.
 
 It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
 your own login in ~/.config/platform/credentials is never touched.
@@ -42,6 +43,7 @@ shared_environment="smoke-shared-${RANDOM}"
 cloud_account="smoke-aws-${RANDOM}"
 # Documentation account ID: AssumeRole there is always denied, which is what the step checks.
 cloud_role="arn:aws:iam::123456789012:role/platform-smoke-${RANDOM}"
+connection="smoke-scm-${RANDOM}"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -93,6 +95,7 @@ cleanup() {
   platform environment delete "${shared_environment}" > /dev/null 2>&1 || true
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
+  platform scm connection remove "${connection}" > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}" "${render_directory}"
 }
 trap cleanup EXIT
@@ -124,6 +127,9 @@ expect_failure "403" \
     --repo https://github.com/smsilva/wasp-idp \
     --path platform/templates/python-service/content \
     --ref main
+
+step "a non-admin cannot list SCM connections"
+expect_failure "403" platform scm connection list
 
 step "environment create --wait"
 platform environment create "${environment}" \
@@ -264,6 +270,28 @@ output="$(expect_failure "team 'guests' not found" \
     --dry-run)"
 expect_output "publish:github: the platform creates the repo" "${output}"
 expect_output "publish:github:pull-request: GitOps belongs to the release" "${output}"
+
+step "scm connection add --no-browser (the manifest flow stops at GitHub)"
+output="$(platform scm connection add "${connection}" \
+  --vendor github \
+  --org wasp-foundry \
+  --no-browser)"
+next_url="$(grep --only-matching 'http://127.0.0.1:9090/v1/scm/connections/[^ ]*' <<< "${output}")"
+page="$(curl --silent --fail "${next_url}")"
+expect_output 'action="https://github.com/organizations/wasp-foundry/settings/apps/new?state=' "${page}"
+expect_output "default_permissions" "${page}"
+status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  "http://127.0.0.1:9090/v1/scm/connections/${connection}/github/callback?code=fake&state=forged")"
+if [[ "${status}" != "400" ]]; then
+  echo "expected 400 for a forged state, got ${status}" >&2
+  exit 1
+fi
+output="$(platform scm connection get "${connection}")"
+expect_output "AppNotCreated" "${output}"
+
+step "scm connection remove"
+platform scm connection remove "${connection}"
+expect_failure "404" platform scm connection get "${connection}"
 
 step "cloud account: trust policy, TrustNotEstablished, private to its owner (#193)"
 platform login --test-user
