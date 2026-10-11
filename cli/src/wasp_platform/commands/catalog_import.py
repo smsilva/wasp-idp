@@ -36,6 +36,17 @@ def _files(paths: list[Path]) -> list[Path]:
   return list(unique.values())
 
 
+def _as_json(document, shown: str):
+  """Dates and other YAML-only values travel as text; what JSON cannot carry at all fails here,
+  naming the file, instead of as a traceback inside httpx."""
+  try:
+    return json.loads(json.dumps(document, default=str, allow_nan=False))
+  except TypeError:
+    raise ImportFileError(f"{shown}: keys must be text (quote dates and numbers used as keys)")
+  except ValueError as error:
+    raise ImportFileError(f"{shown}: not representable as JSON ({error})")
+
+
 def read_documents(paths: list[Path]) -> list[dict]:
   """Every non-empty YAML document, with its source as `<path relative to cwd>#<position>`."""
   documents = []
@@ -45,14 +56,15 @@ def read_documents(paths: list[Path]) -> list[dict]:
       # Outside the current folder, a chain of ../ says less than the absolute path.
       shown = str(file.resolve())
     try:
-      loaded = [document for document in yaml.safe_load_all(file.read_text()) if document is not None]
+      loaded = [document for document in yaml.safe_load_all(file.read_text(encoding="utf-8")) if document is not None]
+    except UnicodeDecodeError:
+      raise ImportFileError(f"{shown}: not UTF-8")
     except yaml.YAMLError as error:
       mark = getattr(error, "problem_mark", None)
       line = f":{mark.line + 1}" if mark else ""
       raise ImportFileError(f"{shown}{line}: invalid YAML: {getattr(error, 'problem', None) or error}")
     for index, document in enumerate(loaded, 1):
-      # Dates and other YAML-only types travel as text.
-      documents.append({"source": f"{shown}#{index}", "document": json.loads(json.dumps(document, default=str))})
+      documents.append({"source": f"{shown}#{index}", "document": _as_json(document, shown)})
   if not documents:
     raise ImportFileError(f"no YAML documents found in {', '.join(str(path) for path in paths)}")
   return documents

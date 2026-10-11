@@ -179,3 +179,24 @@ def test_source_outside_cwd_is_absolute(files, tmp_path_factory):
   outside = tmp_path_factory.mktemp("outside") / "orphan.yaml"
   outside.write_text("kind: System\nmetadata:\n  name: orphan\n")
   assert read_documents([outside])[0]["source"] == f"{outside}#1"
+
+
+@pytest.mark.parametrize("name,content,message", [
+  ("date-key.yaml", b"kind: Domain\nmetadata:\n  name: d\n  annotations:\n    2024-01-01: x\n", "date-key.yaml: keys must be text"),
+  ("nan.yaml", b"kind: Domain\nmetadata:\n  name: d\nx: .nan\n", "nan.yaml: not representable as JSON"),
+  ("latin1.yaml", "kind: Domain\nmetadata:\n  name: d\n  description: ação\n".encode("latin-1"), "latin1.yaml: not UTF-8"),
+  ("loop.yaml", b"a: &x [*x]\n", "loop.yaml: not representable as JSON"),
+])
+def test_yaml_that_is_not_json_names_the_file(files, name, content, message):
+  (files / name).write_bytes(content)
+  with pytest.raises(ImportFileError, match=message):
+    read_documents([files / name])
+
+
+def test_yaml_that_is_not_json_fails_cleanly(api, files):
+  (files / "nan.yaml").write_bytes(b"kind: Domain\nx: .nan\n")
+  result = run("nan.yaml")
+  assert result.exit_code == 1
+  assert "nan.yaml: not representable as JSON" in result.output
+  assert result.exception is None or isinstance(result.exception, SystemExit)
+  assert api.calls == []
