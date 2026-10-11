@@ -75,7 +75,9 @@ clients:
     serviceAccountsEnabled: true
     secret: $(env:PLATFORM_API_ADMIN_SECRET)
 
-# Service account of platform-api-admin: groups and memberships only, no realm settings.
+# Service account of platform-api-admin: no realm settings, but manage-users still reaches every user
+# and group, platform-admins included. Only the API code confines it to /teams; narrowing the grant
+# to that subtree (fine-grained admin permissions) is #238.
 users:
   - username: service-account-platform-api-admin
     enabled: true

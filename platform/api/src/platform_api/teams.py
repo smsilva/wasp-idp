@@ -102,10 +102,13 @@ class KeycloakTeams:
     return found
 
   def _user_id(self, email: str) -> str:
-    users = self._admin("GET", "/users", params={"email": email, "exact": "true", "briefRepresentation": "true"}).json()
-    if not users:
+    # Membership grants access, so the e-mail must name exactly one account that proved it owns it:
+    # an unverified e-mail is only a claim, and taking the first of several matches picks at random.
+    users = self._admin("GET", "/users", params={"email": email, "exact": "true"}).json()
+    verified = [user for user in users if user.get("emailVerified") and user.get("email", "").lower() == email.lower()]
+    if len(verified) != 1:
       raise UserNotFound(email)
-    return users[0]["id"]
+    return verified[0]["id"]
 
   def names(self) -> list[str]:
     return sorted(group["name"] for group in self._children())
@@ -174,7 +177,7 @@ def router(teams, journal: Journal) -> APIRouter:
     except NameTaken as error:
       raise HTTPException(409, f"'{error}' is already a platform group: pick another team name")
     except UserNotFound as error:
-      raise HTTPException(404, f"user '{error}' not found: they must log in to the platform once first")
+      raise HTTPException(404, f"user '{error}' not found: they must log in to the platform once first, with a verified e-mail")
     except NotMember as error:
       raise HTTPException(404, f"'{error}' is not a member of the team")
     except TeamsUnavailable as error:

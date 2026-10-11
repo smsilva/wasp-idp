@@ -31,8 +31,8 @@ class FakeKeycloak:
     self.members[group_id] = set()
     return group_id
 
-  def add_user(self, username, email):
-    self.users[str(uuid.uuid4())] = {"username": username, "email": email}
+  def add_user(self, username, email, verified=True):
+    self.users[str(uuid.uuid4())] = {"username": username, "email": email, "emailVerified": verified}
 
   def group_by_path(self, path):
     return next((group for group in self.groups.values() if group["path"] == path), None)
@@ -64,7 +64,7 @@ class FakeKeycloak:
         return httpx.Response(201)
       return httpx.Response(200, json=[self._view(g) for g in self.groups.values() if g["parent"] == parts[1]])
     if parts[0] == "groups" and len(parts) == 3 and parts[2] == "members":
-      return httpx.Response(200, json=[self.users[user] for user in self.members[parts[1]]])
+      return httpx.Response(200, json=[{"username": self.users[u]["username"], "email": self.users[u]["email"]} for u in self.members[parts[1]]])
     if parts[0] == "groups" and len(parts) == 2 and request.method == "DELETE":
       del self.groups[parts[1]]
       return httpx.Response(204)
@@ -167,6 +167,18 @@ def test_add_unknown_user_is_not_found(client):
   response = client.post("/v1/teams/team-alpha/members", json={"email": "nobody@example.com"})
   assert response.status_code == 404
   assert "log in to the platform once" in response.json()["error"]["message"]
+
+
+@pytest.mark.parametrize("accounts", [
+  [("squatter", "victim@example.com", False)],
+  [("one", "victim@example.com", True), ("two", "victim@example.com", True)],
+])
+def test_add_refuses_unverified_or_ambiguous_email(client, keycloak, accounts):
+  for username, email, verified in accounts:
+    keycloak.add_user(username, email, verified)
+  client.post("/v1/teams", json={"name": "team-alpha"})
+  assert client.post("/v1/teams/team-alpha/members", json={"email": "victim@example.com"}).status_code == 404
+  assert client.get("/v1/teams/team-alpha").json()["members"] == []
 
 
 def test_remove_non_member_is_not_found(client):
