@@ -33,11 +33,12 @@ def no_provider_status() -> dict:
   }
 
 
-def is_owner_or_admin(obj: dict, principal) -> bool:
-  """Reading the kubeconfig (admin access) and deleting an environment are reserved to its owner and
-  platform admins. Without the owner annotation (created before it existed), only admins pass."""
-  owner = (obj.get("metadata", {}).get("annotations") or {}).get(OWNER_ANNOTATION)
-  return principal.sub == owner or ADMIN_GROUP in principal.groups
+def is_owner_or_admin(obj: dict, principal, annotation: str = OWNER_ANNOTATION) -> bool:
+  """True for whoever the annotation names and for platform admins. Environments use the owner
+  annotation (kubeconfig and delete); catalog entities pass their created-by annotation. Without the
+  annotation (objects created before it existed), only admins pass."""
+  person = (obj.get("metadata", {}).get("annotations") or {}).get(annotation)
+  return principal.sub == person or ADMIN_GROUP in principal.groups
 
 
 def view(obj: dict, with_kubeconfig: bool = False) -> dict:

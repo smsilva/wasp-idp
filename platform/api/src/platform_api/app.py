@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import environments
+from . import catalog, environments
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -27,7 +27,7 @@ class EnvironmentRequest(BaseModel):
   @field_validator("name")
   @classmethod
   def check_name(cls, value: str) -> str:
-    if not NAME_PATTERN.match(value):
+    if not NAME_PATTERN.fullmatch(value):
       raise ValueError("lowercase letters, digits and '-', starting with a letter, at most 28 characters")
     return value
 
@@ -43,7 +43,7 @@ class EnvironmentRequest(BaseModel):
 CAPABILITIES = {
   "identity": "Active",
   "environment": "Active",
-  "catalog": "NoProviderForCapability",
+  "catalog": "Active",
   "build": "NoProviderForCapability",
   "release": "NoProviderForCapability",
 }
@@ -135,6 +135,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
     journal.mark_applied(entry)
     return {"name": name, "status": "deleting"}
 
+  app.include_router(catalog.router(state, journal))
   return app
 
 

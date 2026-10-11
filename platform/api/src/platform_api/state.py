@@ -6,8 +6,15 @@ A GitCommitWriter (GitOps) could replace it without changing the API routes.
 from typing import Protocol
 
 GROUP = "platform.wasp.silvios.me"
+# Catalog entities live in their own group, apart from the environment and delivery CRDs.
+CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
 ENVIRONMENTS = "environments"
+CATALOG_PLURALS = ("domains", "systems", "resources")
+
+
+def group_of(plural: str) -> str:
+  return CATALOG_GROUP if plural in CATALOG_PLURALS else GROUP
 
 
 class AlreadyExists(Exception):
@@ -52,7 +59,7 @@ class KubeApplyWriter:
 
   def create(self, plural: str, body: dict) -> dict:
     try:
-      return self.api.create_namespaced_custom_object(GROUP, VERSION, self.namespace, plural, body)
+      return self.api.create_namespaced_custom_object(group_of(plural), VERSION, self.namespace, plural, body)
     except self._api_exception as error:
       if error.status == 409:
         raise AlreadyExists(body["metadata"]["name"]) from error
@@ -62,7 +69,7 @@ class KubeApplyWriter:
     name = body["metadata"]["name"]
     try:
       return self.api.replace_namespaced_custom_object_status(
-        GROUP, VERSION, self.namespace, plural, name, body
+        group_of(plural), VERSION, self.namespace, plural, name, body
       )
     except self._api_exception as error:
       if error.status == 409:
@@ -76,7 +83,7 @@ class KubeApplyWriter:
     the meantime fails the precondition (409) instead of being removed."""
     body = {"preconditions": {"uid": uid}} if uid else None
     try:
-      self.api.delete_namespaced_custom_object(GROUP, VERSION, self.namespace, plural, name, body=body)
+      self.api.delete_namespaced_custom_object(group_of(plural), VERSION, self.namespace, plural, name, body=body)
     except self._api_exception as error:
       if error.status == 404:
         raise NotFound(name) from error
@@ -86,11 +93,11 @@ class KubeApplyWriter:
 
   def get(self, plural: str, name: str) -> dict:
     try:
-      return self.api.get_namespaced_custom_object(GROUP, VERSION, self.namespace, plural, name)
+      return self.api.get_namespaced_custom_object(group_of(plural), VERSION, self.namespace, plural, name)
     except self._api_exception as error:
       if error.status == 404:
         raise NotFound(name) from error
       raise
 
   def list(self, plural: str) -> list[dict]:
-    return self.api.list_namespaced_custom_object(GROUP, VERSION, self.namespace, plural)["items"]
+    return self.api.list_namespaced_custom_object(group_of(plural), VERSION, self.namespace, plural)["items"]

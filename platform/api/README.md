@@ -1,6 +1,6 @@
 # Platform API
 
-Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments` no namespace `platform-system`.
+Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments` e as entidades do catálogo (`domains`, `systems`, `resources`) no namespace `platform-system`.
 
 ## Endpoints
 
@@ -13,12 +13,32 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `GET` | `/v1/environments` | `200`, `{"items": [...]}` |
 | `GET` | `/v1/environments/{name}` | `200` |
 | `DELETE` | `/v1/environments/{name}` | `202`; `403` para quem não é o dono nem `platform-admins` |
+| `POST` | `/v1/catalog/{kind}` | `201`; `kind` é `domains`, `systems` ou `resources`; body `{"name", "owner", "description", "parent"\|"domain"\|"system", "type"}` |
+| `GET` | `/v1/catalog/{kind}` | `200`, `{"items": [...]}` |
+| `GET` | `/v1/catalog/{kind}/{name}` | `200`, com `dependents` |
+| `DELETE` | `/v1/catalog/{kind}/{name}` | `204`; `409` enquanto houver dependentes |
+| `GET` | `/v1/catalog/entities` | `200`, todos os kinds com `parent` normalizado; filtros `?kind=domain\|system\|resource` e `?owner=` |
 
 `GET /v1/environments/{name}` traz também `kubeconfigData`, o acesso de administrador ao ambiente, mas só para quem o criou (anotação `platform.wasp.silvios.me/owner`, gravada pela API com o `sub` do token no create) ou para quem está em `platform-admins`. A lista nunca o traz.
 
 `DELETE /v1/environments/{name}` segue a mesma regra: só o dono ou `platform-admins` apagam; os demais recebem `403` (`forbidden`), e o pedido negado não entra no journal. O delete leva o `uid` do objeto checado como precondição: se o ambiente for apagado e recriado com o mesmo nome entre a checagem e o delete, a kube API recusa e a API devolve `409`, em vez de apagar o ambiente novo. Ambientes sem a anotação `owner` (criados antes do PR #184) só são apagáveis por `platform-admins`. A expiração não passa por aqui: o provider apaga pelo `spec.expiresAt` direto na kube API.
 
 Os objetos devolvidos são a visão da API (`name`, `profile`, `status`, `expiresAt`, `kubeconfig`), não o CR cru: clientes não acoplam ao formato dos CRDs.
+
+## Catálogo
+
+Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` (ADR 0023). Component e API não passam por aqui: ficam no `catalog-info.yaml` do repo.
+
+| Kind | Pai | Obrigatórios |
+|---|---|---|
+| `Domain` | `parent` (outro Domain; opcional, faz um subdomínio) | `owner` |
+| `System` | `domain` | `owner`, `domain` |
+| `Resource` | `system` | `owner`, `type` (papel: `database`, `topic`…), `system` |
+
+- O pai precisa existir no create; senão `422` (`system 'greeter': domain 'nope' not found`). Campo de outro kind ou faltando também é `422`.
+- Apagar com dependentes é `409` com a lista (`system 'greeter' has dependents: resource/greeting-db`).
+- Domain: create e delete só para `platform-admins`. System e Resource: qualquer usuário autenticado cria; só quem criou (anotação `platform.wasp.silvios.me/created-by`) ou `platform-admins` apaga. O `owner` é o time e é texto livre até a #186; quem criou é a pessoa.
+- Create e delete aceitos entram no journal; os negados, não. O delete leva o `uid` como precondição, como no Environment.
 
 ## Escrita
 
