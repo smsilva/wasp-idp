@@ -4,12 +4,20 @@ Domínios, sistemas e recursos que a plataforma guarda. Domínio só `platform-a
 
 ```bash
 platform catalog domain create communication --owner team-alpha
-platform catalog domain create messaging --parent communication --owner team-alpha
-platform catalog system create greeter --domain messaging --owner team-alpha
+
+platform catalog domain create messaging \
+  --parent communication \
+  --owner team-alpha
+
+platform catalog system create greeter \
+  --domain messaging \
+  --owner team-alpha
+
 platform catalog resource create greeting-db \
   --type database \
   --system greeter \
   --owner team-alpha
+
 platform catalog list
 ```
 
@@ -39,7 +47,9 @@ Quem já tem um catálogo no formato Backstage importa os arquivos de uma vez. A
 
 ```bash
 platform catalog import idp/catalog/            # arquivo ou pasta (recursivo: *.yaml, *.yml)
+
 platform catalog import idp/catalog/ --dry-run  # só o plano
+
 platform catalog import idp/catalog/ --yes      # sem perguntar (pipeline)
 ```
 
@@ -62,9 +72,17 @@ Um template é o golden path de um tipo de component (`service`, `website`, `lib
 
 ```bash
 platform catalog template list
+
 platform catalog template get python-service
-platform catalog template render python-service --name demo --output ./demo [--param port=9000]
-platform catalog template render --from platform/templates/python-service --name demo --output ./demo
+
+platform catalog template render python-service [--param port=9000] \
+  --name demo \
+  --output ./demo
+
+platform catalog template render \
+  --from platform/templates/python-service \
+  --name demo \
+  --output ./demo
 ```
 
 O `render` roda localmente: busca o conteúdo no ref registrado (ou lê `--from`), renderiza com os delimitadores do Backstage (`${{ values.x }}`, filtro `dump`), copia como estão os arquivos de `copyWithoutRendering` e grava a origem em `catalog-info.yaml` (`platform.wasp.silvios.me/template: <nome>@<ref>`). Os valores padrão são `name`, `owner`, `system` e `description`; o template declara os extras, passados com `--param`.
@@ -72,10 +90,19 @@ O `render` roda localmente: busca o conteúdo no ref registrado (ou lê `--from`
 Só `platform-admins` alteram o registro:
 
 ```bash
-platform catalog template create my-api --type service --owner team-platform \
-  --repo https://github.com/wasp-foundry/templates --path my-api --ref v1.0.0 [--default]
+platform catalog template create my-api [--default] \
+  --type service \
+  --owner team-platform \
+  --repo https://github.com/wasp-foundry/templates \
+  --path my-api \
+  --ref v1.0.0
+
 platform catalog template default my-api
-platform catalog template import idp/templates/python-service --repo https://github.com/smsilva/wasp-idp --ref main
+
+platform catalog template import idp/templates/python-service \
+  --repo https://github.com/smsilva/wasp-idp \
+  --ref main
+
 platform catalog template delete my-api
 ```
 

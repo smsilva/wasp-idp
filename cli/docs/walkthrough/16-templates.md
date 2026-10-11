@@ -1,11 +1,10 @@
 # Templates
 
-## 16. Templates de component
-
-Um template é o golden path de um tipo de component (ADR 0024). O conteúdo fica no Git; a plataforma guarda só o registro (repo, caminho e ref). O `platform init` registra os templates de `platform/templates/` no commit do checkout, e o primeiro de cada tipo vira o padrão.
+Um template é o **golden path** de um tipo de component (ADR 0024). O conteúdo **fica no Git**; a plataforma guarda **só o registro** (repo, caminho e ref). O `platform init` registra os templates de `platform/templates/` no commit do checkout, e o primeiro de cada tipo vira o padrão.
 
 ```bash
 platform catalog template list
+
 platform catalog template get python-service
 ```
 
@@ -27,8 +26,13 @@ template/python-service
 O `render` gera localmente o que o `component create` vai gerar, buscando o conteúdo no ref registrado. Serve para quem escreve template:
 
 ```bash
-platform catalog template render python-service --name demo --output /tmp/demo --param port=9000
+platform catalog template render python-service \
+  --name demo \
+  --output /tmp/demo \
+  --param port=9000
+
 grep 9000 /tmp/demo/Dockerfile
+
 grep template: /tmp/demo/catalog-info.yaml
 ```
 
@@ -39,26 +43,50 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
     platform.wasp.silvios.me/template: python-service@0b81690231edcd5920c1f774efc0325c80a4b0a4
 ```
 
-Um padrão por tipo: marcar outro desmarca o anterior, e o padrão só sai depois que outro assume.
+**Um padrão por tipo:** marcar outro desmarca o anterior, e o padrão só sai depois que outro assume.
 
-```bash
-platform catalog template create go-service --type service --owner team-platform \
-  --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service/content --ref main
-platform catalog template default go-service
-platform catalog template delete go-service
-platform catalog template default python-service
-platform catalog template delete go-service
-```
+!!! step "Registrar outro template e torná-lo o padrão"
 
-``` { .text .output title="saída" }
-✓ template go-service created
-✓ template go-service is the default for service
-✗ 409: template 'go-service' is the default for type 'service': make another one the default first (python-service)
-✓ template python-service is the default for service
-✓ template go-service deleted
-```
+    ```bash
+    platform catalog template create go-service \
+      --type service \
+      --owner team-platform \
+      --repo https://github.com/smsilva/wasp-idp \
+      --path platform/templates/python-service/content \
+      --ref main
 
-O template do Backstage (`idp/templates/python-service`) também entra. Os `steps` do scaffolder não rodam na plataforma, e o plano diz por quê:
+    platform catalog template default go-service
+    ```
+
+    ``` { .text .output title="saída" }
+    ✓ template go-service created
+    ✓ template go-service is the default for service
+    ```
+
+!!! step "O padrão não sai sozinho"
+
+    ```bash
+    platform catalog template delete go-service
+    ```
+
+    ``` { .text .output title="saída" }
+    ✗ 409: template 'go-service' is the default for type 'service': make another one the default first (python-service)
+    ```
+
+!!! step "Outro assume, e então sai"
+
+    ```bash
+    platform catalog template default python-service
+
+    platform catalog template delete go-service
+    ```
+
+    ``` { .text .output title="saída" }
+    ✓ template python-service is the default for service
+    ✓ template go-service deleted
+    ```
+
+O template do Backstage (`idp/templates/python-service`) também entra. Os `steps` do scaffolder **não rodam na plataforma**, e o plano diz por quê:
 
 ```bash
 platform catalog template import idp/templates/python-service \

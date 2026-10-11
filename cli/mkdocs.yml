@@ -24,14 +24,30 @@ nav:
       - Desmontar tudo: guide/14-teardown.md
   - Walkthrough:
       - walkthrough/index.md
-      - Do zero ao control plane: walkthrough/01-setup.md
-      - Login e identidade: walkthrough/02-login.md
-      - Ambientes: walkthrough/03-environments.md
-      - Catálogo: walkthrough/04-catalog.md
-      - Times: walkthrough/05-teams.md
-      - Templates de component: walkthrough/06-templates.md
-      - Contas de nuvem: walkthrough/07-cloud-accounts.md
-      - Limpar e sair: walkthrough/08-cleanup.md
+      - Preparar o ambiente:
+          - 0. Partir do zero: walkthrough/setup/00-from-scratch.md
+          - 1. Pré-requisitos: walkthrough/setup/01-prerequisites.md
+          - 2. Instalar a CLI: walkthrough/setup/02-install.md
+          - 3. Credenciais do Google: walkthrough/setup/03-google-credentials.md
+          - 4. Subir o control plane: walkthrough/setup/04-control-plane.md
+      - Login:
+          - 5. Sem login, a API recusa: walkthrough/login/05-refused.md
+          - 6. Entrar: walkthrough/login/06-sign-in.md
+          - 7. Quem sou eu: walkthrough/login/07-whoami.md
+      - Ambientes:
+          - 8. Criar um ambiente: walkthrough/environments/08-create.md
+          - 9. O provider por dentro: walkthrough/environments/09-provider.md
+          - 10. Usar o ambiente: walkthrough/environments/10-use.md
+          - 11. Segundo ambiente, em paralelo: walkthrough/environments/11-second.md
+          - 12. Trilha de auditoria: walkthrough/environments/12-audit-trail.md
+      - Catálogo:
+          - 13. Domínios, sistemas e recursos: walkthrough/catalog/13-entities.md
+          - 14. Importar o catálogo do Backstage: walkthrough/catalog/14-backstage-import.md
+      - 15. Times: walkthrough/15-teams.md
+      - 16. Templates de component: walkthrough/16-templates.md
+      - 17. Contas de nuvem: walkthrough/17-cloud-accounts.md
+      - 18. Limpar e sair: walkthrough/18-cleanup.md
+      - Sem navegador: walkthrough/cli-smoke.md
 theme:
   name: material
   language: pt-BR
@@ -80,6 +96,7 @@ extra_css:
   - stylesheets/extra.css
 extra_javascript:
   - javascripts/diagram-zoom.js
+  - javascripts/terminal.js
 markdown_extensions:
   - admonition
   - attr_list
@@ -89,7 +106,7 @@ markdown_extensions:
       permalink: true
   - pymdownx.details
   - pymdownx.highlight:
-      anchor_linenums: true
+      pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.keys
   - pymdownx.superfences:

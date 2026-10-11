@@ -1,13 +1,13 @@
 # Walkthrough
 
-Roteiro para demonstrar a CLI `platform` partindo do zero: sem cluster, sem config e sem a CLI instalada. Esta página é a sequência para apresentar ou para conferir que tudo continua funcionando; o guia de uso, com cada comando explicado, é a [página principal](../index.md).
+Roteiro para demonstrar a CLI `platform` **partindo do zero**: sem cluster, sem config e sem a CLI instalada. Esta página é a sequência para apresentar ou para conferir que tudo continua funcionando; o guia de uso, com cada comando explicado, é a [página principal](../index.md).
 
 !!! info "Última execução"
     Rodado de ponta a ponta em 2026-10-10; os passos 8 a 11 foram refeitos com o provider `local_vcluster` (#183) e o passo 14 (#190) no `platform-local`, no mesmo dia.
 
 ## Preparação
 
-Um terminal e um navegador logado na conta Google que vai entrar na plataforma. O provider de ambientes roda dentro do cluster.
+**Um terminal** e **um navegador** logado na conta Google que vai entrar na plataforma. O provider de ambientes roda dentro do cluster.
 
 | Etapa | Tempo |
 |---|---|
@@ -20,11 +20,46 @@ Cada passo mostra o comando e, logo abaixo, a **saída** esperada.
 
 ## Roteiro
 
-1. [Do zero ao control plane](01-setup.md) — passos 0 a 4
-2. [Login e identidade](02-login.md) — passos 5 a 7
-3. [Ambientes](03-environments.md) — passos 8 a 12
-4. [Catálogo](04-catalog.md) — passos 13 e 14
-5. [Times](05-teams.md) — passo 15
-6. [Templates de component](06-templates.md) — passo 16
-7. [Contas de nuvem](07-cloud-accounts.md) — passo 17
-8. [Limpar e sair](08-cleanup.md) — passo 18
+
+**Preparar o ambiente**
+
+- [0. Partir do zero](setup/00-from-scratch.md)
+- [1. Pré-requisitos](setup/01-prerequisites.md)
+- [2. Instalar a CLI](setup/02-install.md)
+- [3. Credenciais do Google](setup/03-google-credentials.md)
+- [4. Subir o control plane](setup/04-control-plane.md)
+
+**Login**
+
+- [5. Sem login, a API recusa](login/05-refused.md)
+- [6. Entrar](login/06-sign-in.md)
+- [7. Quem sou eu](login/07-whoami.md)
+
+**Ambientes**
+
+- [8. Criar um ambiente](environments/08-create.md)
+- [9. O provider por dentro](environments/09-provider.md)
+- [10. Usar o ambiente](environments/10-use.md)
+- [11. Segundo ambiente, em paralelo](environments/11-second.md)
+- [12. Trilha de auditoria](environments/12-audit-trail.md)
+
+**Catálogo**
+
+- [13. Domínios, sistemas e recursos](catalog/13-entities.md)
+- [14. Importar o catálogo do Backstage](catalog/14-backstage-import.md)
+
+- [15. Times](15-teams.md)
+- [16. Templates de component](16-templates.md)
+- [17. Contas de nuvem](17-cloud-accounts.md)
+- [18. Limpar e sair](18-cleanup.md)
+
+Sem navegador: [`scripts/demo/cli-smoke`](cli-smoke.md).
+
+## Ideias para tornar o roteiro repetível
+
+??? abstract "Issues abertas para o roteiro"
+
+    - **Script `scripts/demo/cli-walkthrough` (#178):** roda os passos em sequência, pausa antes de cada um (Enter para seguir) e para no login esperando o device code. Serve para apresentar e para conferir antes de um merge.
+    - **Medir (#180):** guardar o tempo de cada etapa (como na tabela acima) para perceber quando o `init` ou o provider ficam mais lentos.
+    - **Gravar (#181):** `asciinema rec` durante o roteiro gera um vídeo de terminal leve para o README e para o deck.
+    - **Evoluir junto com a CLI (#182):** cada comando novo (`release create`, `catalog component create`) entra aqui como um passo, com a saída esperada.

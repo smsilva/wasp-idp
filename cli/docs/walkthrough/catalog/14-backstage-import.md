@@ -1,48 +1,6 @@
-# Catalog
+# Backstage import
 
-## 13. Catálogo
-
-O dono de uma entidade é um time que já existe (ADR 0026). Como admin, crie o `team-alpha` antes:
-
-```bash
-platform team create team-alpha
-platform catalog domain create communication --owner team-alpha
-platform catalog domain create messaging --parent communication --owner team-alpha
-platform catalog system create greeter --domain messaging --owner team-alpha
-platform catalog resource create greeting-db --type database --system greeter --owner team-alpha
-platform catalog list
-platform catalog system get greeter
-platform catalog domain delete messaging
-kubectl --context k3d-platform-local --namespace platform-system get domains.catalog.platform.wasp.silvios.me
-```
-
-``` { .text .output title="saída" }
-system/greeter
-  domain       messaging
-  owner        team-alpha
-  description  —
-  dependents   resource/greeting-db
-✗ 409: domain 'messaging' has dependents: system/greeter
-NAME            PARENT          OWNER
-communication                   team-alpha
-messaging       communication   team-alpha
-```
-
-!!! tip "O catálogo é da plataforma"
-    Funciona com o Backstage parado.
-
-Para limpar, na ordem inversa:
-
-```bash
-platform catalog resource delete greeting-db
-platform catalog system delete greeter
-platform catalog domain delete messaging
-platform catalog domain delete communication
-```
-
-## 14. Importar o catálogo do Backstage
-
-O `idp/catalog/` é a carga inicial do catálogo (ADR 0023). O import mostra o plano, calculado pela Platform API, e só grava depois da confirmação.
+O `idp/catalog/` é a **carga inicial** do catálogo (ADR 0023). O import **mostra o plano**, calculado pela Platform API, e **só grava depois da confirmação**.
 
 ```bash
 platform catalog import idp/catalog/
@@ -93,10 +51,11 @@ Domain    bookstore             unchanged
 nothing to do
 ```
 
-Uma referência quebrada aparece no plano com a entidade, o campo e o arquivo, e nada é aplicado:
+Uma referência quebrada aparece no plano com a entidade, o campo e o arquivo, e **nada é aplicado**:
 
 ```bash
 printf 'apiVersion: backstage.io/v1alpha1\nkind: System\nmetadata:\n  name: orphan\nspec:\n  owner: team-alpha\n  domain: nowhere\n' > /tmp/orphan.yaml
+
 platform catalog import /tmp/orphan.yaml
 ```
 

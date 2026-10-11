@@ -1,9 +1,9 @@
 # The CRD
 
 ```bash
-kubectl --context k3d-platform-local \
-  --namespace platform-system \
-  get environments
+kubectl get environments \
+  --context k3d-platform-local \
+  --namespace platform-system
 ```
 
 ```
@@ -14,9 +14,10 @@ demo   ephemeral   True    ClusterReady   2026-10-13T17:01:16Z
 Journal dos pedidos (uma linha antes e outra depois de aplicar). O `actor` é o `sub` do token, imutável, seguido do e-mail:
 
 ```bash
-kubectl --context k3d-platform-local \
+kubectl exec deploy/platform-api \
+  --context k3d-platform-local \
   --namespace platform-system \
-  exec deploy/platform-api -- tail -n 2 /var/lib/platform/journal.jsonl
+  -- tail -n 2 /var/lib/platform/journal.jsonl
 ```
 
 ```json

@@ -5,7 +5,7 @@ hide:
 
 # platform CLI
 
-Sobe um control plane local e cria Environments, cada um como um cluster Kubernetes virtual (vcluster) dentro dele.
+Sobe um **control plane local** e cria **Environments**, cada um como um cluster Kubernetes virtual (**vcluster**) dentro dele.
 
 Clique no diagrama para ampliar.
 
@@ -37,7 +37,7 @@ flowchart LR
   cli -- kubeconfig --> envs
 ```
 
-A CLI só fala com a Platform API, que grava cada pedido como um recurso Kubernetes (CRD). Os providers observam esses recursos e fazem o trabalho: criar o vcluster ou falar com a AWS. Tudo roda dentro do `platform-local`, instalado pelo `init`; não há processo para manter aberto no host.
+A CLI só fala com a **Platform API**, que grava cada pedido como um recurso Kubernetes (**CRD**). Os **providers** observam esses recursos e fazem o trabalho: criar o vcluster ou falar com a AWS. Tudo roda dentro do `platform-local`, instalado pelo `init`; **não há processo para manter aberto no host**.
 
 ## Passo a passo
 

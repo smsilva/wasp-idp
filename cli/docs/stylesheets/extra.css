@@ -24,34 +24,137 @@
   border-bottom: 1px solid #1f2937;
 }
 
-/* Commands and their output read as one terminal session. */
-.md-typeset pre > code {
-  border-radius: 8px;
+/* Tokens for the look below: headings, emphasis, inline code and terminal blocks. */
+:root {
+  --wasp-heading: #0f1b33;
+  --wasp-strong: #9a5b00;
+  --wasp-code-fg: #1f4f9e;
+  --wasp-code-bg: #eef3fa;
+  --wasp-code-border: #d6e0ee;
+  --wasp-term-bg: #f4f7fb;
+  --wasp-term-border: #d6e0ee;
+  --wasp-term-bar: #e8eef7;
+  --wasp-out-bg: #fafbfd;
+  --wasp-out-fg: #4a5568;
+  --wasp-out-label: #9a5b00;
 }
 
-.md-typeset .highlight > .filename {
-  border-radius: 8px 8px 0 0;
-  font-size: .72rem;
-  letter-spacing: .02em;
-  text-transform: uppercase;
+[data-md-color-scheme="slate"] {
+  --md-typeset-color: #d5deea;
+  --wasp-heading: #f2f6fb;
+  --wasp-strong: #f5c86b;
+  --wasp-code-fg: #9ecbff;
+  --wasp-code-bg: #16213a;
+  --wasp-code-border: #24324d;
+  --wasp-term-bg: #121b2e;
+  --wasp-term-border: #2b3b5c;
+  --wasp-term-bar: #18233a;
+  --wasp-out-bg: #0e1526;
+  --wasp-out-fg: #9fb3c8;
+  --wasp-out-label: #f5c86b;
 }
 
-.md-typeset .highlight > .filename + pre > code {
-  border-radius: 0 0 8px 8px;
-}
-
-/* Output blocks: muted, so the command above stands out. */
-.md-typeset .output pre > code {
-  color: var(--md-default-fg-color--light);
+/* Headings: bold, so the page structure reads at a glance. */
+.md-typeset h1 {
+  font-weight: 800;
+  color: var(--wasp-heading);
+  letter-spacing: -.01em;
 }
 
 .md-typeset h2 {
+  font-weight: 700;
+  color: var(--wasp-heading);
   border-top: 1px solid var(--md-default-fg-color--lightest);
   padding-top: 1.2em;
 }
 
+.md-typeset h2::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: .9em;
+  margin-right: .5em;
+  border-radius: 2px;
+  background: var(--md-typeset-a-color);
+  vertical-align: -.05em;
+}
+
+.md-typeset h3 {
+  font-weight: 700;
+  color: var(--wasp-heading);
+}
+
+/* Key words in bold stand out in the accent color. */
+.md-typeset strong {
+  font-weight: 700;
+  color: var(--wasp-strong);
+}
+
+.md-typeset a strong,
+.md-typeset .admonition-title strong,
+.md-typeset summary strong {
+  color: inherit;
+}
+
+/* Inline code: a chip, apart from the prose. */
+.md-typeset :not(pre) > code {
+  color: var(--wasp-code-fg);
+  background: var(--wasp-code-bg);
+  border: 1px solid var(--wasp-code-border);
+  border-radius: 5px;
+  padding: .05em .35em;
+}
+
+.md-typeset a > code {
+  color: inherit;
+}
+
+/* Commands: a terminal panel, clearly apart from the page background. */
+.md-typeset .highlight pre > code {
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--wasp-term-border);
+  border-left: 3px solid var(--md-typeset-a-color);
+  border-radius: 8px;
+}
+
+/* Output: a second panel with a label, muted so the command above stands out. */
+.md-typeset .highlight > .filename {
+  background: var(--wasp-term-bar);
+  border: 1px solid var(--wasp-term-border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  color: var(--wasp-out-label);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.md-typeset .output pre > code,
+.md-typeset .plan pre > code {
+  background: var(--wasp-out-bg);
+  border-left-width: 1px;
+  border-left-color: var(--wasp-term-border);
+  border-radius: 0 0 8px 8px;
+  color: var(--wasp-out-fg);
+}
+
 .md-typeset table:not([class]) {
   font-size: .72rem;
+}
+
+.md-typeset table:not([class]) th {
+  font-weight: 700;
+  color: var(--wasp-heading);
+}
+
+/* Browser screenshots in the walkthrough. */
+.md-typeset img.screenshot {
+  display: block;
+  margin: .6em 0 1em;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .25);
 }
 
 /* Diagrams: click to zoom (javascripts/diagram-zoom.js). */
@@ -78,4 +181,123 @@
   z-index: 999;
   background: rgba(5, 9, 18, .82);
   cursor: zoom-out;
+}
+
+/* Step boxes: one theme per box (`!!! step "title"`), command and its output together. */
+:root {
+  --md-admonition-icon--step: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16m-7 14v-2h5v2h-5m-3.42-4L5.57 9H8.4l3.3 3.3c.39.39.39 1.03 0 1.42L8.42 17H5.59l4-4z"/></svg>');
+}
+
+.md-typeset .admonition.step,
+.md-typeset details.step {
+  border-color: var(--wasp-term-border);
+  border-left: 3px solid var(--md-typeset-a-color);
+  background: transparent;
+  box-shadow: none;
+}
+
+.md-typeset .step > .admonition-title,
+.md-typeset .step > summary {
+  background: var(--wasp-term-bar);
+  color: var(--wasp-heading);
+  font-weight: 700;
+}
+
+.md-typeset .step > .admonition-title::before,
+.md-typeset .step > summary::before {
+  background-color: var(--md-typeset-a-color);
+  -webkit-mask-image: var(--md-admonition-icon--step);
+  mask-image: var(--md-admonition-icon--step);
+}
+
+/* Inside a step box the command panel needs no accent of its own. */
+.md-typeset .step .highlight pre > code {
+  border-left-width: 1px;
+  border-left-color: var(--wasp-term-border);
+}
+
+/* Terminal look (javascripts/terminal.js), in the colors of the deck. */
+:root {
+  --t-prompt: #2f6fd6;
+  --t-cmd: #0f1b33;
+  --t-arg: #24324d;
+  --t-opt: #1f6fb2;
+  --t-val: #9a5b00;
+  --t-op: #6b7a8d;
+  --t-comment: #6b7a8d;
+  --t-ok: #1a7f37;
+  --t-err: #cf222e;
+  --t-info: #2f6fd6;
+}
+
+[data-md-color-scheme="slate"] {
+  --t-prompt: #4a9ef4;
+  --t-cmd: #ffffff;
+  --t-arg: #e6edf6;
+  --t-opt: #7cc4ff;
+  --t-val: #e5c07b;
+  --t-op: #6b7a8d;
+  --t-comment: #6b7a8d;
+  --t-ok: #7ee787;
+  --t-err: #ff7b72;
+  --t-info: #9fb3c8;
+}
+
+.md-typeset .t-prompt::before {
+  content: "$ ";
+  color: var(--t-prompt);
+  font-weight: 700;
+  user-select: none;
+}
+
+.md-typeset .t-cmd { color: var(--t-cmd); }
+.md-typeset .t-key { color: var(--t-cmd); font-weight: 700; }
+
+/* Continuation lines: two more columns, so the options do not sit under the prompt. Not copied. */
+.md-typeset .t-indent::before {
+  content: "  ";
+  user-select: none;
+}
+.md-typeset .t-arg { color: var(--t-arg); }
+.md-typeset .t-opt { color: var(--t-opt); }
+.md-typeset .t-val { color: var(--t-val); }
+.md-typeset .t-op { color: var(--t-op); }
+.md-typeset .t-comment { color: var(--t-comment); font-style: italic; }
+.md-typeset .t-ok { color: var(--t-ok); }
+.md-typeset .t-err { color: var(--t-err); }
+.md-typeset .t-info { color: var(--t-info); }
+
+/* Window bar with the three dots, as in the deck. */
+.md-typeset .highlight.language-bash::before {
+  content: "";
+  display: block;
+  height: 1.5rem;
+  border: 1px solid var(--wasp-term-border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background:
+    radial-gradient(circle at .9rem 50%, #ff5f57 .22rem, transparent .24rem),
+    radial-gradient(circle at 1.6rem 50%, #febc2e .22rem, transparent .24rem),
+    radial-gradient(circle at 2.3rem 50%, #28c840 .22rem, transparent .24rem),
+    var(--wasp-term-bar);
+}
+
+.md-typeset .highlight.language-bash pre > code {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.md-typeset .highlight.language-bash pre {
+  margin-top: 0;
+}
+
+/* "What will be created": same panel as the output, the kinds not in italic. */
+.md-typeset .plan .t-comment {
+  font-style: normal;
+}
+
+/* A box that opens with a code block: keep the terminal bar off the box title. */
+.md-typeset .admonition > .admonition-title + .highlight,
+.md-typeset details > summary + .highlight {
+  margin-top: 1em;
 }

@@ -9,7 +9,9 @@ platform environment create short-lived \
 ```
 
 ```bash
-kubectl --context k3d-platform-local --namespace platform-system logs deploy/local-vcluster-provider
+kubectl logs deploy/local-vcluster-provider \
+  --context k3d-platform-local \
+  --namespace platform-system
 ```
 
 ```

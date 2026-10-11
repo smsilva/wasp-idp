@@ -14,7 +14,9 @@ greetings-test: ready
 
 ```bash
 export KUBECONFIG=~/.config/platform/environments/greetings-test.kubeconfig
+
 kubectl get nodes
+
 kubectl create deployment web --image nginx:alpine
 ```
 
