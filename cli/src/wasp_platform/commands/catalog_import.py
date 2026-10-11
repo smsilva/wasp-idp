@@ -70,7 +70,8 @@ def _detail(item: dict) -> str:
   if action == "update":
     return "; ".join(f"{field}: {_value(old)} → {_value(new)}" for field, (old, new) in sorted(item["changes"].items()))
   if action == "skip":
-    return item["reason"]
+    # Without a kind the row says nothing else about which file it is.
+    return item["reason"] if item["kind"] else f"{item['reason']} ({item['source']})"
   if action == "forbidden":
     return f"{item['reason']} ({item['source']})"
   if action == "error":

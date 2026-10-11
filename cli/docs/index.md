@@ -300,6 +300,27 @@ platform catalog domain delete messaging
 
 O `--type` do recurso é o papel (`database`, `topic`, `queue`, `bucket`), nunca o serviço de nuvem. Componentes e APIs ainda não estão no catálogo da plataforma.
 
+### Importar do Backstage
+
+Quem já tem um catálogo no formato Backstage importa os arquivos de uma vez. A Platform API calcula o plano; nada é gravado antes da confirmação.
+
+```bash
+platform catalog import idp/catalog/            # arquivo ou pasta (recursivo: *.yaml, *.yml)
+platform catalog import idp/catalog/ --dry-run  # só o plano
+platform catalog import idp/catalog/ --yes      # sem perguntar (pipeline)
+```
+
+| Ação | Significado |
+|---|---|
+| `create` | não existe na plataforma |
+| `update` | existe e muda; o detalhe mostra `campo: antes → depois` |
+| `unchanged` | existe igual |
+| `skip` | não é importado: Component e API moram no repo, Group e User no Keycloak |
+| `forbidden` | sem permissão: domínio só `platform-admins`; sistema e recurso só quem criou |
+| `error` | campo faltando ou referência quebrada; o detalhe diz o campo e o arquivo |
+
+Com `forbidden` ou `error` nada é aplicado. O import nunca apaga: o que existe na plataforma e não está nos arquivos fica como está. Um campo ausente no arquivo (a `description`, por exemplo) é removido da entidade. Se o catálogo mudar entre o plano e a confirmação, a API recusa e a CLI mostra o plano novo.
+
 ## 12. Desmontar tudo
 
 ```bash
@@ -328,6 +349,7 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform catalog resource create <nome> --type <papel> --system <sistema> --owner <time>` | cria um recurso compartilhado |
 | `platform catalog list [--kind domain\|system\|resource] [--owner <time>]` | KIND, NAME, PARENT, OWNER |
 | `platform catalog <kind> list\|get\|delete` | por kind; `get` mostra os dependentes |
+| `platform catalog import <caminho>... [--dry-run] [--yes]` | importa Domain, System e Resource de arquivos Backstage, depois de revisar o plano |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |

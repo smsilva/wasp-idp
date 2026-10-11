@@ -167,3 +167,9 @@ def test_stale_plan_shows_the_new_plan(api, files):
   assert result.exit_code == 1
   assert "owner: team-gamma → team-alpha" in result.output
   assert f"409: {message}" in result.output
+
+
+def test_skip_of_a_non_entity_shows_its_source(api, files):
+  api.responses["review"] = (200, plan(CREATE, {"kind": None, "name": None, "action": "skip", "source": "docs/mkdocs.yml#1", "reason": "not a Backstage entity"}))
+  result = run("catalog", "--dry-run")
+  assert "not a Backstage entity (docs/mkdocs.yml#1)" in result.output
