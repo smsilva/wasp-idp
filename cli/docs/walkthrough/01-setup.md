@@ -8,7 +8,7 @@
 ```bash
 k3d cluster delete platform-local
 rm -rf ~/.config/platform
-uv tool uninstall wasp-platform
+make cli-uninstall
 ```
 
 ## 1. Pré-requisitos
@@ -23,7 +23,7 @@ uv --version
 ## 2. Instalar a CLI
 
 ```bash
-uv tool install --editable cli/
+make cli
 platform --help
 ```
 
