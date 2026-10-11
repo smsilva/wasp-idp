@@ -138,6 +138,32 @@ output="$(platform whoami)"
 expect_output "${team}" "${output}"
 expect_failure "403" platform team create smoke-forbidden
 
+step "the Platform API's Keycloak client cannot put anyone in platform-admins (#238)"
+keycloak_admin_api="http://localhost:8180/admin/realms/platform"
+client_secret="$(kubectl --context k3d-platform-local --namespace platform-system \
+  get secret platform-api-keycloak \
+  --output jsonpath='{.data.PLATFORM_API_ADMIN_SECRET}' | base64 --decode)"
+client_token="$(curl --silent --fail \
+  --data grant_type=client_credentials \
+  --data client_id=platform-api-admin \
+  --data-urlencode "client_secret=${client_secret}" \
+  http://localhost:8180/realms/platform/protocol/openid-connect/token | jq --raw-output .access_token)"
+smoke_user_id="$(curl --silent --fail \
+  --header "Authorization: Bearer ${client_token}" \
+  "${keycloak_admin_api}/users?email=platform-smoke@platform.local&exact=true" | jq --raw-output '.[0].id')"
+admins_group_id="$(curl --silent --fail \
+  --header "Authorization: Bearer ${client_token}" \
+  "${keycloak_admin_api}/groups?search=platform-admins&exact=true" | jq --raw-output '.[] | select(.path == "/platform-admins") | .id')"
+status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request PUT \
+  --header "Authorization: Bearer ${client_token}" \
+  "${keycloak_admin_api}/users/${smoke_user_id}/groups/${admins_group_id}")"
+if [[ "${status}" != "403" ]]; then
+  echo "expected 403 adding a user to platform-admins with the API client, got ${status}" >&2
+  exit 1
+fi
+echo "403 as expected"
+
 step "environment shared with the team"
 platform environment create "${shared_environment}" \
   --profile ephemeral \

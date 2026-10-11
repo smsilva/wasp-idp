@@ -12,6 +12,7 @@ import httpx
 import yaml
 
 from .. import config
+from .admin_permissions import AdminPermissions
 
 CLUSTER = "platform-local"
 CONTEXT = f"k3d-{CLUSTER}"
@@ -200,6 +201,16 @@ def install_keycloak(root: Path, admin_email: str | None, log) -> dict:
     logs = _kubectl("logs", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--tail", "30")
     raise BootstrapError(f"realm import did not complete:\n{logs}") from error
   wait_issuer(ISSUER)
+
+  log("applying the admin permissions of the Platform API …")
+  try:
+    AdminPermissions(
+      KEYCLOAK_URL,
+      _secret_value(AUTH_NAMESPACE, "keycloak-admin", "username"),
+      _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"),
+    ).apply(log)
+  except httpx.HTTPError as error:
+    raise BootstrapError(f"admin permissions of {API_ADMIN_SECRET} not applied: {error}") from error
   return {"issuer": ISSUER, "google": google, "admin": admin_email or None}
 
 
