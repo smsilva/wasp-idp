@@ -35,6 +35,13 @@ rules:
   - apiGroups: [catalog.platform.wasp.silvios.me]
     resources: [domains, systems, resources, templates]
     verbs: [get, list, watch, create, update, delete]
+  # The component index is a read mirror (ADR 0023): the scm_github provider writes it, the API reads.
+  - apiGroups: [catalog.platform.wasp.silvios.me]
+    resources: [components]
+    verbs: [get, list, watch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [componentcreations]
+    verbs: [get, list, watch, create]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [scmconnections]
     verbs: [get, list, watch, create, update, delete]

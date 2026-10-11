@@ -123,9 +123,9 @@ def test_same_name_in_two_kinds(client, admin):
 
 
 def test_unknown_kind_is_404(client, admin):
-  response = client.get("/v1/catalog/components", headers=admin)
+  response = client.get("/v1/catalog/apis", headers=admin)
   assert response.status_code == 404
-  assert "unknown catalog kind 'components'" in response.json()["error"]["message"]
+  assert "unknown catalog kind 'apis'" in response.json()["error"]["message"]
 
 
 def test_list_kind_sorted(client, admin, user, tree):
