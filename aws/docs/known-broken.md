@@ -98,6 +98,11 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     aliasado `aws.network`. A checagem que vale é o `plan` na raiz regional.
 32. **`aws_iam_saml_provider.client_vpn` tem drift** entre o XML local e o que está na AWS —
     *unexpected*, não aplicado de propósito, para não mexer em config compartilhada do Client VPN.
+33. **Workload Instance não puxa imagem privada do GHCR** — *intentional* na fase 1 (#262, ADR 0033):
+    o Deployment que o provider `workload` gera no vcluster não tem `imagePullSecrets`, então a imagem
+    de um component com repo privado termina em `RolloutFailed` (`ImagePullBackOff` até o
+    `progressDeadlineSeconds` de 120 s). Só imagens públicas são implantadas; o pull secret pelo
+    GitHub App fica para depois.
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e

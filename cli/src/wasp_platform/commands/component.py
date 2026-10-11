@@ -182,3 +182,6 @@ def get(name: str, output: OutputOption = Format.table):
   typer.echo(f"component/{component['name']}")
   for field in ("system", "owner", "type", "lifecycle", "repo", "template", "description"):
     typer.echo(f"  {field.ljust(12)} {component.get(field) or '—'}")
+  # Only the environments you can use (ADR 0033).
+  running = ", ".join(f"{item['environment']} ({item.get('version') or '—'}, {item['status']})" for item in component.get("runningIn") or [])
+  typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")

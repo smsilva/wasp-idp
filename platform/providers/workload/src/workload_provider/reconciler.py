@@ -38,6 +38,10 @@ def instance_name(revision: dict) -> str:
   return f"{revision['spec']['environment']}.{revision['spec']['instance']}"
 
 
+def spec_action(revision: dict) -> str:
+  return revision["spec"].get("action", "deploy")
+
+
 def rollout(deployment: dict | None) -> tuple[str, str]:
   """Where a Deployment's rollout stands: done, failed or progressing, with a message."""
   if deployment is None:
@@ -94,7 +98,7 @@ class Reconciler:
       try:
         if is_open(revision):
           pending |= self._apply(revision, kept.get(name))
-        elif ready_of(revision).get("reason") == "Succeeded" and name in kept:
+        elif ready_of(revision).get("reason") == "Succeeded" and spec_action(revision) != "remove" and name in kept:
           self._refresh(revision, kept[name])
       except Exception:  # keep the loop alive; the next pass tries again
         log.exception("reconcile %s failed", revision["metadata"]["name"])
@@ -129,6 +133,8 @@ class Reconciler:
     if ready.get("status") != "True" or not (environment.get("status") or {}).get("kubeconfigData"):
       self._open(revision, "EnvironmentNotReady", f"environment {spec['environment']} is not ready yet")
       return True
+    if spec_action(revision) == "remove":
+      return self._remove(revision, environment)
     version = self.store.get_version(f"{spec['component']}.{spec['version']}".lower())
     if version is None or (version.get("spec") or {}).get("appSpec") is None:
       self._close(revision, "False", "SpecNotIndexed", f"{spec['component']} {spec['version']} has no Workload Spec in the index")
@@ -159,6 +165,20 @@ class Reconciler:
       return False
     self._close(revision, "True", "Succeeded", message)
     self._write_instance(revision, instance, deployment, url)
+    return False
+
+  def _remove(self, revision: dict, environment: dict) -> bool:
+    """Deployment and Service out of the vcluster, then the instance; the revisions stay."""
+    spec = revision["spec"]
+    vcluster = self.vclusters.of(environment)
+    try:
+      vcluster.delete("v1", "Service", NAMESPACE, spec["instance"])
+      vcluster.delete("apps/v1", "Deployment", NAMESPACE, spec["instance"])
+    except Exception as error:
+      self._close(revision, "False", "ApplyFailed", f"removing from the vcluster of {spec['environment']}: {error}")
+      return False
+    self.store.delete_instance(instance_name(revision))
+    self._close(revision, "True", "Succeeded", f"removed from {spec['environment']}")
     return False
 
   def _write_instance(self, revision: dict, instance: dict | None, deployment: dict | None, url: str | None) -> None:

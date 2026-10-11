@@ -73,6 +73,13 @@ class Store:
   def patch_instance_status(self, name: str, status: dict) -> None:
     self.api.patch_namespaced_custom_object_status(GROUP, VERSION, self.namespace, INSTANCES, name, {"status": status})
 
+  def delete_instance(self, name: str) -> None:
+    try:
+      self.api.delete_namespaced_custom_object(GROUP, VERSION, self.namespace, INSTANCES, name)
+    except client.ApiException as error:
+      if error.status != 404:
+        raise
+
 
 class Vcluster:
   """One environment's vcluster, reached with the admin kubeconfig its provider published."""
@@ -85,6 +92,13 @@ class Vcluster:
   def apply(self, obj: dict, manager: str) -> None:
     resource = self.dynamic.resources.get(api_version=obj["apiVersion"], kind=obj["kind"])
     self.dynamic.server_side_apply(resource, body=obj, namespace=obj["metadata"].get("namespace"), field_manager=manager, force_conflicts=True)
+
+  def delete(self, api_version: str, kind: str, namespace: str, name: str) -> None:
+    resource = self.dynamic.resources.get(api_version=api_version, kind=kind)
+    try:
+      self.dynamic.delete(resource, name=name, namespace=namespace)
+    except dynamic.exceptions.NotFoundError:
+      pass
 
   def deployment(self, namespace: str, name: str) -> dict | None:
     try:

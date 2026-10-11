@@ -5,7 +5,9 @@ plus one, so two concurrent requests collide on the name and the second gets a 4
 concurrency, no lock). The workload provider applies the newest revision in the vcluster and keeps
 the WorkloadInstance, the runtime view. Writing needs can_use on the environment and the component's
 owner team (or platform-admins); reading needs can_use. In phase 1 the instance name is the component
-name, so a second instance of the same component cannot be asked for.
+name, so a second instance of the same component cannot be asked for. A rollback is a new revision
+with the version and overrides of an earlier one; a remove is a revision too, and the history stays
+until the environment goes.
 """
 import uuid
 
@@ -35,6 +37,8 @@ class RevisionRequest(BaseModel):
   version: str | None = None
   branch: str | None = None
   replicas: int | None = Field(default=None, ge=0, le=20)
+  # A rollback copies the version and the overrides of that revision of the same instance.
+  rollbackTo: int | None = Field(default=None, ge=1)
 
   @field_validator("version")
   @classmethod
@@ -140,10 +144,8 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(409, f"SpecNotIndexed: {component} {newest['spec'].get('version')} was indexed before the version index kept the spec: build it again under a new version")
     return newest
 
-  @routes.post("/workloads/{instance}/revisions", status_code=202)
-  def create(environment: str, instance: str, request: RevisionRequest, principal: Principal = Depends(current_principal)):
-    if (request.version is None) == (request.branch is None):
-      raise HTTPException(422, f"deploy of '{instance}': give either version or branch")
+  def authorize(environment: str, instance: str, principal: Principal, act: str) -> tuple[dict, str]:
+    """The environment and the component, for a principal who may write revisions of the instance."""
     if not LABEL.fullmatch(instance):
       raise HTTPException(422, f"'{instance}' is not an instance name")
     env = usable(environment, principal)
@@ -154,8 +156,12 @@ def router(state, journal: Journal) -> APIRouter:
     except NotFound:
       raise HTTPException(404, f"component '{component}' not found")
     if not (owner in principal.teams or ADMIN_GROUP in principal.groups):
-      raise HTTPException(403, f"deploy of '{component}': only members of its owner team ({owner or 'none'}) and {ADMIN_GROUP} deploy it")
-    version = resolve(component, request)
+      raise HTTPException(403, f"{act} of '{component}': only members of its owner team ({owner or 'none'}) and {ADMIN_GROUP} {act} it")
+    return env, component
+
+  def write(env: dict, instance: str, component: str, spec: dict, principal: Principal) -> dict:
+    """Revision <newest + 1>: a concurrent request that took the number first makes this one a 409."""
+    environment = env["metadata"]["name"]
     existing = revisions_of(environment, instance)
     number = existing[-1]["spec"]["revision"] + 1 if existing else 1
     spec = {
@@ -163,15 +169,10 @@ def router(state, journal: Journal) -> APIRouter:
       "instance": instance,
       "component": component,
       "revision": number,
-      "action": "deploy",
-      **{field: version["spec"][field] for field in ("version", "image", "digest")},
+      **spec,
       "requestedBy": principal.email or principal.sub,
       "requestId": str(uuid.uuid4()),
     }
-    if version["spec"].get("commit"):
-      spec["commit"] = version["spec"]["commit"]
-    if request.replicas is not None:
-      spec["overrides"] = {"replicas": request.replicas}
     name = f"{environment}.{instance}.{number}"
     entry = journal.record("create", KIND, name, spec, principal.actor)
     body = {
@@ -191,6 +192,44 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(409, f"revision {number} of {instance}@{environment} was taken by a concurrent request: try again")
     journal.mark_applied(entry)
     return revision_view(created)
+
+  def rollback_source(environment: str, instance: str, number: int) -> dict:
+    try:
+      source = state.get(REVISIONS, f"{environment}.{instance}.{number}")
+    except NotFound:
+      raise HTTPException(404, f"rollback of {instance}@{environment}: revision {number} not found")
+    if source["spec"].get("action") == "remove":
+      raise HTTPException(409, f"rollback of {instance}@{environment}: revision {number} is a remove")
+    if (ready_of(source) or {}).get("reason") != "Succeeded":
+      raise HTTPException(409, f"rollback of {instance}@{environment}: revision {number} did not succeed ({revision_view(source)['status']})")
+    return source
+
+  @routes.post("/workloads/{instance}/revisions", status_code=202)
+  def create(environment: str, instance: str, request: RevisionRequest, principal: Principal = Depends(current_principal)):
+    if request.rollbackTo is not None:
+      if request.version is not None or request.branch is not None or request.replicas is not None:
+        raise HTTPException(422, f"rollback of '{instance}': rollbackTo takes the version and replicas of that revision, give nothing else")
+      env, component = authorize(environment, instance, principal, "rollback")
+      source = rollback_source(environment, instance, request.rollbackTo)["spec"]
+      spec = {"action": "rollback", "rollbackOf": request.rollbackTo, **{field: source[field] for field in ("version", "image", "digest", "commit", "overrides") if field in source}}
+      return write(env, instance, component, spec, principal)
+    if (request.version is None) == (request.branch is None):
+      raise HTTPException(422, f"deploy of '{instance}': give either version or branch")
+    env, component = authorize(environment, instance, principal, "deploy")
+    version = resolve(component, request)
+    spec = {"action": "deploy", **{field: version["spec"][field] for field in ("version", "image", "digest")}}
+    if version["spec"].get("commit"):
+      spec["commit"] = version["spec"]["commit"]
+    if request.replicas is not None:
+      spec["overrides"] = {"replicas": request.replicas}
+    return write(env, instance, component, spec, principal)
+
+  @routes.delete("/workloads/{instance}", status_code=202)
+  def remove(environment: str, instance: str, principal: Principal = Depends(current_principal)):
+    env, component = authorize(environment, instance, principal, "remove")
+    if not any(view["instance"] == instance for view in instances_of(environment)):
+      raise HTTPException(404, f"workload '{instance}' not found in environment '{environment}'")
+    return write(env, instance, component, {"action": "remove"}, principal)
 
   @routes.get("/workloads")
   def list_instances(environment: str, principal: Principal = Depends(current_principal)):

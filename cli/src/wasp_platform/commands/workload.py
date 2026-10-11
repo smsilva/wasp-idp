@@ -127,19 +127,81 @@ def deploy(
       revision = _wait(client, revision, timeout)
   except ApiError as error:
     fail(str(error))
+  _report(revision, wait, output, f"deploying {revision['version']} …")
+
+
+def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
+  """The revision a command wrote: started, or with --wait how it ended."""
+  name = f"{revision['instance']}@{revision['environment']}"
   if output == Format.json:
     print_json(revision)
     if wait and revision["status"] != "Succeeded":
       raise typer.Exit(1)
     return
-  name = f"{revision['instance']}@{revision['environment']} revision {revision['revision']}"
+  heading = f"{name} revision {revision['revision']}"
   if not wait:
-    typer.echo(f"{name}: deploying {revision['version']} …")
-    typer.echo(f"follow it with: platform workload get --component {component} --environment {environment}")
-  elif revision["status"] == "Succeeded":
-    success(f"{name}: {revision['version']} running · {revision.get('message') or '—'}")
+    typer.echo(f"{heading}: {started}")
+    # After a remove there is no workload to get: its history stays.
+    follow = "history" if revision["action"] == "remove" else "get"
+    typer.echo(f"follow it with: platform workload {follow} --component {revision['component']} --environment {revision['environment']}")
+  elif revision["status"] != "Succeeded":
+    fail(f"{heading}: {revision['status']}: {revision.get('message') or '—'}")
+  elif revision["action"] == "remove":
+    success(f"{heading}: removed from {revision['environment']}")
   else:
-    fail(f"{name}: {revision['status']}: {revision.get('message') or '—'}")
+    success(f"{heading}: {revision['version']} running · {revision.get('message') or '—'}")
+
+
+def _previous(client: PlatformClient, environment: str, component: str) -> int:
+  """The newest revision that succeeded before the one running: what `rollback` goes back to by default."""
+  running = client.get_workload(environment, component).get("revision")
+  candidates = [
+    item["revision"] for item in client.workload_history(environment, component)
+    if item["action"] != "remove" and item["status"] == "Succeeded" and running is not None and item["revision"] < running
+  ]
+  if not candidates:
+    fail(f"{component}@{environment}: no earlier revision that succeeded to roll back to")
+  return max(candidates)
+
+
+@app.command("rollback")
+def rollback(
+  component: Annotated[str, typer.Option(help="Component of the workload.")],
+  environment: Annotated[str, typer.Option(help="Environment of the workload.")],
+  revision: Annotated[int | None, typer.Option(min=1, help="Revision to go back to; by default the one that succeeded before the running one.")] = None,
+  wait: Annotated[bool, typer.Option("--wait", help="Wait until the rollout ends.")] = False,
+  timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
+  output: OutputOption = Format.table,
+):
+  """Roll back: a new revision with the version and overrides of an earlier one."""
+  client = _client()
+  try:
+    target = revision or _previous(client, environment, component)
+    created = client.deploy_workload(environment, component, {"rollbackTo": target})
+    if wait:
+      created = _wait(client, created, timeout)
+  except ApiError as error:
+    fail(str(error))
+  _report(created, wait, output, f"rolling back to revision {target} ({created['version']}) …")
+
+
+@app.command("remove")
+def remove(
+  component: Annotated[str, typer.Option(help="Component of the workload.")],
+  environment: Annotated[str, typer.Option(help="Environment of the workload.")],
+  wait: Annotated[bool, typer.Option("--wait", help="Wait until it is gone from the environment.")] = False,
+  timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
+  output: OutputOption = Format.table,
+):
+  """Remove a workload from an environment: a remove revision; the history stays with the environment."""
+  client = _client()
+  try:
+    created = client.remove_workload(environment, component)
+    if wait:
+      created = _wait(client, created, timeout)
+  except ApiError as error:
+    fail(str(error))
+  _report(created, wait, output, "removing …")
 
 
 @app.command("list")
@@ -188,7 +250,8 @@ def get_(
   ):
     typer.echo(f"  {field.ljust(13)} {value or '—'}")
   if latest["revision"] != item.get("revision"):
-    typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({latest['action']} {latest.get('version') or ''}): {latest['status']}: {latest.get('message') or '—'}")
+    what = " ".join(part for part in (latest["action"], latest.get("version")) if part)
+    typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")
 
 
 @app.command("history")

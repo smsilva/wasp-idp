@@ -195,3 +195,89 @@ def test_history_lists_revisions_in_order(client, state, owner, teammate):
 def test_reads_need_can_use(client, owner):
   assert client.get("/v1/environments/private/workloads", headers=owner).status_code == 403
   assert client.get("/v1/environments/private/revisions", headers=owner).status_code == 403
+
+
+def instance(state, environment="demo", revision=1, version="1.0.0"):
+  state.create("workloadinstances", {
+    "metadata": {"name": f"{environment}.greeting-api"},
+    "spec": {"environment": environment, "instance": "greeting-api", "component": "greeting-api"},
+    "status": {"revision": revision, "version": version, "conditions": [{"type": "Ready", "status": "True", "reason": "Available"}]},
+  })
+
+
+def test_rollback_copies_version_and_overrides(client, state, owner):
+  client.post(DEPLOY, json={"version": "1.0.0", "replicas": 3}, headers=owner)
+  close(state, "demo.greeting-api.1", "True", "Succeeded")
+  client.post(DEPLOY, json={"version": "1.1.0-greetings.1"}, headers=owner)
+  close(state, "demo.greeting-api.2", "True", "Succeeded")
+  response = client.post(DEPLOY, json={"rollbackTo": 1}, headers=owner)
+  assert response.status_code == 202, response.text
+  body = response.json()
+  assert (body["name"], body["action"], body["rollbackOf"], body["version"], body["replicas"]) == ("demo.greeting-api.3", "rollback", 1, "1.0.0", 3)
+  spec = state.get("workloadrevisions", "demo.greeting-api.3")["spec"]
+  assert spec["digest"] == "sha256:" + "b" * 64
+
+
+@pytest.mark.parametrize("setup,body,status,message", [
+  (None, {"rollbackTo": 7}, 404, "revision 7 not found"),
+  ("ResourcesNotSupported", {"rollbackTo": 1}, 409, "revision 1 did not succeed (ResourcesNotSupported)"),
+  ("Succeeded", {"rollbackTo": 1, "version": "1.0.0"}, 422, "give nothing else"),
+  ("Succeeded", {"rollbackTo": 0}, 422, "rollbackTo"),
+])
+def test_rollback_refusals(client, state, owner, setup, body, status, message):
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  if setup:
+    close(state, "demo.greeting-api.1", "True" if setup == "Succeeded" else "False", setup)
+  response = client.post(DEPLOY, json=body, headers=owner)
+  assert response.status_code == status, response.text
+  assert message in response.json()["error"]["message"]
+
+
+def test_rollback_needs_the_owner_team(client, state, owner, teammate):
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  close(state, "demo.greeting-api.1", "True", "Succeeded")
+  response = client.post(DEPLOY, json={"rollbackTo": 1}, headers=teammate)
+  assert response.status_code == 403
+  assert "rollback of 'greeting-api'" in response.json()["error"]["message"]
+
+
+def test_rollback_to_a_remove_is_refused(client, state, owner):
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  close(state, "demo.greeting-api.1", "True", "Succeeded")
+  instance(state)
+  client.delete("/v1/environments/demo/workloads/greeting-api", headers=owner)
+  close(state, "demo.greeting-api.2", "True", "Succeeded")
+  response = client.post(DEPLOY, json={"rollbackTo": 2}, headers=owner)
+  assert response.status_code == 409
+  assert "is a remove" in response.json()["error"]["message"]
+
+
+def test_remove_writes_a_remove_revision(client, state, owner):
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  close(state, "demo.greeting-api.1", "True", "Succeeded")
+  instance(state)
+  response = client.delete("/v1/environments/demo/workloads/greeting-api", headers=owner)
+  assert response.status_code == 202, response.text
+  body = response.json()
+  assert (body["name"], body["action"], body["version"]) == ("demo.greeting-api.2", "remove", None)
+  # Done by the provider: the instance goes, the history stays.
+  close(state, "demo.greeting-api.2", "True", "Succeeded")
+  del state.stores["workloadinstances"]["demo.greeting-api"]
+  assert client.get("/v1/environments/demo/workloads", headers=owner).json()["items"] == []
+  assert len(client.get("/v1/environments/demo/revisions", headers=owner).json()["items"]) == 2
+
+
+def test_remove_refusals(client, state, owner, teammate):
+  assert client.delete("/v1/environments/demo/workloads/greeting-api", headers=owner).status_code == 404
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  assert client.delete("/v1/environments/demo/workloads/greeting-api", headers=teammate).status_code == 403
+
+
+def test_component_get_shows_where_it_runs(client, state, owner, teammate, tokens):
+  instance(state, "demo")
+  instance(state, "private", revision=4, version="1.1.0-greetings.2")
+  body = client.get("/v1/catalog/components/greeting-api", headers=owner).json()
+  # private belongs to someone else: the owner of demo does not see it.
+  assert body["runningIn"] == [{"environment": "demo", "instance": "greeting-api", "version": "1.0.0", "revision": 1, "status": "Available"}]
+  admin = bearer(tokens, sub="admin-1", groups=("platform-users", "platform-admins"), teams=())
+  assert [item["environment"] for item in client.get("/v1/catalog/components/greeting-api", headers=admin).json()["runningIn"]] == ["demo", "private"]
