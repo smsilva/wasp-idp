@@ -13,6 +13,7 @@ Look up a command, a flag or a status. To learn the CLI by doing, start with the
 | [Teams](teams.md) | `platform team …`, environment sharing |
 | [Cloud accounts](cloud-accounts.md) | `platform cloud account …` |
 | [SCM connections](scm-connections.md) | `platform scm connection …` |
+| [Builds](builds.md) | `platform build …`, the build contract with the CI |
 | [JSON output](json-output.md) | `--output json` |
 | [Under the hood](under-the-hood.md) | CRDs, journal, ports |
 | [Tear down](teardown.md) | removing everything |

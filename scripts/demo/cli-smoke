@@ -15,7 +15,9 @@ its admin kubeconfig, and loses access after unshare, in kubectl too), the
 templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
-schema, a name already in the index, a connection that is not ready), and a cloud account (ADR 0029): refused with a clear message without an
+schema, a name already in the index, a connection that is not ready), the
+refusals of build create (unknown component, a malformed version, an org with no
+connection), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -47,6 +49,7 @@ cloud_role="arn:aws:iam::123456789012:role/platform-smoke-${RANDOM}"
 connection="smoke-scm-${RANDOM}"
 component="smoke-component-${RANDOM}"
 taken_component="smoke-taken-${RANDOM}"
+build_component="smoke-build-${RANDOM}"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -336,6 +339,43 @@ expect_failure "is not ready (AppNotCreated)" \
     --owner team-platform \
     --scm "${connection}"
 expect_failure "not found" platform catalog component get "${component}"
+
+step "build create: every refusal happens before GitHub (#287)"
+# The happy path dispatches a real workflow, so it stays in the manual walkthrough (step 20). The repo's
+# org has no connection here, so no request can reach GitHub, even with a ready one for wasp-foundry.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${build_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${build_component}
+MANIFEST
+expect_failure "component not found" \
+  platform build create \
+    --component smoke-missing \
+    --branch main
+expect_failure "<major>.<minor>.<patch>" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --version v1
+expect_failure "no scm connection for the org 'smoke-no-connection'" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main
+output="$(platform build list --component "${build_component}")"
+expect_output "VERSION" "${output}"
+if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
+  echo "expected no versions of ${build_component}, got:" >&2
+  echo "${output}" >&2
+  exit 1
+fi
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${build_component}"
 
 step "scm connection remove"
 platform scm connection remove "${connection}"

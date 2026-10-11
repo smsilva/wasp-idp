@@ -64,8 +64,12 @@ nav:
           - 19.1 Create a component: walkthrough/components/19-1-create.md
           - 19.2 The component in the catalog: walkthrough/components/19-2-list.md
           - 19.3 What is refused before GitHub: walkthrough/components/19-3-refused.md
-      - 20. Remove the GitHub connection: walkthrough/scm-connection/20-remove.md
-      - 21. Clean up and sign out: walkthrough/21-cleanup.md
+      - Builds:
+          - 20.1 Build a branch: walkthrough/builds/20-1-create.md
+          - 20.2 The versions of a component: walkthrough/builds/20-2-list.md
+          - 20.3 What a build refuses: walkthrough/builds/20-3-refused.md
+      - 21. Remove the GitHub connection: walkthrough/scm-connection/21-remove.md
+      - 22. Clean up and sign out: walkthrough/22-cleanup.md
       - Without a browser: walkthrough/cli-smoke.md
   - Reference:
       - reference/index.md
@@ -78,6 +82,7 @@ nav:
       - Teams: reference/teams.md
       - Cloud accounts: reference/cloud-accounts.md
       - SCM connections: reference/scm-connections.md
+      - Builds: reference/builds.md
       - JSON output: reference/json-output.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md

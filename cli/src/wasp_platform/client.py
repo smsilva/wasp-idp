@@ -96,6 +96,18 @@ class PlatformClient:
   def component_creation(self, name: str) -> dict:
     return self._request("GET", f"/v1/catalog/components/{name}/creation")
 
+  def create_build(self, body: dict) -> dict:
+    return self._request("POST", "/v1/builds", json=body)
+
+  def list_builds(self, component: str | None = None) -> list[dict]:
+    return self._request("GET", "/v1/builds", params={"component": component} if component else {})["items"]
+
+  def get_build(self, name: str) -> dict:
+    return self._request("GET", f"/v1/builds/{quote(name, safe='')}")
+
+  def list_versions(self, component: str | None = None) -> list[dict]:
+    return self._request("GET", "/v1/versions", params={"component": component} if component else {})["items"]
+
   def list_teams(self) -> list[dict]:
     return self._request("GET", "/v1/teams")["items"]
 
