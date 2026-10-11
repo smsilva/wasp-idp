@@ -15,7 +15,7 @@ Roda **dentro do cluster**, como Deployment `workload-provider` em `platform-sys
 
 ## Acesso ao vcluster
 
-Usa o kubeconfig admin de `Environment.status.kubeconfigData`, trocando o servidor (que aponta para `127.0.0.1`, para o host) por `https://vcluster.env-{name}:{port}` (`--vcluster-server`), o mesmo endereço que a Platform API usa em `credentials.py`. Um client por ambiente fica em cache enquanto o kubeconfig não muda.
+Usa o kubeconfig admin de `Environment.status.kubeconfigData`, trocando o servidor (que aponta para `127.0.0.1`, para o host) por `https://vcluster.env-{name}` (o Service do chart, ClusterIP na 443, `--vcluster-server`), o mesmo endereço que a Platform API usa em `credentials.py`. Um client por ambiente fica em cache enquanto o kubeconfig não muda.
 
 ## Permissões
 

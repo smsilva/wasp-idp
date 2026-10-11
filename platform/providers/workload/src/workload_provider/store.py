@@ -10,9 +10,10 @@ CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
 REVISIONS = "workloadrevisions"
 INSTANCES = "workloadinstances"
-# The in-cluster address of the vcluster API server, as the Platform API reaches it (credentials.py):
+# The in-cluster address of the vcluster API server (ClusterIP on 443, #307), as the Platform API reaches
+# it (credentials.py):
 # status.kubeconfigData points to 127.0.0.1, for the host.
-SERVER = "https://vcluster.env-{name}:{port}"
+SERVER = "https://vcluster.env-{name}"
 
 
 class Store:

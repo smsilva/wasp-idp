@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> None:
   parser = argparse.ArgumentParser(prog="workload-provider", description="Apply each WorkloadRevision in the vcluster of its Environment and keep the WorkloadInstance.")
   parser.add_argument("--namespace", default="platform-system")
   parser.add_argument("--context", default=None, help="kubeconfig context, only when running outside the cluster")
-  parser.add_argument("--vcluster-server", default=SERVER, help="address of a vcluster API server, with {name} and {port}")
+  parser.add_argument("--vcluster-server", default=SERVER, help="address of a vcluster API server, with {name} (and {port}, the host port)")
   parser.add_argument("--resync-seconds", type=int, default=30)
   parser.add_argument("--poll-seconds", type=int, default=5)
   args = parser.parse_args(argv)

@@ -12,13 +12,33 @@ class HelmError(Exception):
   pass
 
 
+# The host port goes on a Service of its own (#307). The vcluster mirrors the ports of its main Service
+# in the virtual default/kubernetes, but injects KUBERNETES_SERVICE_PORT=443 in every pod: with the
+# main Service on the host port, CoreDNS (and any in-cluster client) never reaches the API.
+HOST_SERVICE = "vcluster-host"
+
+
+def host_service(port: int) -> str:
+  return yaml.safe_dump({
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {"name": HOST_SERVICE, "labels": {"app": "vcluster", "release": "vcluster"}},
+    "spec": {
+      "type": "LoadBalancer",
+      "selector": {"app": "vcluster", "release": "vcluster"},
+      "ports": [{"name": "https", "port": port, "targetPort": 8443, "protocol": "TCP"}],
+    },
+  }, sort_keys=False)
+
+
 def values(port: int) -> dict:
-  """Control plane reachable from the host: LoadBalancer on its own port, certificate valid for 127.0.0.1."""
+  """Control plane reachable from the host: the chart's Service stays ClusterIP on 443 for the pods,
+  a second Service (LoadBalancer) publishes the host port, and the certificate is valid for 127.0.0.1."""
   return {
     "controlPlane": {
-      "service": {"spec": {"type": "LoadBalancer", "ports": [{"name": "https", "port": port, "targetPort": 8443, "protocol": "TCP"}]}},
       "proxy": {"extraSANs": ["127.0.0.1", "localhost"]},
     },
+    "experimental": {"deploy": {"host": {"manifests": host_service(port)}}},
     "exportKubeConfig": {"server": f"https://127.0.0.1:{port}"},
     "telemetry": {"enabled": False},
   }
