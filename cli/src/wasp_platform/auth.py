@@ -37,13 +37,17 @@ def load_credentials() -> dict | None:
   return json.loads(path.read_text())
 
 
-def save_credentials(tokens: dict) -> None:
+def save_credentials(tokens: dict, client_id: str | None = None) -> None:
+  """client_id: the client that issued the tokens, when not the configured one (the test client of
+  `login --test-user`); refresh and revoke must go to the same client, or Keycloak refuses them."""
   now = time.time()
   values = {
     "access_token": tokens["access_token"],
     "refresh_token": tokens.get("refresh_token"),
     "expires_at": now + int(tokens.get("expires_in", 0)),
   }
+  if client_id:
+    values["client_id"] = client_id
   path = credentials_path()
   path.parent.mkdir(parents=True, exist_ok=True)
   # Created 0600 from the start: no window where another user could read it.
@@ -141,6 +145,13 @@ class Oidc:
       raise AuthError(f"device login failed: {error}")
     raise AuthError("device login expired: run 'platform login --use-device-code' again")
 
+  def login_password(self, username: str, password: str) -> dict:
+    """Password grant: only the local test client allows it (realm-smoke.yaml, #179)."""
+    response = self._token({"grant_type": "password", "username": username, "password": password, "scope": "openid"})
+    if response.is_error:
+      raise AuthError(f"test user login failed: {_oauth_error(response)}")
+    return response.json()
+
   def refresh(self, refresh_token: str) -> dict:
     response = self._token({"grant_type": "refresh_token", "refresh_token": refresh_token})
     if response.is_error:
@@ -163,8 +174,10 @@ def access_token(oidc_factory=Oidc) -> str:
     return credentials["access_token"]
   if not credentials.get("refresh_token"):
     raise AuthError("session expired: run 'platform login'")
-  tokens = oidc_factory().refresh(credentials["refresh_token"])
-  save_credentials(tokens)
+  client_id = credentials.get("client_id")
+  oidc = oidc_factory(client_id=client_id) if client_id else oidc_factory()
+  tokens = oidc.refresh(credentials["refresh_token"])
+  save_credentials(tokens, client_id)
   return tokens["access_token"]
 
 

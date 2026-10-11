@@ -36,6 +36,27 @@ O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado
 
 Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o realm sobe sem o Identity Provider e o `init` avisa. Sem `--admin`, o mapper `bootstrap-admin` fica de fora.
 
+## Identidades de teste (só no target local)
+
+O `platform init --target local` junta ao realm o `realm-smoke.yaml` (#179). Ele não existe em nenhum outro target.
+
+| Item | Valor |
+|---|---|
+| Client `platform-smoke` | público, só password grant (`directAccessGrantsEnabled`), mesmos scopes do `platform-cli` |
+| Usuário `platform-smoke` | `platform-users` |
+| Usuário `platform-smoke-admin` | `platform-admins` e `platform-users` |
+| Senhas | aleatórias, geradas uma vez no Secret `keycloak-smoke-user` (`platform-auth`) e lidas pelo keycloak-config-cli via `$(env:…)` |
+
+`platform login --test-user` e `--test-admin` (ocultos no `--help`) leem a senha do Secret pelo `kubectl` e fazem o password grant nesse client. Fora do target local, o comando recusa. É o que deixa o `scripts/demo/cli-smoke` rodar o fluxo da CLI sem navegador e sem conta Google.
+
+**Por que o password grant aqui:** o OAuth 2.1 desaconselha esse grant, e o `platform-cli` continua sem ele. Ele é aceitável neste caso porque o client é dedicado, existe só no cluster local de quem roda o `init`, serve só a teste, e as senhas nunca saem do Secret nem entram no repo.
+
+O password grant só no `platform-smoke` limita **como** a senha é enviada, não **quem** a usa: o realm mantém o formulário de usuário e senha, então quem tem a senha também entra pela tela de login, inclusive como `platform-smoke-admin`. Isso é aceitável porque o Keycloak só escuta em `127.0.0.1:8180` e quem lê o Secret já tem o kubeconfig do `platform-local`, isto é, já é admin do cluster.
+
+O `scripts/demo/cli-smoke` roda com um `XDG_CONFIG_HOME` temporário: o login de teste não substitui nem encerra a sessão Google de quem o executa.
+
+**Se o `realm-smoke.yaml` deixar de ser aplicado,** o keycloak-config-cli apaga o client `platform-smoke` (clients são gerenciados), mas não apaga usuários: remova `platform-smoke` e `platform-smoke-admin` à mão no console do Keycloak, junto com o Secret `keycloak-smoke-user`.
+
 ## Lado do Google (uma vez, manual)
 
 1. No Google Cloud, configure a tela de consentimento OAuth como External, em modo **Testing**, com os e-mails que vão logar em **Test users**. Assim não há processo de verificação.

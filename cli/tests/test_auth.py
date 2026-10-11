@@ -32,6 +32,8 @@ class FakeIdp:
     self.device_polls = 0
     self.revoked = []
     self.refreshed = 0
+    self.refresh_clients = []
+    self.password_logins = []
 
   def handler(self, request: httpx.Request) -> httpx.Response:
     path = request.url.path
@@ -49,6 +51,7 @@ class FakeIdp:
                                        "verification_uri_complete": "http://idp.test/device?user_code=ABCD-EFGH", "interval": 1, "expires_in": 60})
     if path.endswith("/revoke"):
       self.revoked.append(form["token"])
+      self.revoke_clients = getattr(self, "revoke_clients", []) + [form["client_id"]]
       return httpx.Response(200)
     grant = form["grant_type"]
     if grant == "authorization_code":
@@ -67,7 +70,13 @@ class FakeIdp:
       return self.tokens("device")
     if grant == "refresh_token":
       self.refreshed += 1
+      self.refresh_clients.append(form["client_id"])
       return self.tokens("refreshed")
+    if grant == "password":
+      self.password_logins.append((form["client_id"], form["username"], form["password"], form["scope"]))
+      if form["password"] != "right":
+        return httpx.Response(401, json={"error": "invalid_grant", "error_description": "Invalid user credentials"})
+      return self.tokens("password")
     return httpx.Response(400, json={"error": "unsupported_grant_type"})
 
   def tokens(self, label):
@@ -227,3 +236,85 @@ def test_browser_login_serves_themed_page(idp, oidc):
   oidc.login_browser(open_browser=open_browser, timeout=10)
   time.sleep(0.2)
   assert "Back to the terminal." in pages[0]
+
+
+def test_password_login_saves_the_issuing_client(idp):
+  oidc = auth.Oidc(issuer=ISSUER, client_id="platform-smoke", transport=httpx.MockTransport(idp.handler))
+  auth.save_credentials(oidc.login_password("platform-smoke", "right"), client_id="platform-smoke")
+  assert idp.password_logins == [("platform-smoke", "platform-smoke", "right", "openid")]
+  assert auth.load_credentials()["client_id"] == "platform-smoke"
+
+
+def test_password_login_failure_is_clear(idp):
+  oidc = auth.Oidc(issuer=ISSUER, client_id="platform-smoke", transport=httpx.MockTransport(idp.handler))
+  with pytest.raises(auth.AuthError, match="test user login failed: Invalid user credentials"):
+    oidc.login_password("platform-smoke", "wrong")
+
+
+def test_refresh_uses_the_client_that_issued_the_token(idp):
+  auth.save_credentials({"access_token": "old", "refresh_token": "r", "expires_in": 30}, client_id="platform-smoke")
+  def factory(client_id=None):
+    return auth.Oidc(issuer=ISSUER, client_id=client_id or "platform-cli", transport=httpx.MockTransport(idp.handler))
+  assert auth.access_token(oidc_factory=factory) == "access-refreshed"
+  assert idp.refresh_clients == ["platform-smoke"]
+  # The refreshed credentials keep the client, or the next refresh would go to platform-cli.
+  assert auth.load_credentials()["client_id"] == "platform-smoke"
+
+
+def test_logout_revokes_with_the_issuing_client(idp, monkeypatch):
+  auth.save_credentials({"access_token": "a", "refresh_token": "refresh-live", "expires_in": 300}, client_id="platform-smoke")
+  monkeypatch.setattr(auth, "Oidc", lambda issuer=None, client_id=None, transport=None: _real_oidc(client_id, idp))
+  assert runner.invoke(app, ["logout"]).exit_code == 0
+  assert idp.revoke_clients == ["platform-smoke"]
+
+
+_ORIGINAL_OIDC = auth.Oidc
+
+
+def _real_oidc(client_id, idp):
+  return _ORIGINAL_OIDC(issuer=ISSUER, client_id=client_id or "platform-cli", transport=httpx.MockTransport(idp.handler))
+
+
+@pytest.fixture
+def local_target(config_home):
+  from wasp_platform import config
+  config.save({"target": "local", "api_url": "http://api.test", "issuer": ISSUER, "client_id": "platform-cli"})
+
+
+@pytest.mark.parametrize("flags,user", [
+  (["--test-user"], "platform-smoke"),
+  (["--test-admin"], "platform-smoke-admin"),
+])
+def test_login_test_user(idp, api, local_target, monkeypatch, flags, user):
+  from wasp_platform.bootstrap import local
+  monkeypatch.setattr(local, "smoke_password", lambda username: "right" if username == user else "nope")
+  monkeypatch.setattr(auth, "Oidc", lambda issuer=None, client_id=None, transport=None: _real_oidc(client_id, idp))
+  monkeypatch.setattr(client_module.PlatformClient, "me", lambda self: {"sub": "s", "email": f"{user}@platform.local", "groups": ["platform-users"]})
+  result = runner.invoke(app, ["login", *flags])
+  assert result.exit_code == 0, result.output
+  assert f"Logged in as {user}@platform.local" in result.output
+  assert idp.password_logins[0][:2] == ("platform-smoke", user)
+  assert auth.load_credentials()["client_id"] == "platform-smoke"
+
+
+def test_login_test_user_only_on_local(config_home):
+  from wasp_platform import config
+  config.save({"target": "azure", "api_url": "http://api.test", "issuer": ISSUER, "client_id": "platform-cli"})
+  result = runner.invoke(app, ["login", "--test-user"])
+  assert result.exit_code == 1
+  assert "--test-user is only supported on the local target" in result.output
+
+
+def test_login_test_flags_are_hidden():
+  result = runner.invoke(app, ["login", "--help"])
+  assert "--use-device-code" in result.output
+  assert "--test-user" not in result.output and "--test-admin" not in result.output
+
+
+def test_old_credentials_without_client_refresh_with_the_configured_client(idp):
+  auth.save_credentials({"access_token": "old", "refresh_token": "r", "expires_in": 30})
+  def factory(client_id=None):
+    return auth.Oidc(issuer=ISSUER, client_id=client_id or "platform-cli", transport=httpx.MockTransport(idp.handler))
+  assert auth.access_token(oidc_factory=factory) == "access-refreshed"
+  assert idp.refresh_clients == ["platform-cli"]
+  assert "client_id" not in auth.load_credentials()

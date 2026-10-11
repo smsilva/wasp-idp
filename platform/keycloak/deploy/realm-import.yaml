@@ -40,6 +40,10 @@ spec:
           envFrom:
             - secretRef:
                 name: keycloak-google
+            # Passwords of the local test users (realm-smoke.yaml, #179).
+            - secretRef:
+                name: keycloak-smoke-user
+                optional: true
           volumeMounts:
             - name: realm
               mountPath: /config

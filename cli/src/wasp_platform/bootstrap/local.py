@@ -26,6 +26,12 @@ KEYCLOAK_PORT = "8180"
 KEYCLOAK_URL = f"http://localhost:{KEYCLOAK_PORT}"
 ISSUER = f"{KEYCLOAK_URL}/realms/platform"
 CLI_CLIENT_ID = "platform-cli"
+# Test client and users of scripts/demo/cli-smoke (#179, realm-smoke.yaml): local target only.
+SMOKE_CLIENT_ID = "platform-smoke"
+SMOKE_USER = "platform-smoke"
+SMOKE_ADMIN = "platform-smoke-admin"
+SMOKE_SECRET = "keycloak-smoke-user"
+SMOKE_KEYS = {SMOKE_USER: "SMOKE_USER_PASSWORD", SMOKE_ADMIN: "SMOKE_ADMIN_PASSWORD"}
 # One host port per vcluster environment (provider local_vcluster, #183); must match PORTS in
 # platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py.
 ENV_PORTS = "7100-7119"
@@ -105,9 +111,21 @@ def _apply_secret(namespace: str, name: str, values: dict[str, str]) -> None:
   _kubectl("apply", "--filename", "-", input=json.dumps(manifest))
 
 
-def render_realm(realm: dict, google: bool, admin: bool) -> dict:
-  """Drop the Google identity provider without credentials, and the bootstrap-admin mapper without --admin."""
+def smoke_password(username: str) -> str:
+  """The test user's password, from the Secret init generated (the CLI never stores it)."""
+  password = _secret_value(AUTH_NAMESPACE, SMOKE_SECRET, SMOKE_KEYS[username])
+  if not password:
+    raise BootstrapError(f"test user {username} not found: run 'platform init --target local' first")
+  return password
+
+
+def render_realm(realm: dict, google: bool, admin: bool, smoke: dict | None = None) -> dict:
+  """Drop the Google identity provider without credentials, and the bootstrap-admin mapper without --admin.
+  With smoke (realm-smoke.yaml, local target only), add the test client and users of #179."""
   realm = dict(realm)
+  if smoke:
+    realm["clients"] = [*realm.get("clients", []), *smoke.get("clients", [])]
+    realm["users"] = [*realm.get("users", []), *smoke.get("users", [])]
   if not google:
     realm.pop("identityProviders", None)
     realm.pop("identityProviderMappers", None)
@@ -140,7 +158,12 @@ def install_keycloak(root: Path, admin_email: str | None, log) -> dict:
     "PLATFORM_ADMIN_EMAIL": admin_email,
   })
 
-  realm = render_realm(yaml.safe_load((keycloak_dir / "realm-platform.yaml").read_text()), google, bool(admin_email))
+  # Test identities of #179, generated once; local target only (realm-smoke.yaml explains why).
+  smoke_secret = {key: _secret_value(AUTH_NAMESPACE, SMOKE_SECRET, key) or secrets.token_urlsafe(24) for key in SMOKE_KEYS.values()}
+  _apply_secret(AUTH_NAMESPACE, SMOKE_SECRET, smoke_secret)
+  smoke = yaml.safe_load((keycloak_dir / "realm-smoke.yaml").read_text())
+
+  realm = render_realm(yaml.safe_load((keycloak_dir / "realm-platform.yaml").read_text()), google, bool(admin_email), smoke)
   configmap = {
     "apiVersion": "v1", "kind": "ConfigMap",
     "metadata": {"name": "keycloak-realm", "namespace": AUTH_NAMESPACE},

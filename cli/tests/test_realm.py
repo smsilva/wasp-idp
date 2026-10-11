@@ -51,3 +51,38 @@ def test_theme_messages_have_the_same_keys():
 def test_realm_uses_platform_theme():
   assert REALM["loginTheme"] == "platform"
   assert set(REALM["supportedLocales"]) == {"pt-BR", "en"}
+
+
+SMOKE = yaml.safe_load((Path(__file__).parents[2] / "platform" / "keycloak" / "realm-smoke.yaml").read_text())
+
+
+def test_realm_without_smoke_has_no_test_client_nor_users():
+  realm = render_realm(REALM, google=True, admin=True)
+  assert "platform-smoke" not in [c["clientId"] for c in realm["clients"]]
+  assert "users" not in realm
+
+
+def test_smoke_adds_password_client_and_two_users():
+  realm = render_realm(REALM, google=True, admin=True, smoke=SMOKE)
+  client = next(c for c in realm["clients"] if c["clientId"] == "platform-smoke")
+  assert client["directAccessGrantsEnabled"] is True and client["publicClient"] is True
+  assert {"platform-groups", "platform-api-audience"} <= set(client["defaultClientScopes"])
+  users = {u["username"]: u for u in realm["users"]}
+  assert users["platform-smoke"]["groups"] == ["/platform-users"]
+  assert set(users["platform-smoke-admin"]["groups"]) == {"/platform-admins", "/platform-users"}
+  # Passwords come from the Secret keycloak-smoke-user, never from the file.
+  assert all(u["credentials"][0]["value"].startswith("$(env:") for u in realm["users"])
+  # The base realm is not mutated: a later render without smoke stays clean.
+  assert "users" not in REALM
+
+
+def test_cli_client_never_gets_password_grant():
+  realm = render_realm(REALM, google=True, admin=True, smoke=SMOKE)
+  client = next(c for c in realm["clients"] if c["clientId"] == "platform-cli")
+  assert client["directAccessGrantsEnabled"] is False
+
+
+def test_smoke_passwords_match_the_secret_keys():
+  from wasp_platform.bootstrap.local import SMOKE_KEYS
+  values = {u["username"]: u["credentials"][0]["value"] for u in SMOKE["users"]}
+  assert values == {user: f"$(env:{key})" for user, key in SMOKE_KEYS.items()}

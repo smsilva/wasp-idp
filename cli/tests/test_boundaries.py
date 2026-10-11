@@ -1,9 +1,10 @@
-"""Only init may reach Docker, k3d or kubectl; everything else goes through the API."""
+"""Only init (and the local test login) may reach Docker, k3d or kubectl; everything else goes through the API."""
 import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).parents[1] / "src" / "wasp_platform"
-ALLOWED = {"commands/init.py"}
+# auth.py: `login --test-user` reads the local test password from its Secret (#179, local target only).
+ALLOWED = {"commands/init.py", "commands/auth.py"}
 
 
 def imports_bootstrap(path: Path) -> bool:

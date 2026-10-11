@@ -110,6 +110,8 @@ and confirm the code ABCD-EFGH
 ✓ Logged in as voce@example.com (platform-admins, platform-users)
 ```
 
+Para testes sem ninguém (`scripts/demo/cli-smoke`), o target local tem dois usuários de teste: `platform login --test-user` (`platform-users`) e `--test-admin` (`platform-admins`). As opções ficam fora do `--help` e recusam outro target; o motivo e o que o `init` cria estão em `platform/keycloak/README.md`.
+
 ```bash
 platform whoami
 ```
