@@ -2,16 +2,103 @@ site_name: platform CLI
 site_description: Primeiro Environment local com a CLI platform
 site_url: https://smsilva.github.io/wasp-idp/cli/
 repo_url: https://github.com/smsilva/wasp-idp
+repo_name: smsilva/wasp-idp
 edit_uri: edit/main/cli/docs/
 docs_dir: docs
 nav:
-  - Uso: index.md
-  - Walkthrough: walkthrough.md
+  - Início: index.md
+  - Guia de uso:
+      - Pré-requisitos: guide/01-prerequisites.md
+      - Instalar a CLI: guide/02-install.md
+      - Subir o control plane: guide/03-control-plane.md
+      - Entrar: guide/04-login.md
+      - Criar um ambiente: guide/05-create-environment.md
+      - Usar o cluster do ambiente: guide/06-use-environment.md
+      - Saída em JSON: guide/07-json-output.md
+      - Apagar: guide/08-delete.md
+      - Expiração: guide/09-expiration.md
+      - "Por baixo: o CRD": guide/10-crd.md
+      - Catálogo: guide/11-catalog.md
+      - Times: guide/12-teams.md
+      - Contas de nuvem: guide/13-cloud-accounts.md
+      - Desmontar tudo: guide/14-teardown.md
+  - Walkthrough:
+      - walkthrough/index.md
+      - Do zero ao control plane: walkthrough/01-setup.md
+      - Login e identidade: walkthrough/02-login.md
+      - Ambientes: walkthrough/03-environments.md
+      - Catálogo: walkthrough/04-catalog.md
+      - Times: walkthrough/05-teams.md
+      - Templates de component: walkthrough/06-templates.md
+      - Contas de nuvem: walkthrough/07-cloud-accounts.md
+      - Limpar e sair: walkthrough/08-cleanup.md
 theme:
   name: material
   language: pt-BR
+  icon:
+    logo: material/console-line
+    repo: fontawesome/brands/github
+  palette:
+    # Follows the OS preference until the reader picks one with the toggle.
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Tema do sistema
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Tema noturno
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Tema claro
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
     - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - navigation.footer
+    - navigation.indexes
+    - navigation.tabs
+    - navigation.instant
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - toc.follow
+validation:
+  links:
+    anchors: warn
+extra_css:
+  - stylesheets/extra.css
+extra_javascript:
+  - javascripts/diagram-zoom.js
 markdown_extensions:
   - admonition
-  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
