@@ -1,0 +1,81 @@
+/* Same palette as the Platform API pages (platform/api/src/platform_api/assets/scm.html). */
+:root {
+  --md-primary-fg-color: #2f6fd6;
+  --md-primary-fg-color--light: #4a9ef4;
+  --md-primary-fg-color--dark: #1f4f9e;
+  --md-accent-fg-color: #7c5cff;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 222;
+  --md-default-bg-color: #0a0e1a;
+  --md-default-bg-color--light: #0d1322;
+  --md-primary-fg-color: #0d1322;
+  --md-primary-bg-color: #e6edf6;
+  --md-accent-fg-color: #4a9ef4;
+  --md-typeset-a-color: #4a9ef4;
+  --md-code-bg-color: #0d1322;
+  --md-footer-bg-color: #0d1322;
+  --md-footer-bg-color--dark: #0a0e1a;
+}
+
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-tabs {
+  border-bottom: 1px solid #1f2937;
+}
+
+/* Commands and their output read as one terminal session. */
+.md-typeset pre > code {
+  border-radius: 8px;
+}
+
+.md-typeset .highlight > .filename {
+  border-radius: 8px 8px 0 0;
+  font-size: .72rem;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.md-typeset .highlight > .filename + pre > code {
+  border-radius: 0 0 8px 8px;
+}
+
+/* Output blocks: muted, so the command above stands out. */
+.md-typeset .output pre > code {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset h2 {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  padding-top: 1.2em;
+}
+
+.md-typeset table:not([class]) {
+  font-size: .72rem;
+}
+
+/* Diagrams: click to zoom (javascripts/diagram-zoom.js). */
+.md-typeset .mermaid {
+  cursor: zoom-in;
+}
+
+.md-typeset .mermaid.diagram-zoomed {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1000;
+  margin: 0;
+  padding: .6rem;
+  border-radius: 8px;
+  background: var(--md-default-bg-color);
+  cursor: zoom-out;
+  transform-origin: center;
+}
+
+.diagram-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(5, 9, 18, .82);
+  cursor: zoom-out;
+}
