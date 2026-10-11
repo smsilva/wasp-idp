@@ -3,7 +3,9 @@
 The platform does not build: it writes a Build, and the scm_github provider dispatches the repo's
 platform-build workflow on GitHub Actions, follows the run, validates app-spec.yaml (Score) and
 registers the version. The version index is a read mirror, never changed here at a user's request.
-Any signed-in user may build any component: GitHub still decides who reads what in the repo.
+The App, not the person, dispatches and reads the repo, so GitHub does not decide who builds: only
+members of the component's owner team and platform-admins create a build. Reading builds and versions
+stays open to any signed-in user, like the component index.
 """
 import re
 import secrets
@@ -14,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from .auth import Principal, current_principal
 from .catalog import CREATED_BY_ANNOTATION, LABEL
+from .environments import ADMIN_GROUP
 from .journal import Journal
 from .scm import PLURAL as CONNECTIONS, status_of as connection_status
 from .state import GROUP, VERSION, AlreadyExists, NotFound
@@ -118,6 +121,9 @@ def router(state, journal: Journal) -> APIRouter:
       component = state.get(COMPONENTS, request.component)
     except NotFound:
       raise HTTPException(422, f"build of '{request.component}': component not found")
+    owner = (component.get("spec") or {}).get("owner")
+    if not (owner in principal.teams or ADMIN_GROUP in principal.groups):
+      raise HTTPException(403, f"build of '{request.component}': only members of its owner team ({owner or 'none'}) and {ADMIN_GROUP} build it")
     repo = ((component.get("spec") or {}).get("source") or {}).get("repo")
     if not repo or "/" not in repo:
       raise HTTPException(422, f"build of '{request.component}': the component has no repo in the index")

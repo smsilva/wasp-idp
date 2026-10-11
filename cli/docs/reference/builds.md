@@ -7,7 +7,7 @@ platform build list --component <component>
 platform build get <build>
 ```
 
-`create` turns a branch of a component into a version. The platform dispatches the repo's `.github/workflows/platform-build.yaml` on GitHub Actions with the App of the org's SCM connection, follows the run, reads its `platform-build` artifact, checks `app-spec.yaml` at the built commit and registers the version in the index. Any authenticated user builds any component: GitHub still decides who reads the repo.
+`create` turns a branch of a component into a version. The platform dispatches the repo's `.github/workflows/platform-build.yaml` on GitHub Actions with the App of the org's SCM connection, follows the run, reads its `platform-build` artifact, checks `app-spec.yaml` at the built commit and registers the version in the index. The App, not you, dispatches and reads the repo, so GitHub does not decide who builds: only members of the component's owner team and `platform-admins` create a build. `list` and `get` are open to any authenticated user, like the component index.
 
 `list` reads the version index (VERSION, BRANCH, CREATED, newest first): only versions whose `app-spec.yaml` passed. `get` shows a build and its steps; a build is removed 24 h after it ends, the version stays.
 
@@ -31,6 +31,7 @@ The CI holds no platform credential: the platform pulls the run and the artifact
 | Refusal | Code |
 |---|---|
 | the component is not in the index, or has no repo | `422` |
+| you are neither in the component's owner team nor in `platform-admins` | `403` |
 | `--version` or `--branch` malformed | `422` |
 | `--version` already in the index (the CI would push the tag again) | `409` |
 | no SCM connection for the repo's org, or it is not `ready` | `409` |

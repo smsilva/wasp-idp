@@ -48,10 +48,20 @@ def client(state, journal_path, tokens):
   return TestClient(create_app(state, Journal(journal_path), tokens.verifier(), teams=FakeTeams(*CATALOG_TEAMS)))
 
 
+def bearer(tokens, sub="user-1", groups=("platform-users",), teams=("team-alpha",)):
+  paths = [f"/{group}" for group in groups] + [f"/teams/{team}" for team in teams]
+  return {"Authorization": f"Bearer {tokens.issue(sub=sub, groups=list(groups), group_paths=paths)}"}
+
+
 @pytest.fixture
 def user(tokens):
-  # A user of no team: building needs only a sign-in.
-  return {"Authorization": f"Bearer {tokens.issue(sub='user-1', groups=['platform-users'], group_paths=['/platform-users'])}"}
+  # A member of team-alpha, the owner team of the components below.
+  return bearer(tokens)
+
+
+@pytest.fixture
+def outsider(tokens):
+  return bearer(tokens, sub="user-2", teams=("team-beta",))
 
 
 def test_create_writes_the_build(client, state, user, journal_path):
@@ -138,3 +148,18 @@ def test_a_version_already_in_the_index_is_refused_before_the_dispatch(client, s
   assert response.status_code == 409
   assert "version 1.0.0-rc.1 is already in the index (commit aaaaaaa)" in response.text
   assert state.list("builds") == []
+
+
+def test_only_the_owner_team_and_admins_build(client, state, tokens, outsider):
+  response = client.post("/v1/builds", json={"component": "greeting-api", "branch": "main"}, headers=outsider)
+  assert response.status_code == 403
+  assert "owner team (team-alpha)" in response.text
+  assert state.list("builds") == []
+  admin = bearer(tokens, sub="admin-1", groups=("platform-admins",), teams=())
+  assert client.post("/v1/builds", json={"component": "greeting-api", "branch": "main"}, headers=admin).status_code == 202
+
+
+def test_reads_stay_open_to_any_signed_in_user(client, state, user, outsider):
+  name = client.post("/v1/builds", json={"component": "greeting-api", "branch": "main"}, headers=user).json()["name"]
+  assert client.get(f"/v1/builds/{name}", headers=outsider).status_code == 200
+  assert client.get("/v1/versions", params={"component": "greeting-api"}, headers=outsider).status_code == 200

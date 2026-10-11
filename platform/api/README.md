@@ -27,7 +27,7 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `GET` | `/v1/catalog/components` | `200`, o índice; filtros `?system=` e `?owner=` |
 | `GET` | `/v1/catalog/components/{name}` | `200` |
 | `GET` | `/v1/catalog/components/{name}/creation` | `200`, as conditions da criação; só quem pediu (anotação `created-by`) ou `platform-admins` |
-| `POST` | `/v1/builds` | `202`, o build (#206); body `{"component", "branch", "version"}`; `422` para component fora do índice ou sem repo, `version` ou `branch` malformados; `409` para `version` já no índice ou sem connection `ready` da org do repo |
+| `POST` | `/v1/builds` | `202`, o build (#206); só o time dono e `platform-admins` (`403`); body `{"component", "branch", "version"}`; `422` para component fora do índice ou sem repo, `version` ou `branch` malformados; `409` para `version` já no índice ou sem connection `ready` da org do repo |
 | `GET` | `/v1/builds` | `200`, do mais novo ao mais antigo; filtro `?component=` |
 | `GET` | `/v1/builds/{name}` | `200`, as conditions, `runUrl`, o `platform-build.json` (`result`) e os erros do `app-spec.yaml` |
 | `GET` | `/v1/versions` | `200`, o índice de versões, da mais nova à mais antiga; filtro `?component=` |
@@ -81,7 +81,7 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 
 ## Builds
 
-`Build` (`platform/crds/build.yaml`) é o pedido de build de uma branch (#206, ADR 0030). Qualquer usuário autenticado cria: o GitHub continua decidindo quem lê o repo. A API resolve o repo pelo índice de components e a connection pela org do repo, gera o `requestId` e grava o `Build`; quem dispara o `platform-build.yaml`, acompanha o run, lê o artefato, valida o `app-spec.yaml` (Score) e registra a versão é o controller `platform/providers/scm_github/`, o único que lê a chave do App (ADR 0025). O índice de versões (`versions.catalog.platform.wasp.silvios.me`, nome `<component>.<version>`) é um espelho de leitura: a Role da API só tem `get`, `list` e `watch` nele. O contrato com o CI está em `cli/docs/reference/builds.md`.
+`Build` (`platform/crds/build.yaml`) é o pedido de build de uma branch (#206, ADR 0030). Quem dispara e lê o repo é o App, não a pessoa, então o GitHub não decide quem faz build: só membros do time dono do component e `platform-admins` criam (`403` para os demais, antes de qualquer chamada ao GitHub). Ler builds e versões fica aberto a qualquer autenticado, como o índice de components. A API resolve o repo pelo índice de components e a connection pela org do repo, gera o `requestId` e grava o `Build`; quem dispara o `platform-build.yaml`, acompanha o run, lê o artefato, valida o `app-spec.yaml` (Score) e registra a versão é o controller `platform/providers/scm_github/`, o único que lê a chave do App (ADR 0025). O índice de versões (`versions.catalog.platform.wasp.silvios.me`, nome `<component>.<version>`) é um espelho de leitura: a Role da API só tem `get`, `list` e `watch` nele. O contrato com o CI está em `cli/docs/reference/builds.md`.
 
 ## SCM connections
 
