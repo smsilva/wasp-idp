@@ -72,7 +72,73 @@ A consolidação, os ADRs e os comentários nas issues afetadas ficam na #258.
 
 ## 2. Resolução de recursos: Radius, KubeVela e `score-k8s`
 
-_Pendente (#256)._
+Executado em 2026-10-11 no `platform-local` com `score-k8s` 0.20.0, KubeVela v1.11.0 (chart `kubevela/vela-core`) e Radius v0.61.1 (`rad install kubernetes`), uma ferramenta por vez. Os artefatos estão em [`score-k8s/`](2026-10-11-adopt-or-build-spike/score-k8s/), [`kubevela/`](2026-10-11-adopt-or-build-spike/kubevela/) e [`radius/`](2026-10-11-adopt-or-build-spike/radius/).
+
+### Montagem
+
+- **App:** uma cópia do `app-spec.yaml` do template `python-service`, com um recurso `db` do tipo `postgres`. O container é um `psql` que repete `select current_database(), current_user` até conectar; um cenário só conta como executado quando esse `select` respondeu.
+- **Base dos cenários** ([`shared/shared-db.yaml`](2026-10-11-adopt-or-build-spike/shared/shared-db.yaml)): uma instância Postgres compartilhada no namespace `shared-db`, alvo do **compose**, e nela um database `orders_restored` com usuário próprio, criado à mão, que faz o papel do restaurado de backup no **bind**.
+- **Ambientes:** um namespace por cenário no cluster do `platform-local`. O KubeVela também foi testado contra um vcluster de `Environment`.
+
+### `score-k8s`
+
+- **Entrada:** Score, mas só com `apiVersion: score.dev/v1b1`. O `platform/v1` do template é recusado pelo schema. O resto do arquivo é Score sem mudança, então a plataforma traduziria só o cabeçalho.
+- **Modos:**
+  - **provision** e **bind** funcionaram como provisioners `template://`. No bind, o provisioner só devolve valores, e a senha vem de um Secret existente que o score-k8s não gerencia (`encodeSecretRef`).
+  - **compose** não funcionou como template: o `--namespace` do `generate` sobrescreve o `namespace: shared-db` do Job, que roda longe da instância. Funcionou como provisioner `cmd://` ([`compose-postgres`](2026-10-11-adopt-or-build-spike/score-k8s/compose-postgres)): um script que, na geração, cria role e database via `kubectl exec` e devolve o Secret do app como manifest. Gerar de novo reaproveita o `state` e não duplica nada.
+- **Precedência:** vale o primeiro provisioner que casa, na ordem lexical dos arquivos em `.score-k8s/` e por `type`/`class`/`id`. Com `00-branch`, `10-env` e `zz-default`, a ordem branch > ambiente > padrão funcionou. Um provisioner com `class: restored` só entra quando a branch pede (`--override-property resources.db.class=restored`). Ressalva: o `state` fixa o provisioner na primeira geração, e trocar o modo de um ambiente que já existe exige limpar o state.
+- **Atrás da Platform API:** não há CRD nem controller; é um gerador. Mas o `state` é um arquivo local com as senhas em claro, que a plataforma teria de guardar com segurança. Também não há reconciliação nem ciclo de vida: nada desfaz o compose (os databases criados nos testes ficaram na instância compartilhada).
+- **Custo:** zero no cluster.
+
+### KubeVela
+
+- **Entrada:** só a própria `Application` (OAM). Não há integração com Score; a plataforma traduziria o Score para uma `Application`.
+- **Modos:** os três funcionaram, mas o compose ficou desajeitado.
+  - O recurso vira um componente com `ComponentDefinition` em CUE (`postgres-dedicated`, `postgres-database`).
+  - **compose:** o `topology` força o namespace de tudo, igual ao score-k8s. Funcionou separando o Job num componente implantado por um passo `deploy` próprio com `topology` em `shared-db`, mais um `override` com `selector`, mais um componente de Secret vazio nos outros ambientes.
+  - **bind:** um `override` com `selector` tira o componente `db` e aponta o app para o Secret existente.
+  - **Segredos:** o CUE é determinístico e não gera senha. Ela entra como propriedade da `Application`, em claro.
+- **Precedência:** `override`s aplicados na ordem da lista `policies` do passo `deploy`. No ambiente `branch`, o override de bind aplicado depois do de compose venceu.
+- **Atrás da Platform API:** a API geraria uma `Application` por app. Porém:
+  - Por padrão o controller aplica com as próprias permissões; isolar exige instalar com `authentication.withUser` (impersonação).
+  - **Ambientes em vcluster:** cada vcluster precisa ser registrado com `vela cluster join`, com um endereço que a CLI e o `cluster-gateway` alcancem e um SAN válido. Funcionou com o IP do LoadBalancer e `tls-server-name`. O namespace de destino não é criado sozinho.
+  - O `vela cluster detach` é aceito com a `Application` ainda implantada, que segue reportando `running`. Apagá-la depois deixa os objetos órfãos no vcluster, então a ordem tem de ser apagar a `Application` antes do `detach`.
+- **Custo:** 2 pods (`vela-core`, `cluster-gateway`), ~82 MiB, 70 s de instalação. Apagar a `Application` removeu tudo o que ela criou, inclusive o Job em `shared-db`, mas não o database que o Job criou.
+
+### Radius
+
+- **Entrada:** Bicep, sobre os tipos `Radius.*` (2025-08-01-preview). Não aceita Score. O Bicep exige um `bicepconfig.json` com a extensão `radius`, e o `rad bicep download` grava o binário em `~/.rad/bin`.
+- **Duas gerações de API convivem:** `Applications.*` (2023-10-01-preview) e `Radius.*` (2025-08-01-preview). Vários comandos exigem `--preview` para a geração nova. Sem ele, `rad env delete` falha sem avisar, e `rad app delete` responde "deleted" sobre um `Applications.Core/applications` e não apaga o app real.
+- **Modos:** os três funcionaram, com recipes por ambiente via *Recipe Packs*.
+  - **provision:** a recipe oficial do pack `kubernetes` (que roda o Postgres num `Deployment`, sem volume).
+  - **compose:** uma recipe Terraform própria (provider `cyrilgdn/postgresql`, senha de admin lida de um Secret). O state do Terraform fica num Secret em `radius-system`. É a única das três ferramentas que **desfaz o compose**: apagar o app (com `--preview`) removeu o database.
+  - **bind:** uma recipe que só devolve valores. Mas o tipo `postgreSqlDatabases` exige `username` e `password` do *pedido*, e a senha chega ao container pelo Secret do próprio app (a conexão não carrega campos sensíveis). O bind só conectou porque o deploy passou a senha do banco restaurado: **o desenvolvedor precisa conhecer a credencial**. Os tipos novos não têm o `resourceProvisioning: manual` dos antigos.
+- **Precedência:** uma recipe por tipo por ambiente. Dois packs com o mesmo tipo no mesmo ambiente são recusados (`Conflict: ... is defined in multiple recipe packs`). Não há empilhamento branch > ambiente > padrão; um override por branch seria outro ambiente.
+- **Escopo de nomes:** o nome do recurso é único por *resource group*, não por ambiente. O mesmo app em dois ambientes do mesmo grupo dá conflito, e o padrão vira um grupo por ambiente. Cada ambiente também exige um namespace exclusivo, já existente.
+- **Atrás da Platform API:** o Radius tem API e armazenamento próprios (UCP, guardado no CRD genérico `resources.ucp.dev`). A Platform API seria cliente do UCP, não da kube API.
+- **Custo:** 8 pods (UCP, dois resource providers, `bicep-de`, controller, dashboard e o Contour, que vem junto), ~744 MiB com carga, sendo ~224–490 MiB só da `dashboard`. A instalação levou 70 s.
+- **Desinstalação:** o `rad uninstall kubernetes` deixou o APIService `v1alpha3.api.ucp.dev` apontando para um serviço apagado. Com a descoberta de API falhando, **nenhum namespace do cluster terminava de ser apagado**, inclusive os de `Environment`, até o APIService ser removido à mão.
+
+### Respostas
+
+| Pergunta | `score-k8s` | KubeVela | Radius |
+|---|---|---|---|
+| 1. Aceita Score? | Sim (só `apiVersion: score.dev/v1b1`) | Não; `Application` (OAM) | Não; Bicep |
+| 2. Os três modos por ambiente? | provision e bind por template; compose só por `cmd://` na geração, sem desfazer | Sim, com compose desajeitado (componente e passo à parte) | Sim; compose com Terraform e desfeito no delete; bind exige que o desenvolvedor conheça a senha |
+| 2b. Bind a recurso não gerenciado? | Sim, valores mais Secret existente | Sim, override para um Secret existente | Só devolvendo valores; senha vem do pedido |
+| 3. Precedência branch > ambiente > padrão? | Sim: ordem dos arquivos mais `class` | Sim: ordem dos `override`s no passo `deploy` | Não: uma recipe por tipo por ambiente |
+| 4. Atrás da Platform API sem expor CRDs? | Sim (gerador sem CRDs), mas o state com senhas é um arquivo local | Sim (a API gera a `Application`), com impersonação e registro de cada vcluster | Sim, como cliente do UCP; dois modelos de API e de nomes |
+| 5. Maturidade | CNCF Sandbox (spec Score, 2024); 0.x; 23 releases em 12 meses; 49 estrelas | CNCF Incubating (2023); v1.11; 13 releases em 12 meses; ~7,9 mil estrelas | CNCF Sandbox (2024); 0.61; 36 releases em 12 meses; API em preview, duas gerações |
+| 5b. AWS real | Nenhum provisioner AWS pronto (cabe por `cmd://`) | Não testado (há addon de Terraform) | No repositório de tipos, só uma recipe AWS (MySQL, Terraform); nenhuma de Postgres |
+| Custo no cluster | Nenhum | 2 pods, ~82 MiB | 8 pods, ~744 MiB |
+
+### Recomendação preliminar
+
+| Peça | Preliminar | Motivo |
+|---|---|---|
+| Resolução de recursos (Forager, fatia 4 do catálogo) | **Construir**, mantendo o Score como formato e copiando o modelo de provisioners do `score-k8s` | Só o score-k8s aceita Score e empilha branch > ambiente > padrão, mas ele é um gerador sem ciclo de vida, com o state (e as senhas) num arquivo local e o compose fora do modelo declarativo. O KubeVela cobre os três modos e a precedência, mas troca o Score pelo OAM e põe a lógica de modo em CUE e em passos de workflow. O Radius é o único que desfaz o compose, mas exige Bicep, não empilha precedência, força a credencial do bind no pedido e é o mais pesado e instável (duas gerações de API, uninstall que trava o cluster). O que vale levar: casar provisioner por `type`/`class`/`id` com camadas ordenadas (score-k8s), compose com ciclo de vida e state fora do app (recipes Terraform do Radius), e o bind como "só valores mais referência a Secret". |
+
+A consolidação e os ADRs ficam na #258.
 
 ## 3. Kratix: múltiplos métodos de provisionamento
 

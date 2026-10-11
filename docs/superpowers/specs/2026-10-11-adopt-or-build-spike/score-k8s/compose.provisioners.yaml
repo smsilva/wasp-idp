@@ -1,0 +1,3 @@
+- uri: cmd:///path/to/compose-postgres
+  type: postgres
+  description: Compose - a database and user on the shared instance in namespace shared-db (runs at generate time).

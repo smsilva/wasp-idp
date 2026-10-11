@@ -1,0 +1,106 @@
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: postgres-dedicated
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: Provision - a dedicated PostgreSQL instance; writes the connection Secret.
+spec:
+  workload:
+    type: autodetects.core.oam.dev
+  schematic:
+    cue:
+      template: |
+        parameter: {
+          secretName: string
+          password:   string
+        }
+        _service: context.name + "-" + context.appName
+        output: {
+          apiVersion: "apps/v1"
+          kind:       "StatefulSet"
+          metadata: name: _service
+          spec: {
+            serviceName: _service
+            selector: matchLabels: app: _service
+            template: {
+              metadata: labels: app: _service
+              spec: containers: [{
+                name:  "postgres"
+                image: "postgres:17-alpine"
+                env: [
+                  {name: "POSTGRES_USER", value: "app"},
+                  {name: "POSTGRES_DB", value: "app"},
+                  {name: "POSTGRES_PASSWORD", value: parameter.password},
+                ]
+              }]
+            }
+          }
+        }
+        outputs: {
+          service: {
+            apiVersion: "v1"
+            kind:       "Service"
+            metadata: name: _service
+            spec: {
+              selector: app: _service
+              ports: [{port: 5432}]
+            }
+          }
+          secret: {
+            apiVersion: "v1"
+            kind:       "Secret"
+            metadata: name: parameter.secretName
+            stringData: {
+              host:     _service
+              port:     "5432"
+              name:     "app"
+              username: "app"
+              password: parameter.password
+            }
+          }
+        }
+---
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: postgres-database
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: Compose - a database and user on the shared instance in namespace shared-db.
+spec:
+  workload:
+    type: autodetects.core.oam.dev
+  schematic:
+    cue:
+      template: |
+        import "strings"
+
+        parameter: {
+          secretName: string
+          password:   string
+          database:   string
+        }
+        _dbName: parameter.database
+        output: {
+          apiVersion: "batch/v1"
+          kind:       "Job"
+          metadata: {
+            name:      "compose-" + strings.Replace(parameter.database, "_", "-", -1)
+            namespace: "shared-db"
+          }
+          spec: template: spec: {
+            restartPolicy: "OnFailure"
+            containers: [{
+              name:  "psql"
+              image: "postgres:17-alpine"
+              env: [
+                {name: "PGHOST", value: "postgres"},
+                {name: "PGUSER", value: "postgres"},
+                {name: "PGPASSWORD", valueFrom: secretKeyRef: {name: "postgres-admin", key: "POSTGRES_PASSWORD"}},
+              ]
+              command: ["sh", "-c"]
+              args: ["psql -tc \"select 1 from pg_roles where rolname='\(_dbName)'\" | grep -q 1 || psql -c \"create user \(_dbName) password '\(parameter.password)'\"; psql -tc \"select 1 from pg_database where datname='\(_dbName)'\" | grep -q 1 || psql -c \"create database \(_dbName) owner \(_dbName)\""]
+            }]
+          }
+        }

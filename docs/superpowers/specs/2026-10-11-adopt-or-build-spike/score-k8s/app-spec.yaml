@@ -1,0 +1,20 @@
+apiVersion: score.dev/v1b1
+
+metadata:
+  name: orders
+
+containers:
+  api:
+    image: postgres:17-alpine
+    command: ["sh", "-c"]
+    args: ["until psql -c 'select current_database(), current_user'; do sleep 2; done; sleep infinity"]
+    variables:
+      PGHOST: ${resources.db.host}
+      PGPORT: ${resources.db.port}
+      PGDATABASE: ${resources.db.name}
+      PGUSER: ${resources.db.username}
+      PGPASSWORD: ${resources.db.password}
+
+resources:
+  db:
+    type: postgres
