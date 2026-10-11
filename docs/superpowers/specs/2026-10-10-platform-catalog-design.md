@@ -76,7 +76,7 @@ Um único caminho para criar qualquer entidade do catálogo. `--type` é a class
 | 1b | Import de arquivos no formato Backstage com plano revisado | #190 |
 | 2 | `component create` com golden path (repo + `catalog-info.yaml` + `app-spec.yaml`), discovery de Component/API, `component clone` e `component update` por PR | a criar |
 | 3 | Entity provider no Backstage lendo a Platform API; `idp/catalog/` deixa de ser location | a criar |
-| 4 | Forager: Score → Resource derivado e `ResourceRequest` | a criar |
+| 4 | Forager: Score → Resource derivado e `ResourceRequest` | #263 |
 
 Este spec detalha só a fatia 1. As outras ficam registradas aqui para manter o modelo, e cada uma terá o seu spec.
 

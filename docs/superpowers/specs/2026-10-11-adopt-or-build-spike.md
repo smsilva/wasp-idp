@@ -14,7 +14,7 @@ Executado em 2026-10-11 com o Kargo v1.12.3 (chart `oci://ghcr.io/akuity/kargo-c
 
 ### Montagem
 
-- **Imagem de teste:** o repo descartável `smsilva/kargo-spike` publica `ghcr.io/smsilva/kargo-spike` pelo workflow [`publish-workflow.yaml`](2026-10-11-adopt-or-build-spike/kargo/publish-workflow.yaml). Uma tag `vX.Y.Z` gera `X.Y.Z`; um push em outra branch gera `0.2.0-<branch>.<run>`; um `workflow_dispatch` aceita `version` e `request-id`, e o `request-id` vira a anotação OCI `me.silvios.wasp.request-id`. O `greeting-api` não serve porque só publica tags de SHA.
+- **Imagem de teste:** o repo de teste `smsilva/kargo-spike` publica `ghcr.io/smsilva/kargo-spike` pelo workflow [`publish-workflow.yaml`](2026-10-11-adopt-or-build-spike/kargo/publish-workflow.yaml). Uma tag `vX.Y.Z` gera `X.Y.Z`; um push em outra branch gera `0.2.0-<branch>.<run>`; um `workflow_dispatch` aceita `version` e `request-id`, e o `request-id` vira a anotação OCI `me.silvios.wasp.request-id`. O `greeting-api` não serve porque só publica tags de SHA.
 - **Warehouses:** `releases` (SemVer, `constraint: ">=0.0.0"`) e `branch-feat-x` (`constraint: ">=0.0.0-0"` com `allowTagsRegexes` no sufixo da branch).
 - **Stages:** `dev` (Freight direto do Warehouse) e `prod` (Freight verificado em `dev`), cada um apontando para um vcluster criado por `platform environment create`.
 - **Promoção sem GitOps:** um passo `http` faz `PATCH` (strategic merge) da imagem de um Deployment na API do vcluster, autenticado pelo token de uma ServiceAccount com só `get`/`patch` em Deployments do namespace `app`. O token fica num Secret do Project com o label `kargo.akuity.io/cred-type: generic`, lido por `${{ secret(...).token }}`.
@@ -214,4 +214,24 @@ A consolidação e os ADRs ficam na #258; o resultado vai como comentário na #2
 
 ## 4. Recomendação
 
-_Pendente (#258)._
+Nenhuma peça é adotada. Em todas, o que as ferramentas fazem bem cabe num modelo que a plataforma já tem (CRD próprio, controller, `StateWriter`), e o que elas exigem a mais (GitOps, outro formato de entrada, outra API, infraestrutura de entrega) custa mais do que a parte que economizam. O que vale é copiar os modelos que funcionaram, e cada ADR diz quando a ferramenta volta a ser candidata.
+
+| Peça | Decisão | Motivo | ADR | O que muda nas issues |
+|---|---|---|---|---|
+| Versões | **Construir** o índice da #206 | O Warehouse cria Freight só do artefato mais novo, não tem gate do Score nem `VersionConflict`, e acha o `request-id` só por varredura. | [0030](../../adr/0030-build-version-index-and-promotion-defer-kargo.md) | **#206:** o desenho continua. O contrato de build ganha manifest OCI com anotações (`source`, `revision`, `version`, `request-id`), o que exige `setup-buildx-action`. O template passa a `apiVersion: score.dev/v1b1`, porque o gate valida o schema do Score e o `platform/v1` é recusado. |
+| Promoção | **Construir** uma `Promotion` atrás do `StateWriter`; **adiar** o Kargo | No OSS, aplicar sem GitOps é contorno (`http` com TLS desligado e credencial no Kargo), e o modelo para ambientes efêmeros (`Target`) é Enterprise. | [0030](../../adr/0030-build-version-index-and-promotion-defer-kargo.md) | **#262 (nova, tópico 6):** CRD `Promotion` por ato, com owner reference para o `Environment`. O CRD `Release` do ADR 0022 não é criado. |
+| Nome do conceito | **`promote`/`Promotion`** | "release" colide com o GitHub Release, que a #206 já separou. O deck já fala em versão "promoted across Environments". | [0030](../../adr/0030-build-version-index-and-promotion-defer-kargo.md) | **#202:** a etapa `journey-release` e os comandos `platform release create`/`release status` passam a ser promoção. |
+| Resolução de recursos | **Construir** o Forager sobre o Score, com provisioners em camadas no modelo do `score-k8s`; **adiar** Radius e KubeVela | Só o `score-k8s` aceita Score e empilha branch > ambiente > padrão, mas é um gerador sem ciclo de vida e com state local. KubeVela troca o Score pelo OAM; Radius exige Bicep, não empilha e põe a credencial do bind no pedido. | [0031](../../adr/0031-forager-built-on-score-defer-radius-kubevela.md) | **#263 (nova, fatia 4 do catálogo):** controller com `ResourceRequest` como unidade de estado, compose desfeito por finalizer, bind como valores mais referência a Secret. |
+| Método de provisionamento | **Construir** com um método só (Crossplane), como provider da plataforma; **adiar** o Kratix | A Promise como fachada é boa, mas o resto (state store, GitOps no destino, conditions próprias) é infraestrutura a mais para um método, e trocar o método move a saída para o destino errado. | [0032](../../adr/0032-single-provisioning-method-defer-kratix.md) | **#254:** só o provider de Crossplane, sem `spec.method`. Um segundo método seria outro provider, com campo imutável e drift como condition `Drifted`. |
+
+### O que fica de cada ferramenta
+
+- **Kargo:** a promoção como ato com histórico, e a versão corrente de um ambiente como a última promoção com sucesso.
+- **`score-k8s`:** o casamento de provisioner por `type`/`class`/`id` em camadas ordenadas.
+- **Radius:** o compose com ciclo de vida, desfeito quando o pedido é apagado.
+- **KubeVela:** nada específico; o modelo de `override` por ordem é o mesmo das camadas do `score-k8s`.
+- **Kratix:** a API como CRD nosso, e a saúde voltando do destino como dado (`HealthRecord`), no papel da condition `Drifted`.
+
+### Limpeza
+
+O repo de teste `smsilva/kargo-spike` e o pacote `ghcr.io/smsilva/kargo-spike` continuam publicados, como referência executável do contrato de build (anotações OCI com buildx) e das recipes Terraform do Radius. O `platform-local` já voltou ao estado inicial ao fim de cada parte.
