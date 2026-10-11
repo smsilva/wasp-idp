@@ -166,7 +166,10 @@ kubectl --context k3d-platform-local --namespace platform-system \
 
 ## 13. Catálogo
 
+O dono de uma entidade é um time que já existe (ADR 0026). Como admin, crie o `team-alpha` antes:
+
 ```bash
+platform team create team-alpha
 platform catalog domain create communication --owner team-alpha
 platform catalog domain create messaging --parent communication --owner team-alpha
 platform catalog system create greeter --domain messaging --owner team-alpha
@@ -207,7 +210,10 @@ platform catalog import idp/catalog/
 ```
 
 ```
-KIND      NAME                  ACTION  DETAIL
+KIND      NAME                  ACTION     DETAIL
+Group     team-alpha            unchanged
+Group     team-beta             create
+Group     team-platform         create
 Domain    bookstore             create
 Domain    communication         create
 Domain    platform              create
@@ -227,13 +233,10 @@ Resource  notification-reports  create  system notifier
 Resource  production            create  system platform
 —         —                     skip    not a Backstage entity (idp/catalog/communication/greeter/mkdocs.yml#1)
 —         —                     skip    not a Backstage entity (idp/catalog/communication/mkdocs.yml#1)
-Group     team-alpha            skip    identity lives in Keycloak (#236)
-Group     team-beta             skip    identity lives in Keycloak (#236)
-Group     team-platform         skip    identity lives in Keycloak (#236)
 
-17 to create, 0 to update, 0 unchanged, 5 skipped.
+19 to create, 0 to update, 1 unchanged, 2 skipped.
 Apply? [y/N]: y
-✓ 17 created, 0 updated
+✓ 19 created, 0 updated
 ```
 
 Rodar de novo não grava nada:
@@ -247,7 +250,7 @@ KIND      NAME                  ACTION     DETAIL
 Domain    bookstore             unchanged
 ...
 
-0 to create, 0 to update, 17 unchanged, 5 skipped.
+0 to create, 0 to update, 20 unchanged, 2 skipped.
 nothing to do
 ```
 
@@ -268,10 +271,9 @@ System  orphan  error   spec.domain: domain 'nowhere' not found (/tmp/orphan.yam
 
 ## 15. Times
 
-Como admin, crie um time e entre nele (ADR 0026). O time chega ao token no próximo login.
+Como admin, entre no `team-alpha`, criado na seção 13 (ADR 0026). O time chega ao token no próximo login.
 
 ```bash
-platform team create team-alpha
 platform team member add team-alpha voce@example.com
 platform team get team-alpha
 platform login
@@ -279,7 +281,6 @@ platform whoami
 ```
 
 ```
-✓ team team-alpha created
 ✓ voce@example.com added to team-alpha
 team-alpha: 1 member(s)
 EMAIL             USERNAME
@@ -303,10 +304,14 @@ greetings-test  ephemeral  ready   48m      voce@example.com  —
 ✓ demo no longer shared with team-alpha
 ```
 
-Para limpar:
+Um time em uso não é apagado: o catálogo importado na seção 14 tem entidades do `team-alpha`.
 
 ```bash
 platform team delete team-alpha
+```
+
+```
+✗ 409: team 'team-alpha' is still in use: domain/communication, …; unshare or change the owner first
 ```
 
 ## 16. Limpar e sair

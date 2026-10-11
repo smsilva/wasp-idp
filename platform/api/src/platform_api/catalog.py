@@ -13,6 +13,7 @@ from .auth import Principal, current_principal
 from .environments import ADMIN_GROUP, is_owner_or_admin
 from .journal import Journal
 from .state import CATALOG_GROUP, GROUP, VERSION, AlreadyExists, Conflict, NotFound
+from .teams import known_teams
 
 # Who created the entity (token `sub`). Not the owner: the owner is a team, the creator a person.
 CREATED_BY_ANNOTATION = f"{GROUP}/created-by"
@@ -124,7 +125,7 @@ def dependents(state, kind: Kind, name: str) -> list[str]:
   return found
 
 
-def router(state, journal: Journal) -> APIRouter:
+def router(state, journal: Journal, teams=None) -> APIRouter:
   routes = APIRouter(prefix="/v1/catalog")
 
   def kind_of(plural: str) -> Kind:
@@ -168,6 +169,9 @@ def router(state, journal: Journal) -> APIRouter:
       spec = spec_from(kind, request)
     except InvalidRequest as error:
       raise HTTPException(422, str(error))
+    # The owner is a team (ADR 0026): an entity cannot be owned by a name nobody can be a member of.
+    if spec["owner"] not in known_teams(teams):
+      raise HTTPException(422, f"{kind.singular} '{request.name}': team '{spec['owner']}' not found")
     parent = spec.get(kind.parent_field) if kind.parent_field else None
     if parent is not None:
       try:

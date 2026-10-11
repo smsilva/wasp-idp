@@ -5,7 +5,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from fakes import FakeState
+from fakes import CATALOG_TEAMS, FakeState, FakeTeams
 from platform_api.app import create_app
 from platform_api.catalog import CREATED_BY_ANNOTATION
 from platform_api.journal import Journal
@@ -32,7 +32,7 @@ def tokens():
 
 @pytest.fixture
 def client(state, journal_path, tokens):
-  return TestClient(create_app(state, Journal(journal_path), tokens.verifier()))
+  return TestClient(create_app(state, Journal(journal_path), tokens.verifier(), teams=FakeTeams(*CATALOG_TEAMS)))
 
 
 def bearer(tokens, **claims):
@@ -177,12 +177,13 @@ def test_the_repo_catalog_imports_cleanly(client, admin):
   plan = review(client, admin, load_catalog())
   summary = plan["summary"]
   assert (summary["create"], summary["error"], summary["forbidden"]) == (17, 0, 0)
-  assert summary["skip"] == 5  # 3 Groups of org.yaml and 2 mkdocs.yml
+  assert summary["unchanged"] == 3  # the Groups of org.yaml: the fixture's teams already exist
+  assert summary["skip"] == 2  # 2 mkdocs.yml
   created = {(item["kind"], item["name"]) for item in plan["items"] if item["action"] == "create"}
   assert {("Domain", "platform"), ("System", "platform"), ("Domain", "messaging"), ("Resource", "greeting-avatars")} <= created
   applied = client.post(ROUTE, json={"documents": load_catalog(), "dryRun": False, "planHash": plan["planHash"]}, headers=admin)
   assert applied.status_code == 200, applied.text
-  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 17
+  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 20  # 17 entities and 3 teams
 
 
 class KubeError(Exception):
@@ -201,3 +202,21 @@ def test_unexpected_write_error_is_reported_short(client, admin, state):
   assert response.status_code == 409
   failed = response.json()["error"]["plan"]["items"][0]["failed"]
   assert failed == "kubernetes error 500: Internal Server Error"
+
+
+def test_the_repo_catalog_creates_its_teams(state, journal_path, tokens, admin):
+  teams = FakeTeams()
+  client = TestClient(create_app(state, Journal(journal_path), tokens.verifier(), teams=teams))
+  plan = review(client, admin, load_catalog())
+  assert [(item["kind"], item["action"]) for item in plan["items"][:3]] == [("Group", "create")] * 3
+  assert plan["summary"]["create"] == 20
+  applied = client.post(ROUTE, json={"documents": load_catalog(), "dryRun": False, "planHash": plan["planHash"]}, headers=admin)
+  assert applied.status_code == 200, applied.text
+  assert teams.names() == ["team-alpha", "team-beta", "team-platform"]
+  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 20
+
+
+def test_import_needs_teams(state, journal_path, tokens, admin):
+  client = TestClient(create_app(state, Journal(journal_path), tokens.verifier()))
+  response = client.post(ROUTE, json={"documents": load_catalog()}, headers=admin)
+  assert response.status_code == 503

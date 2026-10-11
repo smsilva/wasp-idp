@@ -217,6 +217,14 @@ def test_team_shared_by_an_environment_cannot_be_deleted(client, keycloak, token
   assert client.delete("/v1/teams/team-alpha").status_code == 204
 
 
+def test_team_that_owns_catalog_entities_cannot_be_deleted(client):
+  client.post("/v1/teams", json={"name": "team-alpha"})
+  assert client.post("/v1/catalog/domains", json={"name": "owned", "owner": "team-alpha"}).status_code == 201
+  response = client.delete("/v1/teams/team-alpha")
+  assert response.status_code == 409
+  assert "domain/owned" in response.json()["error"]["message"]
+
+
 def test_delete_team(client, keycloak):
   client.post("/v1/teams", json={"name": "team-alpha"})
   assert client.delete("/v1/teams/team-alpha").status_code == 204

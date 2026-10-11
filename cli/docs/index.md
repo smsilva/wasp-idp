@@ -271,7 +271,7 @@ kubectl --context k3d-platform-local \
 
 ## 11. Catálogo
 
-Domínios, sistemas e recursos que a plataforma guarda. Domínio só `platform-admins` cria; sistema e recurso, qualquer usuário.
+Domínios, sistemas e recursos que a plataforma guarda. Domínio só `platform-admins` cria; sistema e recurso, qualquer usuário. O `--owner` é um time que já existe (seção 12): `platform team create team-alpha`, ou o import de um `Group`.
 
 ```bash
 platform catalog domain create communication --owner team-alpha
@@ -319,11 +319,11 @@ platform catalog import idp/catalog/ --yes      # sem perguntar (pipeline)
 | `create` | não existe na plataforma |
 | `update` | existe e muda; o detalhe mostra `campo: antes → depois` |
 | `unchanged` | existe igual |
-| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), Group vira time com a #236 e User fica no Keycloak, Template chega com a #201 |
+| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), User fica no Keycloak, Template chega com a #201 |
 | `forbidden` | sem permissão: domínio só `platform-admins`; sistema e recurso só quem criou |
 | `error` | campo faltando ou referência quebrada; o detalhe diz o campo e o arquivo |
 
-Com `forbidden` ou `error` nada é aplicado. O import nunca apaga: o que existe na plataforma e não está nos arquivos fica como está. Um campo ausente no arquivo (a `description`, por exemplo) é removido da entidade. Se o catálogo mudar entre o plano e a confirmação, a API recusa e a CLI mostra o plano novo.
+Um `Group` vira time (só `platform-admins` criam; membros não são importados) e entra no plano antes das outras entidades. O `spec.owner` de cada entidade escrita precisa ser um time que existe ou um `Group` do mesmo import. Com `forbidden` ou `error` nada é aplicado. O import nunca apaga: o que existe na plataforma e não está nos arquivos fica como está. Um campo ausente no arquivo (a `description`, por exemplo) é removido da entidade. Se o catálogo mudar entre o plano e a confirmação, a API recusa e a CLI mostra o plano novo.
 
 ## 12. Times
 
@@ -343,7 +343,7 @@ EMAIL             USERNAME
 voce@example.com  voce@example.com
 ```
 
-O membro precisa ter entrado na plataforma uma vez, com o e-mail verificado: antes disso, o Keycloak não o conhece e a API responde `404`. O time chega ao token no próximo `platform login`, e o `platform whoami` passa a mostrá-lo junto dos grupos.
+Um time em uso, dono de entidades do catálogo ou com ambientes compartilhados, não é apagado (`409`). O membro precisa ter entrado na plataforma uma vez, com o e-mail verificado: antes disso, o Keycloak não o conhece e a API responde `404`. O time chega ao token no próximo `platform login`, e o `platform whoami` passa a mostrá-lo junto dos grupos.
 
 ### Compartilhar um ambiente
 

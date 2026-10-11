@@ -6,20 +6,8 @@ from fastapi.testclient import TestClient
 
 from platform_api.app import create_app
 from platform_api.journal import Journal
-from platform_api.teams import TeamsUnavailable
-from fakes import FakeState
+from fakes import FakeState, FakeTeams
 from tokens import TokenFactory
-
-
-class FakeTeams:
-  def __init__(self, *names):
-    self.teams = set(names)
-    self.down = False
-
-  def names(self):
-    if self.down:
-      raise TeamsUnavailable("Keycloak unreachable")
-    return sorted(self.teams)
 
 
 @pytest.fixture
