@@ -15,11 +15,10 @@ import re
 import time
 import zipfile
 from datetime import datetime, timedelta, timezone
-from importlib import resources as package_files
 
 import httpx
-import jsonschema
 import yaml
+from wasp_score import APP_SPEC, RESOURCE_TYPES, check
 
 from .github import GitHubApp, GitHubError
 from .reconciler import BACKOFF_MAX, BACKOFF_START, format_time, parse_time
@@ -42,9 +41,6 @@ ARTIFACT_LIMIT = 1024 * 1024
 RESULT_LIMIT = 64 * 1024
 # A dispatched run that does not show up by its run-name in this long breaks the contract.
 RUN_LOOKUP = timedelta(minutes=10)
-APP_SPEC = "app-spec.yaml"
-# Resource types the platform provisions today; the controller's --resource-types overrides it.
-RESOURCE_TYPES = ("postgres", "dns", "route")
 VERSION_PATTERN = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -60,11 +56,6 @@ log = logging.getLogger("scm-github-provider")
 
 def utcnow() -> datetime:
   return datetime.now(timezone.utc)
-
-
-def score_schema() -> dict:
-  """score.dev/v1b1, vendored from score-spec/spec: never fetched at run time."""
-  return json.loads(package_files.files(__package__).joinpath("schemas/score-v1b1.json").read_text(encoding="utf-8"))
 
 
 class Outcome(Exception):
@@ -127,29 +118,6 @@ def check_result(result: dict, spec: dict, component: str) -> dict:
   return {field: result[field] for field in ("version", "image", "digest", "commit", "branch", "requestId")}
 
 
-def spec_errors(text: str, schema: dict, resource_types, resource_exists) -> tuple[list[dict], list[dict]]:
-  """The errors of an app-spec.yaml, each a field and a reason, and the resources it declares."""
-  try:
-    document = yaml.safe_load(text)
-  except yaml.YAMLError as error:
-    return [{"field": APP_SPEC, "reason": f"not valid YAML: {error}"}], []
-  errors = []
-  for error in sorted(jsonschema.Draft202012Validator(schema).iter_errors(document), key=lambda item: list(map(str, item.absolute_path))):
-    field = ".".join(str(part) for part in error.absolute_path) or "(root)"
-    errors.append({"field": field, "reason": error.message[:300]})
-  resources = (document or {}).get("resources") if isinstance(document, dict) else None
-  declared = []
-  for name, item in (resources or {}).items() if isinstance(resources, dict) else ():
-    if not isinstance(item, dict) or not isinstance(item.get("type"), str):
-      continue
-    declared.append({"name": str(name), "type": item["type"]})
-    if item["type"] not in resource_types:
-      errors.append({"field": f"resources.{name}.type", "reason": f"'{item['type']}' is not a resource type of the platform ({', '.join(resource_types)})"})
-    if isinstance(item.get("id"), str) and not resource_exists(item["id"]):
-      errors.append({"field": f"resources.{name}.id", "reason": f"resource '{item['id']}' is not in the catalog"})
-  return errors, declared
-
-
 class BuildReconciler:
   def __init__(self, builds, connections, versions, resources, secrets, github_factory=GitHubApp, now=utcnow, clock=time.monotonic, resource_types=RESOURCE_TYPES):
     self.builds = builds
@@ -161,7 +129,6 @@ class BuildReconciler:
     self.now = now
     self.clock = clock
     self.resource_types = tuple(resource_types)
-    self.schema = score_schema()
     # name -> (seconds of the next wait, monotonic time of the next try), while a build fails.
     self.backoff: dict[str, tuple[float, float]] = {}
     # connection name -> (installation client, monotonic time it stops being reused).
@@ -190,8 +157,8 @@ class BuildReconciler:
       self._dispatched(obj, installation, work)
       self._running(obj, installation, work)
       self._succeeded(obj, installation, work)
-      self._spec_validated(obj, installation, work)
-      self._registered(obj, work)
+      document = self._spec_validated(obj, installation, work)
+      self._registered(obj, installation, work, document)
       failed = False
     except Waiting as waiting_for:
       self._set(work, "Ready", False, BUILDING, str(waiting_for))
@@ -320,27 +287,35 @@ class BuildReconciler:
     work["result"] = check_result(read_result(archive), spec, spec["component"])
     self._set(work, "Succeeded", True, "Built", f"image {work['result']['image']}:{work['result']['version']} pushed")
 
-  def _spec_validated(self, obj: dict, installation, work: dict) -> None:
-    """A version without a valid spec does not exist for the platform: the image stays in the
-    registry, the version is not registered."""
-    if self._done(work, "SpecValidated"):
-      return
-    commit = work["result"]["commit"]
+  def _app_spec(self, obj: dict, installation, commit: str) -> str:
     text = installation.file_at(obj["spec"]["repo"], APP_SPEC, commit)
     if text is None:
       raise Outcome("InvalidSpec", f"{APP_SPEC} not found at {commit[:7]}", [{"field": APP_SPEC, "reason": "not found"}])
-    errors, declared = spec_errors(text.decode("utf-8", errors="replace"), self.schema, self.resource_types, self._resource_exists)
-    work["appSpec"] = {"resources": declared}
-    if errors:
-      raise Outcome("InvalidSpec", f"{APP_SPEC} at {commit[:7]}: {len(errors)} error(s)", errors)
+    return text.decode("utf-8", errors="replace")
+
+  def _spec_validated(self, obj: dict, installation, work: dict) -> dict | None:
+    """A version without a valid spec does not exist for the platform: the image stays in the
+    registry, the version is not registered. Returns the validated document, None when an earlier
+    pass validated it."""
+    if self._done(work, "SpecValidated"):
+      return None
+    commit = work["result"]["commit"]
+    result = check(self._app_spec(obj, installation, commit), self._resource_exists, self.resource_types)
+    work["appSpec"] = {"resources": result.resources}
+    if not result.valid:
+      raise Outcome("InvalidSpec", f"{APP_SPEC} at {commit[:7]}: {len(result.errors)} error(s)", result.errors)
     self._set(work, "SpecValidated", True, "Valid", f"{APP_SPEC} valid at {commit[:7]}")
+    return result.document
 
   def _resource_exists(self, name: str) -> bool:
     return self.resources.get(name) is not None
 
-  def _registered(self, obj: dict, work: dict) -> None:
+  def _registered(self, obj: dict, installation, work: dict, document: dict | None) -> None:
     spec = obj["spec"]
     result = work["result"]
+    if document is None:
+      # Validated in an earlier pass (a restart, or a failure after it): read again at the same commit.
+      document = yaml.safe_load(self._app_spec(obj, installation, result["commit"]))
     name = version_name(spec["component"], result["version"])
     body = {
       "apiVersion": f"{CATALOG_GROUP}/{VERSION}",
@@ -355,6 +330,8 @@ class BuildReconciler:
         "branch": result["branch"],
         "createdAt": format_time(self.now()),
         "build": obj["metadata"]["name"],
+        # The Workload Spec (ADR 0033): what a deploy of this version renders, without GitHub.
+        "appSpec": document,
       },
     }
     try:

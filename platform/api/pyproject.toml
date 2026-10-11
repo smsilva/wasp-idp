@@ -10,11 +10,14 @@ dependencies = [
   "pyjwt[crypto]>=2.9",
   "httpx>=0.28.1",
   "wasp-templates",
+  "wasp-score",
 ]
 
-# The renderer shared with the CLI, the API and the component creation controller (#204).
+# The renderer shared with the CLI, the API and the component creation controller (#204), and the
+# Score gate shared with the build controller (#291).
 [tool.uv.sources]
 wasp-templates = { path = "../libs/templates", editable = true }
+wasp-score = { path = "../libs/score", editable = true }
 
 [dependency-groups]
 dev = [

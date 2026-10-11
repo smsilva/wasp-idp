@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import builds, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, scm, templates, teams as team_routes
+from . import builds, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, scm, templates, teams as team_routes, workload_specs
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -265,6 +265,7 @@ def create_app(
   app.include_router(templates.router(state, journal, teams))
   app.include_router(components.router(state, journal, teams))
   app.include_router(builds.router(state, journal))
+  app.include_router(workload_specs.router(state))
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
   app.include_router(cloud_accounts.router(state, journal, base_identity))

@@ -68,8 +68,11 @@ nav:
           - 20.1 Build a branch: walkthrough/builds/20-1-create.md
           - 20.2 The versions of a component: walkthrough/builds/20-2-list.md
           - 20.3 What a build refuses: walkthrough/builds/20-3-refused.md
-      - 21. Remove the GitHub connection: walkthrough/scm-connection/21-remove.md
-      - 22. Clean up and sign out: walkthrough/22-cleanup.md
+      - Workloads:
+          - 21.1 Validate a spec before the build: walkthrough/workloads/21-1-validate.md
+          - 21.2 The spec of a version: walkthrough/workloads/21-2-spec.md
+      - 22. Remove the GitHub connection: walkthrough/scm-connection/22-remove.md
+      - 23. Clean up and sign out: walkthrough/23-cleanup.md
       - Without a browser: walkthrough/cli-smoke.md
   - Reference:
       - reference/index.md
@@ -83,6 +86,7 @@ nav:
       - Cloud accounts: reference/cloud-accounts.md
       - SCM connections: reference/scm-connections.md
       - Builds: reference/builds.md
+      - Workloads: reference/workloads.md
       - JSON output: reference/json-output.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md

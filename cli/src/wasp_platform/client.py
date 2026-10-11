@@ -108,6 +108,13 @@ class PlatformClient:
   def list_versions(self, component: str | None = None) -> list[dict]:
     return self._request("GET", "/v1/versions", params={"component": component} if component else {})["items"]
 
+  def validate_workload_spec(self, content: str) -> dict:
+    return self._request("POST", "/v1/workload-specs:validate", json={"content": content})
+
+  def get_workload_spec(self, component: str, version: str | None = None, branch: str | None = None) -> dict:
+    params = {key: value for key, value in (("version", version), ("branch", branch)) if value is not None}
+    return self._request("GET", f"/v1/catalog/components/{quote(component, safe='')}/spec", params=params)
+
   def list_teams(self) -> list[dict]:
     return self._request("GET", "/v1/teams")["items"]
 

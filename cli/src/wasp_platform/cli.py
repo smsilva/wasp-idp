@@ -1,6 +1,6 @@
 import typer
 
-from .commands import build, catalog, cloud, environment, scm, team
+from .commands import build, catalog, cloud, environment, scm, team, workload
 from .commands.auth import login, logout, whoami
 from .commands.init import init
 
@@ -12,6 +12,7 @@ app.command("whoami")(whoami)
 app.add_typer(environment.app, name="environment")
 app.add_typer(catalog.app, name="catalog")
 app.add_typer(build.app, name="build")
+app.add_typer(workload.app, name="workload")
 app.add_typer(team.app, name="team")
 app.add_typer(cloud.app, name="cloud")
 app.add_typer(scm.app, name="scm")

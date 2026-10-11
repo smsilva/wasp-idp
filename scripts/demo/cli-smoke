@@ -17,7 +17,9 @@ manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
 schema, a name already in the index, a connection that is not ready), the
 refusals of build create (outside the owner team, unknown component, a malformed
-version, an org with no connection), and a cloud account (ADR 0029): refused with a clear message without an
+version, an org with no connection), the Workload Spec (spec validate of a
+valid and an invalid Score, spec get of a Version written by kubectl, by version
+and by branch, and SpecNotIndexed for a Version without it), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -50,6 +52,8 @@ connection="smoke-scm-${RANDOM}"
 component="smoke-component-${RANDOM}"
 taken_component="smoke-taken-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
+workload_component="smoke-workload-${RANDOM}"
+workload_directory="$(mktemp --directory)"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -102,8 +106,9 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" --ignore-not-found > /dev/null 2>&1 || true
-  rm --recursive --force "${smoke_config}" "${render_directory}"
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${workload_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}" > /dev/null 2>&1 || true
+  rm --recursive --force "${smoke_config}" "${render_directory}" "${workload_directory}"
 }
 trap cleanup EXIT
 
@@ -383,6 +388,84 @@ if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
   exit 1
 fi
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${build_component}"
+
+step "workload spec validate|get: the Score gate and the spec of a version (#291)"
+# The seed Score, rendered: what a component created from python-service carries.
+sed \
+  --expression 's/\${{ values.name }}/'"${workload_component}"'/' \
+  --expression 's/\${{ values.port }}/8000/' \
+  platform/templates/python-service/content/app-spec.yaml > "${workload_directory}/app-spec.yaml"
+sed 's/^    type: postgres$/    type: redis/' "${workload_directory}/app-spec.yaml" > "${workload_directory}/invalid.yaml"
+# Open to any signed-in user, before any build.
+platform login --test-user
+output="$(cd "${workload_directory}" && platform workload spec validate)"
+expect_output "app-spec.yaml valid · db (postgres), dns, route" "${output}"
+expect_failure "resources.db.type: 'redis' is not a resource type of the platform" \
+  platform workload spec validate \
+    --file "${workload_directory}/invalid.yaml"
+# Versions as the build registers them: the newest of the branch has the spec, an older one predates it.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${workload_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${workload_component}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.1.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.1.0"
+  image: ghcr.io/smoke-no-connection/${workload_component}
+  digest: "sha256:$(printf 'a%.0s' {1..64})"
+  commit: "$(printf '1%.0s' {1..40})"
+  branch: feat/greetings
+  createdAt: "2026-10-11T10:00:00Z"
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.2.0-greetings.2222222
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.2.0-greetings.2222222"
+  image: ghcr.io/smoke-no-connection/${workload_component}
+  digest: "sha256:$(printf 'b%.0s' {1..64})"
+  commit: "$(printf '2%.0s' {1..40})"
+  branch: feat/greetings
+  createdAt: "2026-10-11T11:00:00Z"
+  appSpec:
+$(sed 's/^/    /' "${workload_directory}/app-spec.yaml")
+MANIFEST
+output="$(platform workload spec get --component "${workload_component}" --branch feat/greetings)"
+expect_output "# ${workload_component} 0.2.0-greetings.2222222 · feat/greetings @ 2222222" "${output}"
+expect_output "targetPort: 8000" "${output}"
+output="$(platform workload spec get --component "${workload_component}" --output json)"
+expect_output '"version": "0.2.0-greetings.2222222"' "${output}"
+expect_failure "SpecNotIndexed" \
+  platform workload spec get \
+    --component "${workload_component}" \
+    --version 0.1.0
+expect_failure "no version built from branch 'main' in the index" \
+  platform workload spec get \
+    --component "${workload_component}" \
+    --branch main
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
+platform login --test-admin
 
 step "scm connection remove"
 platform scm connection remove "${connection}"

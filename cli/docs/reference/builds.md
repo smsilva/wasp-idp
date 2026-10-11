@@ -43,9 +43,9 @@ The CI holds no platform credential: the platform pulls the run and the artifact
 | `Dispatched` | `WorkflowNotFound`: no `platform-build.yaml` on the default branch. `BranchNotFound`. `ContractViolation`: the workflow refused the inputs (no `workflow_dispatch`, or no `request-id`/`version` input) |
 | `Running` | `ContractViolation`: no run named `platform-build <request-id>` 10 minutes after the dispatch. While the run is queued or in progress, `Ready` is `False` with reason `Building` |
 | `Succeeded` | `BuildFailed`: the run did not end in success (the message has the run URL). `ContractViolation`: no `platform-build` artifact, or a `platform-build.json` that breaks the contract (missing fields, another `requestId` or branch, a version other than `--version`) |
-| `SpecValidated` | `InvalidSpec`, with one error per field: `app-spec.yaml` missing at the commit, not Score (`score.dev/v1b1`, schema vendored in the provider), a resource type the platform does not provision (`postgres`, `dns`, `route`), or a `resources.<name>.id` that is not a Resource in the catalog |
-| `Ready` | `VersionConflict`: the version is in the index from another commit; the entry is left untouched |
+| `SpecValidated` | `InvalidSpec`, with one error per field: `app-spec.yaml` missing at the commit, not Score (`score.dev/v1b1`, schema vendored in `platform/libs/score`), a resource type the platform does not provision (`postgres`, `dns`, `route`), or a `resources.<name>.id` that is not a Resource in the catalog |
+| `Ready` | `VersionConflict`: the version is in the index from another commit; the entry is left untouched. On success, the version keeps the validated spec ([Workloads](workloads.md)) |
 
 GitHub and cluster failures (`RateLimited`, `GitHubUnavailable`, `GitHubRejected`, `StepFailed`) and the connection reasons (`ConnectionNotFound`, `ConnectionNotReady`, `CredentialMissing`) behave as for [components](catalog.md#components). `--wait` stops at every reason above except `Building` and the retried ones; it waits 1200 s by default.
 
-On `InvalidSpec` the image is in the registry, but the version does not exist for the platform.
+On `InvalidSpec` the image is in the registry, but the version does not exist for the platform. `platform workload spec validate` runs the same check on a local file, before the build.
