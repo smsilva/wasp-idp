@@ -10,7 +10,7 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 
 ## Steps
 
-1. **Pick the issue.** With an argument, use that issue number. Without one, run `scripts/board/queue next`: an `In Progress` item wins over the top of `Todo`. If both are empty, show `scripts/board/queue list --status Backlog | head` and ask which one to promote.
+1. **Pick the issue.** With an argument, use that issue number. Without one, run `scripts/board/queue next`: an `In Progress` item wins over the top of `Todo`, and an issue with open sub-issues is skipped (the parent stays `In Progress` while its sub-issues are the work). If both are empty, show `scripts/board/queue list --status Backlog | head` and ask which one to promote.
 
 2. **Read the whole issue.** `gh issue view <n> --comments` omits the body, so run both:
 
@@ -20,6 +20,8 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
    ```
 
    The last comment is often a handoff (last step, next step, open decision): resume from it.
+
+   A sub-issue carries only its cut and the decisions taken; the full scope and acceptance criteria live in the parent. Read the parent the same way (`gh issue view <n> --json parent --jq .parent.number`).
 
 3. **Check the dependencies** listed in the body: each one is closed (`gh issue view <dep> --json state`) or the code it delivers is on `main`. If one is missing, report it and stop.
 
