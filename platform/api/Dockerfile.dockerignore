@@ -1,0 +1,7 @@
+# The context is platform/ (see Dockerfile): only the API and the libraries it depends on.
+*
+!api
+!libs
+**/.venv
+**/tests
+**/__pycache__

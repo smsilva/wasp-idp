@@ -9,7 +9,12 @@ dependencies = [
   "kubernetes>=31.0",
   "pyjwt[crypto]>=2.9",
   "httpx>=0.28.1",
+  "wasp-templates",
 ]
+
+# The renderer shared with the CLI, the API and the component creation controller (#204).
+[tool.uv.sources]
+wasp-templates = { path = "../libs/templates", editable = true }
 
 [dependency-groups]
 dev = [

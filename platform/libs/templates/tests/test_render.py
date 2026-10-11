@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from wasp_platform.templates.render import RenderError, annotate_origin, load_template, render
+from wasp_templates.render import RenderError, annotate_origin, load_template, render
 
-REPO = Path(__file__).parents[2]
+REPO = Path(__file__).parents[4]
 SEED = REPO / "platform" / "templates" / "python-service"
 
 
@@ -78,7 +78,7 @@ def test_load_template_reads_platform_format(tmp_path):
 def test_seed_renders_clean(tmp_path):
   template = load_template(SEED)
   out = tmp_path / "demo"
-  render(template.content, out, {**template.defaults(), "name": "demo", "owner": "team-alpha", "description": "Demo", "system": None}, template.copy_without_rendering)
+  render(template.content, out, {**template.defaults(), "name": "demo", "owner": "team-alpha", "description": "Demo", "system": "greeter"}, template.copy_without_rendering)
   annotate_origin(out, "python-service@abc")
   rendered = [path for path in out.rglob("*") if path.is_file() and not path.match(".github/workflows/*")]
   assert rendered and not any("${{" in path.read_text() for path in rendered)
@@ -86,7 +86,11 @@ def test_seed_renders_clean(tmp_path):
   assert (out / ".github" / "workflows" / "ci.yaml").read_bytes() == original.read_bytes()
   catalog = (out / "catalog-info.yaml").read_text()
   assert "name: demo" in catalog
+  assert "system: greeter" in catalog
   assert "platform.wasp.silvios.me/template: python-service@abc" in catalog
+  assert (out / "docs" / "prd.md").read_text().startswith("# demo: product requirements")
+  assert (out / "AGENTS.md").is_file()
+  assert "type: postgres" in (out / "app-spec.yaml").read_text()
 
 
 def test_annotate_origin_keeps_the_rest(tmp_path):

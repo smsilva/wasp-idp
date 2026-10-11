@@ -1,8 +1,8 @@
 """Renders a component template (ADR 0024).
 
 Jinja2 with the delimiters of the Backstage scaffolder (`${{ … }}`) and its `dump` filter, so
-Backstage templates render without rewriting. Shared by `platform catalog template render` and,
-later, by the service behind `component create`.
+Backstage templates render without rewriting. Shared by `platform catalog template render` (CLI),
+the Platform API and the controller behind `component create` (#204).
 """
 import fnmatch
 import json
