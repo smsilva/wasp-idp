@@ -26,6 +26,8 @@ spec:
         config:
           method: PATCH
           url: ${{ target.params.apiServer }}/apis/apps/v1/namespaces/app/deployments/kargo-spike
+          # Spike shortcut only: the http step has no CA field, so TLS to the
+          # self-signed vcluster API is not verified. Do not copy.
           insecureSkipTLSVerify: true
           headers:
           - name: Authorization
