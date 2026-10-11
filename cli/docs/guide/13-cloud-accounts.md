@@ -3,7 +3,8 @@
 Uma cloud account é uma conta AWS em que a plataforma pode criar coisas (ADR 0029). A plataforma não guarda segredo por conta: ela assume uma role da conta a partir da credencial base do `init --aws-profile`. Qualquer usuário registra as próprias contas, sem aprovação; a posse é provada pela trust policy que só quem administra a conta consegue aplicar.
 
 ```bash
-platform cloud account add nonprod-aws --role-arn arn:aws:iam::123456789012:role/platform
+platform cloud account add nonprod-aws \
+  --role-arn arn:aws:iam::123456789012:role/platform
 ```
 
 ```
@@ -33,6 +34,7 @@ O ExternalId é gerado pela API, um por conta, e impede que alguém registre a r
 
 ```bash
 platform cloud account verify nonprod-aws --wait
+
 platform cloud account list
 ```
 

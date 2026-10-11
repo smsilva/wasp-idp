@@ -2,7 +2,9 @@
 
 ```bash
 cd wasp-idp/cli
+
 uv sync
+
 uv run platform --help
 ```
 
@@ -10,6 +12,7 @@ Para ter `platform` no `PATH`, na raiz do repo:
 
 ```bash
 make cli
+
 platform --help
 ```
 

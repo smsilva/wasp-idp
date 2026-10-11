@@ -4,7 +4,9 @@ Um time é um grupo do Keycloak que a Platform API mantém (ADR 0026). É ele qu
 
 ```bash
 platform team create team-alpha
+
 platform team member add team-alpha voce@example.com
+
 platform team get team-alpha
 ```
 
@@ -23,8 +25,13 @@ Um time em uso, dono de entidades do catálogo ou com ambientes compartilhados, 
 Um ambiente nasce privado. Quem o criou pode compartilhá-lo com os times de que faz parte; com outros times, só `platform-admins`.
 
 ```bash
-platform environment create review --profile ephemeral --share-with team-alpha --wait
+platform environment create review \
+  --profile ephemeral \
+  --share-with team-alpha \
+  --wait
+
 platform environment share greetings-test --team team-alpha
+
 platform environment unshare greetings-test --team team-alpha
 ```
 

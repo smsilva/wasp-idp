@@ -4,8 +4,12 @@ O login usa o Google através do Keycloak. Exporte as credenciais do OAuth clien
 
 ```bash
 export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
+
 export GOOGLE_CLIENT_SECRET=<secret>
-platform init --target local --admin voce@example.com
+
+platform init \
+  --target local \
+  --admin voce@example.com
 ```
 
 ```

@@ -1,0 +1,23 @@
+# Control plane
+
+```bash
+time platform init \
+  --target local \
+  --admin voce@example.com
+
+cat ~/.config/platform/config.yaml
+```
+
+``` { .text .output title="saída" }
+creating cluster platform-local …
+applying CRDs …
+deploying Keycloak …
+waiting for Keycloak …
+applying the realm platform …
+building the Platform API image …
+deploying the Platform API …
+✓ Platform API at http://127.0.0.1:9090 · config in ~/.config/platform/config.yaml
+✓ Keycloak issuer http://localhost:8180/realms/platform
+
+real    2m56s
+```
