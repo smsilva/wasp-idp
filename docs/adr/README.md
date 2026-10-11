@@ -33,3 +33,4 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0023](0023-platform-catalog-ownership.md) | Catálogo da plataforma: Domain, System e Resource como CRDs, Component e API no repo, Backstage como leitor; resolvedor Forager |
 | [0024](0024-component-templates-in-catalog.md) | Templates de component como entidade do catálogo: conteúdo no Git, um padrão por tipo, renderização compatível com o Backstage, import do scaffolder |
 | [0025](0025-scm-connections-in-platform-api.md) | SCM connections na Platform API: CRD `ScmConnection` neutro de vendor, GitHub App por manifest flow, segredos atrás de um `SecretStore` |
+| [0026](0026-environment-sharing-with-teams.md) | Compartilhamento de ambientes com times: time é grupo do Keycloak sob `/teams`, mantido pela Platform API; `spec.sharedWith` no `Environment`; kubeconfig único na fatia 1, OIDC no vcluster na fatia 2 |
