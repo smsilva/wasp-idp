@@ -17,6 +17,7 @@ from .state import CATALOG_GROUP, GROUP, VERSION, AlreadyExists, Conflict, NotFo
 # Who created the entity (token `sub`). Not the owner: the owner is a team, the creator a person.
 CREATED_BY_ANNOTATION = f"{GROUP}/created-by"
 LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+DESCRIPTION_MAX = 1000
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,14 @@ class EntityRequest(BaseModel):
   domain: str | None = None
   system: str | None = None
   type: str | None = None
+
+  @field_validator("description")
+  @classmethod
+  def check_description(cls, value: str | None) -> str | None:
+    # One line about it; also keeps the CR far below the kube object size limit.
+    if value is not None and len(value) > DESCRIPTION_MAX:
+      raise ValueError(f"at most {DESCRIPTION_MAX} characters")
+    return value
 
   @field_validator("name", "owner", "parent", "domain", "system", "type")
   @classmethod

@@ -183,3 +183,21 @@ def test_the_repo_catalog_imports_cleanly(client, admin):
   applied = client.post(ROUTE, json={"documents": load_catalog(), "dryRun": False, "planHash": plan["planHash"]}, headers=admin)
   assert applied.status_code == 200, applied.text
   assert review(client, admin, load_catalog())["summary"]["unchanged"] == 17
+
+
+class KubeError(Exception):
+  """Shaped like kubernetes.client.ApiException: str() carries headers and body."""
+  status, reason = 500, "Internal Server Error"
+
+  def __str__(self):
+    return "(500)\nReason: Internal Server Error\nHTTP response headers: {'Audit-Id': 'secret'}\nHTTP response body: {...}"
+
+
+def test_unexpected_write_error_is_reported_short(client, admin, state):
+  def boom(obj):
+    raise KubeError()
+  state.on_create = boom
+  response = client.post(ROUTE, json={"documents": TREE, "dryRun": False}, headers=admin)
+  assert response.status_code == 409
+  failed = response.json()["error"]["plan"]["items"][0]["failed"]
+  assert failed == "kubernetes error 500: Internal Server Error"
