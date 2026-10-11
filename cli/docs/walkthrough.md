@@ -139,6 +139,15 @@ env-greetings-test   Active   40s
 platform environment get greetings-test
 kubectl --kubeconfig ~/.config/platform/environments/greetings-test.kubeconfig get nodes
 kubectl --kubeconfig ~/.config/platform/environments/greetings-test.kubeconfig create deployment web --image nginx:alpine
+kubectl --kubeconfig ~/.config/platform/environments/greetings-test.kubeconfig auth whoami
+```
+
+O kubeconfig chama `platform environment credential greetings-test` a cada comando. O `auth whoami` mostra a sua identidade no vcluster: `system:serviceaccount:platform-identities:<sub>`.
+
+Como admin, grave também o kubeconfig de administrador do vcluster:
+
+```bash
+platform environment get greetings-test --admin
 ```
 
 ## 11. Segundo ambiente, em paralelo

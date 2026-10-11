@@ -9,9 +9,11 @@ Runs the CLI walkthrough end to end without a browser (#179), on the local targe
 init, login as the test user, the refusals a non-admin gets, an environment
 created and deleted, then login as the test admin, the catalog import of
 idp/catalog/, a team with two test users, checked in the token, an
-environment shared with that team (the teammate gets the kubeconfig, cannot
-delete it, and loses it after unshare), and the templates (list, render,
-import plan). Stops at the first failure with a non-zero exit code.
+environment shared with that team (the teammate gets a personal kubeconfig whose
+token the Platform API issues (ADR 0028), cannot delete the environment nor get
+its admin kubeconfig, and loses access after unshare, in kubectl too), and the
+templates (list, render, import plan). Stops at the first failure with a
+non-zero exit code.
 
 It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
 your own login in ~/.config/platform/credentials is never touched.
@@ -190,6 +192,16 @@ expect_output "platform-smoke@platform.local" "${output}"
 output="$(platform environment get "${shared_environment}")"
 expect_output "kubectl --kubeconfig" "${output}"
 expect_failure "403" platform environment delete "${shared_environment}"
+expect_failure "403" platform environment get "${shared_environment}" --admin
+
+step "the teammate's kubectl runs as their own identity, with no certificate in the file (#233)"
+member_kubeconfig="${smoke_config}/platform/environments/${shared_environment}.kubeconfig"
+if grep --quiet -- "client-key-data" "${member_kubeconfig}"; then
+  echo "the personal kubeconfig carries a static credential" >&2
+  exit 1
+fi
+output="$(kubectl --kubeconfig "${member_kubeconfig}" auth whoami)"
+expect_output "system:serviceaccount:platform-identities:" "${output}"
 
 step "after unshare, the teammate no longer gets it"
 platform login --test-user
@@ -205,6 +217,7 @@ if grep --quiet --fixed-strings -- "${shared_environment}" <<< "${output}"; then
   echo "teammate still lists ${shared_environment} after unshare" >&2
   exit 1
 fi
+expect_failure "not yours nor shared" kubectl --kubeconfig "${member_kubeconfig}" get namespaces
 
 step "the owner deletes the shared environment"
 platform login --test-user

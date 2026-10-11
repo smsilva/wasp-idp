@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, field_validator
 
 from .auth import Principal, current_principal, require_group
-from .environments import ADMIN_GROUP
+from .credentials import identity_name, revoke_quietly
+from .environments import ADMIN_GROUP, OWNER_ANNOTATION, shared_with
 from .journal import Journal
 from .state import ENVIRONMENTS
 
@@ -137,7 +138,7 @@ class KeycloakTeams:
     team = self._team_id(name)
     self._admin("PUT", f"/users/{self._user_id(email)}/groups/{team}")
 
-  def remove_member(self, name: str, email: str) -> None:
+  def remove_member(self, name: str, email: str) -> list[str]:
     # Removes the accounts the team lists under this e-mail, not the one an e-mail lookup would pick:
     # what is checked and what is removed must be the same account. Taking access away needs no
     # verified e-mail, so every listed account with it goes.
@@ -147,6 +148,8 @@ class KeycloakTeams:
       raise NotMember(email)
     for account in accounts:
       self._admin("DELETE", f"/users/{account}/groups/{team}")
+    # The Keycloak user id is the token `sub`: the caller revokes that person's environment credentials.
+    return accounts
 
 
 def known_teams(teams) -> set[str]:
@@ -188,7 +191,7 @@ class MemberRequest(BaseModel):
   email: str
 
 
-def router(teams, journal: Journal, state=None) -> APIRouter:
+def router(teams, journal: Journal, state=None, credentials=None) -> APIRouter:
   routes = APIRouter(prefix="/v1/teams")
   admin = require_group(ADMIN_GROUP)
 
@@ -251,8 +254,14 @@ def router(teams, journal: Journal, state=None) -> APIRouter:
   @routes.delete("/{name}/members/{email}", status_code=204)
   def remove_member(name: str, email: str, principal: Principal = Depends(admin)):
     entry = journal.record("member-remove", "Team", name, {"email": email}, principal.actor)
-    call(directory().remove_member, name, email)
+    accounts = call(directory().remove_member, name, email)
     journal.mark_applied(entry)
+    # Their tokens for environments shared with the team go now, not when they expire (ADR 0028);
+    # environments they own stay theirs. Access through another team comes back on the next token.
+    for obj in state.list(ENVIRONMENTS) if state is not None else []:
+      if name in shared_with(obj):
+        owner = (obj["metadata"].get("annotations") or {}).get(OWNER_ANNOTATION)
+        revoke_quietly(credentials, obj, only={identity_name(account) for account in accounts if account != owner})
     return Response(status_code=204)
 
   return routes

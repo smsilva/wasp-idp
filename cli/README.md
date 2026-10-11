@@ -28,7 +28,7 @@ platform environment list
 platform environment delete greetings-test
 ```
 
-Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em `~/.config/platform/environments/<nome>.kubeconfig`, gravado por `environment create --wait` ou `environment get`.
+Todos os comandos aceitam `--output json`. O kubeconfig de cada ambiente fica em `~/.config/platform/environments/<nome>.kubeconfig`, gravado por `environment create --wait` ou `environment get`. Ele não guarda credencial: o kubectl pede um token curto a `platform environment credential <nome>` a cada comando (ADR 0028).
 
 Cada ambiente é um vcluster dentro do `platform-local`, criado pelo provider `local_vcluster` (`platform/providers/local_vcluster/`), que o `init` instala no cluster. Não há processo para manter aberto no host.
 

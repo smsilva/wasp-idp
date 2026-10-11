@@ -58,6 +58,12 @@ class PlatformClient:
   def get_environment(self, name: str) -> dict:
     return self._request("GET", f"/v1/environments/{name}")
 
+  def environment_credential(self, name: str) -> dict:
+    return self._request("POST", f"/v1/environments/{name}/credentials")
+
+  def admin_kubeconfig(self, name: str) -> dict:
+    return self._request("GET", f"/v1/environments/{name}/admin-kubeconfig")
+
   def delete_environment(self, name: str) -> dict:
     return self._request("DELETE", f"/v1/environments/{name}")
 
