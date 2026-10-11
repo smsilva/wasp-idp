@@ -23,6 +23,8 @@
 
   Confirm with `gh api graphql -f query='query{node(id:"<itemId>"){... on ProjectV2Item{fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'` — `item-list` lags minutes behind new items. `item-add` is idempotent, so re-running it is safe. Option ids: `Backlog` `2841e349`, `Todo` `1346028c`, `In Progress` `d9b40b84`, `Done` `1168c952`.
 
+  Issues created outside a session (design conversations) often skip `item-add`: confirm membership per issue with GraphQL (`issue.projectItems`), since `item-list` lags behind.
+
   Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `gh project item-list` — pass `--limit 1000` to both, since `item-list` defaults to 30 items and a low limit silently truncates the newest items (with `--limit 100` and 122 items, issues #171–#193 showed up as false "missing from board").
 
 - **`gh pr edit` / `gh issue edit` fail on this repo** with `GraphQL: Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)`. The command exits non-zero and changes nothing — easy to read as "edited" if the output is not checked. Use the REST API instead: `gh api --method PATCH repos/smsilva/wasp-idp/pulls/<n> --input <file.json>` with `{"title": ..., "body": ...}`. `gh issue create`, `gh issue comment` and `gh issue close` are unaffected.
@@ -49,6 +51,10 @@
 - Every new CLI command or output change also updates `cli/docs/walkthrough.md` in the same change (#182).
 - Catalog model (ADR 0023): Domain, System and shared Resource are CRDs in `catalog.platform.wasp.silvios.me`, owned by the Platform API; Component and API live in the repo `catalog-info.yaml`; a Resource used by only one app is derived from its Score by the Forager (the ADR 0022 resolver), never created by hand. A `ResourceRequest` is an instance per environment and never a catalog entity. Command shape is `platform catalog <kind> <verb>` (no `platform app …`); lifecycle commands take `--component`.
 - Name validation in the API uses `re.fullmatch`: `re.match` with `$` accepts a trailing `\n`, which the kube API then rejects as a 500 with an unapplied journal entry.
+- `scripts/demo/cli-smoke` runs the CLI flow without a browser (`platform login --test-user`/`--test-admin`, local target only, #179): run it to validate any CLI change, and add each new command's step to it. It uses its own `XDG_CONFIG_HOME`, so it never touches the real login.
+- Tokens remember the client that issued them (`client_id` in the credentials file): refresh and revoke must go to that same client, or Keycloak refuses them.
+- `platform catalog import` (#190) lives in `platform/api/src/platform_api/catalog_import.py`: the API computes the plan from raw Backstage documents, so every client gets the same plan. Skip reasons point to the issue that will import the kind (`Template` → #201, `Component`/`API` → #205); update them when that issue lands.
+- keycloak-config-cli manages `clients` fully (removes ones missing from the file) but never deletes `users`: removing a user from the realm file leaves it in Keycloak.
 
 ## IDP Tool (Backstage)
 
