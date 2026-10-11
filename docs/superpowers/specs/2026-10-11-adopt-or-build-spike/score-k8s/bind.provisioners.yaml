@@ -1,0 +1,10 @@
+- uri: template://spike/postgres-bind
+  type: postgres
+  description: Bind - credentials of an existing database (restored from backup), not managed by score-k8s.
+  outputs: |
+    host: postgres.shared-db.svc.cluster.local
+    port: 5432
+    name: orders_restored
+    database: orders_restored
+    username: restored_user
+    password: {{ encodeSecretRef "orders-restored-credentials" "password" }}

@@ -1,0 +1,28 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: orders-env1
+  namespace: default
+spec:
+  components:
+  - name: orders
+    type: webservice
+    properties:
+      image: postgres:17-alpine
+      cmd: ["sh", "-c", "until psql -c 'select current_database(), current_user'; do sleep 2; done; sleep infinity"]
+      env:
+      - {name: PGHOST, valueFrom: {secretKeyRef: {name: orders-db, key: host}}}
+      - {name: PGPORT, valueFrom: {secretKeyRef: {name: orders-db, key: port}}}
+      - {name: PGDATABASE, valueFrom: {secretKeyRef: {name: orders-db, key: name}}}
+      - {name: PGUSER, valueFrom: {secretKeyRef: {name: orders-db, key: username}}}
+      - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: orders-db, key: password}}}
+  - name: db
+    type: postgres-dedicated
+    properties:
+      secretName: orders-db
+      password: spike-provision
+  policies:
+  - {name: env1, type: topology, properties: {clusters: [vela-env1], namespace: app}}
+  workflow:
+    steps:
+    - {name: deploy-env1, type: deploy, properties: {policies: [env1]}}

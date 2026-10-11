@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""score-k8s cmd provisioner: a database and user on the shared instance in namespace shared-db."""
+import json
+import re
+import secrets
+import subprocess
+import sys
+
+request = json.load(sys.stdin)
+state = request.get("resource_state") or {}
+database = state.get("database") or f"{request['source_workload']}_{request['resource_guid'][:8]}"
+password = state.get("password") or secrets.token_urlsafe(16)
+
+# Added after the spike run: names and password are interpolated into SQL below,
+# so reject anything outside a plain identifier / URL-safe token.
+if not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", database):
+    sys.exit(f"invalid database name: {database!r}")
+if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", password):
+    sys.exit("invalid password format")
+
+sql = (
+    f"select 'create user {database} password ''{password}''' "
+    f"where not exists (select from pg_roles where rolname = '{database}')\\gexec\n"
+    f"select 'create database {database} owner {database}' "
+    f"where not exists (select from pg_database where datname = '{database}')\\gexec\n"
+)
+subprocess.run(
+    ["kubectl", "exec", "--namespace", "shared-db", "--stdin", "postgres-0", "--",
+     "psql", "--username", "postgres", "--set", "ON_ERROR_STOP=1", "--quiet"],
+    input=sql, text=True, check=True, stdout=sys.stderr,
+)
+
+secret_name = f"{request['source_workload']}-db"
+json.dump({
+    "resource_outputs": {
+        "host": "postgres.shared-db.svc.cluster.local",
+        "port": 5432,
+        "name": database,
+        "database": database,
+        "username": database,
+        "password": f"🔐💬{secret_name}_password💬🔐",
+    },
+    "resource_state": {"database": database, "password": password},
+    "manifests": [{
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": secret_name},
+        "stringData": {"password": password},
+    }],
+}, sys.stdout)

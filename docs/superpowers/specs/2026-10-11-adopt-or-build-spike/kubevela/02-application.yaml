@@ -1,0 +1,76 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: orders
+  namespace: default
+spec:
+  components:
+  - name: orders
+    type: webservice
+    properties:
+      image: postgres:17-alpine
+      cmd: ["sh", "-c", "until psql -c 'select current_database(), current_user'; do sleep 2; done; sleep infinity"]
+      env:
+      - {name: PGHOST, valueFrom: {secretKeyRef: {name: orders-db, key: host}}}
+      - {name: PGPORT, valueFrom: {secretKeyRef: {name: orders-db, key: port}}}
+      - {name: PGDATABASE, valueFrom: {secretKeyRef: {name: orders-db, key: name}}}
+      - {name: PGUSER, valueFrom: {secretKeyRef: {name: orders-db, key: username}}}
+      - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: orders-db, key: password}}}
+  - name: db
+    type: postgres-dedicated
+    properties:
+      secretName: orders-db
+      password: spike-provision
+  - name: db-secret
+    type: k8s-objects
+    properties: {objects: []}
+  policies:
+  - {name: env-provision, type: topology, properties: {clusters: [local], namespace: vela-provision}}
+  - {name: env-compose, type: topology, properties: {clusters: [local], namespace: vela-compose}}
+  - {name: env-bind, type: topology, properties: {clusters: [local], namespace: vela-bind}}
+  - {name: shared-db, type: topology, properties: {clusters: [local], namespace: shared-db}}
+  - name: no-db-secret
+    type: override
+    properties: {selector: [orders, db]}
+  - name: only-db
+    type: override
+    properties: {selector: [db]}
+  - name: only-app
+    type: override
+    properties: {selector: [orders, db-secret]}
+  - {name: env-branch, type: topology, properties: {clusters: [local], namespace: vela-branch}}
+  - name: override-compose
+    type: override
+    properties:
+      components:
+      - name: db
+        type: postgres-database
+        properties: {secretName: orders-db, password: spike-compose, database: orders_vela_compose}
+      - name: db-secret
+        type: k8s-objects
+        properties:
+          objects:
+          - apiVersion: v1
+            kind: Secret
+            metadata: {name: orders-db}
+            stringData: {host: postgres.shared-db.svc.cluster.local, port: "5432", name: orders_vela_compose, username: orders_vela_compose, password: spike-compose}
+  - name: override-bind
+    type: override
+    properties:
+      selector: [orders]
+      components:
+      - name: orders
+        properties:
+          env:
+          - {name: PGHOST, valueFrom: {secretKeyRef: {name: orders-restored-credentials, key: host}}}
+          - {name: PGPORT, valueFrom: {secretKeyRef: {name: orders-restored-credentials, key: port}}}
+          - {name: PGDATABASE, valueFrom: {secretKeyRef: {name: orders-restored-credentials, key: name}}}
+          - {name: PGUSER, valueFrom: {secretKeyRef: {name: orders-restored-credentials, key: username}}}
+          - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: orders-restored-credentials, key: password}}}
+  workflow:
+    steps:
+    - {name: deploy-provision, type: deploy, properties: {policies: [env-provision, no-db-secret]}}
+    - {name: deploy-compose-db, type: deploy, properties: {policies: [shared-db, override-compose, only-db]}}
+    - {name: deploy-compose, type: deploy, properties: {policies: [env-compose, override-compose, only-app]}}
+    - {name: deploy-bind, type: deploy, properties: {policies: [env-bind, override-bind]}}
+    - {name: deploy-branch, type: deploy, properties: {policies: [env-branch, override-bind]}}
