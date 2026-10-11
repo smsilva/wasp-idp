@@ -14,7 +14,7 @@ Executado em 2026-10-11 com o Kargo v1.12.3 (chart `oci://ghcr.io/akuity/kargo-c
 
 ### Montagem
 
-- **Imagem de teste:** o repo descartável `smsilva/kargo-spike` publica `ghcr.io/smsilva/kargo-spike` pelo workflow [`publish-workflow.yaml`](2026-10-11-adopt-or-build-spike/kargo/publish-workflow.yaml). Uma tag `vX.Y.Z` gera `X.Y.Z`; um push em outra branch gera `0.2.0-<branch>.<run>`; um `workflow_dispatch` aceita `version` e `request-id`, e o `request-id` vira a anotação OCI `me.silvios.wasp.request-id`. O `greeting-api` não serve porque só publica tags de SHA.
+- **Imagem de teste:** o repo de teste `smsilva/kargo-spike` publica `ghcr.io/smsilva/kargo-spike` pelo workflow [`publish-workflow.yaml`](2026-10-11-adopt-or-build-spike/kargo/publish-workflow.yaml). Uma tag `vX.Y.Z` gera `X.Y.Z`; um push em outra branch gera `0.2.0-<branch>.<run>`; um `workflow_dispatch` aceita `version` e `request-id`, e o `request-id` vira a anotação OCI `me.silvios.wasp.request-id`. O `greeting-api` não serve porque só publica tags de SHA.
 - **Warehouses:** `releases` (SemVer, `constraint: ">=0.0.0"`) e `branch-feat-x` (`constraint: ">=0.0.0-0"` com `allowTagsRegexes` no sufixo da branch).
 - **Stages:** `dev` (Freight direto do Warehouse) e `prod` (Freight verificado em `dev`), cada um apontando para um vcluster criado por `platform environment create`.
 - **Promoção sem GitOps:** um passo `http` faz `PATCH` (strategic merge) da imagem de um Deployment na API do vcluster, autenticado pelo token de uma ServiceAccount com só `get`/`patch` em Deployments do namespace `app`. O token fica num Secret do Project com o label `kargo.akuity.io/cred-type: generic`, lido por `${{ secret(...).token }}`.
@@ -234,4 +234,4 @@ Nenhuma peça é adotada. Em todas, o que as ferramentas fazem bem cabe num mode
 
 ### Limpeza
 
-O repo de teste `smsilva/kargo-spike` e o pacote `ghcr.io/smsilva/kargo-spike` são apagados depois do merge desta recomendação. O `platform-local` já voltou ao estado inicial ao fim de cada parte.
+O repo de teste `smsilva/kargo-spike` e o pacote `ghcr.io/smsilva/kargo-spike` continuam publicados, como referência executável do contrato de build (anotações OCI com buildx) e das recipes Terraform do Radius. O `platform-local` já voltou ao estado inicial ao fim de cada parte.
