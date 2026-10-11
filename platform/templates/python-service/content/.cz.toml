@@ -1,0 +1,7 @@
+# Commitizen computes the next version from the Conventional Commits since the last v<version> tag
+# (0.1.0 when there is none); platform-build.yaml reads it with `cz bump --get-next`, which creates no tag.
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "scm"
+tag_format = "v$version"
+major_version_zero = true

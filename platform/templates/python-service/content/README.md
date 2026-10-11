@@ -7,7 +7,7 @@ FastAPI service created by the platform from the template `python-service`.
 - `GET /` — app name and a greeting
 - `GET /healthz` — liveness/readiness
 
-Every push to `main` runs the tests and publishes `ghcr.io/wasp-foundry/${{ values.name }}:<sha>`. What the service needs from each environment is declared in `app-spec.yaml`.
+CI tests every pull request and every push to `main`. `platform build create --component ${{ values.name }} --branch <branch>` runs `.github/workflows/platform-build.yaml`, which publishes `ghcr.io/wasp-foundry/${{ values.name }}:<version>`: the version comes from the Conventional Commits since the last `v<version>` tag (Commitizen, `.cz.toml`), with the suffix `-<branch>.<sha7>` outside `main`. What the service needs from each environment is declared in `app-spec.yaml`.
 
 ## Local run
 

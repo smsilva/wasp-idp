@@ -82,15 +82,19 @@ def test_seed_renders_clean(tmp_path):
   annotate_origin(out, "python-service@abc")
   rendered = [path for path in out.rglob("*") if path.is_file() and not path.match(".github/workflows/*")]
   assert rendered and not any("${{" in path.read_text() for path in rendered)
-  original = SEED / "content" / ".github" / "workflows" / "ci.yaml"
-  assert (out / ".github" / "workflows" / "ci.yaml").read_bytes() == original.read_bytes()
+  for workflow in ("ci.yaml", "platform-build.yaml"):
+    original = SEED / "content" / ".github" / "workflows" / workflow
+    assert (out / ".github" / "workflows" / workflow).read_bytes() == original.read_bytes()
+  assert 'tag_format = "v$version"' in (out / ".cz.toml").read_text()
   catalog = (out / "catalog-info.yaml").read_text()
   assert "name: demo" in catalog
   assert "system: greeter" in catalog
   assert "platform.wasp.silvios.me/template: python-service@abc" in catalog
   assert (out / "docs" / "prd.md").read_text().startswith("# demo: product requirements")
   assert (out / "AGENTS.md").is_file()
-  assert "type: postgres" in (out / "app-spec.yaml").read_text()
+  app_spec = (out / "app-spec.yaml").read_text()
+  assert app_spec.startswith("apiVersion: score.dev/v1b1")
+  assert "type: postgres" in app_spec
 
 
 def test_annotate_origin_keeps_the_rest(tmp_path):
