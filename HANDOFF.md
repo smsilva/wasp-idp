@@ -99,7 +99,7 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: apresentação detalhada como deck único público em `docs/presentation/`, publicada no GitHub Pages; cortes por público virão de filtro sobre `audiences` (#148) | Entregue em 2026-10-10 |
 | Plataforma: identidade e fonte da verdade — [ADR 0021](docs/adr/0021-keycloak-as-platform-identity-broker.md) (Keycloak, sem Dex) e [ADR 0022](docs/adr/0022-kube-api-as-platform-source-of-truth.md) (CRDs `platform.wasp.silvios.me` + Platform API como fachada) (#140, #145) | Aceitos em 2026-10-10 |
 | Plataforma: CLI `platform` (Python, pacote `wasp_platform`) + Platform API + provider `local_vcluster` — cada Environment é um vcluster dentro do `platform-local`, criado por um controller no próprio cluster (#152, #183). Login com Google via Keycloak e JWT validado na API (#142–#144), journal em arquivo (#172). Guia: https://smsilva.github.io/wasp-idp/cli/ — o Pages é um site único (deck na raiz, guia em `/cli/`), buildado por `.github/workflows/pages.yaml` | Entregue em 2026-10-10 |
-| Plataforma: próximas issues da Platform API e da CLI | Ver [Plataforma: fila de issues](#plataforma-fila-de-issues) |
+| Plataforma: próximas issues da Platform API e da CLI | Board #6 |
 | Plataforma: times e compartilhamento de ambientes ([ADR 0026](docs/adr/0026-environment-sharing-with-teams.md)) — `platform team …` (#231), `environment share\|unshare` e `--share-with` (#232), client `platform-api-admin` restrito por fine-grained admin permissions (#238), `Group` do catálogo vira time e `owner` precisa ser time (#236), identidade por pessoa no vcluster com credencial curta ([ADR 0028](docs/adr/0028-environment-personal-credentials.md), #233) | Entregue em 2026-10-11 |
 | Plataforma: Postgres no journal (#172); walkthrough repetível (#178, #180–#182); Terraform do OAuth do Google (#171) | Aberto (Backlog) |
 | Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
@@ -108,26 +108,6 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | SEC-EDGE (#84–#89) | #84 (WAF no ALB do hub) mergeado e **não aplicado**; próxima #85 (access logs do ALB para S3), da qual #86 depende |
 
 Backlog e priorização: GitHub Project #6 — https://github.com/users/smsilva/projects/6 (`gh project item-list 6 --owner smsilva --limit 100 --format json`; sem `--limit 100` o default de 30 omite itens).
-
-## Plataforma: fila de issues
-
-**Regra:** ao começar a próxima issue da Platform API ou da CLI, atualize esta tabela antes de tudo: o status de cada issue vem do board #6 (GraphQL ou `gh project item-list 6 --owner smsilva --limit 1000`, porque o `item-list` atrasa), e a coluna "Recomendação" diz o que fazer agora, com base nas dependências. Issue nova da plataforma entra na tabela; issue fechada sai dela e vira uma linha em Completed Work. A atualização vai no PR da issue ou num `docs(handoff)` à parte.
-
-Atualizada em 2026-10-11.
-
-| Ordem | Issue | Status | Depende de | Recomendação |
-|---|---|---|---|---|
-| 1 | #199 SCM connection GitHub | In Progress (PR #253 aberto) | — | **Fazer agora.** Passo humano: criar o App `wasp-foundry-platform` (`platform scm connection add wasp-foundry --vendor github --org wasp-foundry --default`), instalar em All repositories, rodar `verify --wait` até `ready` e então fazer o merge do PR #253. |
-| 2 | #254 Environment em uma CloudAccount | Backlog | — ([ADR 0032](docs/adr/0032-single-provisioning-method-defer-kratix.md) já decidiu o método) | **Fazer em paralelo à #199**, enquanto o passo humano não acontece: só o provider de Crossplane, sem `spec.method`. |
-| 3 | #204 `component create` pelo golden path | Backlog | #199 | Próxima depois do merge da #199. |
-| 4 | #206 build por branch | Backlog | #199, #204 | Depois da #204. Inclui as anotações OCI com buildx e o template com `apiVersion: score.dev/v1b1` ([ADR 0030](docs/adr/0030-build-version-index-and-promotion-defer-kargo.md), comentário na issue). |
-| 5 | #205 `component clone` e discovery | Backlog | #199, #204 | Depois da #204; pode alternar com a #206. |
-| 6 | #262 promoção (`Promotion`) | Backlog | #206 | Depois da #206. O spec decide a forma da CLI, que a #202 segue. |
-| 7 | #263 Forager (fatia 4 do catálogo) | Backlog | #206, #262 | Depois da #262 ([ADR 0031](docs/adr/0031-forager-built-on-score-defer-radius-kubevela.md)). |
-| 8 | #202 e #203 deck da jornada | Backlog | #262 (vocabulário) | Depois do spec da #262, que troca "release" por promoção. |
-| 9 | #172 journal no Postgres | Backlog | — | Fora do caminho crítico; pré-requisito para guardar operações da #221. |
-| 10 | #217 epic de sistemas e agentes: #218 → #219 → #220; #221; #222 → #223, #224, #225, #226 | Backlog | cadeia interna (#222 depende de #219 e #221) | Depois do caminho crítico (ordens 1 a 7). Começar pela #218 e pela #221, que não dependem de outras. |
-| 11 | #171, #178, #180, #181, #182 (OAuth do Google em Terraform, walkthrough) | Backlog | — | Fora do caminho crítico. |
 
 ## Referências (ler sob demanda, não de uma vez)
 
