@@ -25,11 +25,12 @@ BLOCKING = ("forbidden", "error")
 
 PLURALS = {kind.name: plural for plural, kind in KINDS.items()}
 SKIPPED = {
-  "Component": "lives in the repo catalog-info.yaml",
-  "API": "lives in the repo catalog-info.yaml",
+  "Component": "lives in the repo catalog-info.yaml; indexed by discovery (#205)",
+  "API": "lives in the repo catalog-info.yaml; indexed by discovery (#205)",
   "Group": "identity lives in Keycloak (#186)",
   "User": "identity lives in Keycloak (#186)",
-  "Template": "Backstage configuration, not a catalog entity",
+  # Templates become catalog entities (ADR of #200); the import learns them in #201.
+  "Template": "templates arrive with #201",
   "Location": "Backstage configuration, not a catalog entity",
 }
 # Where each platform field comes from in a Backstage entity; errors name this field.
