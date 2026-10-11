@@ -25,7 +25,7 @@ Os links da apresentação usam o `name` do slide em `docs/presentation/idp.yaml
 | Ver decisões de arquitetura já tomadas (ADRs) | [`docs/adr/README.md`](docs/adr/README.md) |
 | Ver o histórico do que já foi entregue | [`docs/archived/README.md`](docs/archived/README.md) |
 | Entender por que uma decisão passada foi tomada, ou reler um plano antigo | [`docs/superpowers/README.md`](docs/superpowers/README.md) |
-| Retomar de onde a última sessão parou | [`HANDOFF.md`](HANDOFF.md) |
+| Retomar de onde a última sessão parou | o board #6: `scripts/board/queue next` e a issue que ele aponta |
 
 ## Convenções deste repo
 

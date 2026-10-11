@@ -72,4 +72,4 @@ Este é o sexto e último domínio. Com ele, `aws/docs/` cobre a arquitetura de 
 completa: **accounts** (onde), **network** (por onde), **security** (quem pode), **dns** (como
 se acha), **compute** (onde roda) e **observability** (como se enxerga). O próximo passo do
 projeto não é mais documentação de referência, e sim **retomar o schema detalhado e a spec de
-implementação** ([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), [`compute/06-crossplane-map.md`](../compute/06-crossplane-map.md)) — ver o `HANDOFF.md`.
+implementação** ([`network/07-crossplane-map.md`](../network/07-crossplane-map.md), [`compute/06-crossplane-map.md`](../compute/06-crossplane-map.md)) — ver o board #6.

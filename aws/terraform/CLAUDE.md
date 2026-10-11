@@ -219,7 +219,7 @@ referência interno (`<assets-repo>`, `crossplane/providers/aws/eks`), não as f
   tipo já aconteceram (camada marcada como não aplicada depois de aceita; `up-all --with-control-plane`
   documentado depois de o túnel virar obrigatório).
 - **Estado de sessão não entra no `README.md`** — o que está de pé agora, IDs de recurso e valores da
-  conta vivem em `HANDOFF.md`. Duas fontes garantem que uma esteja errada.
+  conta não são versionados: `terraform state list` responde. Duas fontes garantem que uma esteja errada.
 - **`scripts/lib` é sourced, não executado.** Log com timestamp, `PIPESTATUS[0]`, confirmação e
   descoberta do bucket vivem lá uma vez só.
 - **Contar mudanças de um plano SALVO não tem `-detailed-exitcode`** (a flag é do `plan`, não do
@@ -609,7 +609,7 @@ Atualizar junto com a mudança, no mesmo trabalho — não depois:
 | **Raiz nova** (pasta com backend próprio) | linha em `## Raízes` — sem ela a raiz é indescobrível, e o README dela também: a `ci/` ficou fora da tabela e a documentação dos workflows foi escrita de novo em outro arquivo por isso |
 
 **O que NÃO entra no README:** o que está de pé agora, IDs de recurso, valores da conta. Isso é
-estado de sessão e vive em `HANDOFF.md` — repetir lá garante duas fontes e uma delas errada.
+estado de sessão, lido na hora (`terraform state list`), nunca escrito no repo.
 Armadilhas de código e de comportamento de provider ficam neste arquivo (`CLAUDE.md`), não no
 README.
 

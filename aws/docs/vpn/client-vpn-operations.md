@@ -147,4 +147,3 @@ O Client VPN cobra por **associação de endpoint** (~US$ 0,10/h por AZ = ~US$ 0
 
 - [ADR 0006: Client VPN with SAML for maintenance access](../../../docs/adr/0006-client-vpn-saml-for-maintenance-access.md)
 - [README do aws/terraform/](../../terraform/README.md) — sequência de provisionamento
-- [HANDOFF.md](../../../HANDOFF.md) — estado atual (o que está de pé, custo, how to resume)
