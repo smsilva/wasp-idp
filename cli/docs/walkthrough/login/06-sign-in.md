@@ -4,7 +4,7 @@
 platform login --use-device-code
 ```
 
-Abra a URL impressa no navegador e passe pelas telas: **confirmar o código**, **entrar com Google**, **revisar o perfil** (só no primeiro login) e **autorizar o terminal**. O terminal termina em `✓ Logged in as voce@example.com (platform-admins, platform-users)`.
+Open the printed URL in the browser and go through the screens: **confirm the code**, **sign in with Google**, **review the profile** (first sign-in only) and **authorize the terminal**. The terminal ends with `✓ Logged in as you@example.com (platform-admins, platform-users)`.
 
 !!! tip
-    `platform login` sem flag abre o navegador padrão sozinho. Use o device code quando o navegador padrão estiver em outra conta Google, ou numa apresentação, para mostrar as telas do Keycloak.
+    `platform login` without a flag opens the default browser by itself. Use the device code when the default browser is signed in to a different Google account, or in a presentation, to show the Keycloak screens.

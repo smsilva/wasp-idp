@@ -9,7 +9,7 @@ kubectl logs deploy/local-vcluster-provider \
 kubectl --context k3d-platform-local get namespaces | grep env-
 ```
 
-``` { .text .output title="saída" }
+``` { .text .output title="output" }
 INFO creating vcluster env-greetings-test on port 7100
 INFO environment greetings-test ready
 env-greetings-test   Active   40s

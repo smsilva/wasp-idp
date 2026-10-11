@@ -1,58 +1,85 @@
 site_name: platform CLI
-site_description: Primeiro Environment local com a CLI platform
+site_description: A local Environment with the platform CLI
 site_url: https://smsilva.github.io/wasp-idp/cli/
 repo_url: https://github.com/smsilva/wasp-idp
 repo_name: smsilva/wasp-idp
 edit_uri: edit/main/cli/docs/
 docs_dir: docs
 nav:
-  - Início: index.md
-  - Guia de uso:
-      - Pré-requisitos: guide/01-prerequisites.md
-      - Instalar a CLI: guide/02-install.md
-      - Subir o control plane: guide/03-control-plane.md
-      - Entrar: guide/04-login.md
-      - Criar um ambiente: guide/05-create-environment.md
-      - Usar o cluster do ambiente: guide/06-use-environment.md
-      - Saída em JSON: guide/07-json-output.md
-      - Apagar: guide/08-delete.md
-      - Expiração: guide/09-expiration.md
-      - "Por baixo: o CRD": guide/10-crd.md
-      - Catálogo: guide/11-catalog.md
-      - Times: guide/12-teams.md
-      - Contas de nuvem: guide/13-cloud-accounts.md
-      - Connections com plataformas de código: guide/14-scm-connections.md
-      - Desmontar tudo: guide/15-teardown.md
+  - Home: index.md
   - Walkthrough:
       - walkthrough/index.md
-      - Preparar o ambiente:
-          - 0. Partir do zero: walkthrough/setup/00-from-scratch.md
-          - 1. Pré-requisitos: walkthrough/setup/01-prerequisites.md
-          - 2. Instalar a CLI: walkthrough/setup/02-install.md
-          - 3. Credenciais do Google: walkthrough/setup/03-google-credentials.md
-          - 4. Subir o control plane: walkthrough/setup/04-control-plane.md
+      - Setup:
+          - 0. From scratch: walkthrough/setup/00-from-scratch.md
+          - 1. Prerequisites: walkthrough/setup/01-prerequisites.md
+          - 2. Install the CLI: walkthrough/setup/02-install.md
+          - 3. Google credentials: walkthrough/setup/03-google-credentials.md
+          - 4. Start the control plane: walkthrough/setup/04-control-plane.md
       - Login:
-          - 5. Sem login, a API recusa: walkthrough/login/05-refused.md
-          - 6. Entrar: walkthrough/login/06-sign-in.md
-          - 7. Quem sou eu: walkthrough/login/07-whoami.md
-      - Ambientes:
-          - 8. Criar um ambiente: walkthrough/environments/08-create.md
-          - 9. O provider por dentro: walkthrough/environments/09-provider.md
-          - 10. Usar o ambiente: walkthrough/environments/10-use.md
-          - 11. Segundo ambiente, em paralelo: walkthrough/environments/11-second.md
-          - 12. Trilha de auditoria: walkthrough/environments/12-audit-trail.md
-      - Catálogo:
-          - 13. Domínios, sistemas e recursos: walkthrough/catalog/13-entities.md
-          - 14. Importar o catálogo do Backstage: walkthrough/catalog/14-backstage-import.md
-      - 15. Times: walkthrough/15-teams.md
-      - 16. Templates de component: walkthrough/16-templates.md
-      - 17. Contas de nuvem: walkthrough/17-cloud-accounts.md
-      - 18. Connection com o GitHub: walkthrough/18-scm-connection.md
-      - 19. Limpar e sair: walkthrough/19-cleanup.md
-      - Sem navegador: walkthrough/cli-smoke.md
+          - 5. Without login, the API refuses: walkthrough/login/05-refused.md
+          - 6. Sign in: walkthrough/login/06-sign-in.md
+          - 7. Who am I: walkthrough/login/07-whoami.md
+      - Environments:
+          - 8. Create an environment: walkthrough/environments/08-create.md
+          - 9. The provider inside: walkthrough/environments/09-provider.md
+          - 10.1 Write the kubeconfig: walkthrough/environments/10-1-kubeconfig.md
+          - 10.2 Use the cluster: walkthrough/environments/10-2-cluster.md
+          - 10.3 Admin kubeconfig: walkthrough/environments/10-3-admin.md
+          - 11. A second environment, in parallel: walkthrough/environments/11-second.md
+          - 12. Audit trail: walkthrough/environments/12-audit-trail.md
+      - Catalog:
+          - 13.1 Create the team and the hierarchy: walkthrough/catalog/13-1-hierarchy.md
+          - 13.2 Query: walkthrough/catalog/13-2-query.md
+          - 13.3 A domain with dependents stays: walkthrough/catalog/13-3-dependents.md
+          - 13.4 Underneath, they are CRDs: walkthrough/catalog/13-4-crds.md
+          - 13.5 Clean up, in reverse order: walkthrough/catalog/13-5-cleanup.md
+          - 14.1 Import from Backstage: walkthrough/catalog/14-1-plan.md
+          - 14.2 Run it again: walkthrough/catalog/14-2-rerun.md
+          - 14.3 Broken reference: walkthrough/catalog/14-3-broken-reference.md
+      - Teams:
+          - 15.1 Join the team: walkthrough/teams/15-1-join.md
+          - 15.2 Renew the token: walkthrough/teams/15-2-token.md
+          - 15.3 Share an environment: walkthrough/teams/15-3-share.md
+          - 15.4 Unshare: walkthrough/teams/15-4-unshare.md
+          - 15.5 A team in use is not deleted: walkthrough/teams/15-5-in-use.md
+      - Component templates:
+          - 16.1 List and get: walkthrough/templates/16-1-list.md
+          - 16.2 Render: walkthrough/templates/16-2-render.md
+          - 16.3 Another template as the default: walkthrough/templates/16-3-new-default.md
+          - 16.4 The default does not leave alone: walkthrough/templates/16-4-default-stays.md
+          - 16.5 Another takes over, then it leaves: walkthrough/templates/16-5-handover.md
+          - 16.6 Backstage template: walkthrough/templates/16-6-backstage-import.md
+      - Cloud accounts:
+          - 17.1 Base credential: walkthrough/cloud-accounts/17-1-base-credential.md
+          - 17.2 Register the account: walkthrough/cloud-accounts/17-2-register.md
+          - 17.3 Apply the trust policy: walkthrough/cloud-accounts/17-3-trust-policy.md
+          - 17.4 Verify: walkthrough/cloud-accounts/17-4-verify.md
+          - 17.5 ExternalId and removal: walkthrough/cloud-accounts/17-5-remove.md
+      - GitHub connection:
+          - 18.1 Create the App: walkthrough/scm-connection/18-1-create-app.md
+          - 18.2 Install on the org: walkthrough/scm-connection/18-2-install.md
+          - 18.3 Verify: walkthrough/scm-connection/18-3-verify.md
+          - 18.4 The key stays off this machine: walkthrough/scm-connection/18-4-private-key.md
+          - 18.5 Remove: walkthrough/scm-connection/18-5-remove.md
+      - 19. Clean up and sign out: walkthrough/19-cleanup.md
+      - Without a browser: walkthrough/cli-smoke.md
+  - Reference:
+      - reference/index.md
+      - Install the CLI: reference/install.md
+      - Control plane: reference/init.md
+      - Sign-in: reference/login.md
+      - Environments: reference/environments.md
+      - Catalog: reference/catalog.md
+      - Templates: reference/templates.md
+      - Teams: reference/teams.md
+      - Cloud accounts: reference/cloud-accounts.md
+      - SCM connections: reference/scm-connections.md
+      - JSON output: reference/json-output.md
+      - Under the hood: reference/under-the-hood.md
+      - Tear down: reference/teardown.md
 theme:
   name: material
-  language: pt-BR
+  language: en
   icon:
     logo: material/console-line
     repo: fontawesome/brands/github
@@ -61,21 +88,21 @@ theme:
     - media: "(prefers-color-scheme)"
       toggle:
         icon: material/brightness-auto
-        name: Tema do sistema
+        name: System theme
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: custom
       accent: custom
       toggle:
         icon: material/weather-sunny
-        name: Tema noturno
+        name: Dark theme
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: custom
       accent: custom
       toggle:
         icon: material/weather-night
-        name: Tema claro
+        name: Light theme
   font:
     text: Inter
     code: JetBrains Mono

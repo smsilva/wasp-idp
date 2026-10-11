@@ -1,13 +1,14 @@
 # Without a browser
 
-O roteiro tem **um passo humano, o login**. O `scripts/demo/cli-smoke` (#179) roda o fluxo **sem ninguém**: `init`, login com o usuário de teste (`platform-users`), a recusa `403` ao criar um domínio, um ambiente criado com `--wait` e apagado, login com o admin de teste, `catalog import idp/catalog/` (aplicado e depois `nothing to do`), os templates (`list` como usuário comum, recusa `403` no `create`, `render` do seed sem nenhum `${{` restante, plano do import do template do Backstage com os `steps` ignorados), as connections (recusa `403` para usuário comum; como admin, `add --no-browser` devolve a URL do manifest flow e a página de início leva o manifesto à org, um `state` forjado é recusado, e `remove`), uma cloud account (`409` pedindo `--aws-profile` sem credencial base; com ela, uma role que a plataforma não assume fica `TrustNotEstablished`, e outro usuário não a vê nem registra a mesma role) e `logout`. O smoke não cria App: o manifest flow precisa de navegador e de um owner da org, então criar, instalar e chegar a `ready` fica no roteiro manual da [connection com o GitHub](18-scm-connection.md). Ele para na primeira falha, com código diferente de zero.
+The walkthrough has **one human step, the sign-in**. `scripts/demo/cli-smoke` (#179) runs the flow **unattended**: `init`, sign-in with the test user (`platform-users`), the `403` refusal when creating a domain, an environment created with `--wait` and deleted, sign-in with the test admin, `catalog import idp/catalog/` (applied, then `nothing to do`), the templates (`list` as a regular user, `403` refusal on `create`, `render` of the seed with no `${{` left over, the import plan of the Backstage template with the `steps` ignored), the connections (`403` refusal for a regular user; as admin, `add --no-browser` returns the manifest flow URL and the start page takes the manifest to the org, a forged `state` is refused, and `remove`), a cloud account (`409` asking for `--aws-profile` without a base credential; with one, a role the platform does not assume ends up `TrustNotEstablished`, and another user neither sees it nor registers the same role) and `logout`. The smoke does not create an App: the manifest flow needs a browser and an org owner, so creating, installing and reaching `ready` stays in the manual walkthrough of the [GitHub connection](scm-connection/18-1-create-app.md). It stops at the first failure, with a non-zero exit code.
 
 ```bash
-scripts/demo/cli-smoke              # do zero, com platform init
+scripts/demo/cli-smoke              # from scratch, with platform init
 
-scripts/demo/cli-smoke # reaproveita o platform-local que já está no ar \
+# reuses the platform-local that is already up
+scripts/demo/cli-smoke \
   --skip-init
 ```
 
 !!! note
-    Os usuários `platform-smoke` e `platform-smoke-admin` e o client `platform-smoke` existem **só no target local**. A justificativa do password grant está em `platform/keycloak/README.md`.
+    The users `platform-smoke` and `platform-smoke-admin` and the client `platform-smoke` exist **only on the local target**. The rationale for the password grant is in `platform/keycloak/README.md`.

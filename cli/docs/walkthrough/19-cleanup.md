@@ -12,10 +12,10 @@ platform logout
 platform whoami
 ```
 
-``` { .text .output title="saída" }
+``` { .text .output title="output" }
 ✓ Logged out
 ✗ not logged in: run 'platform login'
 ```
 
 !!! tip
-    O `platform-local` continua no ar para a próxima rodada; para desmontar tudo, volte ao [passo 0](setup/00-from-scratch.md).
+    `platform-local` stays up for the next round; to tear everything down, go back to [step 0](setup/00-from-scratch.md).

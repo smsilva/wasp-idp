@@ -1,6 +1,6 @@
 # Google credentials
 
-O **OAuth client do Google** é configurado uma vez (veja `platform/keycloak/README.md`). Guarde o id e o secret num cofre de segredos e carregue-os no shell antes do `init`; na tela, **mostre só o prefixo**:
+The **Google OAuth client** is configured once (see `platform/keycloak/README.md`). Store the id and secret in a secrets vault and load them into the shell before `init`; on screen, **show only the prefix**:
 
 ```bash
 export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com

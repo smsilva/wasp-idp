@@ -4,6 +4,6 @@
 platform environment list
 ```
 
-``` { .text .output title="saída" }
+``` { .text .output title="output" }
 ✗ not logged in: run 'platform login'
 ```

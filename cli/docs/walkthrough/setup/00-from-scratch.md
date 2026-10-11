@@ -1,7 +1,7 @@
 # From scratch
 
 !!! warning
-    Apaga o control plane local, os ambientes e as credenciais. O usuário do Keycloak é recriado no primeiro login.
+    Deletes the local control plane, the environments and the credentials. The Keycloak user is recreated on first sign-in.
 
 ```bash
 k3d cluster delete platform-local
