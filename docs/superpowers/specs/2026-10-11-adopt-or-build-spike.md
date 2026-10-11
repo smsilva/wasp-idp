@@ -142,7 +142,75 @@ A consolidação e os ADRs ficam na #258.
 
 ## 3. Kratix: múltiplos métodos de provisionamento
 
-_Pendente (#257)._
+Pergunta da [#254](https://github.com/smsilva/wasp-idp/issues/254): o `Environment` numa `CloudAccount` pode ter mais de um método de provisionamento (Crossplane por padrão, OpenTofu como alternativa), como nas Promises do Kratix?
+
+Executado em 2026-10-11 com o `install-all-in-one.yaml` e o `config-all-in-one.yaml` da release `latest` do Kratix (imagem `kratix-platform@sha256:41d133d4…`): o Kratix, um S3 (SeaweedFS) como state store e o Flux. O cert-manager já estava no cluster. Os artefatos estão em [`kratix/`](2026-10-11-adopt-or-build-spike/kratix/). Não houve chamada à AWS: o Crossplane e o tofu-controller não foram instalados, e o teste para no que o Kratix entrega a cada destino.
+
+### Montagem
+
+- **Promise `cloud-environment`** ([`02-promise.yaml`](2026-10-11-adopt-or-build-spike/kratix/02-promise.yaml)): a API é um CRD nosso, `CloudEnvironment` (`spec.cloudAccount`, `spec.method` com `crossplane` como padrão ou `opentofu`, `spec.region`).
+- **Pipeline:** um passo que, conforme `spec.method`, escreve:
+  - **crossplane:** um `ProviderConfig` com `assumeRoleChain`/`externalID` e uma `VPC`;
+  - **opentofu:** um `Terraform` do tofu-controller com backend `kubernetes`.
+  
+  O passo também grava `destination-selectors.yaml` com o método e devolve `method`/`cloudAccount` no status.
+- **Destinos:** dois `Destination`s no mesmo bucket, um por método (`provisioning-method: crossplane|opentofu`), sem consumidor no cluster.
+
+### Respostas
+
+**1. A Promise fica atrás da Platform API sem o cliente ver os CRDs do Kratix?**
+
+Sim, e de um jeito melhor que as outras ferramentas: a API da Promise é um CRD *nosso*, então o `Environment` poderia ser ele.
+
+- **O que o Kratix escreve no status do nosso CRD:** as conditions `ConfigureWorkflowCompleted`, `Reconciled` e `WorksSucceeded`, mais `status.kratix` (pipelines e jobs), `status.healthStatus` e os campos que o pipeline devolve.
+- **Contrato com o ADR 0022:** as conditions do `Environment` (`Ready` e reasons) teriam de conviver com as do Kratix. Elas dizem que o pipeline rodou e os manifests foram entregues, não que a infraestrutura está pronta.
+
+**2. Onde mora a escolha do método, e como ela casa com `Environment` e `CloudAccount`?**
+
+- **No teste:** no pedido (`spec.method`). O pipeline traduz o método em seletor de destino; `env-a` (padrão) foi para `aws-crossplane` e `env-b` (`opentofu`) para `aws-opentofu`.
+- **Alternativas:** a escolha caberia também na Promise (`destinationSelectors` fixos) ou nos labels do `Destination` (um por conta e método). A `CloudAccount` viraria um ou mais `Destination`s.
+- **A escolha é pegajosa:** trocar `spec.method` de `env-a` para `opentofu` **não move o pedido**. A `WorkPlacement` fica no destino antigo, marcada `Misplaced`, e a saída nova (`terraform.yaml`) foi escrita *no destino do Crossplane*, no lugar do `crossplane.yaml`. Com Flux e `prune`, isso apagaria a VPC do Crossplane e entregaria um `Terraform` onde não há tofu-controller. O método tem de ser imutável depois de criado o `Environment`, ou a troca tem de ser uma migração explícita.
+
+**3. Drift e estado em cada método:**
+
+| | Crossplane | OpenTofu (tofu-controller) |
+|---|---|---|
+| Quem detecta e corrige | O próprio Crossplane, continuamente (o managed resource reconcilia) | O tofu-controller roda `plan` a cada `interval`; com `approvePlan: auto` também aplica (corrige), sem ele só reporta |
+| Onde fica o state | Na kube API do cluster de destino (o managed resource) | Num backend; no teste, `kubernetes` (um Secret no cluster de destino), sem segredo na `CloudAccount` |
+| Credencial | `ProviderConfig` com `assumeRoleChain` e `externalID` | `role_arn`/`external_id` como variáveis do módulo (`assume_role` no provider AWS) |
+| Executado? | Só a geração e a entrega do manifest | Só a geração e a entrega do manifest |
+
+- **O Kratix não detecta drift na nuvem.** Ele reexecuta os pipelines a cada 10 h por padrão (`DefaultReconciliationInterval`, mínimo de 1 minuto, ajustável por Promise), o que só regenera os manifests.
+- **O caminho de volta existe:** um agente no destino grava um `HealthRecord`. Simulei um `unhealthy` com `reason: Drifted` ([`04-health-record.yaml`](2026-10-11-adopt-or-build-spike/kratix/04-health-record.yaml)), e o Kratix o levou para `status.healthStatus` do pedido. Quem detecta é outra peça: o Crossplane, o tofu-controller ou um agente próprio. A Syntasso publica um chart `k8s-health-agent`, não testado aqui.
+
+**4. Kratix contra um seletor de métodos mantido pela plataforma:**
+
+- **O Kratix traz:**
+  - pipelines em containers por Promise;
+  - entrega por state store (Git ou bucket) e GitOps no destino;
+  - escalonamento por `Destination`;
+  - o canal de saúde (`HealthRecord`);
+  - um `DryRun` em preview.
+- **O Kratix custa:**
+  - três peças a operar (Kratix, state store, Flux ou ArgoCD em cada destino);
+  - as conditions dele misturadas às nossas;
+  - a semântica de `Misplaced`;
+  - uma distribuição sem versão (resposta 5).
+- **O seletor próprio custa pouco:** a plataforma já tem o padrão de providers por capacidade (`local_vcluster`, `aws_account`), e a #254 já prevê a seleção de provider por campo (sem conta → `local_vcluster`, com conta → nuvem). Um segundo método é um segundo provider. Cada um escreve direto o que o seu motor consome (managed resources do Crossplane, ou o `Terraform` do tofu-controller) e traduz o estado dele nas conditions do `Environment`.
+
+**5. Maturidade e custo operacional:**
+
+- **Governança:** Apache-2.0, mantido pela Syntasso (que vende o SKE por cima), fora da CNCF; ~780 estrelas.
+- **Distribuição:** no GitHub, só uma release rolante `latest` (os manifests mudam no mesmo endereço). A última tag semver é a v0.125.0, de 2024. O chart Helm está em `v0.0.1`. Fixar versão exige guardar o manifest e o digest da imagem.
+- **Custo:** 6 pods (Kratix, SeaweedFS e 4 controllers do Flux), ~113 MiB vazio e ~207 MiB com os pedidos; 21 s de instalação. A desinstalação, com pedidos e Promise apagados antes, foi limpa.
+
+### Recomendação preliminar
+
+| Peça | Preliminar | Motivo |
+|---|---|---|
+| Método de provisionamento (#254) | **Construir, com um método só (Crossplane), e adiar o Kratix** | A Promise como fachada é boa (o CRD é nosso), mas o resto do Kratix (state store, GitOps no destino, conditions próprias) é infraestrutura a mais para um único método, e a escolha de método ficou pegajosa de um jeito perigoso. Se um segundo método for necessário, ele entra como outro provider selecionado por campo, imutável depois de criado o `Environment`, com o OpenTofu pelo tofu-controller e o drift virando condition (`Drifted`), no mesmo papel do `HealthRecord`. |
+
+A consolidação e os ADRs ficam na #258; o resultado vai como comentário na #254.
 
 ## 4. Recomendação
 

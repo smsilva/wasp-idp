@@ -1,0 +1,16 @@
+apiVersion: spike.platform.wasp.silvios.me/v1alpha1
+kind: CloudEnvironment
+metadata:
+  name: env-a
+  namespace: default
+spec:
+  cloudAccount: team-a-nonprod
+---
+apiVersion: spike.platform.wasp.silvios.me/v1alpha1
+kind: CloudEnvironment
+metadata:
+  name: env-b
+  namespace: default
+spec:
+  cloudAccount: team-a-nonprod
+  method: opentofu

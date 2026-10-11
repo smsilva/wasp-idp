@@ -1,0 +1,25 @@
+apiVersion: platform.kratix.io/v1alpha1
+kind: Destination
+metadata:
+  name: aws-crossplane
+  labels:
+    provisioning-method: crossplane
+spec:
+  path: aws-crossplane
+  strictMatchLabels: true
+  stateStoreRef:
+    name: default
+    kind: BucketStateStore
+---
+apiVersion: platform.kratix.io/v1alpha1
+kind: Destination
+metadata:
+  name: aws-opentofu
+  labels:
+    provisioning-method: opentofu
+spec:
+  path: aws-opentofu
+  strictMatchLabels: true
+  stateStoreRef:
+    name: default
+    kind: BucketStateStore
