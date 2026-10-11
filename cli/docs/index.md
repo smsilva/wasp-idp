@@ -317,7 +317,7 @@ platform catalog import idp/catalog/ --yes      # sem perguntar (pipeline)
 | `create` | não existe na plataforma |
 | `update` | existe e muda; o detalhe mostra `campo: antes → depois` |
 | `unchanged` | existe igual |
-| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), Group e User no Keycloak, Template chega com a #201 |
+| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), Group vira time com a #236 e User fica no Keycloak, Template chega com a #201 |
 | `forbidden` | sem permissão: domínio só `platform-admins`; sistema e recurso só quem criou |
 | `error` | campo faltando ou referência quebrada; o detalhe diz o campo e o arquivo |
 

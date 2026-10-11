@@ -227,9 +227,9 @@ Resource  notification-reports  create  system notifier
 Resource  production            create  system platform
 —         —                     skip    not a Backstage entity (idp/catalog/communication/greeter/mkdocs.yml#1)
 —         —                     skip    not a Backstage entity (idp/catalog/communication/mkdocs.yml#1)
-Group     team-alpha            skip    identity lives in Keycloak (#186)
-Group     team-beta             skip    identity lives in Keycloak (#186)
-Group     team-platform         skip    identity lives in Keycloak (#186)
+Group     team-alpha            skip    identity lives in Keycloak (#236)
+Group     team-beta             skip    identity lives in Keycloak (#236)
+Group     team-platform         skip    identity lives in Keycloak (#236)
 
 17 to create, 0 to update, 0 unchanged, 5 skipped.
 Apply? [y/N]: y
