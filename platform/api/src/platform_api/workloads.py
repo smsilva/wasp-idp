@@ -121,6 +121,7 @@ def instance_view(environment: str, instance: str, obj: dict | None, latest: dic
     "message": (ready or {}).get("message"),
     "replicas": {"desired": replicas.get("desired"), "ready": replicas.get("ready")} if replicas else None,
     "url": status.get("url"),
+    "resources": [{key: item.get(key) for key in ("name", "type", "mode", "status")} for item in status.get("resources") or []],
     "latestRevision": revision_view(latest),
   }
 

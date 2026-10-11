@@ -10,6 +10,7 @@ CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
 REVISIONS = "workloadrevisions"
 INSTANCES = "workloadinstances"
+REQUESTS = "resourcerequests"
 # The in-cluster address of the vcluster API server (ClusterIP on 443, #307), as the Platform API reaches
 # it (credentials.py):
 # status.kubeconfigData points to 127.0.0.1, for the host.
@@ -73,6 +74,18 @@ class Store:
 
   def patch_instance_status(self, name: str, status: dict) -> None:
     self.api.patch_namespaced_custom_object_status(GROUP, VERSION, self.namespace, INSTANCES, name, {"status": status})
+
+  def get_resource_request(self, name: str) -> dict | None:
+    return self._get(GROUP, REQUESTS, name)
+
+  def delete_resource_requests(self, environment: str, instance: str) -> None:
+    selector = f"{GROUP}/environment={environment},{GROUP}/instance={instance}"
+    for item in self.api.list_namespaced_custom_object(GROUP, VERSION, self.namespace, REQUESTS, label_selector=selector)["items"]:
+      try:
+        self.api.delete_namespaced_custom_object(GROUP, VERSION, self.namespace, REQUESTS, item["metadata"]["name"])
+      except client.ApiException as error:
+        if error.status != 404:
+          raise
 
   def delete_instance(self, name: str) -> None:
     try:

@@ -48,7 +48,7 @@ The `workload` provider renders a Deployment and a Service named after the insta
 | `deploy`, `rollback`, `remove`, `apply` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
 | `list`, `get`, `history` | access to the environment |
 
-Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variables`, `resources`, `livenessProbe`/`readinessProbe` with `httpGet`) and `service.ports`. The only placeholder resolved is `${metadata.<key>}`. Declared `resources` end as `ResourcesNotSupported` until the platform provisions them (#263), any other field as `UnsupportedSpec`. The image must be pullable by the vcluster without credentials.
+Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variables`, `resources`, `livenessProbe`/`readinessProbe` with `httpGet`) and `service.ports`. Placeholders: `${metadata.<key>}` and `${resources.<name>.<key>}` (see [Resources](#resources)); any other field is `UnsupportedSpec`. The image must be pullable by the vcluster without credentials.
 
 ## deploy
 
@@ -58,9 +58,12 @@ Writes revision `<n>` (the newest plus one) of the instance and prints `<instanc
 |---|---|
 | `Pending` | open: being applied, or rolling out |
 | `EnvironmentNotReady` | open: waits for the environment to be `ready` |
+| `ResourcesPending` | open: waits for the Forager to resolve and provision the resources of the Score |
 | `Succeeded` | the rollout finished; the instance runs this revision |
 | `SpecNotIndexed` | the version has no Workload Spec in the index |
-| `ResourcesNotSupported` | the Score declares `resources` (#263) |
+| `ResourcesNotSupported` | a resource has no provisioner in the environment's policy (`dns`, `route`, or a `class` nobody offers) |
+| `ResourceModeChanged` | a resource already exists in another mode; remove the workload and deploy again to change it |
+| `ResourcesFailed` | the provisioner of a resource failed |
 | `UnsupportedSpec` | the Score uses a field outside phase 1 |
 | `ApplyFailed` | the vcluster refused the objects, or could not be reached |
 | `RolloutFailed` | no progress for 120 s (`progressDeadlineSeconds`): an image that cannot be pulled, a crash loop |
@@ -76,9 +79,23 @@ A revision that does not succeed leaves the running revision as it was.
 | `SpecNotIndexed` | `409` |
 | another deploy of the same instance took the revision number | `409`: run it again |
 
+## Resources
+
+A resource of the Score (`resources.db: {type: postgres}`) becomes a **`ResourceRequest`** per environment, `<environment>.<instance>.<resource>`, kept by the **Forager**. For each deploy, the Forager resolves the mode of each resource in the **binding policy** of the environment, then in the platform default (`BindingPolicy` `platform-default`), and the first item that matches the type, the `class` and the `id` of the resource wins. A `class` in the Score (`resources.db.class`) needs an item with that class: a class nobody offers ends as `ResourcesNotSupported`, never as a resource of another kind.
+
+| Mode | What the platform does | Status |
+|---|---|---|
+| `provision` | a dedicated resource in the environment: for `postgres`, a Postgres in the namespace `resources` of the vcluster, named `<instance>-<resource>-<hash>`, without a volume; its password is a Secret of the same name in `apps` | available, the platform default |
+| `compose` | something inside a shared resource: a database on a shared Postgres | #305 |
+| `bind` | the credentials of a resource that already exists | #306 |
+
+The revision waits as `ResourcesPending` until every resource is ready, then the outputs fill the placeholders: `${resources.db.host}`, `port`, `name`, `database`, `username`. A secret output (`password`) is accepted only as the whole value of a variable and becomes a `secretKeyRef` to a Secret in the vcluster: the password never appears in the Deployment, in the revision or in the API. Inside another string, in `command` or in `args`, it is `UnsupportedSpec`.
+
+The mode of a resource never changes in place: a deploy that would resolve it to another mode ends as `ResourceModeChanged`. `remove` and a new `deploy` change it. A resource without `id` also gets a Resource in the catalog, `<component>-<resource>`, with the component's owner and System; it stays when the workload goes.
+
 ## list and get
 
-`list` prints one line per instance: `WORKLOAD`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. With `--output json`, `latestRevision` carries the newest revision.
+`list` prints one line per instance: `WORKLOAD`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
 
 ## history
 
@@ -96,7 +113,7 @@ Writes a new revision (`action: rollback`, `rollbackOf: <n>`) with the version a
 
 ## remove
 
-Writes a revision `action: remove`: the provider deletes the Deployment and the Service from the vcluster, then the `WorkloadInstance`. The revisions stay until the environment is deleted, so `history` still shows them and `rollback` cannot target the remove itself. A later `deploy` starts the instance again, with the next revision number. With `--wait`: `✓ <instance>@<environment> revision <n>: removed from <environment>`. `404` when the environment has no such workload.
+Writes a revision `action: remove`: the provider deletes the Deployment and the Service from the vcluster, the `ResourceRequest`s of the instance (the Forager undoes each resource: a provisioned Postgres goes with its data), then the `WorkloadInstance`. The revisions stay until the environment is deleted, so `history` still shows them and `rollback` cannot target the remove itself. A later `deploy` starts the instance again, with the next revision number. With `--wait`: `✓ <instance>@<environment> revision <n>: removed from <environment>`. `404` when the environment has no such workload.
 
 ## apply
 

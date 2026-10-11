@@ -1,0 +1,126 @@
+# A resource of a Workload Instance in an Environment (ADR 0022, 0031): one per resource of the Score,
+# named <environment>.<instance>.<resource>, with the mode the Forager resolved (provision, compose,
+# bind). Written only by the Forager: spec at creation (mode and provisioner never change; a revision
+# that resolves to another one is refused as ResourceModeChanged) and the whole status. Outside the
+# catalog (ADR 0023). Owned by the Environment; the forager finalizer undoes what the provisioner made.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: resourcerequests.platform.wasp.silvios.me
+spec:
+  group: platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: ResourceRequest
+    listKind: ResourceRequestList
+    plural: resourcerequests
+    singular: resourcerequest
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Environment
+          type: string
+          jsonPath: .spec.environment
+        - name: Instance
+          type: string
+          jsonPath: .spec.instance
+        - name: Type
+          type: string
+          jsonPath: .spec.type
+        - name: Mode
+          type: string
+          jsonPath: .spec.mode
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Reason
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [environment, instance, component, resource, type]
+              properties:
+                environment:
+                  type: string
+                instance:
+                  type: string
+                component:
+                  type: string
+                resource:
+                  description: The name of the resource in the Score (resources.<name>).
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                type:
+                  type: string
+                class:
+                  type: string
+                id:
+                  description: The shared Resource of the catalog; empty, the Forager derives <component>-<resource>.
+                  type: string
+                mode:
+                  type: string
+                  enum: [provision, compose, bind]
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: mode is immutable; remove the workload and deploy again to change it
+                provisioner:
+                  description: <type>/<mode>, the code that makes the resource; absent until a policy matches.
+                  type: string
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: provisioner is immutable
+                params:
+                  description: Input of the provisioner, copied from the policy item that resolved it.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                revision:
+                  description: The newest revision of the instance the Forager resolved this request for.
+                  type: integer
+                outputs:
+                  description: Values the Score reads as ${resources.<name>.<key>}, never secrets.
+                  type: object
+                  additionalProperties:
+                    x-kubernetes-int-or-string: true
+                secretRef:
+                  description: A Secret in namespace apps of the vcluster, with the sensitive outputs.
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    keys:
+                      type: array
+                      items:
+                        type: string
+                conditions:
+                  description: 'Resolved: False with NoProviderForCapability or ResourceModeChanged. Ready: Provisioning, Ready, Failed.'
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      revision:
+                        description: Resolved only, the revision this resolution belongs to.
+                        type: integer
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

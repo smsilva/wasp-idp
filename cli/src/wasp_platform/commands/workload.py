@@ -330,6 +330,8 @@ def get_(
     ("message", item.get("message")),
   ):
     typer.echo(f"  {field.ljust(13)} {value or '—'}")
+  for resource in item.get("resources") or []:
+    typer.echo(f"  {'resource'.ljust(13)} {resource['name']} ({resource.get('type')}, {resource.get('mode') or '—'}): {resource.get('status') or '—'}")
   if latest["revision"] != item.get("revision"):
     what = " ".join(part for part in (latest["action"], latest.get("version")) if part)
     typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")

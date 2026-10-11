@@ -1,6 +1,6 @@
 import pytest
 
-from workload_provider.manifests import NAMESPACE, ResourcesNotSupported, UnsupportedSpec, render
+from workload_provider.manifests import NAMESPACE, UnsupportedSpec, render
 
 DIGEST = "sha256:" + "b" * 64
 
@@ -58,9 +58,39 @@ def test_one_replica_and_no_service_by_default():
   assert url is None
 
 
-def test_resources_are_not_supported_yet():
-  with pytest.raises(ResourcesNotSupported, match="db"):
-    render(score(resources={"db": {"type": "postgres"}}), revision())
+BOUND = {"db": {"outputs": {"host": "reviews-db.apps", "port": 5432, "name": "app"}, "secretRef": {"name": "reviews-db", "keys": ["password"]}}}
+
+
+def with_db(**variables):
+  spec = score(resources={"db": {"type": "postgres"}})
+  spec["containers"]["api"]["variables"] = variables
+  return spec
+
+
+def test_resource_outputs_and_secrets():
+  objects, _ = render(with_db(DB_URL="postgres://${resources.db.host}:${resources.db.port}/${resources.db.name}", DB_PASSWORD="${resources.db.password}"), revision(), BOUND)
+  env = objects[1]["spec"]["template"]["spec"]["containers"][0]["env"]
+  assert env == [
+    {"name": "DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "reviews-db", "key": "password"}}},
+    {"name": "DB_URL", "value": "postgres://reviews-db.apps:5432/app"},
+  ]
+
+
+@pytest.mark.parametrize("variables,message", [
+  ({"DSN": "user:${resources.db.password}"}, "is a secret: only accepted as the whole value of a variable"),
+  ({"HOST": "${resources.db.unknown}"}, "resources.db.unknown} cannot be resolved"),
+  ({"HOST": "${resources.cache.host}"}, "resources.cache.host} cannot be resolved"),
+])
+def test_resource_placeholders_refused(variables, message):
+  with pytest.raises(UnsupportedSpec, match=message):
+    render(with_db(**variables), revision(), BOUND)
+
+
+def test_a_secret_never_reaches_args():
+  spec = with_db()
+  spec["containers"]["api"]["args"] = ["--password", "${resources.db.password}"]
+  with pytest.raises(UnsupportedSpec, match="args"):
+    render(spec, revision(), BOUND)
 
 
 @pytest.mark.parametrize("change,message", [

@@ -1,0 +1,27 @@
+[project]
+name = "forager-provider"
+version = "0.1.0"
+description = "Forager: resolves the resources of each WorkloadRevision into ResourceRequests and provisions them (ADR 0022, 0031)"
+requires-python = ">=3.12"
+dependencies = [
+  "kubernetes>=31.0",
+  "pyyaml>=6",
+]
+
+[project.scripts]
+forager-provider = "forager_provider.main:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forager_provider"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -75,6 +75,7 @@ nav:
           - 21.4 The history of a workload: walkthrough/workloads/21-4-history.md
           - 21.5 Roll back and remove: walkthrough/workloads/21-5-rollback.md
           - 21.6 The plan of an environment: walkthrough/workloads/21-6-apply.md
+          - 21.7 A database for a workload: walkthrough/workloads/21-7-resources.md
       - 22. Remove the GitHub connection: walkthrough/scm-connection/22-remove.md
       - 23. Clean up and sign out: walkthrough/23-cleanup.md
       - Without a browser: walkthrough/cli-smoke.md

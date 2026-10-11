@@ -19,6 +19,13 @@ class FakeStore:
       "reviews.2.0.0": {"spec": {}},
     }
     self.revision_status, self.instances, self.instance_status, self.deleted_instances = {}, {}, {}, []
+    self.requests, self.deleted_requests = {}, []
+
+  def get_resource_request(self, name):
+    return self.requests.get(name)
+
+  def delete_resource_requests(self, environment, instance):
+    self.deleted_requests.append((environment, instance))
 
   def get_environment(self, name):
     return self.environments.get(name)
@@ -145,7 +152,6 @@ def test_environment_not_ready_waits():
 @pytest.mark.parametrize("store,version,reason", [
   (FakeStore(), "2.0.0", "SpecNotIndexed"),
   (FakeStore(), "9.9.9", "SpecNotIndexed"),
-  (FakeStore(app_spec=score(resources={"db": {"type": "postgres"}})), "2.1.0", "ResourcesNotSupported"),
   (FakeStore(app_spec=score(extensions={})), "2.1.0", "UnsupportedSpec"),
 ])
 def test_final_failures_apply_nothing(store, version, reason):
@@ -199,6 +205,7 @@ def test_remove_deletes_from_the_vcluster_and_the_instance():
   done = revision(1, reason="Succeeded", status="True")
   assert reconciler(store, vcluster).reconcile([done, revision(2, action="remove")], [instance]) is False
   assert vcluster.deleted == [("Service", "apps", "reviews"), ("Deployment", "apps", "reviews")]
+  assert store.deleted_requests == [("demo", "reviews")]
   assert store.deleted_instances == ["demo.reviews"]
   assert (last(store, "demo.reviews.2")["status"], last(store, "demo.reviews.2")["reason"]) == ("True", "Succeeded")
   # A finished remove is left alone on the next passes.
@@ -220,3 +227,67 @@ def test_remove_failed():
   reconciler(store, FakeVcluster(fail=True)).reconcile([revision(1, action="remove")], [])
   assert last(store, "demo.reviews.1")["reason"] == "ApplyFailed"
   assert store.deleted_instances == []
+
+
+def with_db():
+  spec = score(resources={"db": {"type": "postgres"}})
+  spec["containers"]["api"]["variables"] = {"DB_HOST": "${resources.db.host}", "DB_PASSWORD": "${resources.db.password}"}
+  return FakeStore(app_spec=spec)
+
+
+def request(revision_number=1, resolved=("True", "Resolved", "db: postgres/provision"), ready=("True", "Ready", "postgres reviews-db ready in demo")):
+  return {
+    "metadata": {"name": "demo.reviews.db"},
+    "spec": {"type": "postgres", "mode": "provision"},
+    "status": {
+      "revision": revision_number,
+      "outputs": {"host": "reviews-db.apps"},
+      "secretRef": {"name": "reviews-db", "keys": ["password"]},
+      "conditions": [
+        {"type": "Resolved", "status": resolved[0], "reason": resolved[1], "message": resolved[2]},
+        {"type": "Ready", "status": ready[0], "reason": ready[1], "message": ready[2]},
+      ],
+    },
+  }
+
+
+@pytest.mark.parametrize("existing,message", [
+  (None, "db: waiting for the Forager"),
+  (request(revision_number=0), "db: waiting for the Forager"),
+  (request(ready=("Unknown", "Provisioning", "waiting for postgres reviews-db")), "db: waiting for postgres reviews-db"),
+])
+def test_resources_pending(existing, message):
+  store, vcluster = with_db(), FakeVcluster(deployment())
+  if existing:
+    store.requests["demo.reviews.db"] = existing
+  assert reconciler(store, vcluster).reconcile([revision()], []) is True
+  condition = last(store, "demo.reviews.1")
+  assert (condition["status"], condition["reason"], condition["message"]) == ("Unknown", "ResourcesPending", message)
+  assert vcluster.applied == []
+
+
+@pytest.mark.parametrize("existing,reason,message", [
+  (request(resolved=("False", "NoProviderForCapability", "db: no provisioner for postgres in demo")), "ResourcesNotSupported", "db: no provisioner for postgres in demo"),
+  (request(resolved=("False", "ResourceModeChanged", "db is provision and ...")), "ResourceModeChanged", "db is provision and ..."),
+  (request(ready=("False", "Failed", "invalid name")), "ResourcesFailed", "db: invalid name"),
+])
+def test_resources_end_the_revision(existing, reason, message):
+  store, vcluster = with_db(), FakeVcluster(deployment())
+  store.requests["demo.reviews.db"] = existing
+  assert reconciler(store, vcluster).reconcile([revision()], []) is False
+  condition = last(store, "demo.reviews.1")
+  assert (condition["status"], condition["reason"], condition["message"]) == ("False", reason, message)
+  assert vcluster.applied == []
+
+
+def test_resources_ready_fill_the_deployment_and_the_instance():
+  store, vcluster = with_db(), FakeVcluster(deployment())
+  store.requests["demo.reviews.db"] = request()
+  vcluster.objects = []
+  original = vcluster.apply
+  vcluster.apply = lambda obj, manager: (vcluster.objects.append(obj), original(obj, manager))
+  reconciler(store, vcluster).reconcile([revision()], [])
+  assert last(store, "demo.reviews.1")["reason"] == "Succeeded"
+  env = vcluster.objects[1]["spec"]["template"]["spec"]["containers"][0]["env"]
+  assert env == [{"name": "DB_HOST", "value": "reviews-db.apps"}, {"name": "DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "reviews-db", "key": "password"}}}]
+  assert store.instance_status["demo.reviews"][-1]["resources"] == [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}]

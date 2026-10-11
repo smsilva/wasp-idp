@@ -173,10 +173,12 @@ def test_get_shows_the_instance_the_provider_keeps(client, state, owner):
     "status": {
       "revision": 1, "version": "1.0.0", "image": "ghcr.io/wasp-foundry/greeting-api@sha256:" + "b" * 64,
       "replicas": {"desired": 1, "ready": 1}, "url": "http://greeting-api.apps:80",
+      "resources": [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}],
       "conditions": [{"type": "Ready", "status": "True", "reason": "Available"}],
     },
   })
   body = client.get("/v1/environments/demo/workloads/greeting-api", headers=owner).json()
+  assert body["resources"] == [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}]
   assert (body["status"], body["version"], body["revision"], body["url"]) == ("Available", "1.0.0", 1, "http://greeting-api.apps:80")
   assert body["replicas"] == {"desired": 1, "ready": 1}
   assert body["latestRevision"]["status"] == "Succeeded"

@@ -22,9 +22,11 @@ valid and an invalid Score, spec get of a Version written by kubectl, refused ou
 by version and by branch, and SpecNotIndexed for a Version without it), a Workload Instance
 (deploy of a public image by digest with --wait, list, get, history, rollback to the previous
 success, runningIn in catalog component get, remove; refused outside the owner team, for a version
-outside the index, a rollback to a failed revision, and ResourcesNotSupported for a Score with resources; a pod
+outside the index, a rollback to a failed revision, and ResourcesNotSupported for a resource type without provider; a pod
 in the vcluster reaches the Service of the instance by DNS), the plan
-of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), and a cloud account (ADR 0029): refused with a clear message without an
+of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), a postgres
+provisioned by the Forager (deploy until Ready, an app that connects to it with psql, the derived catalog Resource,
+released on remove), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -478,8 +480,8 @@ expect_failure "no version built from branch 'main' in the index" \
     --component "${workload_component}" \
     --branch main
 step "workload deploy|list|get|history|rollback|remove: a version from the index in an environment (#292)"
-# A public image by digest the vcluster can pull, and a Score without resources (the Forager is #263);
-# the next version declares a database, which phase 1 refuses as ResourcesNotSupported.
+# A public image by digest the vcluster can pull, and a Score without resources; the next version is
+# the python-service Score, whose dns and route have no provider yet: ResourcesNotSupported.
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
 apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
 kind: Version
@@ -667,8 +669,72 @@ output="$(platform workload apply \
 echo "${output}"
 expect_output "${workload_environment}: 0 to add, 0 to change, 1 to remove" "${output}"
 expect_output "revision 7: removed from ${workload_environment}" "${output}"
+
+step "workload deploy with a postgres: the Forager provisions it, remove undoes it (#304)"
+# The platform default policy (platform-default) resolves postgres as provision: a dedicated
+# Postgres in the vcluster, its outputs in the variables and the password as a secretKeyRef.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.5.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.5.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '5%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T14:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${workload_component}
+    resources:
+      db:
+        type: postgres
+    containers:
+      app:
+        image: .
+        variables:
+          DATABASE_HOST: \${resources.db.host}
+          DATABASE_PORT: \${resources.db.port}
+          DATABASE_NAME: \${resources.db.name}
+          DATABASE_USER: \${resources.db.username}
+          DATABASE_PASSWORD: \${resources.db.password}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9898
+MANIFEST
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --version 0.5.0 \
+  --wait)"
+echo "${output}"
+expect_output "revision 8: 0.5.0 running" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
+echo "${output}"
+expect_output "resource      db (postgres, provision): Ready" "${output}"
+# The Resource of the catalog derived from the Score (no id): <component>-<resource>.
+output="$(platform catalog resource get "${workload_component}-db")"
+expect_output "team-platform" "${output}"
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --wait)"
+expect_output "revision 9: removed from ${workload_environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${workload_environment}.${workload_component}.db" \
+  --for delete \
+  --timeout 60s
 platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${workload_component}-db" "${workload_component}-dns" "${workload_component}-route"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
 
 step "scm connection remove"

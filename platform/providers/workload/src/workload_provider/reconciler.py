@@ -4,11 +4,16 @@ For each instance, only the newest revision counts: an older one still open is c
 An open revision is applied (server-side apply, idempotent) on every pass until its rollout ends, so
 a restart of the provider loses nothing. Once a deploy succeeds, every pass refreshes the runtime
 health of its instance.
+
+A Score with resources waits (ResourcesPending) until the Forager has resolved every one of them for
+this revision (ResourceRequest status.revision) and provisioned it (Ready): its outputs and secretRef
+fill the placeholders. A resource without provider ends the revision as ResourcesNotSupported, a
+change of mode as ResourceModeChanged, a provisioner failure as ResourcesFailed.
 """
 import logging
 from datetime import datetime, timezone
 
-from .manifests import MANAGER, NAMESPACE, ResourcesNotSupported, UnsupportedSpec, render
+from .manifests import MANAGER, NAMESPACE, UnsupportedSpec, render
 
 GROUP = "platform.wasp.silvios.me"
 VERSION = "v1alpha1"
@@ -32,6 +37,14 @@ def ready_of(obj: dict) -> dict | None:
 def is_open(revision: dict) -> bool:
   ready = ready_of(revision)
   return ready is None or ready.get("status") == OPEN
+
+
+# Resolved=False reasons of a ResourceRequest, and how they end the revision.
+RESOLVE_FAILURES = {"NoProviderForCapability": "ResourcesNotSupported", "ResourceModeChanged": "ResourceModeChanged"}
+
+
+def condition_of(obj: dict, kind: str) -> dict | None:
+  return next((c for c in (obj.get("status") or {}).get("conditions", []) if c.get("type") == kind), None)
 
 
 def instance_name(revision: dict) -> str:
@@ -139,11 +152,19 @@ class Reconciler:
     if version is None or (version.get("spec") or {}).get("appSpec") is None:
       self._close(revision, "False", "SpecNotIndexed", f"{spec['component']} {spec['version']} has no Workload Spec in the index")
       return False
+    app_spec = version["spec"]["appSpec"]
+    resources, summary = {}, []
+    if app_spec.get("resources"):
+      outcome, detail = self._resources(revision, sorted(app_spec["resources"]))
+      if outcome == "pending":
+        self._open(revision, "ResourcesPending", detail)
+        return True
+      if outcome != "ready":
+        self._close(revision, "False", outcome, detail)
+        return False
+      resources, summary = detail
     try:
-      objects, url = render(version["spec"]["appSpec"], revision)
-    except ResourcesNotSupported as error:
-      self._close(revision, "False", "ResourcesNotSupported", str(error))
-      return False
+      objects, url = render(app_spec, revision, resources)
     except UnsupportedSpec as error:
       self._close(revision, "False", "UnsupportedSpec", str(error))
       return False
@@ -161,11 +182,37 @@ class Reconciler:
       return True
     if state == "failed":
       self._close(revision, "False", "RolloutFailed", message)
-      self._write_instance(revision, instance, deployment, url)
+      self._write_instance(revision, instance, deployment, url, summary)
       return False
     self._close(revision, "True", "Succeeded", message)
-    self._write_instance(revision, instance, deployment, url)
+    self._write_instance(revision, instance, deployment, url, summary)
     return False
+
+  def _resources(self, revision: dict, names: list[str]):
+    """("ready", (resources, summary)), ("pending", message) or (closing reason, message)."""
+    spec = revision["spec"]
+    number = spec["revision"]
+    resources, summary, waiting = {}, [], []
+    for name in names:
+      request = self.store.get_resource_request(f"{spec['environment']}.{spec['instance']}.{name}")
+      if request is None or ((request.get("status") or {}).get("revision") or 0) < number:
+        waiting.append(f"{name}: waiting for the Forager")
+        continue
+      resolved = condition_of(request, "Resolved") or {}
+      if resolved.get("status") == "False":
+        return RESOLVE_FAILURES.get(resolved.get("reason"), "ResourcesNotSupported"), resolved.get("message") or name
+      ready = condition_of(request, "Ready") or {}
+      if ready.get("status") == "False":
+        return "ResourcesFailed", f"{name}: {ready.get('message') or ready.get('reason')}"
+      if ready.get("status") != "True":
+        waiting.append(f"{name}: {ready.get('message') or 'provisioning'}")
+        continue
+      status = request["status"]
+      resources[name] = {"outputs": status.get("outputs") or {}, "secretRef": status.get("secretRef")}
+      summary.append({"name": name, "type": request["spec"]["type"], "mode": request["spec"].get("mode"), "status": ready.get("reason")})
+    if waiting:
+      return "pending", "; ".join(waiting)
+    return "ready", (resources, summary)
 
   def _remove(self, revision: dict, environment: dict) -> bool:
     """Deployment and Service out of the vcluster, then the instance; the revisions stay."""
@@ -177,11 +224,13 @@ class Reconciler:
     except Exception as error:
       self._close(revision, "False", "ApplyFailed", f"removing from the vcluster of {spec['environment']}: {error}")
       return False
+    # The Forager's finalizer undoes each resource.
+    self.store.delete_resource_requests(spec["environment"], spec["instance"])
     self.store.delete_instance(instance_name(revision))
     self._close(revision, "True", "Succeeded", f"removed from {spec['environment']}")
     return False
 
-  def _write_instance(self, revision: dict, instance: dict | None, deployment: dict | None, url: str | None) -> None:
+  def _write_instance(self, revision: dict, instance: dict | None, deployment: dict | None, url: str | None, resources: list[dict]) -> None:
     spec = revision["spec"]
     name = instance_name(revision)
     if instance is None:
@@ -203,6 +252,7 @@ class Reconciler:
       "image": f"{spec['image']}@{spec['digest']}",
       "replicas": replicas,
       "url": url,
+      "resources": resources,
       "conditions": [self._condition(**condition)],
     })
 

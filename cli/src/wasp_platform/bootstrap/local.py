@@ -49,6 +49,7 @@ AWS_BASE_SECRET = "aws-base-credential"
 SCM_PROVIDER_IMAGE = "scm-github-provider"
 # Workload Instances (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment.
 WORKLOAD_PROVIDER_IMAGE = "workload-provider"
+FORAGER_PROVIDER_IMAGE = "forager-provider"
 # Factory templates (ADR 0024): read from this public repo, so no credential is needed.
 SEED_REPO = "https://github.com/smsilva/wasp-idp"
 SEED_FOLDER = Path("platform") / "templates"
@@ -357,6 +358,13 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   log("deploying the workload provider (workload) …")
   _deploy(workload_dir / "deploy" / "workload-provider.yaml", WORKLOAD_PROVIDER_IMAGE, workload_image)
   _kubectl("rollout", "status", f"deployment/{WORKLOAD_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
+
+  forager_dir = root / "platform" / "providers" / "forager"
+  log("building the Forager image …")
+  forager_image = _build_and_import(FORAGER_PROVIDER_IMAGE, forager_dir)
+  log("deploying the Forager (resources of each workload) …")
+  _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, forager_image)
+  _kubectl("rollout", "status", f"deployment/{FORAGER_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
 
   cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)

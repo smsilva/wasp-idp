@@ -75,6 +75,20 @@ spec:
                 url:
                   description: The address inside the vcluster (namespace apps).
                   type: string
+                resources:
+                  description: The resources of the running revision, from their ResourceRequests.
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      type:
+                        type: string
+                      mode:
+                        type: string
+                      status:
+                        type: string
                 conditions:
                   description: 'Ready: True with Available; False with Progressing or Degraded.'
                   type: array
