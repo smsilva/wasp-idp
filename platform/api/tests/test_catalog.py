@@ -190,3 +190,9 @@ def test_entities_filters(client, user, tree):
   assert [item["name"] for item in systems] == ["greeter"]
   assert client.get("/v1/catalog/entities", params={"owner": "team-beta"}, headers=user).json()["items"] == []
   assert client.get("/v1/catalog/entities", params={"kind": "component"}, headers=user).status_code == 422
+
+
+def test_long_description_is_422(client, admin):
+  response = client.post("/v1/catalog/domains", json={"name": "communication", "owner": "team-alpha", "description": "x" * 1001}, headers=admin)
+  assert response.status_code == 422
+  assert "description" in response.json()["error"]["message"]

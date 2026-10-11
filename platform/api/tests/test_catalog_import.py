@@ -273,3 +273,23 @@ def test_cycle_through_the_import_and_the_platform():
   plan = make_plan(documents, state, ADMIN)
   assert {item.name: item.action for item in plan.items} == {"a": "error", "x": "error"}
   assert plan.blocked
+
+
+def test_duplicate_is_reported_even_when_a_copy_is_invalid():
+  documents = sourced(doc("System", "z", {"owner": "team-alpha", "domain": "d"}), doc("System", "z", {"owner": "user:default/x", "domain": "d"}))
+  plan = make_plan(documents, FakeState(), ADMIN)
+  assert [(item.action, item.reason) for item in plan.items] == [
+    ("error", "system 'z' also declared in t.yaml#2"),
+    ("error", "system 'z' also declared in t.yaml#1"),
+  ]
+
+
+def test_null_namespace_is_default_and_other_types_are_errors():
+  assert classify("f#1", doc("System", "greeter", {"owner": "team-alpha", "domain": "d"}, namespace=None)).action is None
+  item = classify("f#1", doc("System", "greeter", {"owner": "team-alpha", "domain": "d"}, namespace=["x"]))
+  assert (item.action, item.field, item.reason) == ("error", "metadata.namespace", "must be text")
+
+
+def test_long_description_is_an_error():
+  item = classify("f#1", doc("System", "greeter", {"owner": "team-alpha", "domain": "d"}, description="x" * 1001))
+  assert (item.action, item.field, item.reason) == ("error", "metadata.description", "at most 1000 characters")

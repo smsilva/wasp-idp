@@ -135,9 +135,11 @@ def classify(source: str, document) -> Item:
   metadata = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
   name = metadata.get("name")
   item = Item(source, kind, None if name is None else str(name))
-  namespace = metadata.get("namespace", "default")
+  namespace = metadata.get("namespace") or "default"
   if item.plural is None:
     item.reject("skip", None, SKIPPED.get(kind, "not a catalog kind"))
+  elif not isinstance(namespace, str):
+    item.reject("error", "metadata.namespace", "must be text")
   elif namespace != "default":
     item.reject("skip", None, f"namespace '{namespace}': the platform catalog has no namespaces")
   elif name is None:
@@ -301,7 +303,8 @@ def decide(item: Item, declared: dict, state, principal) -> None:
 
 def make_plan(documents: list[dict], state, principal) -> Plan:
   items = [classify(document["source"], document["document"]) for document in documents]
-  mark_duplicates([item for item in items if item.action is None])
+  # Every copy with a name counts, valid or not: an error on one copy must not hide the duplicate.
+  mark_duplicates([item for item in items if item.plural and item.name and item.action != "skip"])
   domains = {item.name: item for item in items if item.kind == "Domain" and item.action is None}
   mark_cycles(domains)
   items.sort(key=lambda item: (KIND_ORDER.get(item.kind, len(KIND_ORDER)), depth(item, domains), item.name or "", item.source))
@@ -318,6 +321,14 @@ FAILURES = {
   Conflict: "changed since the plan was made",
   NotFound: "deleted since the plan was made",
 }
+
+
+def failure(error: Exception) -> str:
+  """A kube ApiException's str() carries the response headers and body: keep status and reason."""
+  status = getattr(error, "status", None)
+  if status is not None:
+    return f"kubernetes error {status}: {getattr(error, 'reason', None) or 'unknown'}"
+  return str(error)
 
 
 class PlanRejected(Exception):
@@ -358,7 +369,7 @@ def apply(plan: Plan, state, journal: Journal, principal: Principal) -> None:
         # The object as read, spec replaced: created-by and resourceVersion stay.
         state.replace(item.plural, {**item.current, "spec": item.spec})
     except Exception as error:
-      item.failed = FAILURES.get(type(error), str(error))
+      item.failed = FAILURES.get(type(error)) or failure(error)
       done = sum(1 for written in plan.writes if written.applied)
       raise PlanRejected(409, f"{kind.singular} '{item.name}': {item.failed}; {done} applied before it, import again to converge", plan.view(applied=False))
     journal.mark_applied(entry)
