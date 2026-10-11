@@ -1,6 +1,6 @@
 """The catalog: domains, systems, resources and templates the platform stores (ADRs 0023 and 0024).
 
-Components and APIs live in each repo's catalog-info.yaml and arrive in a later slice.
+Components live in each repo's catalog-info.yaml: `component` creates the repo and reads the index.
 """
 from enum import Enum
 from typing import Annotated
@@ -10,9 +10,10 @@ import typer
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, fail, print_json, print_table, success
 from .catalog_import import import_catalog
+from .component import app as component_app
 from .template import app as template_app
 
-app = typer.Typer(help="The catalog: domains, systems, resources and templates.", no_args_is_help=True)
+app = typer.Typer(help="The catalog: domains, systems, resources, components and templates.", no_args_is_help=True)
 
 # Table columns of each kind after NAME: (header, field of the API view).
 COLUMNS = {
@@ -161,5 +162,6 @@ def list_all(
 app.add_typer(domain_app, name="domain")
 app.add_typer(system_app, name="system")
 app.add_typer(resource_app, name="resource")
+app.add_typer(component_app, name="component")
 app.add_typer(template_app, name="template")
 app.command("import")(import_catalog)
