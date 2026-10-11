@@ -205,6 +205,18 @@ def test_unknown_team_is_not_found(client):
   assert client.post("/v1/teams/missing/members", json={"email": "dev@example.com"}).status_code == 404
 
 
+def test_team_shared_by_an_environment_cannot_be_deleted(client, keycloak, tokens):
+  client.post("/v1/teams", json={"name": "team-alpha"})
+  owner = {"Authorization": f"Bearer {tokens.issue(group_paths=['/platform-users', '/teams/team-alpha'])}"}
+  client.post("/v1/environments", json={"name": "env-a", "profile": "ephemeral", "sharedWith": ["team-alpha"]}, headers=owner)
+  response = client.delete("/v1/teams/team-alpha")
+  assert response.status_code == 409
+  assert "env-a" in response.json()["error"]["message"]
+  assert keycloak.group_by_path("/teams/team-alpha")
+  client.delete("/v1/environments/env-a/shares/team-alpha", headers=owner)
+  assert client.delete("/v1/teams/team-alpha").status_code == 204
+
+
 def test_delete_team(client, keycloak):
   client.post("/v1/teams", json={"name": "team-alpha"})
   assert client.delete("/v1/teams/team-alpha").status_code == 204

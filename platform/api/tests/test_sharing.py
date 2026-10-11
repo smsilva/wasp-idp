@@ -50,10 +50,12 @@ def client(state, journal_path, tokens, teams):
 @pytest.fixture
 def as_(tokens):
   people = {
-    "owner": dict(sub="owner-1", email="owner@example.com", groups=["platform-users", "team-alpha"]),
-    "teammate": dict(sub="mate-1", email="mate@example.com", groups=["platform-users", "team-alpha"]),
-    "outsider": dict(sub="out-1", email="out@example.com", groups=["platform-users", "team-beta"]),
-    "admin": dict(sub="admin-1", email="admin@example.com", groups=["platform-admins", "platform-users"]),
+    "owner": dict(sub="owner-1", email="owner@example.com", group_paths=["/platform-users", "/teams/team-alpha"]),
+    "teammate": dict(sub="mate-1", email="mate@example.com", group_paths=["/platform-users", "/teams/team-alpha"]),
+    "outsider": dict(sub="out-1", email="out@example.com", group_paths=["/platform-users", "/teams/team-beta"]),
+    "admin": dict(sub="admin-1", email="admin@example.com", group_paths=["/platform-admins", "/platform-users"]),
+    # Same names as the team and as the admin group, but outside /teams and nested: never trusted.
+    "homonym": dict(sub="hom-1", email="hom@example.com", group_paths=["/platform-users", "/ops/team-alpha", "/ops/platform-admins"]),
   }
   return lambda who: {"Authorization": f"Bearer {tokens.issue(**people[who])}"}
 
@@ -190,3 +192,18 @@ def test_sharing_needs_teams(state, journal_path, tokens, as_):
 def test_keycloak_down_blocks_sharing(client, as_, teams):
   teams.down = True
   assert create(client, as_, sharedWith=["team-alpha"]).status_code == 503
+
+
+def test_homonym_groups_grant_nothing(client, as_, state):
+  create(client, as_, sharedWith=["team-alpha"])
+  ready(state, "shared-env")
+  assert "kubeconfigData" not in client.get("/v1/environments/shared-env", headers=as_("homonym")).json()
+  assert client.get("/v1/environments", headers=as_("homonym")).json()["items"] == []
+  assert client.delete("/v1/environments/shared-env", headers=as_("homonym")).status_code == 403
+  assert create(client, as_, name="hom-env", who="homonym", sharedWith=["team-alpha"]).status_code == 403
+
+
+def test_me_lists_teams(client, as_):
+  me = client.get("/v1/me", headers=as_("owner")).json()
+  assert me["groups"] == ["platform-users", "team-alpha"]
+  assert me["teams"] == ["team-alpha"]

@@ -95,7 +95,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
 
   @app.get("/v1/me")
   def me(principal: Principal = Depends(current_principal)):
-    return {"sub": principal.sub, "email": principal.email, "groups": sorted(principal.groups)}
+    return {"sub": principal.sub, "email": principal.email, "groups": sorted([*principal.groups, *principal.teams]), "teams": sorted(principal.teams)}
 
   @app.get("/v1/capabilities")
   def capabilities(principal: Principal = Depends(current_principal)):
@@ -160,7 +160,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
     if not added:
       return
     admin = environments.ADMIN_GROUP in principal.groups
-    foreign = sorted(set(added) - set(principal.groups))
+    foreign = sorted(set(added) - set(principal.teams))
     if foreign and not admin:
       raise HTTPException(403, f"you can only share with teams you are a member of: {', '.join(foreign)}")
     if teams is None:
@@ -218,7 +218,7 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   # Before the catalog router: its POST /{plural} would otherwise take "import" as a kind.
   app.include_router(catalog_import.router(state, journal))
   app.include_router(catalog.router(state, journal))
-  app.include_router(team_routes.router(teams, journal))
+  app.include_router(team_routes.router(teams, journal, state))
   return app
 
 

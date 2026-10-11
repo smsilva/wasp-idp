@@ -9,13 +9,16 @@ import jwt
 from fastapi import Depends, HTTPException, Request
 
 AUDIENCE = "platform-api"
+TEAMS_PATH = "/teams/"
 
 
 @dataclass(frozen=True)
 class Principal:
   sub: str
   email: str | None
+  # Top-level groups of the realm (platform-admins, platform-users) and teams (/teams/<name>, ADR 0026).
   groups: list[str] = field(default_factory=list)
+  teams: list[str] = field(default_factory=list)
 
   @property
   def actor(self) -> str:
@@ -42,7 +45,16 @@ class Verifier:
       )
     except (jwt.PyJWTError, jwt.PyJWKClientError) as error:
       raise Unauthorized(str(error)) from error
-    return Principal(sub=claims["sub"], email=claims.get("email"), groups=list(claims.get("groups", [])))
+    groups, teams = groups_and_teams(claims.get("group_paths") or [])
+    return Principal(sub=claims["sub"], email=claims.get("email"), groups=groups, teams=teams)
+
+
+def groups_and_teams(paths: list[str]) -> tuple[list[str], list[str]]:
+  """Authorization reads the full paths (claim `group_paths`), never the `groups` claim: without a
+  path, a group named platform-admins or team-alpha anywhere in the realm would read the same."""
+  groups = [path[1:] for path in paths if path.startswith("/") and path.count("/") == 1]
+  teams = [path.removeprefix(TEAMS_PATH) for path in paths if path.startswith(TEAMS_PATH) and path.count("/") == 2]
+  return groups, teams
 
 
 class Unauthorized(Exception):

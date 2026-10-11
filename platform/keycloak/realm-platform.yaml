@@ -33,6 +33,17 @@ clientScopes:
           access.token.claim: "true"
           id.token.claim: "true"
           userinfo.token.claim: "true"
+      # What the Platform API authorizes on: full paths, so /teams/team-alpha and /platform-admins
+      # cannot be impersonated by a homonym group elsewhere in the realm (ADR 0026).
+      - name: group-paths
+        protocol: openid-connect
+        protocolMapper: oidc-group-membership-mapper
+        config:
+          claim.name: group_paths
+          full.path: "true"
+          access.token.claim: "true"
+          id.token.claim: "false"
+          userinfo.token.claim: "false"
   - name: platform-api-audience
     protocol: openid-connect
     attributes:
