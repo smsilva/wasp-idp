@@ -9,6 +9,7 @@ import typer
 
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, fail, print_json, print_table, success
+from .catalog_import import import_catalog
 
 app = typer.Typer(help="The catalog: domains, systems and resources.", no_args_is_help=True)
 
@@ -159,3 +160,4 @@ def list_all(
 app.add_typer(domain_app, name="domain")
 app.add_typer(system_app, name="system")
 app.add_typer(resource_app, name="resource")
+app.command("import")(import_catalog)
