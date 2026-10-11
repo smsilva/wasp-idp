@@ -53,6 +53,7 @@ service:
 - The output is a valid `app-spec.yaml`: the first line is a YAML comment with the version, the branch and the commit.
 - `--version <version>` picks one version; without `--version` or `--branch`, the newest version of the component.
 - `--output json` adds the image, the digest and the creation time.
+- Only members of the owner team (`team-alpha`) and `platform-admins` read the spec: a Score may carry plain values from a private repo.
 
 A version registered before the index kept the spec has none:
 

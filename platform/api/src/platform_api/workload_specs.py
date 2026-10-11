@@ -3,7 +3,8 @@
 validate runs the gate of the build (wasp_score) on a local file, before any build: the schema, the
 resource types of the platform, each resource id in the catalog. The spec of a component is read from
 its Version, where the scm_github provider stored it: a version indexed before #291 has none
-(SpecNotIndexed). Both stay open to any signed-in user, like the version index.
+(SpecNotIndexed). validate is open to any signed-in user; the spec of a component goes only to members
+of its owner team and platform-admins, since a Score may carry plain values from a private repo.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +12,7 @@ from wasp_score import RESOURCE_TYPES, check
 
 from .auth import Principal, current_principal
 from .builds import COMPONENTS, VERSIONS
+from .environments import ADMIN_GROUP
 from .state import NotFound
 
 RESOURCES = "resources"
@@ -54,9 +56,11 @@ def router(state, resource_types=RESOURCE_TYPES) -> APIRouter:
     if version is not None and branch is not None:
       raise HTTPException(422, f"spec of '{component}': version and branch are exclusive")
     try:
-      state.get(COMPONENTS, component)
+      owner = (state.get(COMPONENTS, component).get("spec") or {}).get("owner")
     except NotFound:
       raise HTTPException(404, f"component '{component}' not found")
+    if not (owner in principal.teams or ADMIN_GROUP in principal.groups):
+      raise HTTPException(403, f"spec of '{component}': only members of its owner team ({owner or 'none'}) and {ADMIN_GROUP} read it")
     versions = [obj for obj in state.list(VERSIONS) if obj["spec"].get("component") == component]
     if version is not None:
       found = [obj for obj in versions if obj["spec"].get("version", "").lower() == version.lower()]

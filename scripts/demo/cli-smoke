@@ -18,8 +18,8 @@ out), the refusals of component create (unknown system, a --param outside the
 schema, a name already in the index, a connection that is not ready), the
 refusals of build create (outside the owner team, unknown component, a malformed
 version, an org with no connection), the Workload Spec (spec validate of a
-valid and an invalid Score, spec get of a Version written by kubectl, by version
-and by branch, and SpecNotIndexed for a Version without it), and a cloud account (ADR 0029): refused with a clear message without an
+valid and an invalid Score, spec get of a Version written by kubectl, refused outside the owner team,
+by version and by branch, and SpecNotIndexed for a Version without it), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -450,6 +450,11 @@ spec:
   appSpec:
 $(sed 's/^/    /' "${workload_directory}/app-spec.yaml")
 MANIFEST
+# A Score may carry plain values from a private repo: the test user is not in team-platform, the owner.
+expect_failure "only members of its owner team (team-platform)" \
+  platform workload spec get \
+    --component "${workload_component}"
+platform login --test-admin
 output="$(platform workload spec get --component "${workload_component}" --branch feat/greetings)"
 expect_output "# ${workload_component} 0.2.0-greetings.2222222 · feat/greetings @ 2222222" "${output}"
 expect_output "targetPort: 8000" "${output}"
@@ -465,7 +470,6 @@ expect_failure "no version built from branch 'main' in the index" \
     --branch main
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
-platform login --test-admin
 
 step "scm connection remove"
 platform scm connection remove "${connection}"

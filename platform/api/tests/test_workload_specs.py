@@ -49,8 +49,19 @@ def client(state, tmp_path, tokens):
 
 @pytest.fixture
 def anyone(tokens):
-  # Outside the owner team: reading and validating are open to any signed-in user.
+  # Outside the owner team: validating is open to any signed-in user.
   return bearer(tokens, sub="user-2", teams=("team-beta",))
+
+
+@pytest.fixture
+def owner(tokens):
+  # A member of team-alpha, the owner team of greeting-api.
+  return bearer(tokens)
+
+
+@pytest.fixture
+def admin(tokens):
+  return bearer(tokens, sub="admin-1", groups=("platform-users", "platform-admins"), teams=())
 
 
 def test_validate_a_valid_spec(client, anyone):
@@ -84,8 +95,8 @@ def test_validate_needs_a_signed_in_user(client):
   assert client.post("/v1/workload-specs:validate", json={"content": SPEC}).status_code == 401
 
 
-def test_get_the_newest_version(client, anyone):
-  response = client.get("/v1/catalog/components/greeting-api/spec", headers=anyone)
+def test_get_the_newest_version(client, owner):
+  response = client.get("/v1/catalog/components/greeting-api/spec", headers=owner)
   assert response.status_code == 200, response.text
   body = response.json()
   assert body["version"] == "1.1.0-greetings.2"
@@ -94,20 +105,20 @@ def test_get_the_newest_version(client, anyone):
   assert body["appSpec"]["metadata"] == {"name": "greeting-api", "built": "1.1.0-greetings.2"}
 
 
-def test_get_a_version(client, anyone):
-  body = client.get("/v1/catalog/components/greeting-api/spec", params={"version": "1.0.0"}, headers=anyone).json()
+def test_get_a_version(client, owner):
+  body = client.get("/v1/catalog/components/greeting-api/spec", params={"version": "1.0.0"}, headers=owner).json()
   assert (body["version"], body["branch"]) == ("1.0.0", "main")
 
 
-def test_get_the_newest_of_a_branch(client, anyone):
-  body = client.get("/v1/catalog/components/greeting-api/spec", params={"branch": "main"}, headers=anyone).json()
+def test_get_the_newest_of_a_branch(client, owner):
+  body = client.get("/v1/catalog/components/greeting-api/spec", params={"branch": "main"}, headers=owner).json()
   assert body["version"] == "1.0.0"
-  body = client.get("/v1/catalog/components/greeting-api/spec", params={"branch": "feat/greetings"}, headers=anyone).json()
+  body = client.get("/v1/catalog/components/greeting-api/spec", params={"branch": "feat/greetings"}, headers=owner).json()
   assert body["version"] == "1.1.0-greetings.2"
 
 
-def test_version_and_branch_are_exclusive(client, anyone):
-  response = client.get("/v1/catalog/components/greeting-api/spec", params={"version": "1.0.0", "branch": "main"}, headers=anyone)
+def test_version_and_branch_are_exclusive(client, owner):
+  response = client.get("/v1/catalog/components/greeting-api/spec", params={"version": "1.0.0", "branch": "main"}, headers=owner)
   assert response.status_code == 422
 
 
@@ -117,11 +128,18 @@ def test_version_and_branch_are_exclusive(client, anyone):
   ("greeting-api", {"version": "9.9.9"}),
   ("greeting-api", {"branch": "feat/none"}),
 ])
-def test_not_found(client, anyone, component, params):
-  assert client.get(f"/v1/catalog/components/{component}/spec", params=params, headers=anyone).status_code == 404
+def test_not_found(client, owner, component, params):
+  assert client.get(f"/v1/catalog/components/{component}/spec", params=params, headers=owner).status_code == 404
 
 
-def test_a_version_indexed_before_the_spec_is_spec_not_indexed(client, anyone):
-  response = client.get("/v1/catalog/components/greeting-api/spec", params={"version": "0.9.0"}, headers=anyone)
+def test_a_version_indexed_before_the_spec_is_spec_not_indexed(client, owner):
+  response = client.get("/v1/catalog/components/greeting-api/spec", params={"version": "0.9.0"}, headers=owner)
   assert response.status_code == 409
   assert "SpecNotIndexed" in response.json()["error"]["message"]
+
+
+def test_get_is_for_the_owner_team_and_admins(client, anyone, admin):
+  response = client.get("/v1/catalog/components/greeting-api/spec", headers=anyone)
+  assert response.status_code == 403
+  assert "team-alpha" in response.json()["error"]["message"]
+  assert client.get("/v1/catalog/components/greeting-api/spec", headers=admin).status_code == 200

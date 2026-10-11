@@ -5,7 +5,7 @@ platform workload spec validate [--file <app-spec.yaml>]
 platform workload spec get --component <component> [--version <version> | --branch <branch>]
 ```
 
-A **Workload Spec** is the `app-spec.yaml` ([Score](https://score.dev), `score.dev/v1b1`) of a version, immutable, kept by the build in the version index (`spec.appSpec` of the `Version`). Both commands are open to any authenticated user.
+A **Workload Spec** is the `app-spec.yaml` ([Score](https://score.dev), `score.dev/v1b1`) of a version, immutable, kept by the build in the version index (`spec.appSpec` of the `Version`). `spec validate` is open to any authenticated user. `spec get` is for members of the component's owner team and `platform-admins`: a Score may carry plain values from a private repo.
 
 ## spec validate
 
@@ -24,5 +24,6 @@ Prints the spec of a version as YAML, preceded by a comment line `# <component> 
 | Refusal | Code |
 |---|---|
 | `--version` and `--branch` together | refused by the CLI (`422` from the API) |
+| you are neither in the component's owner team nor in `platform-admins` | `403` |
 | the component is not in the index, or has no such version | `404` |
 | the version was indexed before the index kept the spec (`SpecNotIndexed`) | `409` |
