@@ -99,3 +99,29 @@ def test_api_role_writes_secrets_but_never_reads_them():
   scm = next(rule for rule in role["rules"] if "scmconnections" in rule["resources"])
   assert {"get", "list", "create", "update", "delete"} <= set(scm["verbs"])
   assert any("scmconnections/status" in rule["resources"] for rule in role["rules"])
+
+
+def test_component_creation_crd_matches_the_api():
+  from platform_api.components import CREATIONS, PRD_MAX
+
+  crd = yaml.safe_load((CRDS / "componentcreation.yaml").read_text())
+  assert crd["metadata"]["name"] == f"{CREATIONS}.{GROUP}"
+  assert group_of(CREATIONS) == GROUP
+  version = crd["spec"]["versions"][0]
+  assert version["subresources"] == {"status": {}}
+  spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]
+  assert spec["prd"]["maxLength"] == PRD_MAX
+  assert spec["visibility"]["enum"] == ["public", "private"]
+
+
+def test_component_index_crd():
+  from platform_api.components import COMPONENTS
+
+  crd = load(COMPONENTS)
+  assert crd["metadata"]["name"] == f"{COMPONENTS}.{CATALOG_GROUP}"
+  assert group_of(COMPONENTS) == CATALOG_GROUP
+  # A read mirror: the API never writes it.
+  deploy = Path(__file__).parents[1] / "deploy" / "platform-api.yaml"
+  role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
+  verbs = {verb for rule in role["rules"] if COMPONENTS in rule["resources"] for verb in rule["verbs"]}
+  assert verbs == {"get", "list", "watch"}

@@ -14,7 +14,8 @@ token the Platform API issues (ADR 0028), cannot delete the environment nor get
 its admin kubeconfig, and loses access after unshare, in kubectl too), the
 templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
-out), and a cloud account (ADR 0029): refused with a clear message without an
+out), the refusals of component create (unknown system, a --param outside the
+schema, a name already in the index, a connection that is not ready), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -44,6 +45,8 @@ cloud_account="smoke-aws-${RANDOM}"
 # Documentation account ID: AssumeRole there is always denied, which is what the step checks.
 cloud_role="arn:aws:iam::123456789012:role/platform-smoke-${RANDOM}"
 connection="smoke-scm-${RANDOM}"
+component="smoke-component-${RANDOM}"
+taken_component="smoke-taken-${RANDOM}"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -96,6 +99,7 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" --ignore-not-found > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}" "${render_directory}"
 }
 trap cleanup EXIT
@@ -291,6 +295,47 @@ if [[ "${status}" != "400" ]]; then
 fi
 output="$(platform scm connection get "${connection}")"
 expect_output "AppNotCreated" "${output}"
+
+step "component create: every refusal happens before GitHub (#279)"
+# The happy path needs a ready connection, so it stays in the manual walkthrough (step 19).
+expect_failure "system 'smoke-missing' not found" \
+  platform catalog component create "${component}" \
+    --system smoke-missing \
+    --owner team-platform \
+    --scm "${connection}"
+expect_failure "params.colour: not a parameter of python-service" \
+  platform catalog component create "${component}" \
+    --system platform \
+    --owner team-platform \
+    --param colour=blue \
+    --scm "${connection}"
+# A component in the index, as the discovery would write it: the name is taken.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${taken_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: wasp-foundry/${taken_component}
+MANIFEST
+expect_failure "component '${taken_component}' already exists" \
+  platform catalog component create "${taken_component}" \
+    --system platform \
+    --owner team-platform \
+    --scm "${connection}"
+output="$(platform catalog component list --system platform)"
+expect_output "${taken_component}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}"
+expect_failure "is not ready (AppNotCreated)" \
+  platform catalog component create "${component}" \
+    --system platform \
+    --owner team-platform \
+    --scm "${connection}"
+expect_failure "not found" platform catalog component get "${component}"
 
 step "scm connection remove"
 platform scm connection remove "${connection}"

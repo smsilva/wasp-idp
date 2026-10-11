@@ -3,7 +3,7 @@
 A walkthrough to demonstrate the `platform` CLI **starting from scratch**: no cluster, no config and no CLI installed. Follow it in order, one step per page: each step builds on the previous ones. To look up a command, a flag or a status, use the [reference](../reference/index.md).
 
 !!! info "Last run"
-    Run end to end on 2026-10-10; steps 8 to 11 were redone with the `local_vcluster` provider (#183) and step 14 (#190) on `platform-local`, on the same day. Step 18 (#199) was run on 2026-10-11, with the `wasp-foundry-platform` App created and installed in the `wasp-foundry` org.
+    Run end to end on 2026-10-10; steps 8 to 11 were redone with the `local_vcluster` provider (#183) and step 14 (#190) on `platform-local`, on the same day. Step 18 (#199) was run on 2026-10-11, with the `wasp-foundry-platform` App created and installed in the `wasp-foundry` org. Step 19 (#279) was run on 2026-10-11 against the same org, creating `wasp-foundry/hello-api`.
 
 ## Preparation
 
@@ -86,9 +86,15 @@ Each step shows the command and, right below it, the expected **output**.
 - [18.2 Install on the org](scm-connection/18-2-install.md)
 - [18.3 Verify](scm-connection/18-3-verify.md)
 - [18.4 The key stays off this machine](scm-connection/18-4-private-key.md)
-- [18.5 Remove](scm-connection/18-5-remove.md)
 
-- [19. Clean up and sign out](19-cleanup.md)
+**Components**
+
+- [19.1 Create a component](components/19-1-create.md)
+- [19.2 The component in the catalog](components/19-2-list.md)
+- [19.3 What is refused before GitHub](components/19-3-refused.md)
+
+- [20. Remove the GitHub connection](scm-connection/20-remove.md)
+- [21. Clean up and sign out](21-cleanup.md)
 
 Without a browser: [`scripts/demo/cli-smoke`](cli-smoke.md).
 

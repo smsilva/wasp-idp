@@ -1,6 +1,6 @@
 # Catalog
 
-Domains, systems and shared resources that the platform stores (ADR 0023). The `--owner` is always a team that already exists ([Teams](teams.md)). Components and APIs are not in the platform catalog yet.
+Domains, systems and shared resources that the platform stores (ADR 0023). The `--owner` is always a team that already exists ([Teams](teams.md)). Components live in their repo's `catalog-info.yaml`: the platform creates the repo and keeps an index ([Components](#components)). APIs are not in the platform catalog yet.
 
 | Command | What it does |
 |---|---|
@@ -17,6 +17,39 @@ Domains, systems and shared resources that the platform stores (ADR 0023). The `
 | delete a system or a resource | whoever created it, or `platform-admins` |
 
 An entity with dependents is not deleted: the API answers `409` naming them, so deleting goes in the reverse order.
+
+## Components
+
+```bash
+platform catalog component create <name> --system <system> \
+  [--owner <team>] [--type service|website|library | --template <template>] \
+  [--param key=value]... [--description <text>] [--scm <connection>] \
+  [--visibility public|private] [--prd <file>|-] [--wait] [--timeout <seconds>]
+platform catalog component list [--system <system>] [--owner <team>]
+platform catalog component get <name>
+```
+
+`create` creates the repo on the org of the SCM connection from a template ([Templates](templates.md)), pushes the rendered content as a single first commit and registers the component (`lifecycle: experimental`). Any authenticated user creates; the creation steps are visible to whoever requested it and to `platform-admins`.
+
+| Option | Default |
+|---|---|
+| `--owner` | your team, when you have exactly one; otherwise required |
+| `--type` / `--template` | the default template of `service` |
+| `--scm` | the default connection (`409` without one) |
+| `--visibility` | the connection's `defaultVisibility` (`public`) |
+| `--prd` | the template's `docs/prd.md` skeleton; the journal keeps only the hash of the text (at most 64 KiB) |
+
+`list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component; while it is not in the index yet, it shows the creation steps.
+
+| Step | Fails with |
+|---|---|
+| `Validated` | `ConnectionNotFound`, `ConnectionNotReady` |
+| `Rendered` | `StepFailed` (fetch or render of the template) |
+| `RepoCreated` | `RepoAlreadyExists`: a repo with that name that this request did not create; it is never touched. `RepoGone`: created, then deleted outside the platform |
+| `Pushed` | `GitHubError` |
+| `Registered` | `ComponentExists`: the index has that name for another repo |
+
+`GitHubError` and `StepFailed` are retried every 15 s; `--wait` keeps waiting on them and stops at the others. The index is a read mirror of the repo's `catalog-info.yaml`: no command changes or deletes a component, and deleting the repo is done on GitHub.
 
 ## Import from Backstage
 

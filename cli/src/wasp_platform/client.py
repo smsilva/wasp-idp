@@ -83,6 +83,19 @@ class PlatformClient:
     params = {key: value for key, value in {"kind": kind, "owner": owner}.items() if value}
     return self._request("GET", "/v1/catalog/entities", params=params)["items"]
 
+  def create_component(self, body: dict) -> dict:
+    return self._request("POST", "/v1/catalog/components", json=body)
+
+  def list_components(self, system: str | None = None, owner: str | None = None) -> list[dict]:
+    params = {key: value for key, value in {"system": system, "owner": owner}.items() if value}
+    return self._request("GET", "/v1/catalog/components", params=params)["items"]
+
+  def get_component(self, name: str) -> dict:
+    return self._request("GET", f"/v1/catalog/components/{name}")
+
+  def component_creation(self, name: str) -> dict:
+    return self._request("GET", f"/v1/catalog/components/{name}/creation")
+
   def list_teams(self) -> list[dict]:
     return self._request("GET", "/v1/teams")["items"]
 

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, catalog_import, cloud_accounts, credentials as personal, environments, scm, templates, teams as team_routes
+from . import catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, scm, templates, teams as team_routes
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -260,9 +260,10 @@ def create_app(
   def unshare_environment(name: str, team: str, principal: Principal = Depends(current_principal)):
     return change_share(name, team, principal, add=False)
 
-  # Before the catalog router: its /{plural} routes would otherwise take "import" and "templates" as kinds.
+  # Before the catalog router: its /{plural} routes would otherwise take "import", "templates" and "components" as kinds.
   app.include_router(catalog_import.router(state, journal, teams))
   app.include_router(templates.router(state, journal, teams))
+  app.include_router(components.router(state, journal, teams))
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
   app.include_router(cloud_accounts.router(state, journal, base_identity))

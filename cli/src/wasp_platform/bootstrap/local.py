@@ -344,7 +344,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
 
   scm_dir = root / "platform" / "providers" / "scm_github"
   log("building the SCM provider image …")
-  scm_image = _build_and_import(SCM_PROVIDER_IMAGE, scm_dir)
+  scm_image = _build_and_import(SCM_PROVIDER_IMAGE, scm_dir.parent.parent, scm_dir / "Dockerfile")
   log("deploying the SCM provider (scm_github) …")
   _deploy(scm_dir / "deploy" / "scm-github-provider.yaml", SCM_PROVIDER_IMAGE, scm_image)
   _kubectl("rollout", "status", "deployment/scm-github-provider", "--namespace", NAMESPACE, "--timeout", "180s")

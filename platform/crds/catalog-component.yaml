@@ -1,0 +1,68 @@
+# The component index (ADR 0023). A READ MIRROR: a component lives in its repo's catalog-info.yaml and
+# changes by pull request there. The scm_github provider writes this CR in the Registered step of a
+# ComponentCreation (and, in a later slice, the discovery); the Platform API only reads it and never
+# changes it at a user's request.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: components.catalog.platform.wasp.silvios.me
+spec:
+  group: catalog.platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: Component
+    listKind: ComponentList
+    plural: components
+    singular: component
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: System
+          type: string
+          jsonPath: .spec.system
+        - name: Owner
+          type: string
+          jsonPath: .spec.owner
+        - name: Lifecycle
+          type: string
+          jsonPath: .spec.lifecycle
+        - name: Repo
+          type: string
+          jsonPath: .spec.source.repo
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [owner, system, source]
+              properties:
+                owner:
+                  description: Owner team, copied from catalog-info.yaml.
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                system:
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                type:
+                  type: string
+                lifecycle:
+                  type: string
+                description:
+                  type: string
+                source:
+                  type: object
+                  required: [repo]
+                  properties:
+                    repo:
+                      description: The repo as <org>/<name>, the github.com/project-slug annotation.
+                      type: string
+                    template:
+                      description: <template>@<ref> the repo was created from, when the platform created it.
+                      type: string
+                    origin:
+                      description: created (by the platform) or discovered; the discovery keeps created.
+                      type: string
+                      enum: [created, discovered]

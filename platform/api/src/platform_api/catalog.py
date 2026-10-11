@@ -1,7 +1,7 @@
 """The platform catalog: Domain, System and Resource, stored as CRDs (ADR 0023).
 
-Component and API stay in each repo's catalog-info.yaml and reach the platform by discovery (a
-later slice); this module owns only the entities the platform stores itself.
+Component and API stay in each repo's catalog-info.yaml; the component index is a read mirror served
+by components.py. This module owns only the entities the platform stores itself.
 """
 import re
 from dataclasses import dataclass

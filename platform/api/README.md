@@ -1,6 +1,6 @@
 # Platform API
 
-Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments`, `scmconnections` e as entidades do catálogo (`domains`, `systems`, `resources`, `templates`) no namespace `platform-system`, e escreve `secrets` sem poder lê-los.
+Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments`, `scmconnections`, `componentcreations` e as entidades do catálogo (`domains`, `systems`, `resources`, `templates`, e `components` só para leitura) no namespace `platform-system`, e escreve `secrets` sem poder lê-los.
 
 ## Endpoints
 
@@ -23,6 +23,10 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `GET` | `/v1/catalog/templates/{name}` | `200` |
 | `POST` | `/v1/catalog/templates/{name}/default` | `200`; só `platform-admins`; desmarca o padrão anterior do tipo |
 | `DELETE` | `/v1/catalog/templates/{name}` | `204`; só `platform-admins`; `409` para o padrão de um tipo com outros templates |
+| `POST` | `/v1/catalog/components` | `202`, a criação (#279); body `{"name", "system", "owner", "description", "type", "template", "params", "scm", "visibility", "prd"}`; `422` para System, template ou `params` inválidos, `409` para nome em uso ou connection que não está `ready` |
+| `GET` | `/v1/catalog/components` | `200`, o índice; filtros `?system=` e `?owner=` |
+| `GET` | `/v1/catalog/components/{name}` | `200` |
+| `GET` | `/v1/catalog/components/{name}/creation` | `200`, as conditions da criação; só quem pediu (anotação `created-by`) ou `platform-admins` |
 | `POST` | `/v1/catalog/templates:import` | `200`, o mesmo plano do `/v1/catalog/import`, só com templates |
 | `POST` | `/v1/cloud/accounts` | `202`, body `{"name", "vendor": "aws", "roleArn", "regions"}`; resposta com `trustPolicy`; `409` sem credencial base ou com `roleArn` já registrado |
 | `GET` | `/v1/cloud/accounts` | `200`, `{"items": [...]}`; as próprias, ou todas para `platform-admins` |
@@ -46,7 +50,7 @@ Os objetos devolvidos são a visão da API (`name`, `profile`, `status`, `expire
 
 ## Catálogo
 
-Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` (ADR 0023). Component e API não passam por aqui: ficam no `catalog-info.yaml` do repo.
+Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` (ADR 0023). Component e API ficam no `catalog-info.yaml` do repo. A API só grava o pedido de criação (`ComponentCreation`, grupo `platform.wasp.silvios.me`); o provider `scm_github` cria o repo e escreve o índice `components`, que a API só lê: é um espelho, nunca alterado a pedido do usuário. O `prd` entra no CR e chega ao journal só como hash.
 
 | Kind | Pai | Obrigatórios |
 |---|---|---|

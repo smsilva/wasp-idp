@@ -1,5 +1,6 @@
 # Provider scm_github (#199): validates each GitHub ScmConnection with the App's key and records the
-# installation. Installed by `platform init`. The only reader of the credential Secrets (ADR 0025).
+# installation, and runs each ComponentCreation (#279). Installed by `platform init`. The only reader
+# of the credential Secrets (ADR 0025).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -21,6 +22,16 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [componentcreations]
+    verbs: [get, list, watch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [componentcreations/status]
+    verbs: [get, patch]
+  # The component index: written in the Registered step, a read mirror for the API (ADR 0023).
+  - apiGroups: [catalog.platform.wasp.silvios.me]
+    resources: [components]
+    verbs: [get, create, update]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -58,9 +69,17 @@ spec:
         - name: provider
           image: scm-github-provider:dev
           imagePullPolicy: Never
-          args: [--namespace, platform-system]
+          args: [--namespace, platform-system, --workdir, /work]
+          volumeMounts:
+            - name: work
+              mountPath: /work
           resources:
             requests:
               memory: 64Mi
             limits:
-              memory: 192Mi
+              memory: 256Mi
+      volumes:
+        # The rendered content of the creations: rendered again after a restart (fixed ref, same result).
+        - name: work
+          emptyDir:
+            sizeLimit: 512Mi

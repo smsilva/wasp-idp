@@ -167,10 +167,12 @@ def users_of(state, name: str) -> list[str]:
   # Imported here: catalog imports this module for known_teams.
   from .catalog import KINDS
   from .templates import KIND as TEMPLATE
+  from .components import COMPONENTS
 
   found = [f"environment/{obj['metadata']['name']}" for obj in state.list(ENVIRONMENTS) if name in ((obj.get("spec") or {}).get("sharedWith") or [])]
   for kind in [*KINDS.values(), TEMPLATE]:
     found += [f"{kind.singular}/{obj['metadata']['name']}" for obj in state.list(kind.plural) if (obj.get("spec") or {}).get("owner") == name]
+  found += [f"component/{obj['metadata']['name']}" for obj in state.list(COMPONENTS) if (obj.get("spec") or {}).get("owner") == name]
   return sorted(found)
 
 

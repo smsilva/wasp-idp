@@ -1,0 +1,143 @@
+# The request to create a component through the golden path (#204): the Platform API writes it after
+# the synchronous checks, and the scm_github provider runs one idempotent step per condition
+# (Validated, Rendered, RepoCreated, Pushed, Registered), then Ready. The rendered content lives in the
+# controller's volume, never in this CR.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: componentcreations.platform.wasp.silvios.me
+spec:
+  group: platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: ComponentCreation
+    listKind: ComponentCreationList
+    plural: componentcreations
+    singular: componentcreation
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Template
+          type: string
+          jsonPath: .spec.template.name
+        - name: Repo
+          type: string
+          jsonPath: .status.repo.fullName
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Reason
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [system, owner, template, scmConnection, visibility]
+              properties:
+                system:
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                owner:
+                  description: Owner team (ADR 0026).
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+                description:
+                  type: string
+                type:
+                  type: string
+                template:
+                  description: Resolved by the API; source is a copy of the Template's at that moment.
+                  type: object
+                  required: [name, source]
+                  properties:
+                    name:
+                      type: string
+                    default:
+                      description: The template came from the default of the type, not from --template.
+                      type: boolean
+                    source:
+                      type: object
+                      required: [repo, path, ref]
+                      properties:
+                        repo:
+                          type: string
+                        path:
+                          type: string
+                        ref:
+                          type: string
+                    copyWithoutRendering:
+                      type: array
+                      items:
+                        type: string
+                params:
+                  description: The template's extra parameters, already cast to the schema by the API.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                scmConnection:
+                  type: string
+                visibility:
+                  type: string
+                  enum: [public, private]
+                prd:
+                  description: Seeds docs/prd.md (at most 64 KiB); the journal keeps only its hash.
+                  type: string
+                  maxLength: 65536
+            status:
+              type: object
+              properties:
+                repo:
+                  type: object
+                  properties:
+                    fullName:
+                      type: string
+                    url:
+                      type: string
+                    nodeId:
+                      description: Proof the platform created the repo; without it an existing repo is never adopted.
+                      type: string
+                files:
+                  description: Paths of the rendered files, pushed as the first commit.
+                  type: array
+                  items:
+                    type: string
+                appSpec:
+                  description: What the rendered app-spec.yaml declares, for the CLI summary.
+                  type: object
+                  properties:
+                    containers:
+                      type: array
+                      items:
+                        type: string
+                    resources:
+                      type: array
+                      items:
+                        type: string
+                    routes:
+                      type: array
+                      items:
+                        type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

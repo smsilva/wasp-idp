@@ -64,6 +64,11 @@ spec:
                     installationId:
                       description: Written by the controller, once it finds the App's installation on the org.
                       type: integer
+                    defaultVisibility:
+                      description: Visibility of the repos `component create` makes when the request names none.
+                      type: string
+                      enum: [public, private]
+                      default: public
                 credentialRef:
                   description: Name of the Secret holding the credential, never its content.
                   type: string
