@@ -61,6 +61,7 @@ O apply grava na ordem do plano e para no primeiro erro de escrita, informando o
 ```
 
 - `source` é texto livre, para o plano dizer de onde veio cada item. A CLI manda o caminho relativo ao diretório atual e, em arquivo com vários documentos, a posição (`#2`, contando de 1).
+- `dryRun` é `true` quando omitido: aplicar exige pedir explicitamente.
 - No máximo 500 documentos por import; acima disso, `422`.
 
 ### Resposta
@@ -91,14 +92,15 @@ O apply grava na ordem do plano e para no primeiro erro de escrita, informando o
 | `create` | a entidade não existe na plataforma |
 | `update` | existe, e algum campo do spec convertido difere (inclusive campo removido) |
 | `unchanged` | existe e é igual |
-| `skip` | kind não importado, ou `metadata.namespace` diferente de `default` |
+| `skip` | documento que não é entidade Backstage (`apiVersion` fora de `backstage.io/*`, como um `mkdocs.yml` na pasta), kind não importado, ou `metadata.namespace` diferente de `default` |
 | `forbidden` | o usuário não pode fazer o create ou o update (decisão 4) |
-| `error` | documento fora do formato, label inválido, campo obrigatório faltando, campo que o kind não aceita, referência quebrada, pai não importável, `kind/name` duplicado |
+| `error` | entidade Backstage sem `metadata.name` ou sem `spec`, label inválido, owner fora do formato, campo obrigatório faltando, campo que o kind não aceita, referência quebrada, pai não importável, `kind/name` duplicado |
 
 Motivos de `skip`:
 
 | Kind | Motivo |
 |---|---|
+| sem `apiVersion: backstage.io/*` | `not a Backstage entity` |
 | `Component`, `API` | `lives in the repo catalog-info.yaml` |
 | `Group`, `User` | `identity lives in Keycloak (#186)` |
 | `Template`, `Location` | `Backstage configuration, not a catalog entity` |
@@ -122,10 +124,10 @@ Os erros com plano no corpo usam o envelope padrão da API (`{"error": {"code", 
 
 Em `platform_api/catalog_import.py`, função pura sobre os documentos, o estado (`StateReader`) e o `Principal`:
 
-1. **Classificar:** kind fora de Domain/System/Resource, ou namespace ≠ `default` → `skip`. Documento sem `kind`, `metadata.name` ou `spec` como objeto → `error`.
+1. **Classificar:** documento que não é um objeto com `apiVersion` em `backstage.io/*` → `skip` (`not a Backstage entity`); kind fora de Domain/System/Resource → `skip`; namespace ≠ `default` → `skip`. Entidade Backstage sem `metadata.name` ou sem `spec` como objeto → `error`.
 2. **Converter** para `EntityRequest`:
    - `metadata.name` → `name`; `metadata.description` → `description`;
-   - `spec.owner`: `group:default/x` e `group:x` → `x`; texto sem prefixo segue como está; outro prefixo de kind (`user:...`) → `error` em `spec.owner`;
+   - `spec.owner`: `group:default/x`, `group:x` e `default/x` → `x`; texto sem prefixo segue como está; outro prefixo de kind (`user:...`) ou namespace diferente de `default` → `error` em `spec.owner`;
    - Domain: `spec.subdomainOf` → `parent`; System: `spec.domain` → `domain`; Resource: `spec.system` → `system`, `spec.type` → `type`;
    - demais campos do Backstage (`lifecycle`, `tags`, `links`, `dependsOn`, `annotations`, ...) são ignorados.
 
@@ -206,7 +208,7 @@ Cliente: `PlatformClient.import_catalog(documents, dry_run, plan_hash=None)`. `A
 
 No cluster local, depois de `platform init --target local` (API nova e RBAC com `update`):
 
-1. `platform catalog import idp/catalog/` mostra 5 Domains (`bookstore`, `communication`, `messaging`, `notifications`, `platform`), 4 Systems (`bookinfo`, `platform`, `greeter`, `notifier`) e 8 Resources em `create`, e os 3 Groups de `org.yaml` em `skip`; aplica só depois da confirmação.
+1. `platform catalog import idp/catalog/` mostra 5 Domains (`bookstore`, `communication`, `messaging`, `notifications`, `platform`), 4 Systems (`bookinfo`, `platform`, `greeter`, `notifier`) e 8 Resources em `create`, e em `skip` os 3 Groups de `org.yaml` e os 2 `mkdocs.yml` (`not a Backstage entity`); aplica só depois da confirmação.
 2. Rodar de novo: tudo `unchanged`, `nothing to do`.
 3. Um arquivo temporário com um System apontando para um domain inexistente: o plano mostra o `error` com entidade e campo, e nada é aplicado.
 
