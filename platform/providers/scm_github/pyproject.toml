@@ -1,13 +1,18 @@
 [project]
 name = "scm-github-provider"
 version = "0.1.0"
-description = "GitHub SCM connection controller: validates each platform.wasp.silvios.me ScmConnection against its GitHub App"
+description = "GitHub SCM controller: validates each ScmConnection against its GitHub App and runs each ComponentCreation"
 requires-python = ">=3.12"
 dependencies = [
   "kubernetes>=31.0",
   "httpx>=0.28",
   "pyjwt[crypto]>=2.9",
+  "pyyaml>=6.0",
+  "wasp-templates",
 ]
+
+[tool.uv.sources]
+wasp-templates = { path = "../../libs/templates", editable = true }
 
 [project.scripts]
 scm-github-provider = "scm_github_provider.main:main"
