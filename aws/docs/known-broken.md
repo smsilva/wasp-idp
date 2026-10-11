@@ -84,6 +84,20 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     [`terraform/ci/README.md`](../terraform/ci/README.md).
 26. **Fluxo foundry (#101): CI de qualquer app escreve qualquer caminho do `wasp-foundry/gitops`** — *intentional*. O App `wasp-foundry-ci` tem Contents RW no repo inteiro e sua chave é secret de org; um workflow de uma aplicação pode alterar os manifestos de outra e, via ArgoCD, fazer deploy de qualquer coisa no k3d. Aplicações usam `project: default` (sem isolamento entre times no ArgoCD), e qualquer usuário do Backstage — inclusive guest, com as permissões em `allow-all` — pode criar repo público na org pelo template. Correção futura: `AppProject` por time com `sourceRepos`/`destinations` restritos + ruleset de path no `gitops` + política de permissão no scaffolder. Ver [ADR 0018](../../docs/adr/0018-separate-github-apps-per-role.md).
 27. **Clusters de ambiente do IDP local (#105): ArgoCD com `cluster-admin` e promoção sem verificação** — *intentional*. O ServiceAccount `argocd-manager` tem `cluster-admin` em `development` e `production`; `promote.yaml` promove qualquer tag de development sem conferir que ela rodou bem lá; cada cluster tem uma porta de host só (`9081`/`9082`), reservada ao `productpage` — as demais apps são acessadas por `port-forward`. Com os três clusters e o Bookinfo de pé a máquina de 15 GiB fica sem folga (swap quase cheio). Ver [ADR 0019](../../docs/adr/0019-environment-clusters-managed-by-central-argocd.md).
+28. **Teardown não é agendado nem notifica** — *unexpected*, issues #98 e #97. `down-cell` se diz
+    "nightly" e o `README.md` diz "todo dia", mas os três workflows são `workflow_dispatch` puro. E
+    falha de teardown não avisa ninguém: o run de 02/09 ficou `failure` em silêncio por 2 dias. É o
+    único modo de falha do repo que **gasta dinheiro continuamente**.
+29. **#92 e #94 não foram exercitados na AWS** — *intentional*. Ambos validados só offline; exigem uma
+    célula de pé, e a região foi destruída de propósito. O caminho de retry só aparece numa falha real.
+30. **Endpoint público do EKS fica aberto se o job morrer antes do passo de fechamento** —
+    *intentional*, issue #49. O `if: always()` cobre falha de step, não cancelamento nem morte do
+    runner.
+31. **`terraform validate` em `src/cell` acusa "Provider configuration not present"** — *intentional*,
+    pré-existente (confirmado por `git stash` + reexecução): resíduo de estado de teste com o provider
+    aliasado `aws.network`. A checagem que vale é o `plan` na raiz regional.
+32. **`aws_iam_saml_provider.client_vpn` tem drift** entre o XML local e o que está na AWS —
+    *unexpected*, não aplicado de propósito, para não mexer em config compartilhada do Client VPN.
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e

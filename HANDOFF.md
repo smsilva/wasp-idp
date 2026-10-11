@@ -1,6 +1,6 @@
 # HANDOFF
 
-Visão geral e estado do repo. Progresso de tarefas vive nas issues e no board #6 (`In Progress`, depois `Todo`); cada issue carrega contexto, decisões e o último estado em comentários — ver `CLAUDE.md`.
+Visão geral e estado do repo. Progresso e ordem das tarefas vivem nas issues e no board #6: a próxima é a que está `In Progress`, senão o topo de `Todo` (`scripts/board/queue next`); cada issue carrega contexto, decisões e o último estado em comentários — ver `CLAUDE.md`.
 
 ## Why
 
@@ -99,35 +99,9 @@ os três workflows, exemplos de `gh`). A raiz `ci/` foi acrescentada à tabela `
 | IDP: apresentação detalhada como deck único público em `docs/presentation/`, publicada no GitHub Pages; cortes por público virão de filtro sobre `audiences` (#148) | Entregue em 2026-10-10 |
 | Plataforma: identidade e fonte da verdade — [ADR 0021](docs/adr/0021-keycloak-as-platform-identity-broker.md) (Keycloak, sem Dex) e [ADR 0022](docs/adr/0022-kube-api-as-platform-source-of-truth.md) (CRDs `platform.wasp.silvios.me` + Platform API como fachada) (#140, #145) | Aceitos em 2026-10-10 |
 | Plataforma: CLI `platform` (Python, pacote `wasp_platform`) + Platform API + provider `local_vcluster` — cada Environment é um vcluster dentro do `platform-local`, criado por um controller no próprio cluster (#152, #183). Login com Google via Keycloak e JWT validado na API (#142–#144), journal em arquivo (#172). Guia: https://smsilva.github.io/wasp-idp/cli/ — o Pages é um site único (deck na raiz, guia em `/cli/`), buildado por `.github/workflows/pages.yaml` | Entregue em 2026-10-10 |
-| Plataforma: próximas issues da Platform API e da CLI | Ver [Plataforma: fila de issues](#plataforma-fila-de-issues) |
 | Plataforma: times e compartilhamento de ambientes ([ADR 0026](docs/adr/0026-environment-sharing-with-teams.md)) — `platform team …` (#231), `environment share\|unshare` e `--share-with` (#232), client `platform-api-admin` restrito por fine-grained admin permissions (#238), `Group` do catálogo vira time e `owner` precisa ser time (#236), identidade por pessoa no vcluster com credencial curta ([ADR 0028](docs/adr/0028-environment-personal-credentials.md), #233) | Entregue em 2026-10-11 |
-| Plataforma: Postgres no journal (#172); walkthrough repetível (#178, #180–#182); Terraform do OAuth do Google (#171) | Aberto (Backlog) |
-| Teardown: aresta de grafo (#92) e retry (#94 achado 1) | Mergeados, **não exercitados na AWS** (exigem célula de pé) |
-| Teardown: agendar, notificar falha, subcomando de recuperação (#94 achados 3/4/5) | Aberto — achado 4 é o de maior retorno |
-| Efemeridade do Client VPN | Não iniciada — decisão pendente (Open Questions) |
-| SEC-EDGE (#84–#89) | #84 (WAF no ALB do hub) mergeado e **não aplicado**; próxima #85 (access logs do ALB para S3), da qual #86 depende |
 
-Backlog e priorização: GitHub Project #6 — https://github.com/users/smsilva/projects/6 (`gh project item-list 6 --owner smsilva --limit 100 --format json`; sem `--limit 100` o default de 30 omite itens).
-
-## Plataforma: fila de issues
-
-**Regra:** ao começar a próxima issue da Platform API ou da CLI, atualize esta tabela antes de tudo: o status de cada issue vem do board #6 (GraphQL ou `gh project item-list 6 --owner smsilva --limit 1000`, porque o `item-list` atrasa), e a coluna "Recomendação" diz o que fazer agora, com base nas dependências. Issue nova da plataforma entra na tabela; issue fechada sai dela e vira uma linha em Completed Work. A atualização vai no PR da issue ou num `docs(handoff)` à parte.
-
-Atualizada em 2026-10-11.
-
-| Ordem | Issue | Status | Depende de | Recomendação |
-|---|---|---|---|---|
-| 1 | #199 SCM connection GitHub | In Progress (PR #253 aberto) | — | **Fazer agora.** Passo humano: criar o App `wasp-foundry-platform` (`platform scm connection add wasp-foundry --vendor github --org wasp-foundry --default`), instalar em All repositories, rodar `verify --wait` até `ready` e então fazer o merge do PR #253. |
-| 2 | #254 Environment em uma CloudAccount | Backlog | — ([ADR 0032](docs/adr/0032-single-provisioning-method-defer-kratix.md) já decidiu o método) | **Fazer em paralelo à #199**, enquanto o passo humano não acontece: só o provider de Crossplane, sem `spec.method`. |
-| 3 | #204 `component create` pelo golden path | Backlog | #199 | Próxima depois do merge da #199. |
-| 4 | #206 build por branch | Backlog | #199, #204 | Depois da #204. Inclui as anotações OCI com buildx e o template com `apiVersion: score.dev/v1b1` ([ADR 0030](docs/adr/0030-build-version-index-and-promotion-defer-kargo.md), comentário na issue). |
-| 5 | #205 `component clone` e discovery | Backlog | #199, #204 | Depois da #204; pode alternar com a #206. |
-| 6 | #262 promoção (`Promotion`) | Backlog | #206 | Depois da #206. O spec decide a forma da CLI, que a #202 segue. |
-| 7 | #263 Forager (fatia 4 do catálogo) | Backlog | #206, #262 | Depois da #262 ([ADR 0031](docs/adr/0031-forager-built-on-score-defer-radius-kubevela.md)). |
-| 8 | #202 e #203 deck da jornada | Backlog | #262 (vocabulário) | Depois do spec da #262, que troca "release" por promoção. |
-| 9 | #172 journal no Postgres | Backlog | — | Fora do caminho crítico; pré-requisito para guardar operações da #221. |
-| 10 | #217 epic de sistemas e agentes: #218 → #219 → #220; #221; #222 → #223, #224, #225, #226 | Backlog | cadeia interna (#222 depende de #219 e #221) | Depois do caminho crítico (ordens 1 a 7). Começar pela #218 e pela #221, que não dependem de outras. |
-| 11 | #171, #178, #180, #181, #182 (OAuth do Google em Terraform, walkthrough) | Backlog | — | Fora do caminho crítico. |
+O que falta fazer, e em que ordem, é o board #6 — https://github.com/users/smsilva/projects/6. A ordem é a posição no board: `scripts/board/queue next` diz a próxima tarefa e `scripts/board/queue list` mostra a fila.
 
 ## Referências (ler sob demanda, não de uma vez)
 
@@ -138,7 +112,7 @@ Atualizada em 2026-10-11.
 | Pergunta em aberto, sem decisão | [`aws/docs/open-questions.md`](aws/docs/open-questions.md) |
 | Lição já corrigida, mas que vale para camada futura | [`aws/docs/lessons-learned/`](aws/docs/lessons-learned/) |
 | Narrativa de entrega concluída | [`docs/archived/index.md`](docs/archived/index.md) |
-| O que falta fazer, priorizado | GitHub Project #6 (link acima) |
+| O que falta fazer, em ordem | Board #6 (link acima), `scripts/board/queue list` |
 | Sequência de provisionamento e dicionário de recursos | `docs/superpowers/specs/2026-08-27-provisioning-sequence.md` |
 
 ## Operação
@@ -306,72 +280,19 @@ fazem isso). Um processo morto no meio não impede recuperação, mas custa temp
 
 ## Open Questions
 
-- **O que deve virar efêmero no hub, para o Client VPN parar de custar ~US$ 146/mês parado?** Esta é
-  a frente pedida e não iniciada — o brainstorming foi interrompido antes da decisão. Três opções já
-  levantadas, com o trade-off apurado; **não rederivar**:
-
-  | Opção | Custo parado | `.ovpn` entre sessões | Ressalva |
-  |---|---|---|---|
-  | Só as 2 `aws_ec2_client_vpn_network_association` (+ as 2 rotas) | ~US$ 55 | **estável** — o `dns_name` do endpoint não muda | endpoint, certificado ACM, SAML provider e authorization rules sobrevivem |
-  | O Client VPN inteiro | ~US$ 55 | reexportar sempre | certificado revalida por DNS a cada subida |
-  | O hub inteiro | US$ 0 | reexportar sempre | inverte a premissa do [ADR 0014](docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md) de que o hub é o resting state |
-
-  A opção cirúrgica existe porque **a cobrança é por associação, não por endpoint**. Ela também
-  derruba a nota de `aws/terraform/CLAUDE.md` de que "o `.ovpn` nunca se reaproveita entre applies do
-  hub" — isso vale quando o endpoint é recriado, não quando só as associações vão e voltam.
-  **Armadilha já documentada, não tentar:** `transit_gateway_configuration` no endpoint parece o
-  caminho mais direto e não é — o attachment que ele cria leva *"several hours"* para deletar, o
-  provider não espera, e isso **impede deletar o TGW**.
-- **Um retry de teardown é suficiente, ou o caminho é `state rm` automático?** O retry de #94 cobre
-  erro transitório. Não cobre finalizer preso por controller sem credencial — nesse caso a segunda
-  tentativa falha igual. Com a aresta de #92 o cenário deixa de acontecer por essa causa, mas a
-  pergunta continua de pé para outras.
-- **Vale abrir exceção na SCP baseline para limpar as VPCs default das 15 regiões negadas?**
-  Continua em aberto, mas **deixou de ser o único caminho**: a issue **#69** propõe neutralizá-las com
-  *declarative policy* de EC2 (VPC Block Public Access), sem tocar na SCP. O item bloqueante lá é
-  medir se a policy dá para restringir por região — aplicada larga, ela mata o ALB público da célula.
-- **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
-  ângulos já mapeados.
-- **A `gp2` in-tree (`kubernetes.io/aws-ebs`) ainda provisiona volume em Kubernetes 1.36, via CSI
-  migration?** Muda se a #62 é gap de qualidade (classe legada, `gp2` mais caro por IOPS que `gp3`)
-  ou bug latente (classe que não funciona mais). Conferir na doc da AWS **antes** de escrever
-  código — a regra existe porque o passo `2.4` custou ~US$ 180/mês por não fazer isso.
-- **Um cluster recém-criado não tem admin além da role de CI**, cuja trust OIDC é restrita a
-  `refs/heads/main`. `aws eks update-kubeconfig` + `kubectl` falham com "the server has asked for the
-  client to provide credentials". Para depurar de dentro, ou resolver a #56, ou criar uma access
-  entry fora do Terraform (`aws eks create-access-entry` + `associate-access-policy`; não gera drift
-  porque `var.access_entries` está vazio, então o `for_each` não gerencia nada).
+Em [`aws/docs/open-questions.md`](aws/docs/open-questions.md).
 
 ## Known Broken
 
-Lista completa e canônica em [`aws/docs/known-broken.md`](aws/docs/known-broken.md). Itens com contexto que vale ter à mão:
-
-- **Teardown não é agendado nem notifica** — *unexpected*, #94 achados 3 e 4. `down-cell` se diz
-  "nightly" e o `README.md` diz "todo dia", mas os três workflows são `workflow_dispatch` puro. E
-  falha de teardown não avisa ninguém: o run de 02/09 ficou `failure` em silêncio por 2 dias. É o
-  único modo de falha do repo que **gasta dinheiro continuamente**.
-- **#92 e #94 não foram exercitados na AWS** — *intentional*. Ambos validados só offline; exigem uma
-  célula de pé, e a região foi destruída de propósito. O caminho de retry só aparece numa falha real.
-
-- **`recover-lock.yml` nunca foi executado e não roda** — *unexpected*, item 25. Dois defeitos:
-  referencia o composite action do repositório privado direto (a correção do App token tocou só os
-  outros dois workflows), e cria apenas o symlink de `values.auto.tfvars`, sem o de
-  `saml-metadata.xml` que `module.hub` lê em todo plan. **Não corrigido de propósito:** a correção
-  precisa de uma execução real para ser dada por boa, e é a lição que a #52 inteira ensinou.
-- **Endpoint público do EKS fica aberto se o job morrer antes do passo de fechamento** —
-  *intentional*, issue #49. O `if: always()` cobre falha de step, não cancelamento nem morte do
-  runner.
-- **`terraform validate` em `src/cell` acusa "Provider configuration not present"** — *intentional*,
-  pré-existente (confirmado por `git stash` + reexecução): resíduo de estado de teste com o provider
-  aliasado `aws.network`. A checagem que vale é o `plan` na raiz regional.
-- **`aws_iam_saml_provider.client_vpn` tem drift** entre o XML local e o que está na AWS —
-  *unexpected*, não aplicado de propósito, para não mexer em config compartilhada do Client VPN.
+Em [`aws/docs/known-broken.md`](aws/docs/known-broken.md).
 
 ## Completed Work
 
 Narrativa detalhada de cada entrega concluída vive em `docs/archived/<tema>/<passo>.md`, indexada
 em [`docs/archived/index.md`](docs/archived/index.md).
 
+- **2026-10-11 — ordem do trabalho no board #6.** A fila de issues saiu do `HANDOFF.md`: a ordem é a posição no board, lida e alterada por `scripts/board/queue`; `Todo` só com o que pode começar. As frentes paradas da AWS voltaram para `Backlog`, depois da plataforma.
+- **2026-10-11 — #199, SCM connection do GitHub** (PR #253). App `wasp-foundry-platform` criado pelo manifest flow e instalado na org `wasp-foundry` em All repositories; connection `ready`. Docs da CLI reorganizados em walkthrough (uma etapa por página) e reference, em inglês (#270–#275).
 - **2026-10-11 — #207, spike adotar ou construir** (sub-issues #255–#258, PRs #259, #260, #261, #264). Kargo, score-k8s, KubeVela, Radius e Kratix executados no `platform-local`; nenhum adotado. [ADR 0030](docs/adr/0030-build-version-index-and-promotion-defer-kargo.md): índice de versões e `Promotion` próprios, o conceito de implantação passa a ser promoção. [ADR 0031](docs/adr/0031-forager-built-on-score-defer-radius-kubevela.md): Forager sobre o Score com provisioners em camadas. [ADR 0032](docs/adr/0032-single-provisioning-method-defer-kratix.md): um método de provisionamento em nuvem, o Crossplane. Avaliação em `docs/superpowers/specs/2026-10-11-adopt-or-build-spike.md`; o repo de teste `smsilva/kargo-spike` fica publicado como referência.
 - **2026-10-11 — #192 e #193, cloud accounts** (PRs #249, #250, #251). [ADR 0029](docs/adr/0029-cloud-accounts-in-platform-api.md): `CloudAccount` neutro de vendor, credencial base mais assume-role com ExternalId gerado pela API, BYO sem aprovação. Fatia AWS: `platform init --aws-profile` grava a credencial base e sobe o provider `aws_account`, que publica a identidade base (ConfigMap `aws-base-identity`, que ativa a capacidade) e verifica cada conta assumindo a role com e sem ExternalId (`Verified`, `TrustNotEstablished`, `ExternalIdNotEnforced`, `AccountMismatch`); `platform cloud account add|list|get|verify|remove`. Testado ao vivo com uma role temporária. Credencial base SSO expira em ~1h: para uso contínuo, um IAM user dedicado.
 - **2026-10-11 — #233, credencial pessoal no vcluster** (PR #245). [ADR 0028](docs/adr/0028-environment-personal-credentials.md) substitui a fatia 2 do ADR 0026 (OIDC no vcluster): a Platform API emite, depois de `can_use`, um token de 10 min da ServiceAccount `platform-identities/<sub>` (`cluster-admin`) do vcluster; o kubeconfig é um `exec` de `platform environment credential <nome>`, sem certificado. Unshare e remoção de membro apagam a ServiceAccount (o token cai em ~10 s). Kubeconfig admin só por `/admin-kubeconfig` (`get --admin`, `platform-admins`).

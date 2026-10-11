@@ -2,9 +2,8 @@
 
 ## Handoff conventions
 
-- **Task progress lives in GitHub Issues + the Project v2 board (#6, `smsilva/wasp-idp`), not in handoff files.** There is no `HANDOFF.local.md`. To resume: the active front is what is `In Progress` on the board, then `Todo`; each issue carries its own context, decisions and open questions in its body and comments. Split work into one issue per deliverable (sub-issues under a parent when they share a goal) and handle them in sequence, one branch and PR each. Before stopping mid-task, leave the state (last step, next step, open decision) as a comment on the issue — anything needed to resume on another machine must be on GitHub or in the repo, never only on local disk.
-- `HANDOFF.md` (root, versioned) keeps only broad repo state: what exists and is live, fronts delivered (one line + date), cross-cutting gotchas, pointers to ADRs/known-broken/board. Never task progress.
-  - One exception: the "Plataforma: fila de issues" section in `HANDOFF.md` lists the open Platform API and CLI issues with board status, dependencies and a recommendation of what to do next. Before starting the next platform issue, refresh that table first (status from board #6, recommendation from the dependencies); new platform issues enter it, closed ones leave it for a line in Completed Work.
+- **Task progress lives in GitHub Issues + the Project v2 board (#6, `smsilva/wasp-idp`), not in handoff files.** There is no `HANDOFF.local.md`. The board is the queue: its order is the position of each item (top first), and the next task is what is `In Progress`, else the top of `Todo`. `Todo` holds only what can start now; everything else waits in `Backlog`, also in order. `scripts/board/queue` reads and changes it (`next`, `list --status Todo`, `move <issue> --after <issue>`, `status <issue> Todo`): when a new issue enters, place it in the order, and when one closes, move the next one to `Todo`. Dependencies are written in the issue body. Each issue carries its own context, decisions and open questions in its body and comments. Split work into one issue per deliverable (sub-issues under a parent when they share a goal) and handle them in sequence, one branch and PR each. Before stopping mid-task, leave the state (last step, next step, open decision) as a comment on the issue — anything needed to resume on another machine must be on GitHub or in the repo, never only on local disk. Here, a handoff is that comment, and resuming starts from `scripts/board/queue next`.
+- `HANDOFF.md` (root, versioned) keeps only broad repo state: what exists and is live, fronts delivered (one line + date), cross-cutting gotchas, pointers to ADRs/known-broken/board. Never task progress, and never the order of the work: that is the board's.
 
 - PII (emails) and anything identifying a person/company go in `CLAUDE.local.md` (gitignored), never in `HANDOFF.md` — the repo is public.
 
@@ -26,7 +25,7 @@
 
   Issues created outside a session (design conversations) often skip `item-add`: confirm membership per issue with GraphQL (`issue.projectItems`), since `item-list` lags behind.
 
-  Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `gh project item-list` — pass `--limit 1000` to both, since `item-list` defaults to 30 items and a low limit silently truncates the newest items (with `--limit 100` and 122 items, issues #171–#193 showed up as false "missing from board").
+  Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `gh project item-list` — pass `--limit 1000` to both, since `item-list` defaults to 30 items and a low limit silently truncates the newest items, which then look missing from the board.
 
 - **`gh pr edit` / `gh issue edit` fail on this repo** with `GraphQL: Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)`. The command exits non-zero and changes nothing — easy to read as "edited" if the output is not checked. Use the REST API instead: `gh api --method PATCH repos/smsilva/wasp-idp/pulls/<n> --input <file.json>` with `{"title": ..., "body": ...}`. `gh issue create`, `gh issue comment` and `gh issue close` are unaffected.
 
@@ -34,7 +33,7 @@
 
 - **Stacked PRs:** merging the base PR does not retarget the child (the base branch is not auto-deleted). Rebase the child with `git rebase --onto origin/main <base-commit>`, force-push, and switch its base to `main` via REST `{"base": "main"}`. GitHub may keep reporting `mergeable_state: dirty` after the retarget even with no real conflict; amending the commit (`--amend --no-edit --date=now`) and force-pushing forces a recompute.
 
-- Write GitHub issue bodies so a fresh agent (no conversation context) can act without re-deriving facts already knowable from the code: state a checked fact directly ("the policy is already `Resource = \"*\"`"), never phrase it as "discover/verify whether X exists" when a `grep`/read already answers it. That phrasing pattern caused real rework the first time it shipped — verified by dry-running a cold agent against the issue.
+- Write GitHub issue bodies so a fresh agent (no conversation context) can act without re-deriving facts already knowable from the code: state a checked fact directly ("the policy is already `Resource = \"*\"`"), never phrase it as "discover/verify whether X exists" when a `grep`/read already answers it. Phrased as a question, the fact sends the agent re-deriving what the author already knew.
 
 ## Branch naming
 

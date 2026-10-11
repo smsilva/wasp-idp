@@ -57,3 +57,37 @@ referência fica aqui.
   (`regions/<r>/main.tf`), um com `provider = aws.network` alimentando `module.hub`, outro sem
   provider (conta `cicd`) alimentando `module.cell` via a variável nova `var.availability_zones`
   — `src/cell` não tem mais data source próprio.
+- **O que deve virar efêmero no hub, para o Client VPN parar de custar ~US$ 146/mês parado?** Sem decisão.
+  Três opções levantadas, com o trade-off apurado; **não rederivar**:
+
+  | Opção | Custo parado | `.ovpn` entre sessões | Ressalva |
+  |---|---|---|---|
+  | Só as 2 `aws_ec2_client_vpn_network_association` (+ as 2 rotas) | ~US$ 55 | **estável** — o `dns_name` do endpoint não muda | endpoint, certificado ACM, SAML provider e authorization rules sobrevivem |
+  | O Client VPN inteiro | ~US$ 55 | reexportar sempre | certificado revalida por DNS a cada subida |
+  | O hub inteiro | US$ 0 | reexportar sempre | inverte a premissa do [ADR 0014](../../docs/adr/0014-single-regional-root-composing-hub-and-cell-modules.md) de que o hub é o resting state |
+
+  A opção cirúrgica existe porque **a cobrança é por associação, não por endpoint**. Ela também
+  derruba a nota de [`aws/terraform/CLAUDE.md`](../terraform/CLAUDE.md) de que "o `.ovpn` nunca se reaproveita entre applies do
+  hub" — isso vale quando o endpoint é recriado, não quando só as associações vão e voltam.
+  **Armadilha já documentada, não tentar:** `transit_gateway_configuration` no endpoint parece o
+  caminho mais direto e não é — o attachment que ele cria leva *"several hours"* para deletar, o
+  provider não espera, e isso **impede deletar o TGW**.
+- **Um retry de teardown é suficiente, ou o caminho é `state rm` automático?** O retry de #94 cobre
+  erro transitório. Não cobre finalizer preso por controller sem credencial — nesse caso a segunda
+  tentativa falha igual. Com a aresta de #92 o cenário deixa de acontecer por essa causa, mas a
+  pergunta continua de pé para outras.
+- **Vale abrir exceção na SCP baseline para limpar as VPCs default das 15 regiões negadas?**
+  Continua em aberto, mas **deixou de ser o único caminho**: a issue **#69** propõe neutralizá-las com
+  *declarative policy* de EC2 (VPC Block Public Access), sem tocar na SCP. O item bloqueante lá é
+  medir se a policy dá para restringir por região — aplicada larga, ela mata o ALB público da célula.
+- **#40** segue investigação em aberto, sem trabalho iniciado — ver o corpo da issue para os
+  ângulos já mapeados.
+- **A `gp2` in-tree (`kubernetes.io/aws-ebs`) ainda provisiona volume em Kubernetes 1.36, via CSI
+  migration?** Muda se a #62 é gap de qualidade (classe legada, `gp2` mais caro por IOPS que `gp3`)
+  ou bug latente (classe que não funciona mais). Conferir na doc da AWS **antes** de escrever
+  código — a regra existe porque o passo `2.4` custou ~US$ 180/mês por não fazer isso.
+- **Um cluster recém-criado não tem admin além da role de CI**, cuja trust OIDC é restrita a
+  `refs/heads/main`. `aws eks update-kubeconfig` + `kubectl` falham com "the server has asked for the
+  client to provide credentials". Para depurar de dentro, ou resolver a #56, ou criar uma access
+  entry fora do Terraform (`aws eks create-access-entry` + `associate-access-policy`; não gera drift
+  porque `var.access_entries` está vazio, então o `for_each` não gerencia nada).
