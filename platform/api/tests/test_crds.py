@@ -18,6 +18,7 @@ def load(plural: str) -> dict:
   ("domains", ["owner"]),
   ("systems", ["owner", "domain"]),
   ("resources", ["owner", "type", "system"]),
+  ("templates", ["owner", "type", "source"]),
 ])
 def test_catalog_crd(plural, required):
   crd = load(plural)
@@ -26,6 +27,21 @@ def test_catalog_crd(plural, required):
   assert crd["spec"]["names"]["plural"] == plural
   spec = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
   assert sorted(spec["required"]) == sorted(required)
+
+
+def test_template_crd_matches_the_api():
+  from platform_api.templates import TYPES
+
+  version = load("templates")["spec"]["versions"][0]
+  spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]
+  assert tuple(spec["type"]["enum"]) == TYPES
+  assert sorted(spec["source"]["required"]) == ["path", "ref", "repo"]
+  # The CLI fetches repo and ref with git: a CR written straight to the cluster must obey the same rules.
+  from platform_api.templates import REF, REPO_URL
+
+  assert spec["source"]["properties"]["repo"]["pattern"] == REPO_URL.pattern
+  assert spec["source"]["properties"]["ref"]["pattern"] == REF.pattern
+  assert [column["name"] for column in version["additionalPrinterColumns"]] == ["Type", "Default", "Ref"]
 
 
 def test_group_of():

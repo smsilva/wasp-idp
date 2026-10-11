@@ -103,3 +103,46 @@ def test_api_admin_client_only_reads_through_roles():
 def test_realm_declares_no_teams():
   # Teams live under /teams, created by the API: keycloak-config-cli must never own that tree.
   assert "teams" not in [g["name"] for g in REALM["groups"]]
+
+
+def test_seed_templates_first_install_marks_one_default_per_type(tmp_path):
+  from wasp_platform.bootstrap.local import SEED_REPO, seed_templates
+
+  root = Path(__file__).parents[2]
+  manifests = seed_templates(root, "abc1234", existing=[])
+  assert [manifest["metadata"]["name"] for manifest in manifests] == ["python-service"]
+  spec = manifests[0]["spec"]
+  assert spec["source"] == {"repo": SEED_REPO, "path": "platform/templates/python-service/content", "ref": "abc1234"}
+  assert (spec["type"], spec["default"], spec["owner"]) == ("service", True, "team-platform")
+  assert spec["parameters"]["properties"]["port"]["default"] == 8000
+  assert manifests[0]["apiVersion"] == "catalog.platform.wasp.silvios.me/v1alpha1"
+
+
+def test_seed_templates_again_keeps_the_admin_choice_of_default():
+  from wasp_platform.bootstrap.local import seed_templates
+
+  root = Path(__file__).parents[2]
+  # An admin made another service template the default: init must not take it back.
+  existing = [
+    {"metadata": {"name": "python-service"}, "spec": {"type": "service"}},
+    {"metadata": {"name": "go-service"}, "spec": {"type": "service", "default": True}},
+  ]
+  spec = seed_templates(root, "def5678", existing)[0]["spec"]
+  assert "default" not in spec and spec["source"]["ref"] == "def5678"
+  # Still the default from an earlier init: stays the default.
+  existing = [{"metadata": {"name": "python-service"}, "spec": {"type": "service", "default": True}}]
+  assert seed_templates(root, "def5678", existing)[0]["spec"]["default"] is True
+
+
+def test_seed_ref_is_the_last_commit_on_the_remote(monkeypatch):
+  from wasp_platform.bootstrap import local
+
+  answers = {
+    ("git", "-C", "/r", "rev-parse", "HEAD"): "local-only\n",
+    ("git", "-C", "/r", "branch", "--remotes", "--contains", "local-only"): "",
+    ("git", "-C", "/r", "merge-base", "HEAD", "origin/main"): "pushed\n",
+  }
+  monkeypatch.setattr(local, "_run", lambda *command, **kwargs: answers[command])
+  assert local.seed_ref(Path("/r")) == "pushed"
+  answers[("git", "-C", "/r", "branch", "--remotes", "--contains", "local-only")] = "  origin/feat/x\n"
+  assert local.seed_ref(Path("/r")) == "local-only"

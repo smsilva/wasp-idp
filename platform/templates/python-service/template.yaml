@@ -1,0 +1,15 @@
+# Platform format (ADR 0024). The component's name, owner, system and description come from the
+# platform; parameters declares only the extras, as JSON Schema. owner here is the template's owner.
+name: python-service
+type: service
+owner: team-platform
+description: FastAPI service with CI to GHCR, Dockerfile and app-spec.yaml
+parameters:
+  type: object
+  properties:
+    port:
+      type: integer
+      description: Port the container listens on.
+      default: 8000
+copyWithoutRendering:
+  - .github/workflows/*

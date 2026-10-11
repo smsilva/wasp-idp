@@ -1,6 +1,6 @@
 # Platform API
 
-Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments` e as entidades do catálogo (`domains`, `systems`, `resources`) no namespace `platform-system`.
+Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + FastAPI, roda no cluster de control plane (`platform-local` no target local) com uma ServiceAccount que só enxerga `environments` e as entidades do catálogo (`domains`, `systems`, `resources`, `templates`) no namespace `platform-system`.
 
 ## Endpoints
 
@@ -17,6 +17,13 @@ Fachada sobre os CRDs do grupo `platform.wasp.silvios.me` (ADR 0022). Python + F
 | `GET` | `/v1/catalog/{kind}` | `200`, `{"items": [...]}` |
 | `GET` | `/v1/catalog/{kind}/{name}` | `200`, com `dependents` |
 | `DELETE` | `/v1/catalog/{kind}/{name}` | `204`; `409` enquanto houver dependentes |
+| `POST` | `/v1/catalog/import` | `200`, plano do import (#190); body `{"documents", "dryRun", "planHash", "source": {"repo", "ref"}}` |
+| `POST` | `/v1/catalog/templates` | `201`; só `platform-admins`; body `{"name", "type", "owner", "source": {"repo", "path", "ref"}, "default", "parameters", "copyWithoutRendering", "description"}` |
+| `GET` | `/v1/catalog/templates` | `200`, `{"items": [...]}` |
+| `GET` | `/v1/catalog/templates/{name}` | `200` |
+| `POST` | `/v1/catalog/templates/{name}/default` | `200`; só `platform-admins`; desmarca o padrão anterior do tipo |
+| `DELETE` | `/v1/catalog/templates/{name}` | `204`; só `platform-admins`; `409` para o padrão de um tipo com outros templates |
+| `POST` | `/v1/catalog/templates:import` | `200`, o mesmo plano do `/v1/catalog/import`, só com templates |
 | `GET` | `/v1/catalog/entities` | `200`, todos os kinds com `parent` normalizado; filtros `?kind=domain\|system\|resource` e `?owner=` |
 
 `GET /v1/environments/{name}` traz também `kubeconfigData`, o acesso de administrador ao ambiente, mas só para quem o criou (anotação `platform.wasp.silvios.me/owner`, gravada pela API com o `sub` do token no create) ou para quem está em `platform-admins`. A lista nunca o traz.
@@ -39,6 +46,14 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 - Apagar com dependentes é `409` com a lista (`system 'greeter' has dependents: resource/greeting-db`).
 - Domain: create e delete só para `platform-admins`. System e Resource: qualquer usuário autenticado cria; só quem criou (anotação `platform.wasp.silvios.me/created-by`) ou `platform-admins` apaga. O `owner` é o time e é texto livre até a #186; quem criou é a pessoa.
 - Create e delete aceitos entram no journal; os negados, não. O delete leva o `uid` como precondição, como no Environment.
+
+### Templates
+
+`Template` é um CRD do mesmo grupo (ADR 0024): `type` (`service`, `website`, `library`), `default`, `source.{repo,path,ref}`, `parameters` (JSON Schema dos extras, sem `name`, `owner`, `system` e `description`, que vêm da plataforma) e `copyWithoutRendering`. O conteúdo fica no Git; a API não o lê.
+
+- Um padrão por tipo: criar com `default` ou chamar `/default` desmarca o anterior na mesma operação, e cada mudança entra no journal.
+- O import converte o `kind: Template` do Backstage: as páginas de `spec.parameters` viram um JSON Schema sem os campos da plataforma nem as dicas `ui:*`; o `url` do `fetch:template` vira `source.path`, relativo ao arquivo (o `path` de cada documento no body); `copyWithoutTemplating` vira `copyWithoutRendering`. Os outros `steps` viram itens `skip` de kind `Step`, com o motivo. Arquivos dentro das pastas de um template (`fetch:template.url`) viram `skip` (`part of template <nome>`): o `catalog-info.yaml` do conteúdo não é um Component.
+- Reimportar mantém o `default`; o diff do plano é por campo (`source.ref: v1 → v2`).
 
 ## Escrita
 

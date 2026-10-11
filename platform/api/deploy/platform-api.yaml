@@ -22,7 +22,7 @@ rules:
     resources: [environments/status]
     verbs: [get, update, patch]
   - apiGroups: [catalog.platform.wasp.silvios.me]
-    resources: [domains, systems, resources]
+    resources: [domains, systems, resources, templates]
     verbs: [get, list, watch, create, update, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -1,0 +1,16 @@
+apiVersion: platform/v1
+
+metadata:
+  name: ${{ values.name }}
+
+containers:
+  api:
+    image: .
+    variables:
+      APP_NAME: ${{ values.name }}
+
+service:
+  ports:
+    http:
+      port: 80
+      targetPort: ${{ values.port }}

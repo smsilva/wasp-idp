@@ -319,11 +319,40 @@ platform catalog import idp/catalog/ --yes      # sem perguntar (pipeline)
 | `create` | não existe na plataforma |
 | `update` | existe e muda; o detalhe mostra `campo: antes → depois` |
 | `unchanged` | existe igual |
-| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), User fica no Keycloak, Template chega com a #201 |
+| `skip` | não é importado: Component e API moram no repo e chegam pelo discovery (#205), User fica no Keycloak; arquivos dentro do conteúdo de um template (`part of template <nome>`); os `steps` de um template do Backstage |
 | `forbidden` | sem permissão: domínio só `platform-admins`; sistema e recurso só quem criou |
 | `error` | campo faltando ou referência quebrada; o detalhe diz o campo e o arquivo |
 
 Um `Group` vira time (só `platform-admins` criam; membros não são importados) e entra no plano antes das outras entidades. O `spec.owner` de cada entidade escrita precisa ser um time que existe ou um `Group` do mesmo import. Com `forbidden` ou `error` nada é aplicado. O import nunca apaga: o que existe na plataforma e não está nos arquivos fica como está. Um campo ausente no arquivo (a `description`, por exemplo) é removido da entidade. Se o catálogo mudar entre o plano e a confirmação, a API recusa e a CLI mostra o plano novo.
+
+Templates do Backstage (`kind: Template`) também entram pelo `catalog import`, desde que venham `--repo` e `--ref`: o arquivo local não sabe onde está publicado. Sem eles, o template vira `error` e o resto do plano segue.
+
+### Templates
+
+Um template é o golden path de um tipo de component (`service`, `website`, `library`; ADR 0024). O conteúdo fica no Git, e a plataforma guarda repo, caminho e ref. O `platform init` registra `platform/templates/*` no último commit do checkout que existe no GitHub.
+
+```bash
+platform catalog template list
+platform catalog template get python-service
+platform catalog template render python-service --name demo --output ./demo [--param port=9000]
+platform catalog template render --from platform/templates/python-service --name demo --output ./demo
+```
+
+O `render` roda localmente: busca o conteúdo no ref registrado (ou lê `--from`), renderiza com os delimitadores do Backstage (`${{ values.x }}`, filtro `dump`), copia como estão os arquivos de `copyWithoutRendering` e grava a origem em `catalog-info.yaml` (`platform.wasp.silvios.me/template: <nome>@<ref>`). Os valores padrão são `name`, `owner`, `system` e `description`; o template declara os extras, passados com `--param`.
+
+Só `platform-admins` alteram o registro:
+
+```bash
+platform catalog template create my-api --type service --owner team-platform \
+  --repo https://github.com/wasp-foundry/templates --path my-api --ref v1.0.0 [--default]
+platform catalog template default my-api
+platform catalog template import idp/templates/python-service --repo https://github.com/smsilva/wasp-idp --ref main
+platform catalog template delete my-api
+```
+
+- Um padrão por tipo: `default` desmarca o anterior. Apagar o padrão enquanto houver outros do mesmo tipo é `409`.
+- `import` aceita arquivo ou pasta e lê só definições de template: `kind: Template` do Backstage ou `template.yaml` no formato da plataforma. Os `steps` do scaffolder aparecem no plano como `skip`, com o motivo, e reimportar mantém quem é o padrão.
+- O `--owner` é um time que já existe, como nas outras entidades do catálogo. O template do Backstage em `idp/templates/python-service` tem `owner: group:default/guests`: importe-o pelo `platform catalog import` junto com o `Group` `guests`, ou crie o time antes.
 
 ## 12. Times
 
@@ -394,10 +423,15 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform catalog resource create <nome> --type <papel> --system <sistema> --owner <time>` | cria um recurso compartilhado |
 | `platform catalog list [--kind domain\|system\|resource] [--owner <time>]` | KIND, NAME, PARENT, OWNER |
 | `platform catalog <kind> list\|get\|delete` | por kind; `get` mostra os dependentes |
-| `platform catalog import <caminho>... [--dry-run] [--yes]` | importa Domain, System e Resource de arquivos Backstage, depois de revisar o plano |
+| `platform catalog import <caminho>... [--repo <url> --ref <ref>] [--dry-run] [--yes]` | importa Domain, System, Resource e Template de arquivos Backstage, depois de revisar o plano |
 | `platform team list\|get <time>` | times e membros |
 | `platform team create\|delete <time>` | cria ou apaga um time (só `platform-admins`) |
 | `platform team member add\|remove <time> <email>` | muda membros (só `platform-admins`); vale no próximo `platform login` |
+| `platform catalog template list\|get <nome>` | NAME, TYPE, REF, DEFAULT, SOURCE; `get` mostra os parâmetros |
+| `platform catalog template create <nome> --type <tipo> --owner <time> --repo <url> --path <pasta> --ref <ref> [--default]` | registra um template (só `platform-admins`) |
+| `platform catalog template import <caminho> --repo <url> --ref <ref> [--dry-run] [--yes]` | importa templates do Backstage ou do formato da plataforma |
+| `platform catalog template default\|delete <nome>` | muda o padrão do tipo; apaga (só `platform-admins`) |
+| `platform catalog template render [<nome>\|--from <pasta>] --name <component> --output <pasta> [--param k=v]` | renderiza localmente |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |

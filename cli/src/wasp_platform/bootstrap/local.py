@@ -42,6 +42,10 @@ API_ADMIN_KEY = "PLATFORM_API_ADMIN_SECRET"
 # platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py.
 ENV_PORTS = "7100-7119"
 PROVIDER_IMAGE = "local-vcluster-provider"
+# Factory templates (ADR 0024): read from this public repo, so no credential is needed.
+SEED_REPO = "https://github.com/smsilva/wasp-idp"
+SEED_FOLDER = Path("platform") / "templates"
+CATALOG_API_VERSION = "catalog.platform.wasp.silvios.me/v1alpha1"
 
 
 class BootstrapError(Exception):
@@ -292,12 +296,61 @@ def install(admin_email: str | None = None, log=None) -> dict:
   _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
   _kubectl("rollout", "status", "deployment/local-vcluster-provider", "--namespace", NAMESPACE, "--timeout", "180s")
 
+  install_templates(root, log)
+
   path = config.save({
     **config.load(),
     "target": "local", "api_url": API_URL, "context": CONTEXT,
     "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
   })
   return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": image, "config": str(path), **identity}
+
+
+def seed_templates(root: Path, ref: str, existing: list[dict]) -> list[dict]:
+  """Template manifests for platform/templates/*, at ref. The first of each type is the default only
+  while no other template of that type is: an admin's `template default` survives a new init."""
+  current = {obj["metadata"]["name"]: obj.get("spec") or {} for obj in existing}
+  taken = {spec.get("type") for spec in current.values() if spec.get("default")}
+  manifests = []
+  for definition in sorted((root / SEED_FOLDER).glob("*/template.yaml")):
+    data = yaml.safe_load(definition.read_text(encoding="utf-8"))
+    name, type_ = data["name"], data["type"]
+    spec = {
+      "type": type_,
+      "source": {"repo": SEED_REPO, "path": (definition.parent / "content").relative_to(root).as_posix(), "ref": ref},
+      "parameters": data.get("parameters") or {},
+      "copyWithoutRendering": list(data.get("copyWithoutRendering") or []),
+      "owner": data["owner"],
+    }
+    if data.get("description"):
+      spec["description"] = data["description"]
+    if current.get(name, {}).get("default") or type_ not in taken:
+      spec["default"] = True
+      taken.add(type_)
+    manifests.append({
+      "apiVersion": CATALOG_API_VERSION, "kind": "Template",
+      "metadata": {"name": name, "namespace": NAMESPACE, "annotations": {"platform.wasp.silvios.me/created-by": "platform-init"}},
+      "spec": spec,
+    })
+  return manifests
+
+
+def seed_ref(root: Path) -> str:
+  """The checkout's commit when it is on the remote; otherwise the last commit of origin/main it
+  builds on: the ref is fetched from SEED_REPO on GitHub, where an unpushed commit does not exist."""
+  head = _run("git", "-C", str(root), "rev-parse", "HEAD").strip()
+  if _run("git", "-C", str(root), "branch", "--remotes", "--contains", head).strip():
+    return head
+  return _run("git", "-C", str(root), "merge-base", "HEAD", "origin/main").strip()
+
+
+def install_templates(root: Path, log) -> None:
+  """Registers the factory templates at the checkout's commit; applying again only moves the ref."""
+  ref = seed_ref(root)
+  existing = json.loads(_kubectl("get", "templates.catalog.platform.wasp.silvios.me", "--namespace", NAMESPACE, "--output", "json"))["items"]
+  manifests = seed_templates(root, ref, existing)
+  log(f"registering {len(manifests)} template(s) at {ref[:7]} …")
+  _kubectl("apply", "--filename", "-", input=json.dumps({"apiVersion": "v1", "kind": "List", "items": manifests}))
 
 
 def wait_healthy(url: str, timeout: int = 90) -> None:
