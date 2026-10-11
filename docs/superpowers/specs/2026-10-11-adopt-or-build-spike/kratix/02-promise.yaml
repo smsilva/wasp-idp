@@ -1,0 +1,127 @@
+apiVersion: platform.kratix.io/v1alpha1
+kind: Promise
+metadata:
+  name: cloud-environment
+spec:
+  api:
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: cloudenvironments.spike.platform.wasp.silvios.me
+    spec:
+      group: spike.platform.wasp.silvios.me
+      names:
+        kind: CloudEnvironment
+        plural: cloudenvironments
+        singular: cloudenvironment
+      scope: Namespaced
+      versions:
+      - name: v1alpha1
+        served: true
+        storage: true
+        schema:
+          openAPIV3Schema:
+            type: object
+            properties:
+              spec:
+                type: object
+                required: [cloudAccount]
+                properties:
+                  # Patterns added after the spike run: these fields are interpolated into the
+                  # rendered manifests, so they must be plain names.
+                  cloudAccount:
+                    type: string
+                    pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
+                  method:
+                    type: string
+                    enum: [crossplane, opentofu]
+                    default: crossplane
+                  region:
+                    type: string
+                    pattern: '^[a-z]{2}(-[a-z]+)+-[0-9]$'
+                    default: us-east-1
+  workflows:
+    resource:
+      configure:
+      - apiVersion: platform.kratix.io/v1alpha1
+        kind: Pipeline
+        metadata:
+          name: render
+        spec:
+          containers:
+          - name: render
+            image: mikefarah/yq:4.44.3
+            command: ["sh", "-c"]
+            args:
+            - |
+              set -e
+              in=/kratix/input/object.yaml
+              name="$(yq '.metadata.name' "$in")"
+              account="$(yq '.spec.cloudAccount' "$in")"
+              method="$(yq '.spec.method // "crossplane"' "$in")"
+              region="$(yq '.spec.region // "us-east-1"' "$in")"
+              # role ARN and ExternalId come from the CloudAccount status in the real flow (ADR 0029); fixed here
+              role="arn:aws:iam::210987654321:role/wasp-platform"
+              external_id="spike-external-id"
+              if [ "$method" = "opentofu" ]; then
+                cat > /kratix/output/terraform.yaml <<EOT
+              apiVersion: infra.contrib.fluxcd.io/v1alpha2
+              kind: Terraform
+              metadata:
+                name: env-$name
+                namespace: flux-system
+              spec:
+                interval: 10m
+                approvePlan: auto
+                path: ./environment
+                sourceRef:
+                  kind: GitRepository
+                  name: environment-modules
+                vars:
+                - {name: name, value: "$name"}
+                - {name: region, value: "$region"}
+                - {name: role_arn, value: "$role"}
+                - {name: external_id, value: "$external_id"}
+                backendConfig:
+                  customConfiguration: |
+                    backend "kubernetes" {
+                      secret_suffix = "env-$name"
+                      namespace     = "flux-system"
+                      in_cluster_config = true
+                    }
+              EOT
+              else
+                cat > /kratix/output/crossplane.yaml <<EOT
+              apiVersion: aws.upbound.io/v1beta1
+              kind: ProviderConfig
+              metadata:
+                name: account-$account
+              spec:
+                credentials:
+                  source: Secret
+                  secretRef: {namespace: crossplane-system, name: aws-base-identity, key: credentials}
+                assumeRoleChain:
+                - roleARN: "$role"
+                  externalID: "$external_id"
+              ---
+              apiVersion: ec2.aws.upbound.io/v1beta1
+              kind: VPC
+              metadata:
+                name: env-$name
+              spec:
+                forProvider:
+                  region: "$region"
+                  cidrBlock: 10.0.0.0/16
+                  tags: {wasp-environment: "$name"}
+                providerConfigRef:
+                  name: account-$account
+              EOT
+              fi
+              cat > /kratix/metadata/destination-selectors.yaml <<EOT
+              - matchLabels:
+                  provisioning-method: $method
+              EOT
+              cat > /kratix/metadata/status.yaml <<EOT
+              method: $method
+              cloudAccount: $account
+              EOT

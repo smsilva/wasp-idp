@@ -1,0 +1,17 @@
+# Simulates what an agent at the destination would write after a periodic `tofu plan` finds drift.
+apiVersion: platform.kratix.io/v1alpha1
+kind: HealthRecord
+metadata:
+  name: env-b-health
+  namespace: default
+data:
+  promiseRef:
+    name: cloud-environment
+  resourceRef:
+    name: env-b
+    namespace: default
+  state: unhealthy
+  lastRun: 1791702000
+  details:
+    reason: Drifted
+    message: "tofu plan found 1 change outside OpenTofu: aws_vpc.this tags"
