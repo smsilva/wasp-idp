@@ -216,8 +216,8 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
     return change_share(name, team, principal, add=False)
 
   # Before the catalog router: its POST /{plural} would otherwise take "import" as a kind.
-  app.include_router(catalog_import.router(state, journal))
-  app.include_router(catalog.router(state, journal))
+  app.include_router(catalog_import.router(state, journal, teams))
+  app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state))
   return app
 

@@ -3,7 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import FakeState
+from fakes import CATALOG_TEAMS, FakeState, FakeTeams
 from platform_api.app import create_app
 from platform_api.catalog import CREATED_BY_ANNOTATION
 from platform_api.journal import Journal
@@ -27,7 +27,7 @@ def tokens():
 
 @pytest.fixture
 def client(state, journal_path, tokens):
-  return TestClient(create_app(state, Journal(journal_path), tokens.verifier()))
+  return TestClient(create_app(state, Journal(journal_path), tokens.verifier(), teams=FakeTeams(*CATALOG_TEAMS)))
 
 
 def bearer(tokens, **claims):
@@ -196,3 +196,14 @@ def test_long_description_is_422(client, admin):
   response = client.post("/v1/catalog/domains", json={"name": "communication", "owner": "team-alpha", "description": "x" * 1001}, headers=admin)
   assert response.status_code == 422
   assert "description" in response.json()["error"]["message"]
+
+
+def test_owner_must_be_an_existing_team(client, admin):
+  response = client.post("/v1/catalog/domains", json={"name": "lonely", "owner": "team-nobody"}, headers=admin)
+  assert response.status_code == 422
+  assert "team 'team-nobody' not found" in response.json()["error"]["message"]
+
+
+def test_catalog_writes_need_teams(state, journal_path, tokens, admin):
+  client = TestClient(create_app(state, Journal(journal_path), tokens.verifier()))
+  assert client.post("/v1/catalog/domains", json={"name": "d", "owner": "team-alpha"}, headers=admin).status_code == 503

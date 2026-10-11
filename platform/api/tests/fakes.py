@@ -3,6 +3,7 @@ import json
 from collections import defaultdict
 
 from platform_api.state import ENVIRONMENTS, AlreadyExists, Conflict, NotFound
+from platform_api.teams import TeamExists, TeamsUnavailable
 
 
 def _copy(obj: dict) -> dict:
@@ -79,3 +80,25 @@ class FakeState:
 
   def list(self, plural):
     return [_copy(obj) for obj in self.stores[plural].values()]
+
+
+class FakeTeams:
+  """The team directory the routes use (KeycloakTeams), in memory."""
+
+  def __init__(self, *names):
+    self.teams = set(names)
+    self.down = False
+
+  def names(self):
+    if self.down:
+      raise TeamsUnavailable("Keycloak unreachable")
+    return sorted(self.teams)
+
+  def create(self, name):
+    if name in self.teams:
+      raise TeamExists(name)
+    self.teams.add(name)
+
+
+# The teams of idp/catalog/org.yaml, which most catalog tests use as owners.
+CATALOG_TEAMS = ("team-alpha", "team-beta", "team-platform")

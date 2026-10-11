@@ -149,6 +149,27 @@ class KeycloakTeams:
       self._admin("DELETE", f"/users/{account}/groups/{team}")
 
 
+def known_teams(teams) -> set[str]:
+  """The names of the teams, for checks that need them all; 503 when Keycloak cannot answer."""
+  if teams is None:
+    raise HTTPException(503, "teams are not configured: the Platform API has no Keycloak admin client")
+  try:
+    return set(teams.names())
+  except TeamsUnavailable as error:
+    raise HTTPException(503, str(error))
+
+
+def users_of(state, name: str) -> list[str]:
+  """What refers to the team by name: environments shared with it and catalog entities it owns."""
+  # Imported here: catalog imports this module for known_teams.
+  from .catalog import KINDS
+
+  found = [f"environment/{obj['metadata']['name']}" for obj in state.list(ENVIRONMENTS) if name in ((obj.get("spec") or {}).get("sharedWith") or [])]
+  for kind in KINDS.values():
+    found += [f"{kind.singular}/{obj['metadata']['name']}" for obj in state.list(kind.plural) if (obj.get("spec") or {}).get("owner") == name]
+  return sorted(found)
+
+
 class TeamRequest(BaseModel):
   name: str
 
@@ -208,12 +229,12 @@ def router(teams, journal: Journal, state=None) -> APIRouter:
 
   @routes.delete("/{name}", status_code=204)
   def delete(name: str, principal: Principal = Depends(admin)):
-    # Environments keep the team by name: a team recreated with the same name would inherit their
-    # access, so the shares go first. Not atomic, like the catalog's dependents check.
+    # Environments and catalog entities keep the team by name: a team recreated with the same name
+    # would inherit them, so they go first. Not atomic, like the catalog's dependents check.
     if state is not None:
-      shared = sorted(obj["metadata"]["name"] for obj in state.list(ENVIRONMENTS) if name in ((obj.get("spec") or {}).get("sharedWith") or []))
-      if shared:
-        raise HTTPException(409, f"team '{name}' still has environments shared with it: {', '.join(shared)}; unshare them first")
+      found = users_of(state, name)
+      if found:
+        raise HTTPException(409, f"team '{name}' is still in use: {', '.join(found)}; unshare or change the owner first")
     entry = journal.record("delete", "Team", name, None, principal.actor)
     call(directory().delete, name)
     journal.mark_applied(entry)

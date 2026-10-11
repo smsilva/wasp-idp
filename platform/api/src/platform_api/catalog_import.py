@@ -17,6 +17,7 @@ from .catalog import CREATED_BY_ANNOTATION, KINDS, EntityRequest, InvalidRequest
 from .environments import ADMIN_GROUP, is_owner_or_admin
 from .journal import Journal
 from .state import AlreadyExists, Conflict, NotFound
+from .teams import LABEL as TEAM_LABEL, RESERVED as TEAM_RESERVED, TeamExists, TeamsUnavailable, known_teams
 
 MAX_DOCUMENTS = 500
 ACTIONS = ("create", "update", "unchanged", "skip", "forbidden", "error")
@@ -24,10 +25,11 @@ WRITES = ("create", "update")
 BLOCKING = ("forbidden", "error")
 
 PLURALS = {kind.name: plural for plural, kind in KINDS.items()}
+# A Backstage Group becomes a team (ADR 0026): a Keycloak group, not a CRD, so it has no plural.
+TEAM = "Group"
 SKIPPED = {
   "Component": "lives in the repo catalog-info.yaml; indexed by discovery (#205)",
   "API": "lives in the repo catalog-info.yaml; indexed by discovery (#205)",
-  "Group": "identity lives in Keycloak (#236)",
   "User": "users live in Keycloak: they sign in, never imported",
   # Templates become catalog entities (ADR of #200); the import learns them in #201.
   "Template": "templates arrive with #201",
@@ -70,6 +72,10 @@ class Item:
   @property
   def plural(self) -> str | None:
     return PLURALS.get(self.kind)
+
+  @property
+  def importable(self) -> bool:
+    return self.plural is not None or self.kind == TEAM
 
   def reject(self, action: str, field: str | None, reason: str) -> None:
     self.action, self.field, self.reason, self.changes = action, field, reason, None
@@ -137,7 +143,7 @@ def classify(source: str, document) -> Item:
   name = metadata.get("name")
   item = Item(source, kind, None if name is None else str(name))
   namespace = metadata.get("namespace") or "default"
-  if item.plural is None:
+  if not item.importable:
     item.reject("skip", None, SKIPPED.get(kind, "not a catalog kind"))
   elif not isinstance(namespace, str):
     item.reject("error", "metadata.namespace", "must be text")
@@ -149,6 +155,14 @@ def classify(source: str, document) -> Item:
     item.reject("error", "metadata.name", "must be text")
   elif not isinstance(document.get("spec"), dict):
     item.reject("error", "spec", "required")
+  elif item.kind == TEAM:
+    # Only the name: members are e-mails (PII) and membership is `platform team member`.
+    if not TEAM_LABEL.fullmatch(name):
+      item.reject("error", "metadata.name", "lowercase letters, digits and '-', at most 63 characters")
+    elif name in TEAM_RESERVED:
+      item.reject("error", "metadata.name", f"'{name}' is reserved by the platform")
+    else:
+      item.spec = {}
   else:
     try:
       item.name, item.spec = convert(KINDS[item.plural], document)
@@ -157,7 +171,8 @@ def classify(source: str, document) -> Item:
   return item
 
 
-KIND_ORDER = {"Domain": 0, "System": 1, "Resource": 2}
+# Teams first: the owner of every other entity.
+KIND_ORDER = {TEAM: 0, "Domain": 1, "System": 2, "Resource": 3}
 
 
 @dataclass
@@ -265,7 +280,16 @@ def cycle_through(item: Item, declared: dict, state) -> list[str] | None:
   return None
 
 
-def decide(item: Item, declared: dict, state, principal) -> None:
+def decide_team(item: Item, teams: set[str], principal) -> None:
+  if item.name in teams:
+    item.action = "unchanged"
+  elif ADMIN_GROUP not in principal.groups:
+    item.reject("forbidden", None, f"creating a team requires group '{ADMIN_GROUP}'")
+  else:
+    item.action = "create"
+
+
+def decide(item: Item, declared: dict, state, principal, teams: set[str]) -> None:
   kind = KINDS[item.plural]
   parent = item.spec.get(kind.parent_field) if kind.parent_field else None
   if parent is not None:
@@ -297,23 +321,31 @@ def decide(item: Item, declared: dict, state, principal) -> None:
     } or None
     item.action = "update" if item.changes else "unchanged"
   if item.action in WRITES:
+    # Only what the import writes: an entity saved before owners were teams stays readable.
+    owner = item.spec.get("owner")
+    team = declared.get((TEAM, owner))
+    if owner not in teams and (team is None or team.action in BLOCKING):
+      return item.reject("error", "spec.owner", f"team '{owner}' not found: declare its Group in the files or create it with 'platform team create'")
     reason = denied(kind, item, principal)
     if reason:
       item.reject("forbidden", None, reason)
 
 
-def make_plan(documents: list[dict], state, principal) -> Plan:
+def make_plan(documents: list[dict], state, principal, teams: set[str]) -> Plan:
+  """teams: the names of the existing teams, read once by the caller."""
   items = [classify(document["source"], document["document"]) for document in documents]
   # Every copy with a name counts, valid or not: an error on one copy must not hide the duplicate.
-  mark_duplicates([item for item in items if item.plural and item.name and item.action != "skip"])
+  mark_duplicates([item for item in items if item.importable and item.name and item.action != "skip"])
   domains = {item.name: item for item in items if item.kind == "Domain" and item.action is None}
   mark_cycles(domains)
   items.sort(key=lambda item: (KIND_ORDER.get(item.kind, len(KIND_ORDER)), depth(item, domains), item.name or "", item.source))
   # Skips are not entities of the import: a child pointing at one resolves against the platform.
-  declared = {(item.kind, item.name): item for item in items if item.plural and item.action != "skip"}
+  declared = {(item.kind, item.name): item for item in items if item.importable and item.action != "skip"}
   for item in items:
-    if item.action is None:
-      decide(item, declared, state, principal)
+    if item.action is None and item.kind == TEAM:
+      decide_team(item, teams, principal)
+    elif item.action is None:
+      decide(item, declared, state, principal, teams)
   return Plan(items)
 
 
@@ -357,10 +389,21 @@ class ImportRequest(BaseModel):
   planHash: str | None = None
 
 
-def apply(plan: Plan, state, journal: Journal, principal: Principal) -> None:
+def apply(plan: Plan, state, journal: Journal, principal: Principal, teams) -> None:
   """Writes in plan order and stops at the first failure. Not transactional: what was written stays,
   and importing again converges, because it shows up as unchanged."""
   for item in plan.writes:
+    if item.kind == TEAM:
+      entry = journal.record("create", "Team", item.name, None, principal.actor)
+      try:
+        teams.create(item.name)
+      except (TeamExists, TeamsUnavailable) as error:
+        item.failed = "created by someone else since the plan was made" if isinstance(error, TeamExists) else str(error)
+        done = sum(1 for written in plan.writes if written.applied)
+        raise PlanRejected(409, f"team '{item.name}': {item.failed}; {done} applied before it, import again to converge", plan.view(applied=False))
+      journal.mark_applied(entry)
+      item.applied = True
+      continue
     kind = KINDS[item.plural]
     entry = journal.record(item.action, kind.name, item.name, item.spec, principal.actor)
     try:
@@ -377,19 +420,19 @@ def apply(plan: Plan, state, journal: Journal, principal: Principal) -> None:
     item.applied = True
 
 
-def router(state, journal: Journal) -> APIRouter:
+def router(state, journal: Journal, teams=None) -> APIRouter:
   routes = APIRouter(prefix="/v1/catalog")
 
   @routes.post("/import")
   def import_catalog(request: ImportRequest, principal: Principal = Depends(current_principal)):
-    plan = make_plan([document.model_dump() for document in request.documents], state, principal)
+    plan = make_plan([document.model_dump() for document in request.documents], state, principal, known_teams(teams))
     if request.dryRun:
       return plan.view(applied=False)
     if plan.blocked:
       raise PlanRejected(422, "the plan has entities that cannot be imported: nothing was applied", plan.view(applied=False))
     if request.planHash is not None and request.planHash != plan.hash:
       raise PlanRejected(409, "catalog changed since the plan was made: review the plan again", plan.view(applied=False))
-    apply(plan, state, journal, principal)
+    apply(plan, state, journal, principal, teams)
     return plan.view(applied=True)
 
   return routes
