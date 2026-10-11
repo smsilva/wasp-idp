@@ -54,7 +54,7 @@ def shared_with(obj: dict) -> list[str]:
 
 def can_use(obj: dict, principal) -> bool:
   """Owner, admins, and members of a team the environment is shared with (ADR 0026): they get the kubeconfig."""
-  return is_owner_or_admin(obj, principal) or bool(set(principal.groups) & set(shared_with(obj)))
+  return is_owner_or_admin(obj, principal) or bool(set(principal.teams) & set(shared_with(obj)))
 
 
 def view(obj: dict, with_kubeconfig: bool = False) -> dict:

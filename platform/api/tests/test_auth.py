@@ -48,8 +48,15 @@ def test_missing_token_is_401_with_error_shape(app):
 def test_me_returns_identity_from_token(app, tokens):
   token = tokens.issue(groups=["platform-users", "platform-admins"])
   assert call(app, "/v1/me", token).json() == {
-    "sub": "user-1", "email": "dev@example.com", "groups": ["platform-admins", "platform-users"],
+    "sub": "user-1", "email": "dev@example.com", "groups": ["platform-admins", "platform-users"], "teams": [],
   }
+
+
+def test_groups_come_from_full_paths(app, tokens):
+  # The pathless `groups` claim is never trusted: a nested platform-admins is not the admin group.
+  token = tokens.issue(groups=["platform-admins"], group_paths=["/platform-users", "/ops/platform-admins", "/teams/team-alpha", "/teams/x/y"])
+  assert call(app, "/v1/me", token).json()["groups"] == ["platform-users", "team-alpha"]
+  assert call(app, "/v1/me", token).json()["teams"] == ["team-alpha"]
 
 
 @pytest.mark.parametrize("overrides", [

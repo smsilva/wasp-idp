@@ -14,6 +14,7 @@ from pydantic import BaseModel, field_validator
 from .auth import Principal, current_principal, require_group
 from .environments import ADMIN_GROUP
 from .journal import Journal
+from .state import ENVIRONMENTS
 
 PARENT = "teams"
 # Like catalog names: the team is the `owner` of catalog entities (ADR 0023).
@@ -165,7 +166,7 @@ class MemberRequest(BaseModel):
   email: str
 
 
-def router(teams, journal: Journal) -> APIRouter:
+def router(teams, journal: Journal, state=None) -> APIRouter:
   routes = APIRouter(prefix="/v1/teams")
   admin = require_group(ADMIN_GROUP)
 
@@ -207,6 +208,12 @@ def router(teams, journal: Journal) -> APIRouter:
 
   @routes.delete("/{name}", status_code=204)
   def delete(name: str, principal: Principal = Depends(admin)):
+    # Environments keep the team by name: a team recreated with the same name would inherit their
+    # access, so the shares go first. Not atomic, like the catalog's dependents check.
+    if state is not None:
+      shared = sorted(obj["metadata"]["name"] for obj in state.list(ENVIRONMENTS) if name in ((obj.get("spec") or {}).get("sharedWith") or []))
+      if shared:
+        raise HTTPException(409, f"team '{name}' still has environments shared with it: {', '.join(shared)}; unshare them first")
     entry = journal.record("delete", "Team", name, None, principal.actor)
     call(directory().delete, name)
     journal.mark_applied(entry)

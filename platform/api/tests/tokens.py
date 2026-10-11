@@ -31,5 +31,8 @@ class TokenFactory:
       "groups": ["platform-users"], "iat": now, "exp": now + 300,
     }
     claims.update(overrides)
+    # Like the realm: every group also comes as a full path. Top-level unless the test says otherwise.
+    if "group_paths" not in overrides:
+      claims["group_paths"] = [f"/{group}" for group in claims.get("groups") or []]
     claims = {name: value for name, value in claims.items() if value is not None}
     return jwt.encode(claims, key or self.key, algorithm="RS256")
