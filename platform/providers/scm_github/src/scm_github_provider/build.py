@@ -17,8 +17,7 @@ import zipfile
 from datetime import datetime, timedelta, timezone
 
 import httpx
-import yaml
-from wasp_score import APP_SPEC, RESOURCE_TYPES, check
+from wasp_score import APP_SPEC, RESOURCE_TYPES, check, load
 
 from .github import GitHubApp, GitHubError
 from .reconciler import BACKOFF_MAX, BACKOFF_START, format_time, parse_time
@@ -315,7 +314,7 @@ class BuildReconciler:
     result = work["result"]
     if document is None:
       # Validated in an earlier pass (a restart, or a failure after it): read again at the same commit.
-      document = yaml.safe_load(self._app_spec(obj, installation, result["commit"]))
+      document = load(self._app_spec(obj, installation, result["commit"]))
     name = version_name(spec["component"], result["version"])
     body = {
       "apiVersion": f"{CATALOG_GROUP}/{VERSION}",

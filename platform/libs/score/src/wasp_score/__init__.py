@@ -19,6 +19,21 @@ def score_schema() -> dict:
   return json.loads(package_files.files(__package__).joinpath("schemas/score-v1b1.json").read_text(encoding="utf-8"))
 
 
+class _Loader(yaml.SafeLoader):
+  """safe_load without aliases: a few hundred bytes of nested aliases expand to millions of nodes in
+  whatever walks the document (the schema, json.dumps, the kube API). A Score never needs them."""
+
+  def compose_node(self, parent, index):
+    if self.check_event(yaml.AliasEvent):
+      event = self.peek_event()
+      raise yaml.composer.ComposerError(None, None, f"aliases are not accepted (*{event.anchor})", event.start_mark)
+    return super().compose_node(parent, index)
+
+
+def load(text: str):
+  return yaml.load(text, Loader=_Loader)
+
+
 @dataclass
 class Check:
   """The document, the errors (each a field and a reason) and the resources it declares."""
@@ -34,7 +49,7 @@ class Check:
 
 def check(text: str, resource_exists: Callable[[str], bool], resource_types=RESOURCE_TYPES) -> Check:
   try:
-    document = yaml.safe_load(text)
+    document = load(text)
   except yaml.YAMLError as error:
     return Check(errors=[{"field": APP_SPEC, "reason": f"not valid YAML: {error}"}])
   errors = []
