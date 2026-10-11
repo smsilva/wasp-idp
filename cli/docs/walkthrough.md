@@ -287,6 +287,22 @@ voce@example.com  voce@example.com
 voce@example.com (platform-admins, platform-users, team-alpha)
 ```
 
+Compartilhe um ambiente com o time. Quem está nele passa a vê-lo no `environment list` e a receber o kubeconfig:
+
+```bash
+platform environment share demo --team team-alpha
+platform environment list
+platform environment unshare demo --team team-alpha
+```
+
+```
+✓ demo shared with team-alpha
+NAME            PROFILE    STATUS  EXPIRES  OWNER             SHARED
+demo            ephemeral  ready   52m      voce@example.com  team-alpha
+greetings-test  ephemeral  ready   48m      voce@example.com  —
+✓ demo no longer shared with team-alpha
+```
+
 Para limpar:
 
 ```bash

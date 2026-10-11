@@ -42,3 +42,15 @@ users:
     credentials:
       - type: password
         value: $(env:SMOKE_ADMIN_PASSWORD)
+  # Teammate of platform-smoke: receives the environment it shares (#232).
+  - username: platform-smoke-member
+    email: platform-smoke-member@platform.local
+    emailVerified: true
+    firstName: Platform
+    lastName: Smoke Member
+    enabled: true
+    groups:
+      - /platform-users
+    credentials:
+      - type: password
+        value: $(env:SMOKE_MEMBER_PASSWORD)

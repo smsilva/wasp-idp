@@ -8,8 +8,10 @@ Usage: ${0##*/} [--skip-init]
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
 init, login as the test user, the refusals a non-admin gets, an environment
 created and deleted, then login as the test admin, the catalog import of
-idp/catalog/ and a team with the test user as member, checked in the user's
-token. Stops at the first failure with a non-zero exit code.
+idp/catalog/, a team with two test users, checked in the token, and an
+environment shared with that team: the teammate gets the kubeconfig, cannot
+delete it, and loses it after unshare. Stops at the first failure with a
+non-zero exit code.
 
 It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
 your own login in ~/.config/platform/credentials is never touched.
@@ -31,6 +33,7 @@ done
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 environment="smoke-${RANDOM}"
 team="smoke-team-${RANDOM}"
+shared_environment="smoke-shared-${RANDOM}"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
 # The test logins replace the credentials file; a private config dir keeps the user's session.
@@ -78,6 +81,7 @@ cleanup() {
   # An environment left behind keeps a vcluster and a host port busy. After a successful run it is
   # already gone and this fails silently; bash keeps the script's own exit status.
   platform environment delete "${environment}" > /dev/null 2>&1 || true
+  platform environment delete "${shared_environment}" > /dev/null 2>&1 || true
   platform team delete "${team}" > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}"
 }
@@ -123,14 +127,50 @@ expect_output "nothing to do" "${output}"
 step "team create and member add (platform-admins)"
 platform team create "${team}"
 platform team member add "${team}" platform-smoke@platform.local
+platform team member add "${team}" platform-smoke-member@platform.local
 output="$(platform team get "${team}")"
 expect_output "platform-smoke@platform.local" "${output}"
+expect_output "platform-smoke-member@platform.local" "${output}"
 
 step "the test user gets the team in its token, and cannot manage teams"
 platform login --test-user
 output="$(platform whoami)"
 expect_output "${team}" "${output}"
 expect_failure "403" platform team create smoke-forbidden
+
+step "environment shared with the team"
+platform environment create "${shared_environment}" \
+  --profile ephemeral \
+  --share-with "${team}" \
+  --wait
+
+step "the teammate sees it, gets the kubeconfig, and cannot delete it"
+platform login --test-member
+output="$(platform environment list)"
+expect_output "${shared_environment}" "${output}"
+expect_output "platform-smoke@platform.local" "${output}"
+output="$(platform environment get "${shared_environment}")"
+expect_output "kubectl --kubeconfig" "${output}"
+expect_failure "403" platform environment delete "${shared_environment}"
+
+step "after unshare, the teammate no longer gets it"
+platform login --test-user
+platform environment unshare "${shared_environment}" --team "${team}"
+platform login --test-member
+output="$(platform environment get "${shared_environment}")"
+if grep --quiet --fixed-strings -- "kubectl --kubeconfig" <<< "${output}"; then
+  echo "teammate still gets the kubeconfig after unshare" >&2
+  exit 1
+fi
+output="$(platform environment list)"
+if grep --quiet --fixed-strings -- "${shared_environment}" <<< "${output}"; then
+  echo "teammate still lists ${shared_environment} after unshare" >&2
+  exit 1
+fi
+
+step "the owner deletes the shared environment"
+platform login --test-user
+platform environment delete "${shared_environment}"
 
 step "team delete"
 platform login --test-admin

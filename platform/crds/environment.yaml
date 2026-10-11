@@ -45,6 +45,11 @@ spec:
                 expiresAt:
                   type: string
                   format: date-time
+                sharedWith:
+                  description: Teams whose members use the environment (ADR 0026); empty means private to the owner.
+                  type: array
+                  items:
+                    type: string
             status:
               type: object
               properties:

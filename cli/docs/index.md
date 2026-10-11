@@ -150,9 +150,11 @@ platform environment list
 ```
 
 ```
-NAME            PROFILE    STATUS  EXPIRES
-greetings-test  ephemeral  ready   59m
+NAME            PROFILE    STATUS  EXPIRES  OWNER             SHARED
+greetings-test  ephemeral  ready   59m      voce@example.com  —
 ```
+
+A lista mostra os seus ambientes e os compartilhados com os seus times (seção 12). `--all` mostra todos, sem kubeconfig; para `platform-admins`, o padrão já é todos.
 
 ## 6. Usar o cluster do ambiente
 
@@ -341,7 +343,27 @@ EMAIL             USERNAME
 voce@example.com  voce@example.com
 ```
 
-O membro precisa ter entrado na plataforma uma vez: antes disso, o Keycloak não o conhece e a API responde `404`. O time chega ao token no próximo `platform login`, e o `platform whoami` passa a mostrá-lo junto dos grupos.
+O membro precisa ter entrado na plataforma uma vez, com o e-mail verificado: antes disso, o Keycloak não o conhece e a API responde `404`. O time chega ao token no próximo `platform login`, e o `platform whoami` passa a mostrá-lo junto dos grupos.
+
+### Compartilhar um ambiente
+
+Um ambiente nasce privado. Quem o criou pode compartilhá-lo com os times de que faz parte; com outros times, só `platform-admins`.
+
+```bash
+platform environment create review --profile ephemeral --share-with team-alpha --wait
+platform environment share greetings-test --team team-alpha
+platform environment unshare greetings-test --team team-alpha
+```
+
+```
+✓ review ready
+✓ greetings-test shared with team-alpha
+✓ greetings-test no longer shared with team-alpha
+```
+
+Os membros do time veem o ambiente no `environment list` e recebem o kubeconfig no `environment get`. Apagar, compartilhar e descompartilhar continuam com o dono e os admins.
+
+Todos recebem o mesmo kubeconfig de administrador do vcluster. Tirar alguém do time, ou descompartilhar, corta o acesso pela API, mas quem já baixou o kubeconfig continua com ele até o ambiente ser recriado. A identidade por pessoa no vcluster é a #233.
 
 ## 13. Desmontar tudo
 
@@ -362,8 +384,9 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform login [--use-device-code]` | entra com a conta Google |
 | `platform whoami` | e-mail e grupos, vistos pela API |
 | `platform logout` | revoga a sessão e apaga as credenciais |
-| `platform environment create <nome> --profile ephemeral\|shared [--expires 3d] [--wait]` | pede um ambiente |
-| `platform environment list` | NAME, PROFILE, STATUS, EXPIRES |
+| `platform environment create <nome> --profile ephemeral\|shared [--expires 3d] [--share-with <time>]... [--wait]` | pede um ambiente, privado se não compartilhado |
+| `platform environment list [--all]` | NAME, PROFILE, STATUS, EXPIRES, OWNER, SHARED; os seus e os dos seus times, ou todos |
+| `platform environment share\|unshare <nome> --team <time>` | compartilha ou deixa de compartilhar; só o dono ou `platform-admins` |
 | `platform environment get <nome>` | status e mensagem; grava o kubeconfig quando pronto |
 | `platform environment delete <nome>` | remove o ambiente e o vcluster; só o dono ou `platform-admins` |
 | `platform catalog domain create <nome> --owner <time> [--parent <domínio>]` | cria um domínio ou subdomínio (só `platform-admins`) |

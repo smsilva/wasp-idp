@@ -40,11 +40,20 @@ class PlatformClient:
   def me(self) -> dict:
     return self._request("GET", "/v1/me")
 
-  def create_environment(self, name: str, profile: str, expires: str | None) -> dict:
-    return self._request("POST", "/v1/environments", json={"name": name, "profile": profile, "expires": expires})
+  def create_environment(self, name: str, profile: str, expires: str | None, shared_with: list[str] | None = None) -> dict:
+    body = {"name": name, "profile": profile, "expires": expires}
+    if shared_with:
+      body["sharedWith"] = shared_with
+    return self._request("POST", "/v1/environments", json=body)
 
-  def list_environments(self) -> list[dict]:
-    return self._request("GET", "/v1/environments")["items"]
+  def list_environments(self, all: bool = False) -> list[dict]:
+    return self._request("GET", "/v1/environments", params={"all": "true"} if all else None)["items"]
+
+  def share_environment(self, name: str, team: str) -> dict:
+    return self._request("PUT", f"/v1/environments/{name}/shares/{team}")
+
+  def unshare_environment(self, name: str, team: str) -> dict:
+    return self._request("DELETE", f"/v1/environments/{name}/shares/{team}")
 
   def get_environment(self, name: str) -> dict:
     return self._request("GET", f"/v1/environments/{name}")

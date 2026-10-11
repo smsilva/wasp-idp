@@ -23,6 +23,15 @@ class EnvironmentRequest(BaseModel):
   name: str
   profile: Literal["ephemeral", "shared"]
   expires: str | None = None
+  sharedWith: list[str] = []
+
+  @field_validator("sharedWith")
+  @classmethod
+  def check_teams(cls, value: list[str]) -> list[str]:
+    for team in value:
+      if not team_routes.LABEL.fullmatch(team):
+        raise ValueError(f"'{team}' is not a team name")
+    return value
 
   @field_validator("name")
   @classmethod
@@ -95,7 +104,8 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   @app.post("/v1/environments", status_code=202)
   def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
     deadline = expires_at(request.expires) if request.expires else None
-    body = environments.manifest(request.name, request.profile, deadline, principal.sub)
+    check_share(request.sharedWith, principal)
+    body = environments.manifest(request.name, request.profile, deadline, principal.sub, principal.email, request.sharedWith)
     entry = journal.record("create", "Environment", request.name, body["spec"], principal.actor)
     try:
       created = state.create(ENVIRONMENTS, body)
@@ -112,15 +122,17 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
     return environments.view(created)
 
   @app.get("/v1/environments")
-  def list_environments(principal: Principal = Depends(current_principal)):
+  def list_environments(all: bool = False, principal: Principal = Depends(current_principal)):
+    # By default: mine and the ones shared with my teams; admins see every environment (ADR 0026).
+    everything = all or environments.ADMIN_GROUP in principal.groups
     items = sorted(state.list(ENVIRONMENTS), key=lambda obj: obj["metadata"]["name"])
-    return {"items": [environments.view(obj) for obj in items]}
+    return {"items": [environments.view(obj) for obj in items if everything or environments.can_use(obj, principal)]}
 
   @app.get("/v1/environments/{name}")
   def get_environment(name: str, principal: Principal = Depends(current_principal)):
     try:
       obj = state.get(ENVIRONMENTS, name)
-      return environments.view(obj, with_kubeconfig=environments.is_owner_or_admin(obj, principal))
+      return environments.view(obj, with_kubeconfig=environments.can_use(obj, principal))
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
 
@@ -141,6 +153,67 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
       raise HTTPException(409, f"environment '{name}' changed while deleting: try again")
     journal.mark_applied(entry)
     return {"name": name, "status": "deleting"}
+
+  def check_share(added: list[str], principal: Principal) -> None:
+    """The owner shares only with their own teams; other teams need an admin. Membership is checked
+    before existence, so a non-member cannot probe which teams exist."""
+    if not added:
+      return
+    admin = environments.ADMIN_GROUP in principal.groups
+    foreign = sorted(set(added) - set(principal.groups))
+    if foreign and not admin:
+      raise HTTPException(403, f"you can only share with teams you are a member of: {', '.join(foreign)}")
+    if teams is None:
+      raise HTTPException(503, "teams are not configured: the Platform API has no Keycloak admin client")
+    try:
+      known = set(teams.names())
+    except team_routes.TeamsUnavailable as error:
+      raise HTTPException(503, str(error))
+    missing = sorted(set(added) - known)
+    if missing:
+      raise HTTPException(422, f"team not found: {', '.join(missing)}")
+
+  def change_share(name: str, team: str, principal: Principal, add: bool) -> dict:
+    try:
+      obj = state.get(ENVIRONMENTS, name)
+    except NotFound:
+      raise HTTPException(404, f"environment '{name}' not found")
+    if not environments.is_owner_or_admin(obj, principal):
+      raise HTTPException(403, f"environment '{name}' can only be shared by its owner or platform-admins")
+    current = environments.shared_with(obj)
+    if add:
+      check_share([team], principal)
+      if team in current:
+        return environments.view(obj)
+      updated = sorted({*current, team})
+    else:
+      # No membership check: taking access away is always allowed to the owner, even for a deleted team.
+      if team not in current:
+        raise HTTPException(404, f"environment '{name}' is not shared with '{team}'")
+      updated = [item for item in current if item != team]
+    spec = {key: value for key, value in obj["spec"].items() if key != "sharedWith"}
+    if updated:
+      spec["sharedWith"] = updated
+    obj["spec"] = spec
+    entry = journal.record("share" if add else "unshare", "Environment", name, {"team": team}, principal.actor)
+    try:
+      replaced = state.replace(ENVIRONMENTS, obj)
+    except NotFound:
+      raise HTTPException(404, f"environment '{name}' not found")
+    except Conflict:
+      raise HTTPException(409, f"environment '{name}' changed while sharing: try again")
+    journal.mark_applied(entry)
+    return environments.view(replaced)
+
+  @app.put("/v1/environments/{name}/shares/{team}")
+  def share_environment(name: str, team: str, principal: Principal = Depends(current_principal)):
+    if not team_routes.LABEL.fullmatch(team):
+      raise HTTPException(422, f"'{team}' is not a team name")
+    return change_share(name, team, principal, add=True)
+
+  @app.delete("/v1/environments/{name}/shares/{team}")
+  def unshare_environment(name: str, team: str, principal: Principal = Depends(current_principal)):
+    return change_share(name, team, principal, add=False)
 
   # Before the catalog router: its POST /{plural} would otherwise take "import" as a kind.
   app.include_router(catalog_import.router(state, journal))
