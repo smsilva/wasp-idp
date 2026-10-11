@@ -20,8 +20,9 @@ refusals of build create (outside the owner team, unknown component, a malformed
 version, an org with no connection), the Workload Spec (spec validate of a
 valid and an invalid Score, spec get of a Version written by kubectl, refused outside the owner team,
 by version and by branch, and SpecNotIndexed for a Version without it), a Workload Instance
-(deploy of a public image by digest with --wait, list, get, history; refused outside the owner team,
-for a version outside the index, and ResourcesNotSupported for a Score with resources), and a cloud account (ADR 0029): refused with a clear message without an
+(deploy of a public image by digest with --wait, list, get, history, rollback to the previous
+success, runningIn in catalog component get, remove; refused outside the owner team, for a version
+outside the index, a rollback to a failed revision, and ResourcesNotSupported for a Score with resources), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -474,7 +475,7 @@ expect_failure "no version built from branch 'main' in the index" \
   platform workload spec get \
     --component "${workload_component}" \
     --branch main
-step "workload deploy|list|get|history: a version from the index in an environment (#292)"
+step "workload deploy|list|get|history|rollback|remove: a version from the index in an environment (#292)"
 # A public image by digest the vcluster can pull, and a Score without resources (the Forager is #263);
 # the next version declares a database, which phase 1 refuses as ResourcesNotSupported.
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
@@ -573,6 +574,42 @@ expect_output "ResourcesNotSupported" "${output}"
 output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
 expect_output "(Available)" "${output}"
 expect_output "newest        revision 2" "${output}"
+platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --replicas 1 \
+  --wait
+# By default, back to the revision that succeeded before the running one: 1, with its 2 replicas.
+output="$(platform workload rollback \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --wait)"
+echo "${output}"
+expect_output "revision 4: 0.3.0 running · 2/2 replicas available" "${output}"
+expect_failure "revision 2 did not succeed" \
+  platform workload rollback \
+    --component "${workload_component}" \
+    --environment "${workload_environment}" \
+    --revision 2
+output="$(platform catalog component get "${workload_component}")"
+expect_output "running in   ${workload_environment} (0.3.0, Available)" "${output}"
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --wait)"
+echo "${output}"
+expect_output "revision 5: removed from ${workload_environment}" "${output}"
+output="$(platform workload list --environment "${workload_environment}")"
+if grep --quiet --fixed-strings -- "${workload_component}@" <<< "${output}"; then
+  echo "${workload_component} still listed after remove" >&2
+  exit 1
+fi
+# The history stays until the environment goes.
+output="$(platform workload history --environment "${workload_environment}")"
+echo "${output}"
+expect_output "rollback" "${output}"
+expect_output "remove" "${output}"
 platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"

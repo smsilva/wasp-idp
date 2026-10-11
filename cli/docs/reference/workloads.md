@@ -7,6 +7,8 @@ platform workload deploy --component <component> --environment <environment> (--
 platform workload list --environment <environment>
 platform workload get --component <component> --environment <environment>
 platform workload history --environment <environment> [--component <component>]
+platform workload rollback --component <component> --environment <environment> [--revision <n>] [--wait] [--timeout <seconds>]
+platform workload remove --component <component> --environment <environment> [--wait] [--timeout <seconds>]
 ```
 
 A **Workload Spec** is the `app-spec.yaml` ([Score](https://score.dev), `score.dev/v1b1`) of a version, immutable, kept by the build in the version index (`spec.appSpec` of the `Version`). `spec validate` is open to any authenticated user. `spec get` is for members of the component's owner team and `platform-admins`: a Score may carry plain values from a private repo.
@@ -42,7 +44,7 @@ The `workload` provider renders a Deployment and a Service named after the insta
 
 | Access | Who |
 |---|---|
-| `deploy` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
+| `deploy`, `rollback`, `remove` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
 | `list`, `get`, `history` | access to the environment |
 
 Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variables`, `resources`, `livenessProbe`/`readinessProbe` with `httpGet`) and `service.ports`. The only placeholder resolved is `${metadata.<key>}`. Declared `resources` end as `ResourcesNotSupported` until the platform provisions them (#263), any other field as `UnsupportedSpec`. The image must be pullable by the vcluster without credentials.
@@ -80,3 +82,17 @@ A revision that does not succeed leaves the running revision as it was.
 ## history
 
 The revisions of the environment, oldest first, optionally of one component: `WORKLOAD`, `REVISION`, `ACTION`, `VERSION`, `STATUS`, `BY` (who asked) and `CREATED`. Revisions stay until the environment is deleted.
+
+## rollback
+
+Writes a new revision (`action: rollback`, `rollbackOf: <n>`) with the version and the overrides (`--replicas`) of revision `<n>` of the same instance: the history keeps moving forward, as `helm rollback` does. Without `--revision`, the newest revision that succeeded before the one running. `--wait` as in `deploy`.
+
+| Refusal | Code |
+|---|---|
+| no earlier revision that succeeded (default `--revision`) | refused by the CLI |
+| revision `<n>` does not exist for the instance | `404` |
+| revision `<n>` is a remove, or did not succeed | `409` |
+
+## remove
+
+Writes a revision `action: remove`: the provider deletes the Deployment and the Service from the vcluster, then the `WorkloadInstance`. The revisions stay until the environment is deleted, so `history` still shows them and `rollback` cannot target the remove itself. A later `deploy` starts the instance again, with the next revision number. With `--wait`: `✓ <instance>@<environment> revision <n>: removed from <environment>`. `404` when the environment has no such workload.

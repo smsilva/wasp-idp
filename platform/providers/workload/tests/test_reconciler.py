@@ -18,7 +18,7 @@ class FakeStore:
       "reviews.2.1.0": {"spec": {"appSpec": app_spec or score()}},
       "reviews.2.0.0": {"spec": {}},
     }
-    self.revision_status, self.instances, self.instance_status = {}, {}, {}
+    self.revision_status, self.instances, self.instance_status, self.deleted_instances = {}, {}, {}, []
 
   def get_environment(self, name):
     return self.environments.get(name)
@@ -35,6 +35,9 @@ class FakeStore:
   def patch_instance_status(self, name, status):
     self.instance_status.setdefault(name, []).append(status)
 
+  def delete_instance(self, name):
+    self.deleted_instances.append(name)
+
 
 def deployment(desired=1, available=1, ready=None, generation=2, observed=2, deadline=False):
   conditions = [{"type": "Progressing", "reason": "ProgressDeadlineExceeded", "message": "exceeded its progress deadline"}] if deadline else []
@@ -47,12 +50,17 @@ def deployment(desired=1, available=1, ready=None, generation=2, observed=2, dea
 
 class FakeVcluster:
   def __init__(self, state=None, fail=False):
-    self.applied, self.state, self.fail = [], state, fail
+    self.applied, self.deleted, self.state, self.fail = [], [], state, fail
 
   def apply(self, obj, manager):
     if self.fail:
       raise RuntimeError("connection refused")
     self.applied.append((obj["kind"], obj["metadata"]["name"]))
+
+  def delete(self, api_version, kind, namespace, name):
+    if self.fail:
+      raise RuntimeError("connection refused")
+    self.deleted.append((kind, namespace, name))
 
   def deployment(self, namespace, name):
     return self.state
@@ -66,11 +74,14 @@ class FakeVclusters:
     return self.vcluster
 
 
-def revision(number=1, version="2.1.0", reason=None, status=None):
+def revision(number=1, version="2.1.0", reason=None, status=None, action="deploy"):
   obj = {"metadata": {"name": f"demo.reviews.{number}"}, "spec": {
-    "environment": "demo", "instance": "reviews", "component": "reviews", "revision": number, "action": "deploy",
+    "environment": "demo", "instance": "reviews", "component": "reviews", "revision": number, "action": action,
     "version": version, "image": "ghcr.io/acme/reviews", "digest": DIGEST,
   }}
+  if action == "remove":
+    for field in ("version", "image", "digest"):
+      del obj["spec"][field]
   if reason:
     obj["status"] = {"conditions": [{"type": "Ready", "status": status, "reason": reason, "message": ""}]}
   return obj
@@ -171,3 +182,41 @@ def test_succeeded_revision_refreshes_the_instance_health():
   status = store.instance_status["demo.reviews"][-1]
   assert status["replicas"] == {"desired": 2, "ready": 1}
   assert status["conditions"][0]["reason"] == "Degraded"
+
+
+def test_rollback_applies_like_a_deploy():
+  store, vcluster = FakeStore(), FakeVcluster(deployment())
+  rollback = revision(3, action="rollback")
+  rollback["spec"]["rollbackOf"] = 1
+  reconciler(store, vcluster).reconcile([revision(1, reason="Succeeded", status="True"), rollback], [])
+  assert last(store, "demo.reviews.3")["reason"] == "Succeeded"
+  assert store.instance_status["demo.reviews"][-1]["revision"] == 3
+
+
+def test_remove_deletes_from_the_vcluster_and_the_instance():
+  store, vcluster = FakeStore(), FakeVcluster(deployment())
+  instance = {"metadata": {"name": "demo.reviews"}, "status": {}}
+  done = revision(1, reason="Succeeded", status="True")
+  assert reconciler(store, vcluster).reconcile([done, revision(2, action="remove")], [instance]) is False
+  assert vcluster.deleted == [("Service", "apps", "reviews"), ("Deployment", "apps", "reviews")]
+  assert store.deleted_instances == ["demo.reviews"]
+  assert (last(store, "demo.reviews.2")["status"], last(store, "demo.reviews.2")["reason"]) == ("True", "Succeeded")
+  # A finished remove is left alone on the next passes.
+  removed = revision(2, action="remove", reason="Succeeded", status="True")
+  reconciler(store, vcluster).reconcile([done, removed], [])
+  assert len(vcluster.deleted) == 2
+  assert store.instance_status == {}
+
+
+def test_remove_waits_for_the_environment():
+  store, vcluster = FakeStore(environment_ready=False), FakeVcluster()
+  assert reconciler(store, vcluster).reconcile([revision(1, action="remove")], []) is True
+  assert last(store, "demo.reviews.1")["reason"] == "EnvironmentNotReady"
+  assert vcluster.deleted == []
+
+
+def test_remove_failed():
+  store = FakeStore()
+  reconciler(store, FakeVcluster(fail=True)).reconcile([revision(1, action="remove")], [])
+  assert last(store, "demo.reviews.1")["reason"] == "ApplyFailed"
+  assert store.deleted_instances == []

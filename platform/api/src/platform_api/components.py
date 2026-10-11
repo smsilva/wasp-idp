@@ -12,12 +12,13 @@ from wasp_templates.source import SourceError, coerce
 
 from .auth import Principal, current_principal
 from .catalog import CREATED_BY_ANNOTATION, DESCRIPTION_MAX, LABEL
-from .environments import ADMIN_GROUP, is_owner_or_admin
+from .environments import ADMIN_GROUP, can_use, is_owner_or_admin
 from .journal import Journal, redacted
 from .scm import PLURAL as CONNECTIONS, status_of as connection_status
-from .state import CATALOG_GROUP, GROUP, VERSION, AlreadyExists, NotFound
+from .state import CATALOG_GROUP, ENVIRONMENTS, GROUP, VERSION, AlreadyExists, NotFound
 from .teams import known_teams
 from .templates import TYPES
+from .workloads import INSTANCES, ready_of as instance_ready
 
 COMPONENTS = "components"
 CREATIONS = "componentcreations"
@@ -204,12 +205,33 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
     items = [component_view(obj) for obj in sorted(state.list(COMPONENTS), key=lambda obj: obj["metadata"]["name"])]
     return {"items": [item for item in items if (system is None or item["system"] == system) and (owner is None or item["owner"] == owner)]}
 
+  def running_in(name: str, principal: Principal) -> list[dict]:
+    """Where the component runs (ADR 0033): a read join over the Workload Instances, never stored in the
+    catalog, and only in the environments the caller can use."""
+    items = []
+    for obj in state.list(INSTANCES):
+      spec, status = obj.get("spec") or {}, obj.get("status") or {}
+      if spec.get("component") != name:
+        continue
+      try:
+        environment = state.get(ENVIRONMENTS, spec.get("environment"))
+      except NotFound:
+        continue
+      if not can_use(environment, principal):
+        continue
+      items.append({
+        "environment": spec["environment"], "instance": spec.get("instance"), "version": status.get("version"),
+        "revision": status.get("revision"), "status": (instance_ready(obj) or {}).get("reason") or "Pending",
+      })
+    return sorted(items, key=lambda item: (item["environment"], item["instance"] or ""))
+
   @routes.get("/{name}")
   def get(name: str, principal: Principal = Depends(current_principal)):
     try:
-      return component_view(state.get(COMPONENTS, name))
+      component = component_view(state.get(COMPONENTS, name))
     except NotFound:
       raise HTTPException(404, f"component '{name}' not found")
+    return {**component, "runningIn": running_in(name, principal)}
 
   @routes.get("/{name}/creation")
   def creation(name: str, principal: Principal = Depends(current_principal)):

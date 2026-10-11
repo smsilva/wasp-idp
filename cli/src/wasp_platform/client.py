@@ -118,6 +118,9 @@ class PlatformClient:
   def deploy_workload(self, environment: str, instance: str, body: dict) -> dict:
     return self._request("POST", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}/revisions", json=body)
 
+  def remove_workload(self, environment: str, instance: str) -> dict:
+    return self._request("DELETE", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}")
+
   def list_workloads(self, environment: str) -> list[dict]:
     return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads")["items"]
 

@@ -39,7 +39,7 @@ platform catalog component get <name>
 | `--visibility` | the connection's `defaultVisibility` (`public`) |
 | `--prd` | the template's `docs/prd.md` skeleton; the journal keeps only the hash of the text (at most 64 KiB) |
 
-`list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component; while it is not in the index yet, it shows the creation steps.
+`list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component and a `running in` line: the environments where a Workload Instance of it runs, with version and status ([Workloads](workloads.md#workload-instances)), only those you can use (JSON: `runningIn`). While the component is not in the index yet, `get` shows the creation steps.
 
 | Step | Fails with |
 |---|---|
