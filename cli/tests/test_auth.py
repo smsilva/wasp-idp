@@ -281,13 +281,13 @@ def local_target(config_home):
   config.save({"target": "local", "api_url": "http://api.test", "issuer": ISSUER, "client_id": "platform-cli"})
 
 
-@pytest.mark.parametrize("flags,user,password", [
-  (["--test-user"], "platform-smoke", "right"),
-  (["--test-admin"], "platform-smoke-admin", "right"),
+@pytest.mark.parametrize("flags,user", [
+  (["--test-user"], "platform-smoke"),
+  (["--test-admin"], "platform-smoke-admin"),
 ])
-def test_login_test_user(idp, api, local_target, monkeypatch, flags, user, password):
+def test_login_test_user(idp, api, local_target, monkeypatch, flags, user):
   from wasp_platform.bootstrap import local
-  monkeypatch.setattr(local, "smoke_password", lambda username: password if username == user else "nope")
+  monkeypatch.setattr(local, "smoke_password", lambda username: "right" if username == user else "nope")
   monkeypatch.setattr(auth, "Oidc", lambda issuer=None, client_id=None, transport=None: _real_oidc(client_id, idp))
   monkeypatch.setattr(client_module.PlatformClient, "me", lambda self: {"sub": "s", "email": f"{user}@platform.local", "groups": ["platform-users"]})
   result = runner.invoke(app, ["login", *flags])
@@ -309,3 +309,12 @@ def test_login_test_flags_are_hidden():
   result = runner.invoke(app, ["login", "--help"])
   assert "--use-device-code" in result.output
   assert "--test-user" not in result.output and "--test-admin" not in result.output
+
+
+def test_old_credentials_without_client_refresh_with_the_configured_client(idp):
+  auth.save_credentials({"access_token": "old", "refresh_token": "r", "expires_in": 30})
+  def factory(client_id=None):
+    return auth.Oidc(issuer=ISSUER, client_id=client_id or "platform-cli", transport=httpx.MockTransport(idp.handler))
+  assert auth.access_token(oidc_factory=factory) == "access-refreshed"
+  assert idp.refresh_clients == ["platform-cli"]
+  assert "client_id" not in auth.load_credentials()

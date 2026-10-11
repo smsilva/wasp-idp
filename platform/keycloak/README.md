@@ -51,6 +51,12 @@ O `platform init --target local` junta ao realm o `realm-smoke.yaml` (#179). Ele
 
 **Por que o password grant aqui:** o OAuth 2.1 desaconselha esse grant, e o `platform-cli` continua sem ele. Ele é aceitável neste caso porque o client é dedicado, existe só no cluster local de quem roda o `init`, serve só a teste, e as senhas nunca saem do Secret nem entram no repo.
 
+O password grant só no `platform-smoke` limita **como** a senha é enviada, não **quem** a usa: o realm mantém o formulário de usuário e senha, então quem tem a senha também entra pela tela de login, inclusive como `platform-smoke-admin`. Isso é aceitável porque o Keycloak só escuta em `127.0.0.1:8180` e quem lê o Secret já tem o kubeconfig do `platform-local`, isto é, já é admin do cluster.
+
+O `scripts/demo/cli-smoke` roda com um `XDG_CONFIG_HOME` temporário: o login de teste não substitui nem encerra a sessão Google de quem o executa.
+
+**Se o `realm-smoke.yaml` deixar de ser aplicado,** o keycloak-config-cli apaga o client `platform-smoke` (clients são gerenciados), mas não apaga usuários: remova `platform-smoke` e `platform-smoke-admin` à mão no console do Keycloak, junto com o Secret `keycloak-smoke-user`.
+
 ## Lado do Google (uma vez, manual)
 
 1. No Google Cloud, configure a tela de consentimento OAuth como External, em modo **Testing**, com os e-mails que vão logar em **Test users**. Assim não há processo de verificação.

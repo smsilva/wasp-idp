@@ -80,3 +80,9 @@ def test_cli_client_never_gets_password_grant():
   realm = render_realm(REALM, google=True, admin=True, smoke=SMOKE)
   client = next(c for c in realm["clients"] if c["clientId"] == "platform-cli")
   assert client["directAccessGrantsEnabled"] is False
+
+
+def test_smoke_passwords_match_the_secret_keys():
+  from wasp_platform.bootstrap.local import SMOKE_KEYS
+  values = {u["username"]: u["credentials"][0]["value"] for u in SMOKE["users"]}
+  assert values == {user: f"$(env:{key})" for user, key in SMOKE_KEYS.items()}
