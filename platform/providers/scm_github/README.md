@@ -10,7 +10,7 @@ Para cada connection com `spec.credentialRef` (o App já existe):
 
 1. Lê a chave do Secret e gera o JWT do App (RS256, `iss=appId`, 10 min).
 2. `GET /app`: grava o `appSlug` quando falta (caminho `--app-id`). Chave de outro App → `InvalidCredentials`.
-3. `GET /app/installations`: procura a instalação cuja `account.login` é a `org`. Não achou → `NotInstalled`, com o link de instalação. Grava o `installationId` quando falta; um id gravado diferente do encontrado também é `NotInstalled` (a rota `installed` da API não tem `state`, então o id só vale depois desta checagem).
+3. `GET /app/installations`: procura a instalação cuja `account.login` é a `org`. Não achou → `NotInstalled`, com o link de instalação. Grava o `installationId` quando falta ou quando o gravado não é uma instalação deste App (a rota `installed` da API não tem `state`, então o id é só uma dica e não pode travar a connection). Um id de instalação deste App em outra conta é `NotInstalled`.
 4. `repository_selection` precisa ser `all` → senão `NotAllRepositories`.
 5. As permissões da instalação precisam cobrir as do manifesto (`REQUIRED`, igual ao `PERMISSIONS` da API, com `actions:write` para o build da #206) → senão `MissingPermissions`, listando o que falta.
 6. `POST /app/installations/{id}/access_tokens` funciona → `Ready=True, reason=Verified`, com `permissions`, `repositorySelection` e `lastValidated`.

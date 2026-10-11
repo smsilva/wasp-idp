@@ -137,13 +137,17 @@ class Reconciler:
       self.store.patch_spec(name, {"github": {"appSlug": slug}})
 
     install_url = f"https://github.com/apps/{slug}/installations/new"
-    installation = next((item for item in app.installations() if (item.get("account") or {}).get("login", "").lower() == org.lower()), None)
+    installations = app.installations()
+    installation = next((item for item in installations if (item.get("account") or {}).get("login", "").lower() == org.lower()), None)
     if installation is None:
       raise Outcome("NotInstalled", f"the App {slug} is not installed on {org}: {install_url}")
     recorded = github.get("installationId")
-    if recorded and recorded != installation["id"]:
-      raise Outcome("NotInstalled", f"installation {recorded} recorded for {org} is not this App's installation there ({installation['id']}): reinstall from {install_url}")
-    if not recorded:
+    others = {item["id"] for item in installations if item is not installation}
+    if recorded in others:
+      raise Outcome("NotInstalled", f"installation {recorded} recorded for {org} belongs to another account of the App ({org}'s is {installation['id']}): reinstall from {install_url}")
+    # Empty, or a hint that is no installation of this App (forged through the setup_url route, or
+    # gone after a reinstall): what GitHub reports for the org wins.
+    if recorded != installation["id"]:
       self.store.patch_spec(name, {"github": {"installationId": installation["id"]}})
 
     observed = {"permissions": installation.get("permissions") or {}, "repositorySelection": installation.get("repository_selection")}

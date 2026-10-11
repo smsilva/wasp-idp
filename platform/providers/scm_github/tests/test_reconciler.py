@@ -123,11 +123,18 @@ def test_not_installed_on_the_org():
   assert "https://github.com/apps/acme-platform/installations/new" in condition["message"]
 
 
-def test_a_different_installation_is_not_accepted():
+def test_a_forged_installation_hint_is_replaced():
   store, _ = run(FakeGitHub(), connection(installation_id=666))
+  assert ready(store)["reason"] == "Verified"
+  assert store.specs == [{"github": {"installationId": 7}}]
+
+
+def test_an_installation_on_another_account_is_not_accepted():
+  github = FakeGitHub(installations=[installation(), installation(login="other-org", id_=8)])
+  store, _ = run(github, connection(installation_id=8))
   condition = ready(store)
   assert condition["reason"] == "NotInstalled"
-  assert "666" in condition["message"]
+  assert "8" in condition["message"]
   assert store.specs == []
 
 

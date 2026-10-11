@@ -208,6 +208,13 @@ def test_installed_rejects_garbage(client, admin, state, installation_id):
   assert "installationId" not in state.get(PLURAL, "acme")["spec"]["github"]
 
 
+def test_installed_never_overwrites_a_recorded_installation(client, admin, state):
+  client.get(f"{ROUTE}/acme/github/callback", params={"code": "good-code", "state": state_of(add(client, admin))})
+  client.get(f"{ROUTE}/acme/github/installed", params={"installation_id": "7"})
+  client.get(f"{ROUTE}/acme/github/installed", params={"installation_id": "666"})
+  assert state.get(PLURAL, "acme")["spec"]["github"]["installationId"] == 7
+
+
 def test_installed_does_not_touch_a_ready_connection(client, admin, state):
   add(client, admin, appId=42, privateKeyPem=PEM)
   obj = state.get(PLURAL, "acme")

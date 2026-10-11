@@ -446,7 +446,11 @@ def router(state, journal: Journal, secrets, github: httpx.Client, public_url: s
       # Anyone can call this route: it must not be a way to knock a working connection down.
       return page("Already verified", f"The connection <b>{html.escape(name)}</b> is ready. Run <code>platform scm connection verify</code> after changing the installation.", True)
     entry = journal.record("installed", KIND, name, {"installationId": int(installation_id), "setupAction": setup_action[:20]}, "github-setup-url")
-    obj = request_verify({**obj, "spec": {**obj["spec"], "github": {**github_spec, "installationId": int(installation_id)}}})
+    # Only fills an empty field, never overwrites one; the controller replaces a hint that is not
+    # an installation of this App, so a forged call can at most ask for a verification.
+    if not github_spec.get("installationId"):
+      github_spec = {**github_spec, "installationId": int(installation_id)}
+    obj = request_verify({**obj, "spec": {**obj["spec"], "github": github_spec}})
     try:
       state.replace(PLURAL, obj)
     except (Conflict, NotFound):

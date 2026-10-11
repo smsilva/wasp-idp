@@ -79,7 +79,7 @@ O manifest flow passa por três rotas que o navegador chama sem JWT:
 
 - `start?state=…`: página que faz `POST` automático do manifesto para `https://github.com/organizations/<org>/settings/apps/new`. O manifesto pede `administration`, `contents`, `workflows`, `pull_requests` e `actions` em escrita e `metadata` em leitura, sem webhook, App privado.
 - `callback?code=…&state=…`: consome o `state`, troca o `code` pela chave (`POST /app-manifests/{code}/conversions`), grava a chave pelo `SecretStore` e `appId`/`appSlug` no spec, e passa a `NotInstalled`.
-- `installed?installation_id=…`: o `setup_url` do App. Não tem `state`: grava o id como dica e pede a revalidação; o controller só aceita uma instalação deste App na org, e uma connection `ready` não é tocada.
+- `installed?installation_id=…`: o `setup_url` do App. Não tem `state`: grava o id como dica só se o campo estiver vazio e pede a revalidação; o controller troca uma dica que não seja instalação deste App pela instalação real da org, e uma connection `ready` não é tocada.
 
 O `state` é de uso único, vale 10 min e fica na memória da réplica única da API: reiniciar a API só obriga a rodar o `add` de novo. O GitHub redireciona para `PLATFORM_PUBLIC_URL` (`http://127.0.0.1:9090`), o mesmo endereço em que a CLI fala com a API, então o `Host` passa pelo `TrustedHostMiddleware`.
 
