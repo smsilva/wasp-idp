@@ -164,7 +164,41 @@ kubectl --context k3d-platform-local --namespace platform-system \
 {"at":"2026-10-10T20:38:45+00:00","actor":"2016b176-… (voce@example.com)","action":"create","name":"demo"}
 ```
 
-## 13. Limpar e sair
+## 13. Catálogo
+
+```bash
+platform catalog domain create communication --owner team-alpha
+platform catalog domain create messaging --parent communication --owner team-alpha
+platform catalog system create greeter --domain messaging --owner team-alpha
+platform catalog resource create greeting-db --type database --system greeter --owner team-alpha
+platform catalog list
+platform catalog system get greeter
+platform catalog domain delete messaging
+kubectl --context k3d-platform-local --namespace platform-system get domains.catalog.platform.wasp.silvios.me
+```
+
+```
+system/greeter
+  domain       messaging
+  owner        team-alpha
+  description  —
+  dependents   resource/greeting-db
+✗ 409: domain 'messaging' has dependents: system/greeter
+NAME            PARENT          OWNER
+communication                   team-alpha
+messaging       communication   team-alpha
+```
+
+Funciona com o Backstage parado: o catálogo é da plataforma. Para limpar, na ordem inversa:
+
+```bash
+platform catalog resource delete greeting-db
+platform catalog system delete greeter
+platform catalog domain delete messaging
+platform catalog domain delete communication
+```
+
+## 14. Limpar e sair
 
 ```bash
 platform environment delete demo
@@ -187,4 +221,4 @@ O `platform-local` continua no ar para a próxima rodada; para desmontar tudo, v
 - **Teste de fumaça sem humano (#179):** o login é o único passo manual. Um usuário local de teste no realm (só no target local, criado pelo `init` com senha aleatória num Secret) e o grant de senha desligado para todos os outros clients permitiriam um `platform login --test-user` e, com ele, rodar o roteiro inteiro em CI.
 - **Medir (#180):** guardar o tempo de cada etapa (como na tabela acima) para perceber quando o `init` ou o provider ficam mais lentos.
 - **Gravar (#181):** `asciinema rec` durante o roteiro gera um vídeo de terminal leve para o README e para o deck.
-- **Evoluir junto com a CLI (#182):** cada comando novo (`release create`, `app create`) entra aqui como um passo, com a saída esperada.
+- **Evoluir junto com a CLI (#182):** cada comando novo (`release create`, `catalog component create`) entra aqui como um passo, com a saída esperada.

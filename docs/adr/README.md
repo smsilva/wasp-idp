@@ -30,3 +30,4 @@ nunca edita o antigo. `HANDOFF.md` referencia o ADR relevante em vez de repetir 
 | [0020](0020-catalog-discovery-from-github-org.md) | Catalog descobre os repos da org `wasp-foundry` pelo entity provider do GitHub |
 | [0021](0021-keycloak-as-platform-identity-broker.md) | Keycloak, sem Dex, como broker de identidade da plataforma: Google autentica, Keycloak autoriza |
 | [0022](0022-kube-api-as-platform-source-of-truth.md) | API do Kubernetes como fonte da verdade da plataforma; Platform API como fachada; Postgres como journal e projeção |
+| [0023](0023-platform-catalog-ownership.md) | Catálogo da plataforma: Domain, System e Resource como CRDs, Component e API no repo, Backstage como leitor; resolvedor Forager |

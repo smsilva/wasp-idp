@@ -265,7 +265,42 @@ kubectl --context k3d-platform-local \
 {"id":"552d…","applied":true}
 ```
 
-## 11. Desmontar tudo
+## 11. Catálogo
+
+Domínios, sistemas e recursos que a plataforma guarda. Domínio só `platform-admins` cria; sistema e recurso, qualquer usuário.
+
+```bash
+platform catalog domain create communication --owner team-alpha
+platform catalog domain create messaging --parent communication --owner team-alpha
+platform catalog system create greeter --domain messaging --owner team-alpha
+platform catalog resource create greeting-db \
+  --type database \
+  --system greeter \
+  --owner team-alpha
+platform catalog list
+```
+
+```
+KIND      NAME           PARENT         OWNER
+Domain    communication  —              team-alpha
+Domain    messaging      communication  team-alpha
+System    greeter        messaging      team-alpha
+Resource  greeting-db    greeter        team-alpha
+```
+
+Apagar é na ordem inversa: com dependentes, a API recusa e diz quais são.
+
+```bash
+platform catalog domain delete messaging
+```
+
+```
+✗ 409: domain 'messaging' has dependents: system/greeter
+```
+
+O `--type` do recurso é o papel (`database`, `topic`, `queue`, `bucket`), nunca o serviço de nuvem. Componentes e APIs ainda não estão no catálogo da plataforma.
+
+## 12. Desmontar tudo
 
 ```bash
 platform environment list --output json | jq -r '.[].name' \
@@ -288,6 +323,11 @@ Apagar o `platform-local` leva junto os vclusters, que vivem dentro dele.
 | `platform environment list` | NAME, PROFILE, STATUS, EXPIRES |
 | `platform environment get <nome>` | status e mensagem; grava o kubeconfig quando pronto |
 | `platform environment delete <nome>` | remove o ambiente e o vcluster; só o dono ou `platform-admins` |
+| `platform catalog domain create <nome> --owner <time> [--parent <domínio>]` | cria um domínio ou subdomínio (só `platform-admins`) |
+| `platform catalog system create <nome> --domain <domínio> --owner <time>` | cria um sistema |
+| `platform catalog resource create <nome> --type <papel> --system <sistema> --owner <time>` | cria um recurso compartilhado |
+| `platform catalog list [--kind domain\|system\|resource] [--owner <time>]` | KIND, NAME, PARENT, OWNER |
+| `platform catalog <kind> list\|get\|delete` | por kind; `get` mostra os dependentes |
 | `--output json` | em todos os comandos |
 
 | Status | Significado |
