@@ -47,6 +47,8 @@
 - `kubeconfigData` is admin access to an environment: never return it from list endpoints, and only to the owner (annotation `platform.wasp.silvios.me/owner`, set from the token `sub` on create) or `platform-admins`. New routes touching an environment must apply the same owner check (#185 for delete, #186 for group sharing).
 - Never restart Keycloak (theme reload, `platform init` with a changed theme) while someone is mid-login: the auth session lives in pod memory, and the Google callback hits a server that forgot it (`ERR_EMPTY_RESPONSE`).
 - Every new CLI command or output change also updates `cli/docs/walkthrough.md` in the same change (#182).
+- Catalog model (ADR 0023): Domain, System and shared Resource are CRDs in `catalog.platform.wasp.silvios.me`, owned by the Platform API; Component and API live in the repo `catalog-info.yaml`; a Resource used by only one app is derived from its Score by the Forager (the ADR 0022 resolver), never created by hand. A `ResourceRequest` is an instance per environment and never a catalog entity. Command shape is `platform catalog <kind> <verb>` (no `platform app …`); lifecycle commands take `--component`.
+- Name validation in the API uses `re.fullmatch`: `re.match` with `$` accepts a trailing `\n`, which the kube API then rejects as a 500 with an unapplied journal entry.
 
 ## IDP Tool (Backstage)
 
