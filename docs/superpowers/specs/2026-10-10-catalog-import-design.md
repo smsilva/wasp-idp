@@ -32,7 +32,7 @@ Quem não pode recebe `forbidden` no item, com o motivo, e o plano não aplica (
 
 ### 5. System sem `domain` é erro, não Domain inventado
 
-A plataforma exige `domain` em System; o Backstage não. O import marca `error` em `spec.domain` com a sugestão de declarar o Domain no arquivo. Não existe `--default-domain` nem Domain criado em silêncio: os dois criam uma segunda verdade, divergente do arquivo. No mesmo PR, `idp/catalog/platform.yaml` ganha o Domain `platform` (owner `group:default/team-platform`) e o System `platform` passa a ter `domain: platform`.
+A plataforma exige `domain` em System; o Backstage não. O import marca `error` em `spec.domain` com a sugestão de declarar o Domain no arquivo. Não existe `--default-domain` nem Domain criado em silêncio: os dois criam uma segunda verdade, divergente do arquivo. No mesmo PR, `idp/catalog/platform.yaml` ganha o Domain `platform` (owner `group:default/team-platform`) e o System `platform` passa a ter `domain: platform`. A location de `platform.yaml` em `idp/app-config.yaml` passa a permitir `Domain` (hoje `allow: [System, Resource]`), senão o Backstage recusa o Domain novo.
 
 ### 6. O arquivo é a verdade do que ele declara
 
@@ -60,7 +60,7 @@ O apply grava na ordem do plano e para no primeiro erro de escrita, informando o
 }
 ```
 
-- `source` é texto livre, para o plano dizer de onde veio cada item. A CLI manda o caminho relativo ao diretório atual e, em arquivo com vários documentos, a posição (`#2`, contando de 1).
+- `source` é texto livre, para o plano dizer de onde veio cada item. A CLI manda o caminho relativo ao diretório atual e a posição do documento no arquivo (`#2`, contando de 1 só os documentos não vazios).
 - `dryRun` é `true` quando omitido: aplicar exige pedir explicitamente.
 - No máximo 500 documentos por import; acima disso, `422`.
 
@@ -172,14 +172,14 @@ platform catalog import <caminho>... [--dry-run] [--yes] [--output json]
    3 to create, 1 to update, 0 unchanged, 1 skipped, 1 error.
    ```
 
-   `DETAIL` traz o pai no `create`, os `changes` no `update` (`campo: antes → depois`, `—` para ausência), e motivo e `source` em `skip`, `forbidden` e `error`.
+   `DETAIL` traz o pai no `create`, os `changes` no `update` (`campo: antes → depois`, `—` para ausência), o motivo em `skip`, e motivo e `source` em `forbidden` e `error`.
 3. **Decisão:**
    - `error` ou `forbidden` no plano → `fix the errors above; nothing was applied`, saída 1;
    - nada a gravar → `nothing to do`, saída 0;
    - `--dry-run` → para, saída 0;
    - `--yes` → aplica sem perguntar e sem `planHash`;
    - senão → `Apply? [y/N]`; sim reenvia com o `planHash` da revisão; não → `nothing was applied`, saída 0.
-4. **Resultado:** `✓ 3 created, 1 updated`. No `409` por hash, imprime o plano novo e `the catalog changed since the review: run the import again`, saída 1. Na falha no meio, a tabela com os itens gravados e o que falhou, e `run the import again to converge`, saída 1.
+4. **Resultado:** `✓ 3 created, 1 updated`. No `409` por hash, imprime o plano novo e a mensagem da API (`catalog changed since the plan was made: review the plan again`), saída 1. Na falha no meio, a tabela com os itens gravados e o que falhou, e `run the import again to converge`, saída 1.
 
 `--output json` imprime o plano ou o resultado como a API devolveu e nunca pergunta: sem `--yes` equivale a `--dry-run`.
 
