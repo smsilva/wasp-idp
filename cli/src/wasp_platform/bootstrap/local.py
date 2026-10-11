@@ -47,6 +47,8 @@ AWS_PROVIDER_IMAGE = "aws-account-provider"
 AWS_BASE_SECRET = "aws-base-credential"
 
 SCM_PROVIDER_IMAGE = "scm-github-provider"
+# Workload Instances (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment.
+WORKLOAD_PROVIDER_IMAGE = "workload-provider"
 # Factory templates (ADR 0024): read from this public repo, so no credential is needed.
 SEED_REPO = "https://github.com/smsilva/wasp-idp"
 SEED_FOLDER = Path("platform") / "templates"
@@ -348,6 +350,13 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   log("deploying the SCM provider (scm_github) …")
   _deploy(scm_dir / "deploy" / "scm-github-provider.yaml", SCM_PROVIDER_IMAGE, scm_image)
   _kubectl("rollout", "status", "deployment/scm-github-provider", "--namespace", NAMESPACE, "--timeout", "180s")
+
+  workload_dir = root / "platform" / "providers" / "workload"
+  log("building the workload provider image …")
+  workload_image = _build_and_import(WORKLOAD_PROVIDER_IMAGE, workload_dir)
+  log("deploying the workload provider (workload) …")
+  _deploy(workload_dir / "deploy" / "workload-provider.yaml", WORKLOAD_PROVIDER_IMAGE, workload_image)
+  _kubectl("rollout", "status", f"deployment/{WORKLOAD_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
 
   cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)

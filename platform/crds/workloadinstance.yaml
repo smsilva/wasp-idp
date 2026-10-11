@@ -1,0 +1,96 @@
+# A Workload Instance (ADR 0033): a Workload Spec live in an Environment, named
+# <environment>.<instance>. It is to the Workload Spec what a Helm release is to a chart. Written only
+# by the workload provider: the desired state is always the newest WorkloadRevision of the instance,
+# and the status is the runtime health, refreshed on every resync. Outside the catalog, like a
+# ResourceRequest. Owned by the Environment.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workloadinstances.platform.wasp.silvios.me
+spec:
+  group: platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: WorkloadInstance
+    listKind: WorkloadInstanceList
+    plural: workloadinstances
+    singular: workloadinstance
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Environment
+          type: string
+          jsonPath: .spec.environment
+        - name: Instance
+          type: string
+          jsonPath: .spec.instance
+        - name: Version
+          type: string
+          jsonPath: .status.version
+        - name: Revision
+          type: integer
+          jsonPath: .status.revision
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Reason
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [environment, instance, component]
+              properties:
+                environment:
+                  type: string
+                instance:
+                  type: string
+                component:
+                  type: string
+            status:
+              type: object
+              properties:
+                revision:
+                  description: The revision running now.
+                  type: integer
+                version:
+                  type: string
+                image:
+                  description: <image>@<digest>, as the Deployment pulls it.
+                  type: string
+                replicas:
+                  type: object
+                  properties:
+                    desired:
+                      type: integer
+                    ready:
+                      type: integer
+                url:
+                  description: The address inside the vcluster (namespace apps).
+                  type: string
+                conditions:
+                  description: 'Ready: True with Available; False with Progressing or Degraded.'
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

@@ -155,3 +155,20 @@ def test_version_index_crd():
   spec = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
   assert spec["properties"]["appSpec"]["x-kubernetes-preserve-unknown-fields"] is True
   assert "appSpec" not in spec["required"]
+
+
+def test_workload_crds_match_the_api():
+  from platform_api.workloads import INSTANCES, REVISIONS
+
+  for plural, required in ((REVISIONS, ["action", "component", "environment", "instance", "requestId", "requestedBy", "revision"]), (INSTANCES, ["component", "environment", "instance"])):
+    crd = yaml.safe_load((CRDS / f"{plural.removesuffix('s')}.yaml").read_text())
+    assert crd["metadata"]["name"] == f"{plural}.{GROUP}"
+    assert group_of(plural) == GROUP
+    spec = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+    assert sorted(spec["required"]) == required
+  deploy = Path(__file__).parents[1] / "deploy" / "platform-api.yaml"
+  role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
+  # The API writes revisions only: the instances belong to the workload provider.
+  verbs = {plural: set(rule["verbs"]) for rule in role["rules"] for plural in rule["resources"]}
+  assert "create" in verbs[REVISIONS]
+  assert not {"create", "update", "patch", "delete"} & verbs[INSTANCES]
