@@ -183,3 +183,14 @@ def test_base_identity_is_published_and_cleared(store, aws):
   aws.base.add_client_error("get_caller_identity", service_error_code="ExpiredToken", http_status_code=403)
   assert not publish_base(store, aws.sts)
   assert store.base is None
+
+
+def test_status_shows_no_foreign_account_nor_aws_message(store, aws):
+  aws.assume()
+  aws.caller(account="210987654321")
+  reconcile(store, aws, account())
+  assert "210987654321" not in last(store)[1]["conditions"][0]["message"]
+  aws.base.add_client_error("assume_role", service_error_code="ValidationError", service_message="User arn:aws:iam::210987654321:user/platform-base is not valid", http_status_code=400)
+  reconcile(store, aws, account())
+  message = last(store)[1]["conditions"][0]["message"]
+  assert message == "AssumeRole failed: ValidationError"

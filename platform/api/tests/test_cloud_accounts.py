@@ -186,3 +186,23 @@ def test_unknown_account(client, as_):
 def test_name_taken(client, as_):
   add(client, as_)
   assert add(client, as_, role="arn:aws:iam::123456789012:role/other").status_code == 409
+
+
+@pytest.mark.parametrize("role", [
+  "arn:aws:iam::123456789012:role/Platform",
+  "arn:aws:iam::123456789012:role/team-a/platform",
+])
+def test_same_role_in_another_spelling_is_a_conflict(client, as_, role):
+  add(client, as_)
+  assert add(client, as_, name="again", role=role, who="other").status_code == 409
+
+
+def test_concurrent_create_of_the_same_role_steps_back(client, as_, state):
+  def racer(obj):
+    if obj["metadata"]["name"] == "nonprod-aws":
+      state.stores[CLOUD_ACCOUNTS]["racer"] = {"metadata": {"name": "racer", "uid": "uid-racer"}, "spec": {"vendor": "aws", "aws": {"roleArn": ROLE}}}
+
+  state.on_create = racer
+  response = add(client, as_)
+  assert response.status_code == 409
+  assert sorted(state.stores[CLOUD_ACCOUNTS]) == ["racer"]

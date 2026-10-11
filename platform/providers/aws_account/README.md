@@ -18,7 +18,7 @@ Roda **dentro do cluster**, como Deployment `aws-account-provider` em `platform-
 3. `AssumeRole` **sem** o ExternalId. Se funcionar → `ExternalIdNotEnforced`: sem a condição `sts:ExternalId`, a AWS aceita qualquer ExternalId, e a prova de posse não vale.
 4. Tudo certo → `Ready=True, reason=Verified`, com `accountId`, `callerArn` e `lastValidated`.
 
-Qualquer outro erro da AWS vira `VerificationFailed`, com a mensagem.
+Qualquer outro erro da AWS vira `VerificationFailed`. O status mostra só o código do erro, e a mensagem completa vai para o log: as mensagens da AWS citam a identidade base e outras contas, e o status é lido por quem registrou a role, que pode não ser dela. Pelo mesmo motivo, o `AccountMismatch` não diz em que conta a role assumida está.
 
 ## Quando verifica
 

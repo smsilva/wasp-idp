@@ -62,7 +62,7 @@ Domain, System e Resource são CRDs do grupo `catalog.platform.wasp.silvios.me` 
 
 ## Cloud accounts
 
-`CloudAccount` é um CRD de `platform.wasp.silvios.me` (ADR 0029, `platform/crds/cloudaccount.yaml`): `spec.vendor` (`aws`) e `spec.aws.{roleArn,externalId,regions}`. A API gera o `externalId` (`secrets.token_urlsafe(24)`), nunca o aceita do cliente e o deixa fora do journal. A trust policy devolvida tem como principal o ARN da credencial base, que o provider `aws_account` publica no ConfigMap `aws-base-identity`. Sem esse ConfigMap, a capacidade `cloud-account` fica `NoProviderForCapability` e o registro responde `409`. A validação é do provider (`platform/providers/aws_account/`), que escreve as conditions.
+`CloudAccount` é um CRD de `platform.wasp.silvios.me` (ADR 0029, `platform/crds/cloudaccount.yaml`): `spec.vendor` (`aws`) e `spec.aws.{roleArn,externalId,regions}`. A API gera o `externalId` (`secrets.token_urlsafe(24)`), nunca o aceita do cliente e o deixa fora do journal. A trust policy devolvida tem como principal o ARN da credencial base, que o provider `aws_account` publica no ConfigMap `aws-base-identity`. Sem esse ConfigMap, a capacidade `cloud-account` fica `NoProviderForCapability` e o registro responde `409`. A validação é do provider (`platform/providers/aws_account/`), que escreve as conditions. A mesma role não entra duas vezes: a comparação é por conta e nome da role sem caixa nem path, como o IAM os trata (`role/Platform` e `role/team/platform` são a `role/platform`). A kube API não tem índice único, então o `create` relista depois de gravar e desiste com `409` se outra conta da mesma role entrou ao mesmo tempo.
 
 ## Escrita
 
