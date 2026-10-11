@@ -1,6 +1,6 @@
 # Walkthrough
 
-Roteiro para demonstrar a CLI `platform` partindo do zero: sem cluster, sem config e sem a CLI instalada. Rodado de ponta a ponta em 2026-10-10; os passos 8 a 11 foram refeitos com o provider `local_vcluster` (#183) no mesmo dia.
+Roteiro para demonstrar a CLI `platform` partindo do zero: sem cluster, sem config e sem a CLI instalada. Rodado de ponta a ponta em 2026-10-10; os passos 8 a 11 foram refeitos com o provider `local_vcluster` (#183) no mesmo dia. O passo 14 (#190) foi rodado no `platform-local` no mesmo dia.
 
 O guia de uso, com cada comando explicado, é a [página principal](index.md). Esta página é a sequência para apresentar ou para conferir que tudo continua funcionando.
 
@@ -198,7 +198,75 @@ platform catalog domain delete messaging
 platform catalog domain delete communication
 ```
 
-## 14. Limpar e sair
+## 14. Importar o catálogo do Backstage
+
+O `idp/catalog/` é a carga inicial do catálogo (ADR 0023). O import mostra o plano, calculado pela Platform API, e só grava depois da confirmação.
+
+```bash
+platform catalog import idp/catalog/
+```
+
+```
+KIND      NAME                  ACTION  DETAIL
+Domain    bookstore             create
+Domain    communication         create
+Domain    platform              create
+Domain    messaging             create  parent communication
+Domain    notifications         create  parent communication
+System    bookinfo              create  domain bookstore
+System    greeter               create  domain messaging
+System    notifier              create  domain notifications
+System    platform              create  domain platform
+Resource  development           create  system platform
+Resource  greeting-avatars      create  system greeter
+Resource  greeting-db           create  system greeter
+Resource  greeting-events       create  system greeter
+Resource  notification-db       create  system notifier
+Resource  notification-jobs     create  system notifier
+Resource  notification-reports  create  system notifier
+Resource  production            create  system platform
+—         —                     skip    not a Backstage entity (idp/catalog/communication/greeter/mkdocs.yml#1)
+—         —                     skip    not a Backstage entity (idp/catalog/communication/mkdocs.yml#1)
+Group     team-alpha            skip    identity lives in Keycloak (#186)
+Group     team-beta             skip    identity lives in Keycloak (#186)
+Group     team-platform         skip    identity lives in Keycloak (#186)
+
+17 to create, 0 to update, 0 unchanged, 5 skipped.
+Apply? [y/N]: y
+✓ 17 created, 0 updated
+```
+
+Rodar de novo não grava nada:
+
+```bash
+platform catalog import idp/catalog/
+```
+
+```
+KIND      NAME                  ACTION     DETAIL
+Domain    bookstore             unchanged
+...
+
+0 to create, 0 to update, 17 unchanged, 5 skipped.
+nothing to do
+```
+
+Uma referência quebrada aparece no plano com a entidade, o campo e o arquivo, e nada é aplicado:
+
+```bash
+printf 'apiVersion: backstage.io/v1alpha1\nkind: System\nmetadata:\n  name: orphan\nspec:\n  owner: team-alpha\n  domain: nowhere\n' > /tmp/orphan.yaml
+platform catalog import /tmp/orphan.yaml
+```
+
+```
+KIND    NAME    ACTION  DETAIL
+System  orphan  error   spec.domain: domain 'nowhere' not found (/tmp/orphan.yaml#1)
+
+0 to create, 0 to update, 0 unchanged, 0 skipped, 1 error.
+✗ fix the errors above; nothing was applied
+```
+
+## 15. Limpar e sair
 
 ```bash
 platform environment delete demo

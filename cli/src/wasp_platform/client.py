@@ -5,7 +5,10 @@ from . import auth, config
 
 
 class ApiError(Exception):
-  pass
+  def __init__(self, message: str, plan: dict | None = None):
+    super().__init__(message)
+    # The catalog import answers 409/422 with the plan, so the CLI can show what happened.
+    self.plan = plan
 
 
 class PlatformClient:
@@ -28,7 +31,7 @@ class PlatformClient:
     if response.status_code == 401:
       raise ApiError("not authenticated: run 'platform login'")
     if response.is_error:
-      raise ApiError(_detail(response))
+      raise ApiError(_detail(response), plan=_plan(response))
     # 204 (delete) has no body.
     return response.json() if response.content else {}
 
@@ -63,6 +66,9 @@ class PlatformClient:
     params = {key: value for key, value in {"kind": kind, "owner": owner}.items() if value}
     return self._request("GET", "/v1/catalog/entities", params=params)["items"]
 
+  def import_catalog(self, documents: list[dict], dry_run: bool, plan_hash: str | None = None) -> dict:
+    return self._request("POST", "/v1/catalog/import", json={"documents": documents, "dryRun": dry_run, "planHash": plan_hash})
+
 
 def _detail(response: httpx.Response) -> str:
   """The API answers every error as {"error": {"code", "message"}}."""
@@ -71,3 +77,10 @@ def _detail(response: httpx.Response) -> str:
   except (ValueError, AttributeError):
     message = None
   return f"{response.status_code}: {message or response.text}"
+
+
+def _plan(response: httpx.Response) -> dict | None:
+  try:
+    return (response.json().get("error") or {}).get("plan")
+  except (ValueError, AttributeError):
+    return None

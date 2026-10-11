@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import catalog, environments
+from . import catalog, catalog_import, environments
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -51,8 +51,11 @@ CAPABILITIES = {
 ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 422: "invalid_request"}
 
 
-def _error(status: int, message, headers=None) -> JSONResponse:
-  return JSONResponse({"error": {"code": ERROR_CODES.get(status, "error"), "message": message}}, status, headers=headers)
+def _error(status: int, message, headers=None, plan: dict | None = None) -> JSONResponse:
+  body = {"code": ERROR_CODES.get(status, "error"), "message": message}
+  if plan is not None:
+    body["plan"] = plan
+  return JSONResponse({"error": body}, status, headers=headers)
 
 
 def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None) -> FastAPI:
@@ -67,6 +70,10 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
   @app.exception_handler(StarletteHTTPException)
   def http_error(request: Request, error: StarletteHTTPException):
     return _error(error.status_code, error.detail, getattr(error, "headers", None))
+
+  @app.exception_handler(catalog_import.PlanRejected)
+  def plan_rejected(request: Request, error: catalog_import.PlanRejected):
+    return _error(error.status, error.message, plan=error.plan)
 
   @app.exception_handler(RequestValidationError)
   def validation_error(request: Request, error: RequestValidationError):
@@ -135,6 +142,8 @@ def create_app(state, journal: Journal, verifier: Verifier, allowed_hosts: list[
     journal.mark_applied(entry)
     return {"name": name, "status": "deleting"}
 
+  # Before the catalog router: its POST /{plural} would otherwise take "import" as a kind.
+  app.include_router(catalog_import.router(state, journal))
   app.include_router(catalog.router(state, journal))
   return app
 

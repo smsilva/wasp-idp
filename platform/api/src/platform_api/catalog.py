@@ -42,7 +42,10 @@ KINDS = {
 
 
 class InvalidRequest(Exception):
-  pass
+  def __init__(self, message: str, fields: list[str]):
+    super().__init__(message)
+    # The offending fields, so the import can name them in the Backstage format.
+    self.fields = fields
 
 
 class EntityRequest(BaseModel):
@@ -71,11 +74,11 @@ def spec_from(kind: Kind, request: EntityRequest) -> dict:
   allowed = {"owner", "description", *parent, *kind.required}
   foreign = sorted(set(given) - allowed)
   if foreign:
-    raise InvalidRequest(f"{', '.join(foreign)}: not a field of {kind.singular}")
+    raise InvalidRequest(f"{', '.join(foreign)}: not a field of {kind.singular}", foreign)
   needed = [*kind.required, *(parent if kind.parent_required else [])]
   missing = [field for field in needed if field not in given]
   if missing:
-    raise InvalidRequest(f"{', '.join(missing)}: required for {kind.singular}")
+    raise InvalidRequest(f"{', '.join(missing)}: required for {kind.singular}", missing)
   return given
 
 

@@ -222,7 +222,7 @@ catalog:
     - type: file
       target: ../../catalog/platform.yaml
       rules:
-        - allow: [System, Resource]
+        - allow: [Domain, System, Resource]
 
     # Communication domain: subdomains, systems and resources around greeting-api/notification-api (#114)
     - type: file

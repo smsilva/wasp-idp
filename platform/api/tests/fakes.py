@@ -40,6 +40,18 @@ class FakeState:
       self.on_create(obj)
     return created
 
+  def replace(self, plural, body):
+    store = self.stores[plural]
+    name = body["metadata"]["name"]
+    if name not in store:
+      raise NotFound(name)
+    if store[name]["metadata"]["resourceVersion"] != body["metadata"].get("resourceVersion"):
+      raise Conflict(name)
+    obj = _copy(body)
+    self._bump(obj)
+    store[name] = obj
+    return _copy(obj)
+
   def replace_status(self, plural, body):
     name = body["metadata"]["name"]
     current = self.stores[plural][name]
