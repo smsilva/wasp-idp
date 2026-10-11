@@ -29,7 +29,8 @@ class PlatformClient:
       raise ApiError("not authenticated: run 'platform login'")
     if response.is_error:
       raise ApiError(_detail(response))
-    return response.json()
+    # 204 (delete) has no body.
+    return response.json() if response.content else {}
 
   def me(self) -> dict:
     return self._request("GET", "/v1/me")
@@ -45,6 +46,22 @@ class PlatformClient:
 
   def delete_environment(self, name: str) -> dict:
     return self._request("DELETE", f"/v1/environments/{name}")
+
+  def create_catalog_entity(self, plural: str, body: dict) -> dict:
+    return self._request("POST", f"/v1/catalog/{plural}", json=body)
+
+  def list_catalog(self, plural: str) -> list[dict]:
+    return self._request("GET", f"/v1/catalog/{plural}")["items"]
+
+  def get_catalog_entity(self, plural: str, name: str) -> dict:
+    return self._request("GET", f"/v1/catalog/{plural}/{name}")
+
+  def delete_catalog_entity(self, plural: str, name: str) -> None:
+    self._request("DELETE", f"/v1/catalog/{plural}/{name}")
+
+  def list_catalog_entities(self, kind: str | None = None, owner: str | None = None) -> list[dict]:
+    params = {key: value for key, value in {"kind": kind, "owner": owner}.items() if value}
+    return self._request("GET", "/v1/catalog/entities", params=params)["items"]
 
 
 def _detail(response: httpx.Response) -> str:
