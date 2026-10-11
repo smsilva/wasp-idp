@@ -17,7 +17,10 @@ from .template import _params
 app = typer.Typer(help="Components: repos created through the golden path, and the index.", no_args_is_help=True)
 
 # Ready=False with these reasons does not heal by waiting: --wait stops at once.
-FINAL = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "ConnectionNotFound", "ConnectionNotReady", "CredentialMissing"}
+FINAL = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected", "ConnectionNotFound", "ConnectionNotReady", "CredentialMissing"}
+# Protected=False with this reason is a warning: main is unprotected (a private repo on GitHub Free), the
+# creation still ends Ready.
+UNPROTECTED = "ProtectionUnavailable"
 # Files the summary names when the template generated them.
 ANNOUNCED = ("docs/prd.md", "AGENTS.md")
 
@@ -42,6 +45,17 @@ def _prd(value: str | None) -> str | None:
 
 def _ready(creation: dict) -> dict:
   return next((item for item in creation.get("conditions") or [] if item["type"] == "Ready"), {})
+
+
+def _mark(condition: dict, pending: str) -> str:
+  if condition["status"] == "True":
+    return "✓"
+  return "⚠" if condition.get("reason") == UNPROTECTED else pending
+
+
+def warnings(creation: dict) -> list[str]:
+  """What the creation could not do but did not fail on."""
+  return [item.get("message") or item["reason"] for item in creation.get("conditions") or [] if item["status"] != "True" and item.get("reason") == UNPROTECTED]
 
 
 def summary(creation: dict, type_: str | None) -> list[str]:
@@ -69,8 +83,7 @@ def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> 
     for condition in creation.get("conditions") or []:
       key = (condition["type"], condition["status"], condition.get("reason"))
       if key not in shown and condition["type"] != "Ready" and not quiet:
-        mark = "✓" if condition["status"] == "True" else "…"
-        typer.echo(f"  {mark} {condition['type']}: {condition.get('message') or condition.get('reason')}", err=True)
+        typer.echo(f"  {_mark(condition, '…')} {condition['type']}: {condition.get('message') or condition.get('reason')}", err=True)
         shown.add(key)
     ready = _ready(creation)
     if ready.get("status") == "True":
@@ -120,6 +133,8 @@ def create(
   elif wait:
     for line in summary(creation, None if template else (type_ or "service")):
       success(line)
+    for line in warnings(creation):
+      typer.secho(f"⚠ {line}", fg=typer.colors.YELLOW)
   else:
     typer.echo(f"creating {name} from template {creation['template']['name']}@{creation['template']['ref']} …")
     typer.echo(f"follow it with: platform catalog component get {name}")
@@ -159,8 +174,7 @@ def get(name: str, output: OutputOption = Format.table):
       return
     typer.echo(f"component/{name} (creating: {creation['status']})")
     for condition in creation.get("conditions") or []:
-      mark = "✓" if condition["status"] == "True" else "✗"
-      typer.echo(f"  {mark} {condition['type'].ljust(12)} {condition.get('message') or condition.get('reason')}")
+      typer.echo(f"  {_mark(condition, '✗')} {condition['type'].ljust(12)} {condition.get('message') or condition.get('reason')}")
     return
   if output == Format.json:
     print_json(component)

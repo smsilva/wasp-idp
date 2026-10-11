@@ -9,9 +9,33 @@ API = "https://api.github.com"
 
 
 class GitHubError(Exception):
-  def __init__(self, status: int, message: str):
+  def __init__(self, status: int, message: str, retry_after: float | None = None):
     super().__init__(f"GitHub answered {status}: {message}")
     self.status = status
+    # Seconds GitHub asks to wait before the next call; set only for a rate limit.
+    self.retry_after = retry_after
+
+  @property
+  def rate_limited(self) -> bool:
+    return self.retry_after is not None
+
+  @property
+  def transient(self) -> bool:
+    """Worth trying again later: a rate limit or a GitHub outage. Any other 4xx will not heal by waiting."""
+    return self.rate_limited or self.status >= 500
+
+
+def retry_after(response: httpx.Response) -> float | None:
+  """The primary limit sends x-ratelimit-remaining: 0 and the reset epoch; the secondary one, retry-after
+  (with a 403 or a 429). A 429 without either still means wait: one minute, as GitHub documents."""
+  headers = response.headers
+  if response.status_code not in (403, 429):
+    return None
+  if headers.get("retry-after", "").isdigit():
+    return float(headers["retry-after"])
+  if headers.get("x-ratelimit-remaining") == "0" and headers.get("x-ratelimit-reset", "").isdigit():
+    return max(float(headers["x-ratelimit-reset"]) - time.time(), 0)
+  return 60.0 if response.status_code == 429 else None
 
 
 def app_jwt(app_id: int, private_key: str, now=time.time) -> str:
@@ -37,7 +61,7 @@ class Client:
         message = response.json().get("message", response.text)
       except ValueError:
         message = response.text
-      raise GitHubError(response.status_code, f"{method} {path}: {message}")
+      raise GitHubError(response.status_code, f"{method} {path}: {message}", retry_after(response))
     return response.json()
 
 
@@ -109,6 +133,17 @@ class Installation(Client):
   def commit(self, full_name: str, message: str, tree: str, parents: list[str]) -> str:
     body = {"message": message, "tree": tree, "parents": parents}
     return self._send("POST", f"/repos/{full_name}/git/commits", expected=201, json=body)["sha"]
+
+  def protect(self, full_name: str, branch: str) -> None:
+    """Changes only by pull request, with no approval required: the org may have a single member, who
+    cannot approve their own PR (ADR 0017). PUT replaces the whole protection, so it is idempotent."""
+    body = {
+      "required_status_checks": None,
+      "enforce_admins": False,
+      "required_pull_request_reviews": {"required_approving_review_count": 0},
+      "restrictions": None,
+    }
+    self._send("PUT", f"/repos/{full_name}/branches/{branch}/protection", json=body)
 
   def point_branch(self, full_name: str, branch: str, sha: str, exists: bool) -> None:
     if exists:

@@ -24,7 +24,7 @@ rules:
     verbs: [get]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [componentcreations]
-    verbs: [get, list, watch]
+    verbs: [get, list, watch, delete] # delete: 24 h after Ready, or after a final failure
   - apiGroups: [platform.wasp.silvios.me]
     resources: [componentcreations/status]
     verbs: [get, patch]

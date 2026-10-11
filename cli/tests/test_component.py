@@ -26,7 +26,7 @@ def condition(type_, ok=True, reason=None, message=None):
 
 
 DONE = creation(
-  conditions=[condition(step) for step in ("Validated", "Rendered", "RepoCreated", "Pushed", "Registered")] + [condition("Ready", reason="Created")],
+  conditions=[condition(step) for step in ("Validated", "Rendered", "RepoCreated", "Pushed", "Protected", "Registered")] + [condition("Ready", reason="Created")],
   repo={"fullName": "wasp-foundry/greeting-api", "url": "https://github.com/wasp-foundry/greeting-api", "nodeId": "R_1"},
   files=["AGENTS.md", "app-spec.yaml", "catalog-info.yaml", "docs/prd.md"],
   app_spec={"containers": ["api"], "resources": ["postgres"], "routes": ["/"]},
@@ -111,6 +111,23 @@ def test_wait_stops_at_a_final_reason(api):
   assert "RepoAlreadyExists" in result.output
 
 
+def test_wait_shows_an_unprotected_main_as_a_warning(api):
+  unprotected = condition("Protected", ok=False, reason="ProtectionUnavailable", message="main of wasp-foundry/greeting-api is not protected: Upgrade to GitHub Pro")
+  api["polls"] = [{**DONE, "conditions": [unprotected if item["type"] == "Protected" else item for item in DONE["conditions"]]}]
+  result = run("create", "greeting-api", "--system", "greeter", "--visibility", "private", "--wait")
+  assert result.exit_code == 0, result.output
+  assert "⚠ Protected: main of wasp-foundry/greeting-api is not protected" in result.output
+  assert result.stdout.splitlines()[-1] == "⚠ main of wasp-foundry/greeting-api is not protected: Upgrade to GitHub Pro"
+
+
+def test_wait_stops_when_github_rejects(api):
+  failed = creation(conditions=[condition("Pushed", ok=False, reason="GitHubRejected", message="malformed path"), condition("Ready", ok=False, reason="GitHubRejected", message="malformed path")])
+  api["polls"] = [failed]
+  result = run("create", "greeting-api", "--system", "greeter", "--wait")
+  assert result.exit_code == 1
+  assert "GitHubRejected: malformed path" in result.output
+
+
 def test_type_and_template_together_are_refused(api):
   result = run("create", "greeting-api", "--system", "greeter", "--type", "service", "--template", "python-service")
   assert result.exit_code == 1
@@ -133,7 +150,7 @@ def test_list_columns_and_filters(api):
 
 
 def test_get_shows_the_creation_until_the_component_is_indexed(api):
-  api["polls"] = [creation(conditions=[condition("Validated"), condition("Rendered", ok=False, reason="GitHubError", message="502")])]
+  api["polls"] = [creation(conditions=[condition("Validated"), condition("Rendered", ok=False, reason="GitHubUnavailable", message="502")])]
   result = run("get", "greeting-api")
   assert result.exit_code == 0, result.output
   assert "creating" in result.stdout
