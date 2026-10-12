@@ -57,6 +57,14 @@ jobs:
             --config-file cli/mkdocs.yml \
             --site-dir "${RUNNER_TEMP}/site/cli"
 
+      # Our own JS/CSS keep the same URL across deploys, so a browser would keep the old copy in cache:
+      # the commit in the query string makes each deploy fetch them again.
+      - name: Version the CLI guide assets
+        run: |
+          find "${RUNNER_TEMP}/site/cli" -name '*.html' -exec \
+            sed --in-place --regexp-extended \
+              "s#((javascripts|stylesheets)/[A-Za-z0-9_-]+\.(js|css))\"#\1?v=${GITHUB_SHA:0:7}\"#g" {} +
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ runner.temp }}/site
