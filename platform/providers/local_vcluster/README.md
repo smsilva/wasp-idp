@@ -8,7 +8,7 @@ Roda **dentro do cluster**, como Deployment `local-vcluster-provider` em `platfo
 
 - Adiciona o finalizer `platform.wasp.silvios.me/local-vcluster`.
 - Escolhe uma porta livre da faixa `7100`–`7119` (portas já usadas por Services `app=vcluster` do tipo LoadBalancer) e a grava em `status.port`.
-- Instala o chart `vcluster` com o Service do control plane como `LoadBalancer` nessa porta e o certificado válido para `127.0.0.1` (`helm.py`, `values()`). O `init` mapeia a faixa no load balancer do k3d, então a API do ambiente responde em `https://127.0.0.1:<porta>` no host.
+- Instala o chart `vcluster` com o certificado válido para `127.0.0.1` (`helm.py`, `values()`). O Service do chart fica no padrão, ClusterIP na `443`: o vcluster espelha as portas dele no `kubernetes` Service virtual e injeta `KUBERNETES_SERVICE_PORT=443` nos pods, então mudar essa porta deixa o CoreDNS sem API e o DNS do ambiente quebrado (#307). A porta do host fica num segundo Service, `vcluster-host` (`LoadBalancer`), criado pelo próprio chart (`experimental.deploy.host.manifests`) e removido com ele. O `init` mapeia a faixa no load balancer do k3d, então a API do ambiente responde em `https://127.0.0.1:<porta>` no host, e dentro do `platform-local` em `https://vcluster.env-<nome>`.
 - Quando o vcluster grava o Secret `vc-vcluster` (com o kubeconfig apontando para `127.0.0.1:<porta>`), copia o conteúdo para `status.kubeconfigData` e marca `Ready=True, reason=ClusterReady`. A API devolve esse campo só no `GET` de um ambiente, e a CLI o grava em `~/.config/platform/environments/<nome>.kubeconfig`.
 - Falhas viram `Ready=False, reason=ProvisioningFailed` com a mensagem (inclusive "todas as portas em uso").
 - No delete, desinstala o release, apaga o namespace e remove o finalizer.

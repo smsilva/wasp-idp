@@ -27,8 +27,9 @@ TOKEN_SECONDS = 600
 CLUSTER_ROLE = "cluster-admin"
 EMAIL_ANNOTATION = f"{GROUP}/email"
 MANAGED_BY = {"app.kubernetes.io/managed-by": "platform-api"}
-# The in-cluster address of the vcluster API server; its certificate carries vcluster.env-<name>.
-SERVER = "https://vcluster.env-{name}:{port}"
+# The in-cluster address of the vcluster API server (the chart's Service, ClusterIP on 443, #307); its
+# certificate carries vcluster.env-<name>.
+SERVER = "https://vcluster.env-{name}"
 EXEC_API_VERSION = "client.authentication.k8s.io/v1"
 DNS_LABEL = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?")
 

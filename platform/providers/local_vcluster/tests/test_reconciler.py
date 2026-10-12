@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import pytest
+import yaml
 
 from local_vcluster_provider.helm import values
 from local_vcluster_provider.reconciler import FINALIZER, PORTS, RELEASE, Reconciler
@@ -135,7 +136,11 @@ def test_expired_environment_is_deleted():
 @pytest.mark.parametrize("port", [7100, 7119])
 def test_values_expose_the_api_on_the_host_port(port):
   rendered = values(port)
-  service = rendered["controlPlane"]["service"]["spec"]
-  assert service["type"] == "LoadBalancer" and service["ports"][0]["port"] == port
+  # The chart's Service keeps its default (ClusterIP, 443): the pods reach the API there (#307).
+  assert "service" not in rendered["controlPlane"]
+  service = yaml.safe_load(rendered["experimental"]["deploy"]["host"]["manifests"])
+  assert service["metadata"]["labels"]["app"] == "vcluster"
+  assert service["spec"]["type"] == "LoadBalancer" and service["spec"]["ports"][0] == {"name": "https", "port": port, "targetPort": 8443, "protocol": "TCP"}
+  assert service["spec"]["selector"] == {"app": "vcluster", "release": "vcluster"}
   assert rendered["exportKubeConfig"]["server"] == f"https://127.0.0.1:{port}"
   assert "127.0.0.1" in rendered["controlPlane"]["proxy"]["extraSANs"]
