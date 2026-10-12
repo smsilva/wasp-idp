@@ -43,8 +43,10 @@ class SharedPostgres:
       if conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone() is None:
         conn.execute(sql.SQL("CREATE DATABASE {} OWNER {}").format(role, role))
       conn.execute(sql.SQL("COMMENT ON DATABASE {} IS {}").format(role, sql.Literal(owner)))
-      # Only its own role connects: the other tenants of the instance never see it.
+      # Only its own role connects: the other tenants of the instance never see it. Nor do they reach
+      # the admin's databases (postgres, template1), where PUBLIC connects and makes temp tables by default.
       conn.execute(sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(role))
+      conn.execute("REVOKE CONNECT, TEMPORARY ON DATABASE postgres, template1 FROM PUBLIC")
 
   def drop(self, name: str) -> None:
     role = sql.Identifier(name)
