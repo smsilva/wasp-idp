@@ -283,9 +283,32 @@ def url_spans(url, base):
          f'<tspan fill="{DOMAIN_C}">{esc(domain)}</tspan>')
   return out + (f'<tspan fill="{PATH_C}">{esc(path)}</tspan>' if path else "")
 
+# A `platform` command reads as noun, verb, names: `platform` dim, the command group (`team member`) in
+# NOUN, the verb in bold white, the names it acts on (`team-alpha`, `dev@example.com`) in VALUE like an
+# option's value. Other commands (git, cd, the agent) keep the plain colouring.
+NOUN = "#c3a6ff"
+VERBS = {"add", "clone", "create", "deploy", "get", "import", "init", "list", "login", "signals", "verify"}
+
 def command_line(x, y, text):
   import re
   spans, after_option = "", False
+  head = re.match(r"platform(?:\s+[^\s\\-]\S*)+", text)
+  if head:
+    seen_verb = False
+    for n, token in enumerate(re.split(r"(\s+)", head.group(0))):
+      if token.isspace():
+        spans += token
+        continue
+      if n == 0:
+        color = SOFT
+      elif not seen_verb and token in VERBS:
+        seen_verb = True
+        spans += f'<tspan fill="{WHITE}" font-weight="700">{esc(token)}</tspan>'
+        continue
+      else:
+        color = VALUE if seen_verb else NOUN
+      spans += f'<tspan fill="{color}">{esc(token)}</tspan>'
+    text = text[head.end():]
   for token in re.split(r"(\s+)", text):
     if token.startswith("https://"):
       spans += url_spans(token, WHITE)
