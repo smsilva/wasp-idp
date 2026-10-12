@@ -56,7 +56,7 @@ Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variable
 
 An instance runs one component for as long as its history lives: the first deploy names it, and a deploy or a plan that names another component is refused (`409`). An extra instance cannot take the name of another component of the catalog (`409`): its Service would answer for that component (`http://<component>`) in the environment.
 
-`get`, `rollback` and `remove` take `--component` or `--instance`. With `--component`, the CLI picks the only instance of the component in the environment (the default one, or an extra one when it is alone); with more than one it stops with `<component> has N instances in <environment>: …; give --instance`. `history --component` lists the revisions of every instance of the component; `--instance`, only those of one.
+`get`, `rollback` and `remove` take `--component` or `--instance`. With `--component`, the CLI acts on the default instance, the one named after the component; when the component runs any extra instance in the environment it stops with `<component> has N instances in <environment>: …; give --instance`, so `--component` never lands on a sandbox unasked. `deploy` always sends the component: deploying another component to an existing instance is a 409. `history --component` lists the revisions of every instance of the component; `--instance`, only those of one.
 
 ## deploy
 

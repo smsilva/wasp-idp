@@ -66,7 +66,7 @@ def test_deploy_writes_a_revision(api):
   assert result.exit_code == 0, result.output
   request = api["requests"][0]
   assert request.url.path == "/v1/environments/demo/workloads/reviews/revisions"
-  assert json.loads(request.content) == {"version": "2.1.0", "replicas": 2}
+  assert json.loads(request.content) == {"component": "reviews", "version": "2.1.0", "replicas": 2}
   assert result.output.splitlines() == [
     "reviews@demo revision 1: deploying 2.1.0 …",
     "follow it with: platform workload get --component reviews --environment demo",
@@ -77,7 +77,7 @@ def test_deploy_wait_follows_the_revision(api):
   api["history"] = [[revision(status="EnvironmentNotReady")], [revision(status="Succeeded", open_=False, message="2/2 replicas available")]]
   result = run("deploy", "--component", "reviews", "--environment", "demo", "--branch", "feat/v3", "--wait")
   assert result.exit_code == 0, result.output
-  assert json.loads(api["requests"][0].content) == {"branch": "feat/v3"}
+  assert json.loads(api["requests"][0].content) == {"component": "reviews", "branch": "feat/v3"}
   assert result.output.splitlines() == ["✓ reviews@demo revision 1: 2.1.0 running · 2/2 replicas available"]
 
 
@@ -181,7 +181,7 @@ def test_remove_wait(api):
 def test_deploy_with_resource_classes(api):
   result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--resource-class", "db=restored", "--resource-class", "cache=warm")
   assert result.exit_code == 0, result.output
-  assert json.loads(api["requests"][0].content) == {"version": "2.1.0", "resourceClasses": {"db": "restored", "cache": "warm"}}
+  assert json.loads(api["requests"][0].content) == {"component": "reviews", "version": "2.1.0", "resourceClasses": {"db": "restored", "cache": "warm"}}
 
 
 @pytest.mark.parametrize("value", ["db", "=restored", "db=", "db=a=b"])
@@ -219,13 +219,20 @@ def test_deploy_an_extra_instance(api):
   ]
 
 
-def test_component_with_one_instance_names_it(api):
-  # The only instance of reviews is an extra one.
-  api["instances"] = [EXTRA]
-  api["instance"] = EXTRA
+def test_component_names_its_default_instance(api):
   result = run("get", "--component", "reviews", "--environment", "demo")
   assert result.exit_code == 0, result.output
-  assert api["requests"][-1].url.path == "/v1/environments/demo/workloads/reviews-pr-42"
+  assert api["requests"][-1].url.path == "/v1/environments/demo/workloads/reviews"
+
+
+@pytest.mark.parametrize("command", [["get"], ["rollback"], ["remove"]])
+def test_component_never_lands_on_an_extra_instance(api, command):
+  # The only instance of reviews is an extra one: --component does not pick it.
+  api["instances"] = [EXTRA]
+  result = run(*command, "--component", "reviews", "--environment", "demo")
+  assert result.exit_code == 1
+  assert "reviews has 1 instance in demo: reviews-pr-42; give --instance" in result.output
+  assert all(request.method == "GET" for request in api["requests"])
 
 
 @pytest.mark.parametrize("command", [["get"], ["rollback"], ["remove"]])

@@ -100,16 +100,17 @@ InstanceOption = Annotated[str | None, typer.Option(help="Instance of the worklo
 
 
 def _instance(client: PlatformClient, environment: str, component: str | None, instance: str | None) -> str:
-  """The instance a command acts on: --instance, or the only instance of --component in the environment."""
+  """The instance a command acts on: --instance, or the default instance of --component (named after it)."""
   if (component is None) == (instance is None):
     fail("give either --component or --instance")
   if instance is not None:
     return instance
   found = sorted(item["instance"] for item in client.list_workloads(environment) if item.get("component") == component)
-  if len(found) > 1:
-    fail(f"{component} has {len(found)} instances in {environment}: {', '.join(found)}; give --instance")
+  # --component never lands on an extra instance unasked: that would remove someone's sandbox.
+  if found and found != [component]:
+    fail(f"{component} has {len(found)} instance{'s' if len(found) > 1 else ''} in {environment}: {', '.join(found)}; give --instance")
   # None at all: the default instance, and the API says whether it exists.
-  return found[0] if found else component
+  return component
 
 
 def _wait(client: PlatformClient, revision: dict, timeout: int) -> dict:
@@ -140,9 +141,8 @@ def deploy(
   """Deploy a version to an environment: a new revision of the instance."""
   if (version is None) == (branch is None):
     fail("give either --version or --branch")
-  body = {key: value for key, value in (("version", version), ("branch", branch), ("replicas", replicas)) if value is not None}
-  if instance is not None:
-    body = {"component": component, **body}
+  # Always named: the API refuses (409) a component other than the one the instance already runs.
+  body = {"component": component, **{key: value for key, value in (("version", version), ("branch", branch), ("replicas", replicas)) if value is not None}}
   if resource_class:
     body["resourceClasses"] = _resource_classes(resource_class)
   client = _client()

@@ -25,7 +25,7 @@ hello-api-pr-42@demo  hello-api  0.4.0-greetings.4444444  Available  1/1       1
 - Its revisions, its history and its resources are its own: a `provision` database is one per instance.
 - The first deploy names the component of the instance, and the instance keeps it. A deploy that names another component is refused (`409`), and so is an instance named like another component: its Service would answer for it.
 
-With two instances, `--component` is no longer enough to pick one:
+With an extra instance in the environment, `--component` no longer picks one, even when the default instance is gone: it acts only on the instance named after the component, and only when that is the one running.
 
 ```bash
 platform workload get \
