@@ -23,7 +23,9 @@ by version and by branch, and SpecNotIndexed for a Version without it), a Worklo
 (deploy of a public image by digest with --wait, list, get, history, rollback to the previous
 success, runningIn in catalog component get, remove; refused outside the owner team, for a version
 outside the index, a rollback to a failed revision, and ResourcesNotSupported for a resource type without provider; a pod
-in the vcluster reaches the Service of the instance by DNS), the plan
+in the vcluster reaches the Service of the instance by DNS), a second instance of the same component
+(deploy --instance, list with COMPONENT, get --component refused as ambiguous, the Service of the
+component without the pods of the second instance, remove --instance), the plan
 of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), a postgres
 provisioned by the Forager (deploy until Ready, an app that connects to it with psql, the derived catalog Resource,
 released on remove), and a cloud account (ADR 0029): refused with a clear message without an
@@ -612,6 +614,42 @@ expect_failure "revision 2 did not succeed" \
     --revision 2
 output="$(platform catalog component get "${workload_component}")"
 expect_output "running in   ${workload_environment} (0.3.0, Available)" "${output}"
+step "workload deploy --instance: a second instance of the same component, without its traffic (#294)"
+workload_extra="${workload_component}-pr-1"
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --instance "${workload_extra}" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --wait)"
+echo "${output}"
+expect_output "${workload_extra}@${workload_environment} revision 1: 0.3.0 running · 1/1 replicas available" "${output}"
+output="$(platform workload list --environment "${workload_environment}")"
+echo "${output}"
+expect_output "http://${workload_extra}.apps:80" "${output}"
+expect_failure "${workload_component} has 2 instances in ${workload_environment}" \
+  platform workload get \
+    --component "${workload_component}" \
+    --environment "${workload_environment}"
+output="$(platform workload get --instance "${workload_extra}" --environment "${workload_environment}")"
+expect_output "${workload_extra}@${workload_environment} (Available)" "${output}"
+# The Service of the component balances only its own instance: 2 pods, none of the second instance.
+endpoints="$(kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps get endpointslices \
+  --selector "kubernetes.io/service-name=${workload_component}" \
+  --output jsonpath='{range .items[*].endpoints[*]}{.targetRef.name}{"\n"}{end}')"
+echo "${endpoints}"
+if [[ "$(grep --count . <<< "${endpoints}")" != "2" ]] || grep --quiet -- "^${workload_extra}-" <<< "${endpoints}"; then
+  echo "expected the 2 pods of ${workload_component} behind its Service, and none of ${workload_extra}" >&2
+  exit 1
+fi
+output="$(platform catalog component get "${workload_component}")"
+expect_output "${workload_extra}@${workload_environment} (0.3.0, Available)" "${output}"
+output="$(platform workload remove \
+  --instance "${workload_extra}" \
+  --environment "${workload_environment}" \
+  --wait)"
+echo "${output}"
+expect_output "${workload_extra}@${workload_environment} revision 2: removed from ${workload_environment}" "${output}"
 output="$(platform workload remove \
   --component "${workload_component}" \
   --environment "${workload_environment}" \

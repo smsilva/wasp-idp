@@ -312,3 +312,79 @@ def test_rollback_copies_the_resource_class(client, state, owner):
   assert (body["replicas"], body["resourceClasses"]) == (2, {"db": "restored"})
   response = client.post(DEPLOY, json={"rollbackTo": 1, "resourceClasses": {"dns": "x"}}, headers=owner)
   assert response.status_code == 422 and "give nothing else" in response.json()["error"]["message"]
+
+
+EXTRA = "/v1/environments/demo/workloads/greeting-api-pr-1"
+
+
+def test_extra_instance_of_the_same_component(client, state, owner):
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  response = client.post(f"{EXTRA}/revisions", json={"component": "greeting-api", "branch": "feat/greetings"}, headers=owner)
+  assert response.status_code == 202, response.text
+  body = response.json()
+  assert (body["name"], body["instance"], body["component"], body["version"]) == ("demo.greeting-api-pr-1.1", "greeting-api-pr-1", "greeting-api", "1.1.0-greetings.2")
+  assert state.get("workloadrevisions", "demo.greeting-api-pr-1.1")["metadata"]["labels"] == {
+    "platform.wasp.silvios.me/environment": "demo",
+    "platform.wasp.silvios.me/component": "greeting-api",
+    "platform.wasp.silvios.me/instance": "greeting-api-pr-1",
+  }
+  items = client.get("/v1/environments/demo/workloads", headers=owner).json()["items"]
+  assert [(item["instance"], item["component"]) for item in items] == [("greeting-api", "greeting-api"), ("greeting-api-pr-1", "greeting-api")]
+
+
+def test_next_deploy_of_an_extra_instance_keeps_its_component(client, state, owner):
+  client.post(f"{EXTRA}/revisions", json={"component": "greeting-api", "version": "1.0.0"}, headers=owner)
+  body = client.post(f"{EXTRA}/revisions", json={"branch": "feat/greetings"}, headers=owner).json()
+  assert (body["revision"], body["component"]) == (2, "greeting-api")
+
+
+def test_component_of_an_instance_never_changes(client, state, owner):
+  state.create("components", {"metadata": {"name": "ratings"}, "spec": {"owner": "team-alpha", "system": "greeter"}})
+  state.create("versions", indexed("ratings", "2.0.0", "2026-10-01T10:00:00Z", branch="main"))
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  response = client.post(DEPLOY, json={"component": "ratings", "version": "2.0.0"}, headers=owner)
+  assert response.status_code == 409
+  assert "runs component 'greeting-api'" in response.json()["error"]["message"]
+
+
+def test_extra_instance_of_an_unknown_component(client, owner):
+  response = client.post(f"{EXTRA}/revisions", json={"version": "1.0.0"}, headers=owner)
+  assert response.status_code == 404
+  assert "component 'greeting-api-pr-1' not found" in response.json()["error"]["message"]
+
+
+def test_extra_instance_needs_the_owner_team_of_its_component(client, state, owner, teammate):
+  response = client.post(f"{EXTRA}/revisions", json={"component": "greeting-api", "version": "1.0.0"}, headers=teammate)
+  assert response.status_code == 403
+  assert "deploy of 'greeting-api'" in response.json()["error"]["message"]
+  client.post(f"{EXTRA}/revisions", json={"component": "greeting-api", "version": "1.0.0"}, headers=owner)
+  # Rollback and remove take the component from the revisions of the instance.
+  assert client.delete(EXTRA, headers=teammate).status_code == 403
+
+
+def test_rollback_and_remove_of_an_extra_instance(client, state, owner):
+  client.post(f"{EXTRA}/revisions", json={"component": "greeting-api", "version": "1.0.0"}, headers=owner)
+  close(state, "demo.greeting-api-pr-1.1", "True", "Succeeded")
+  client.post(f"{EXTRA}/revisions", json={"branch": "feat/greetings"}, headers=owner)
+  close(state, "demo.greeting-api-pr-1.2", "True", "Succeeded")
+  body = client.post(f"{EXTRA}/revisions", json={"rollbackTo": 1}, headers=owner).json()
+  assert (body["name"], body["component"], body["version"]) == ("demo.greeting-api-pr-1.3", "greeting-api", "1.0.0")
+  body = client.delete(EXTRA, headers=owner).json()
+  assert (body["name"], body["action"], body["component"]) == ("demo.greeting-api-pr-1.4", "remove", "greeting-api")
+
+
+def test_history_by_component_lists_every_instance(client, state, owner):
+  client.post(DEPLOY, json={"version": "1.0.0"}, headers=owner)
+  client.post(f"{EXTRA}/revisions", json={"component": "greeting-api", "version": "1.0.0"}, headers=owner)
+  items = client.get("/v1/environments/demo/revisions", params={"component": "greeting-api"}, headers=owner).json()["items"]
+  assert [item["name"] for item in items] == ["demo.greeting-api.1", "demo.greeting-api-pr-1.1"]
+  items = client.get("/v1/environments/demo/revisions", params={"component": "ratings"}, headers=owner).json()["items"]
+  assert items == []
+
+
+def test_extra_instance_cannot_take_the_name_of_another_component(client, state, owner):
+  state.create("components", {"metadata": {"name": "ratings"}, "spec": {"owner": "team-beta", "system": "greeter"}})
+  response = client.post("/v1/environments/demo/workloads/ratings/revisions", json={"component": "greeting-api", "version": "1.0.0"}, headers=owner)
+  assert response.status_code == 409
+  assert "'ratings' is the name of another component" in response.json()["error"]["message"]
+  assert state.stores["workloadrevisions"] == {}

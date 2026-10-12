@@ -110,6 +110,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [A database for a workload](workloads/resources.md)
 - [A database in the shared instance](workloads/compose.md)
 - [A database that already exists](workloads/bind.md)
+- [Another instance of the same component](workloads/instances.md)
 
 - [Remove the GitHub connection](scm-connection/remove.md)
 - [Clean up and sign out](cleanup.md)

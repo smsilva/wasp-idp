@@ -44,7 +44,7 @@ def api(monkeypatch):
       items = state["history"].pop(0) if len(state["history"]) > 1 else state["history"][0]
       return httpx.Response(200, json={"items": items})
     if path.endswith("/workloads"):
-      return httpx.Response(200, json={"items": [INSTANCE]})
+      return httpx.Response(200, json={"items": state.get("instances") or [INSTANCE]})
     return httpx.Response(200, json=state.get("instance") or INSTANCE)
 
   transport = httpx.MockTransport(handler)
@@ -66,7 +66,7 @@ def test_deploy_writes_a_revision(api):
   assert result.exit_code == 0, result.output
   request = api["requests"][0]
   assert request.url.path == "/v1/environments/demo/workloads/reviews/revisions"
-  assert json.loads(request.content) == {"version": "2.1.0", "replicas": 2}
+  assert json.loads(request.content) == {"component": "reviews", "version": "2.1.0", "replicas": 2}
   assert result.output.splitlines() == [
     "reviews@demo revision 1: deploying 2.1.0 …",
     "follow it with: platform workload get --component reviews --environment demo",
@@ -77,7 +77,7 @@ def test_deploy_wait_follows_the_revision(api):
   api["history"] = [[revision(status="EnvironmentNotReady")], [revision(status="Succeeded", open_=False, message="2/2 replicas available")]]
   result = run("deploy", "--component", "reviews", "--environment", "demo", "--branch", "feat/v3", "--wait")
   assert result.exit_code == 0, result.output
-  assert json.loads(api["requests"][0].content) == {"branch": "feat/v3"}
+  assert json.loads(api["requests"][0].content) == {"component": "reviews", "branch": "feat/v3"}
   assert result.output.splitlines() == ["✓ reviews@demo revision 1: 2.1.0 running · 2/2 replicas available"]
 
 
@@ -107,14 +107,14 @@ def test_list(api):
   result = run("list", "--environment", "demo")
   assert result.exit_code == 0, result.output
   lines = result.output.splitlines()
-  assert lines[0].split() == ["WORKLOAD", "VERSION", "STATUS", "REPLICAS", "REVISION", "URL"]
-  assert lines[1].split() == ["reviews@demo", "2.1.0", "Available", "2/2", "1", "http://reviews.apps:80"]
+  assert lines[0].split() == ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "URL"]
+  assert lines[1].split() == ["reviews@demo", "reviews", "2.1.0", "Available", "2/2", "1", "http://reviews.apps:80"]
 
 
 def test_get(api):
   result = run("get", "--component", "reviews", "--environment", "demo")
   assert result.exit_code == 0, result.output
-  assert api["requests"][0].url.path == "/v1/environments/demo/workloads/reviews"
+  assert api["requests"][-1].url.path == "/v1/environments/demo/workloads/reviews"
   lines = result.output.splitlines()
   assert lines[0] == "reviews@demo (Available)"
   assert lines[4].split() == ["replicas", "2/2"]
@@ -124,7 +124,7 @@ def test_get(api):
 def test_history(api):
   result = run("history", "--environment", "demo", "--component", "reviews")
   assert result.exit_code == 0, result.output
-  assert api["requests"][0].url.params["instance"] == "reviews"
+  assert dict(api["requests"][0].url.params) == {"component": "reviews"}
   lines = result.output.splitlines()
   assert lines[0].split() == ["WORKLOAD", "REVISION", "ACTION", "VERSION", "STATUS", "BY", "CREATED"]
   assert lines[1].split() == ["reviews@demo", "1", "deploy", "2.1.0", "Succeeded", "dev@example.com", "2026-10-11T12:00:00Z"]
@@ -149,7 +149,8 @@ def test_rollback_to_a_given_revision_and_wait(api):
   api["history"] = [[revision(4, action="rollback", version="1.0.0", status="Succeeded", open_=False, message="2/2 replicas available")]]
   result = run("rollback", "--component", "reviews", "--environment", "demo", "--revision", "2", "--wait")
   assert result.exit_code == 0, result.output
-  assert json.loads(api["requests"][0].content) == {"rollbackTo": 2}
+  post = next(request for request in api["requests"] if request.method == "POST")
+  assert json.loads(post.content) == {"rollbackTo": 2}
   assert result.output.splitlines() == ["✓ reviews@demo revision 4: 1.0.0 running · 2/2 replicas available"]
 
 
@@ -163,7 +164,7 @@ def test_rollback_without_an_earlier_success(api):
 def test_remove(api):
   result = run("remove", "--component", "reviews", "--environment", "demo")
   assert result.exit_code == 0, result.output
-  assert (api["requests"][0].method, api["requests"][0].url.path) == ("DELETE", "/v1/environments/demo/workloads/reviews")
+  assert (api["requests"][-1].method, api["requests"][-1].url.path) == ("DELETE", "/v1/environments/demo/workloads/reviews")
   assert result.output.splitlines() == [
     "reviews@demo revision 2: removing …",
     "follow it with: platform workload history --component reviews --environment demo",
@@ -180,7 +181,7 @@ def test_remove_wait(api):
 def test_deploy_with_resource_classes(api):
   result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--resource-class", "db=restored", "--resource-class", "cache=warm")
   assert result.exit_code == 0, result.output
-  assert json.loads(api["requests"][0].content) == {"version": "2.1.0", "resourceClasses": {"db": "restored", "cache": "warm"}}
+  assert json.loads(api["requests"][0].content) == {"component": "reviews", "version": "2.1.0", "resourceClasses": {"db": "restored", "cache": "warm"}}
 
 
 @pytest.mark.parametrize("value", ["db", "=restored", "db=", "db=a=b"])
@@ -196,3 +197,79 @@ def test_get_shows_the_resource_classes_of_the_newest_revision(api):
   api["instance"] = {**INSTANCE, "latestRevision": latest, "resources": [{"name": "db", "type": "postgres", "mode": "bind", "status": "Ready"}]}
   lines = run("get", "--component", "reviews", "--environment", "demo").output.splitlines()
   assert "  resource      db (postgres, bind, class restored): Ready" in lines
+
+
+EXTRA = {**INSTANCE, "name": "reviews-pr-42@demo", "instance": "reviews-pr-42", "url": "http://reviews-pr-42.apps:80"}
+
+
+def extra_revision(number=1, **fields):
+  return {**revision(number, **fields), "name": f"demo.reviews-pr-42.{number}", "instance": "reviews-pr-42"}
+
+
+def test_deploy_an_extra_instance(api):
+  api["created"] = extra_revision()
+  result = run("deploy", "--component", "reviews", "--instance", "reviews-pr-42", "--environment", "demo", "--branch", "feat/pr-42")
+  assert result.exit_code == 0, result.output
+  request = api["requests"][0]
+  assert request.url.path == "/v1/environments/demo/workloads/reviews-pr-42/revisions"
+  assert json.loads(request.content) == {"component": "reviews", "branch": "feat/pr-42"}
+  assert result.output.splitlines() == [
+    "reviews-pr-42@demo revision 1: deploying 2.1.0 …",
+    "follow it with: platform workload get --instance reviews-pr-42 --environment demo",
+  ]
+
+
+def test_component_names_its_default_instance(api):
+  result = run("get", "--component", "reviews", "--environment", "demo")
+  assert result.exit_code == 0, result.output
+  assert api["requests"][-1].url.path == "/v1/environments/demo/workloads/reviews"
+
+
+@pytest.mark.parametrize("command", [["get"], ["rollback"], ["remove"]])
+def test_component_never_lands_on_an_extra_instance(api, command):
+  # The only instance of reviews is an extra one: --component does not pick it.
+  api["instances"] = [EXTRA]
+  result = run(*command, "--component", "reviews", "--environment", "demo")
+  assert result.exit_code == 1
+  assert "reviews has 1 instance in demo: reviews-pr-42; give --instance" in result.output
+  assert all(request.method == "GET" for request in api["requests"])
+
+
+@pytest.mark.parametrize("command", [["get"], ["rollback"], ["remove"]])
+def test_component_with_more_instances_needs_instance(api, command):
+  api["instances"] = [INSTANCE, EXTRA]
+  result = run(*command, "--component", "reviews", "--environment", "demo")
+  assert result.exit_code == 1
+  assert "reviews has 2 instances in demo: reviews, reviews-pr-42; give --instance" in result.output
+  assert all(request.method == "GET" for request in api["requests"])
+
+
+@pytest.mark.parametrize("args", [[], ["--component", "reviews", "--instance", "reviews-pr-42"]])
+def test_get_needs_component_or_instance(api, args):
+  result = run("get", "--environment", "demo", *args)
+  assert result.exit_code == 1
+  assert "give either --component or --instance" in result.output
+  assert api["requests"] == []
+
+
+def test_instance_goes_straight_to_it(api):
+  api["instances"] = [INSTANCE, EXTRA]
+  api["instance"] = EXTRA
+  result = run("get", "--instance", "reviews-pr-42", "--environment", "demo")
+  assert result.exit_code == 0, result.output
+  assert [request.url.path for request in api["requests"]] == ["/v1/environments/demo/workloads/reviews-pr-42"]
+  assert result.output.splitlines()[0] == "reviews-pr-42@demo (Available)"
+
+
+def test_remove_an_extra_instance(api):
+  result = run("remove", "--instance", "reviews-pr-42", "--environment", "demo")
+  assert result.exit_code == 0, result.output
+  assert (api["requests"][0].method, api["requests"][0].url.path) == ("DELETE", "/v1/environments/demo/workloads/reviews-pr-42")
+
+
+def test_history_of_an_instance(api):
+  api["history"] = [[extra_revision(status="Succeeded", open_=False)]]
+  result = run("history", "--environment", "demo", "--instance", "reviews-pr-42")
+  assert result.exit_code == 0, result.output
+  assert dict(api["requests"][0].url.params) == {"instance": "reviews-pr-42"}
+  assert result.output.splitlines()[1].split()[0] == "reviews-pr-42@demo"

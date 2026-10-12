@@ -4,8 +4,9 @@ The API writes only WorkloadRevisions, named <environment>.<instance>.<n>: the n
 plus one, so two concurrent requests collide on the name and the second gets a 409 (optimistic
 concurrency, no lock). The workload provider applies the newest revision in the vcluster and keeps
 the WorkloadInstance, the runtime view. Writing needs can_use on the environment and the component's
-owner team (or platform-admins); reading needs can_use. In phase 1 the instance name is the component
-name, so a second instance of the same component cannot be asked for. A rollback is a new revision
+owner team (or platform-admins); reading needs can_use. An instance is named after its component by
+default; an extra one (#294, the shared sandbox) names its component on the first deploy, and keeps it
+for as long as its history lives: a deploy that names another one is a 409. A rollback is a new revision
 with the version and overrides of an earlier one; a remove is a revision too, and the history stays
 until the environment goes.
 
@@ -42,6 +43,8 @@ MAX_RESOURCE_CLASSES = 16
 class RevisionRequest(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
+  # By default the one the instance already runs, else the one named like the instance.
+  component: str | None = None
   version: str | None = None
   branch: str | None = None
   replicas: int | None = Field(default=None, ge=0, le=20)
@@ -70,7 +73,7 @@ class RevisionRequest(BaseModel):
 class PlanEntry(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
-  # Phase 1: the instance is named after its component, so only the key itself is accepted (#294).
+  # By default the key: an extra instance names its component (#294).
   component: str | None = None
   version: str | None = None
   branch: str | None = None
@@ -165,8 +168,13 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(403, f"environment '{environment}' is not yours nor shared with your teams")
     return obj
 
-  def revisions_of(environment: str, instance: str | None = None) -> list[dict]:
-    items = [obj for obj in state.list(REVISIONS) if obj["spec"].get("environment") == environment and (instance is None or obj["spec"].get("instance") == instance)]
+  def revisions_of(environment: str, instance: str | None = None, component: str | None = None) -> list[dict]:
+    items = [
+      obj for obj in state.list(REVISIONS)
+      if obj["spec"].get("environment") == environment
+      and (instance is None or obj["spec"].get("instance") == instance)
+      and (component is None or obj["spec"].get("component") == component)
+    ]
     return sorted(items, key=lambda obj: (obj["spec"]["instance"], obj["spec"]["revision"]))
 
   def instances_of(environment: str) -> list[dict]:
@@ -199,13 +207,32 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(409, f"SpecNotIndexed: {component} {newest['spec'].get('version')} was indexed before the version index kept the spec: build it again under a new version")
     return newest
 
-  def authorize(environment: str, instance: str, principal: Principal, act: str) -> tuple[dict, str]:
+  def component_of(environment: str, instance: str, asked: str | None) -> str:
+    """The component an instance runs: the one of its revisions, else the one asked for, else its name."""
+    existing = revisions_of(environment, instance)
+    if not existing:
+      if asked is None or asked == instance:
+        return instance
+      # The Service takes the instance name: an extra instance named like another component would answer
+      # for it (http://<component>) in the environment.
+      try:
+        state.get(COMPONENTS, instance)
+      except NotFound:
+        return asked
+      raise HTTPException(409, f"'{instance}' is the name of another component: an instance of '{asked}' cannot take it")
+    current = existing[-1]["spec"]["component"]
+    if asked is not None and asked != current:
+      raise HTTPException(409, f"{instance}@{environment} runs component '{current}', not '{asked}': give the other one an instance of its own")
+    return current
+
+  def authorize(environment: str, instance: str, principal: Principal, act: str, asked: str | None = None) -> tuple[dict, str]:
     """The environment and the component, for a principal who may write revisions of the instance."""
     if not LABEL.fullmatch(instance):
       raise HTTPException(422, f"'{instance}' is not an instance name")
+    if asked is not None and not LABEL.fullmatch(asked):
+      raise HTTPException(422, f"'{asked}' is not a component name")
     env = usable(environment, principal)
-    # Phase 1: the instance is named after its component.
-    component = instance
+    component = component_of(environment, instance, asked)
     try:
       owner = (state.get(COMPONENTS, component).get("spec") or {}).get("owner")
     except NotFound:
@@ -267,11 +294,10 @@ def router(state, journal: Journal) -> APIRouter:
     newest = live(environment)
     items = []
     for instance, entry in sorted(request.workloads.items()):
-      if entry.component is not None and entry.component != instance:
-        raise HTTPException(422, f"apply of '{instance}': component '{entry.component}' differs from the instance name; more than one instance of a component is #294")
       if (entry.version is None) == (entry.branch is None):
         raise HTTPException(422, f"apply of '{instance}': give either version or branch")
-      _, component = authorize(environment, instance, principal, "deploy")
+      # The plan names the component of every instance: without component, the key.
+      _, component = authorize(environment, instance, principal, "deploy", entry.component or instance)
       version = resolve(component, RevisionRequest(version=entry.version, branch=entry.branch))
       to = {"version": version["spec"]["version"], "replicas": entry.replicas if entry.replicas is not None else DEFAULT_REPLICAS}
       current = newest.get(instance)
@@ -310,7 +336,7 @@ def router(state, journal: Journal) -> APIRouter:
   @routes.post("/workloads/{instance}/revisions", status_code=202)
   def create(environment: str, instance: str, request: RevisionRequest, principal: Principal = Depends(current_principal)):
     if request.rollbackTo is not None:
-      if request.version is not None or request.branch is not None or request.replicas is not None or request.resourceClasses:
+      if request.version is not None or request.branch is not None or request.replicas is not None or request.resourceClasses or request.component is not None:
         raise HTTPException(422, f"rollback of '{instance}': rollbackTo takes the version and overrides of that revision, give nothing else")
       env, component = authorize(environment, instance, principal, "rollback")
       source = rollback_source(environment, instance, request.rollbackTo)["spec"]
@@ -318,7 +344,7 @@ def router(state, journal: Journal) -> APIRouter:
       return write(env, instance, component, spec, principal)
     if (request.version is None) == (request.branch is None):
       raise HTTPException(422, f"deploy of '{instance}': give either version or branch")
-    env, component = authorize(environment, instance, principal, "deploy")
+    env, component = authorize(environment, instance, principal, "deploy", request.component)
     version = resolve(component, request)
     resources = version["spec"]["appSpec"].get("resources") or {}
     for name in sorted(request.resourceClasses or {}):
@@ -374,8 +400,8 @@ def router(state, journal: Journal) -> APIRouter:
     return found
 
   @routes.get("/revisions")
-  def history(environment: str, instance: str | None = None, principal: Principal = Depends(current_principal)):
+  def history(environment: str, instance: str | None = None, component: str | None = None, principal: Principal = Depends(current_principal)):
     usable(environment, principal)
-    return {"items": [revision_view(obj) for obj in revisions_of(environment, instance)]}
+    return {"items": [revision_view(obj) for obj in revisions_of(environment, instance, component)]}
 
   return routes

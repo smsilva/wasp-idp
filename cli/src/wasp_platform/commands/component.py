@@ -76,6 +76,12 @@ def summary(creation: dict, type_: str | None) -> list[str]:
   return lines
 
 
+def _where(component: str, item: dict) -> str:
+  """The environment of the default instance; <instance>@<environment> for an extra one (#294)."""
+  instance = item.get("instance")
+  return item["environment"] if instance in (None, component) else f"{instance}@{item['environment']}"
+
+
 def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> dict:
   deadline = time.monotonic() + timeout
   shown = set()
@@ -183,5 +189,5 @@ def get(name: str, output: OutputOption = Format.table):
   for field in ("system", "owner", "type", "lifecycle", "repo", "template", "description"):
     typer.echo(f"  {field.ljust(12)} {component.get(field) or '—'}")
   # Only the environments you can use (ADR 0033).
-  running = ", ".join(f"{item['environment']} ({item.get('version') or '—'}, {item['status']})" for item in component.get("runningIn") or [])
+  running = ", ".join(f"{_where(component['name'], item)} ({item.get('version') or '—'}, {item['status']})" for item in component.get("runningIn") or [])
   typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")

@@ -158,3 +158,13 @@ def test_get_shows_the_creation_until_the_component_is_indexed(api):
   api["component"] = {"name": "greeting-api", "system": "greeter", "repo": "wasp-foundry/greeting-api"}
   result = run("get", "greeting-api")
   assert "wasp-foundry/greeting-api" in result.stdout
+
+
+def test_get_shows_an_extra_instance_with_its_name(api):
+  api["component"] = {"name": "greeting-api", "runningIn": [
+    {"environment": "demo", "instance": "greeting-api", "version": "1.0.0", "status": "Available"},
+    {"environment": "demo", "instance": "greeting-api-pr-1", "version": "1.1.0", "status": "Progressing"},
+  ]}
+  result = run("get", "greeting-api")
+  assert result.exit_code == 0, result.output
+  assert "running in   demo (1.0.0, Available), greeting-api-pr-1@demo (1.1.0, Progressing)" in result.stdout
