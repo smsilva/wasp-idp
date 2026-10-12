@@ -236,6 +236,11 @@ const deck = document.getElementById('deck');
 const stages = deck.querySelectorAll('.stage');
 let current = 0;
 let syncing = false;
+// Detail steps (`parent`) come after the main track: → never walks into them, a link opens them.
+const firstDetail = Array.from(stages).findIndex((stage) => stage.dataset.detail !== undefined);
+const lastMain = (firstDetail < 0 ? stages.length : firstDetail) - 1;
+// Where the link into a detail came from: set only from a main-track step, cleared on any main-track step.
+const ORIGIN_KEY = 'idp-outline-origin';
 // Presenter view: a second window of this same page, kept in sync step by step.
 const channel = new BroadcastChannel('idp-outline-' + location.pathname);
 channel.onmessage = (event) => {
@@ -262,6 +267,7 @@ document.fonts.ready.then(() => { if (deck.classList.contains('on')) fitAligned(
 window.addEventListener('resize', () => { if (deck.classList.contains('on')) fitAligned(stages[current]); });
 function show(index) {
   current = Math.max(0, Math.min(stages.length - 1, index));
+  if (stages[current].dataset.detail === undefined) sessionStorage.removeItem(ORIGIN_KEY);
   stages.forEach((stage, i) => stage.classList.toggle('current', i === current));
   fitAligned(stages[current]);
   deck.querySelector('.counter').textContent = (current + 1) + ' / ' + stages.length;
@@ -270,6 +276,32 @@ function show(index) {
   history.replaceState(null, '', '#present-' + (current + 1));
 }
 function present(index) { deck.classList.add('on'); show(index); }
+function goSlide(name) {
+  const target = deck.querySelector(`.stage[data-slide='${name}']`);
+  if (!target) return;
+  if (stages[current].dataset.detail === undefined) sessionStorage.setItem(ORIGIN_KEY, String(current));
+  show(Number(target.dataset.step));
+}
+// Back: to the step the link came from; with none (direct link, index), to the parent slide.
+function back() {
+  const origin = sessionStorage.getItem(ORIGIN_KEY);
+  show(origin !== null ? Number(origin) : Number(stages[current].dataset.up));
+}
+function next() {
+  if (stages[current].dataset.exit !== undefined) back();
+  else if (current !== lastMain) show(current + 1);
+}
+function previous() {
+  if (stages[current].dataset.entry !== undefined) back(); else show(current - 1);
+}
+// Clicks navigate only on links (box, breadcrumb, overlay, back): elsewhere a click keeps the text selection.
+deck.addEventListener('click', (event) => {
+  if (!deck.classList.contains('on')) return;
+  const link = event.target.closest('[data-go-slide], [data-back]');
+  if (!link) return;
+  event.stopPropagation();
+  if (link.dataset.back !== undefined) back(); else goSlide(link.dataset.goSlide);
+});
 function stop() {
   deck.classList.remove('on');
   document.documentElement.classList.remove('presenting');
@@ -284,10 +316,10 @@ document.querySelectorAll('[data-step]').forEach((element) => {
 // On touch screens there is no keyboard: a tap on the right third advances, on the left third goes back.
 deck.addEventListener('pointerup', (event) => {
   if (event.pointerType !== 'touch' || !deck.classList.contains('on') || deck.classList.contains('index-open')) return;
-  if (event.target.closest('a, .notes-panel')) return;
+  if (event.target.closest('a, .notes-panel, [data-go-slide]')) return;
   const x = event.clientX / window.innerWidth;
-  if (x > 2 / 3) show(current + 1);
-  else if (x < 1 / 3) show(current - 1);
+  if (x > 2 / 3) next();
+  else if (x < 1 / 3) previous();
 });
 // Slide index inside presentation mode.
 const items = Array.from(deck.querySelectorAll('.index-item'));
@@ -346,10 +378,11 @@ document.addEventListener('keydown', (event) => {
     return;
   }
   if (['i', 'I', '['].includes(event.key)) { openIndex(); return; }
-  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(event.key)) { event.preventDefault(); show(current + 1); }
-  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(event.key)) { event.preventDefault(); show(current - 1); }
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(event.key)) { event.preventDefault(); next(); }
+  else if (event.key === 'Backspace' && stages[current].dataset.detail !== undefined) { event.preventDefault(); back(); }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(event.key)) { event.preventDefault(); previous(); }
   else if (event.key === 'Home') show(0);
-  else if (event.key === 'End') show(stages.length - 1);
+  else if (event.key === 'End') show(lastMain);
   else if (event.key === 'Escape') stop();
   else if (event.key === 'n' || event.key === 'N') {
     const on = deck.classList.toggle('with-notes');
@@ -959,7 +992,7 @@ def render_html(outline, base):
   return f"""<!doctype html>
 <html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{' — '.join(esc(x) for x in (deck['title'], deck.get('iteration')) if x)}</title>
 <style>{CSS}</style><script>if (/^#present-[\\w-]+$/.test(location.hash)) document.documentElement.classList.add('presenting');</script></head>
-<body><div id='deck'>{deck_html}<div class='notes-panel'></div><div class='hint'>{home_link}<span class='keys'>{" · " if home_link else ""}← → avançar · I índice · N notas · L posição das notas · S janela do apresentador · F tela cheia · Esc sair</span></div><div class='counter'></div></div><button id='toggle-nav' type='button'>«</button><nav>{''.join(nav)}</nav><main>{''.join(body)}</main>
+<body><div id='deck'>{deck_html}<div class='notes-panel'></div><div class='hint'>{home_link}<span class='keys'>{" · " if home_link else ""}← → avançar · Backspace voltar do detalhe · I índice · N notas · L posição das notas · S janela do apresentador · F tela cheia · Esc sair</span></div><div class='counter'></div></div><button id='toggle-nav' type='button'>«</button><nav>{''.join(nav)}</nav><main>{''.join(body)}</main>
 <script>{SCRIPT}</script></body></html>
 """
 
