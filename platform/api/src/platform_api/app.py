@@ -79,6 +79,10 @@ def create_app(
   def plan_rejected(request: Request, error: catalog_import.PlanRejected):
     return _error(error.status, error.message, plan=error.plan)
 
+  @app.exception_handler(capabilities.NoProvider)
+  def no_provider(request: Request, error: capabilities.NoProvider):
+    return JSONResponse({"error": {"code": capabilities.NO_PROVIDER, "message": str(error)}}, 503)
+
   @app.exception_handler(RequestValidationError)
   def validation_error(request: Request, error: RequestValidationError):
     message = "; ".join(f"{'.'.join(str(part) for part in item['loc'][1:])}: {item['msg']}" for item in error.errors())
@@ -243,18 +247,20 @@ def create_app(
   # Before the catalog router: its /{plural} routes would otherwise take "import", "templates" and "components" as kinds.
   app.include_router(catalog_import.router(state, journal, teams))
   app.include_router(templates.router(state, journal, teams))
-  app.include_router(components.router(state, journal, teams))
-  app.include_router(builds.router(state, journal))
-  app.include_router(registries.router(state, journal))
+  # The writes of an optional subsystem answer 503 without its provider (ADR 0034 §4); component
+  # create is catalog's, and creates the repo through scm.
+  app.include_router(components.router(state, journal, teams), dependencies=[Depends(capabilities.requires(deployments, "scm"))])
+  app.include_router(builds.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "build"))])
+  app.include_router(registries.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "registry"))])
   app.include_router(workload_specs.router(state))
-  app.include_router(workloads.router(state, journal))
-  app.include_router(binding_policies.router(state, journal))
+  app.include_router(workloads.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "workload"))])
+  app.include_router(binding_policies.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "resources"))])
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
-  app.include_router(cloud_accounts.router(state, journal, base_identity))
+  app.include_router(cloud_accounts.router(state, journal, base_identity), dependencies=[Depends(capabilities.requires(deployments, cloud_accounts.CAPABILITY))])
   app.include_router(capabilities.router(state, deployments, base_identity))
   github = github or httpx.Client(base_url=scm.GITHUB_API, timeout=15)
-  app.include_router(scm.router(state, journal, secrets, github, public_url, scm_states or scm.States()))
+  app.include_router(scm.router(state, journal, secrets, github, public_url, scm_states or scm.States()), dependencies=[Depends(capabilities.requires(deployments, "scm"))])
   return app
 
 

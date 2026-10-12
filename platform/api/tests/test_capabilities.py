@@ -244,3 +244,57 @@ def test_without_a_deployment_reader_nothing_is_installed(tmp_path, tokens, admi
 def test_version_is_the_image_tag(image, expected):
   from platform_api.capabilities import version
   assert version(image) == expected
+
+
+# The writes of an optional subsystem need its provider (#377, ADR 0034 §4).
+WRITES = [
+  ("scm_github", "POST", "/v1/scm/connections", {"name": "acme", "vendor": "github", "org": "acme"}),
+  ("scm_github", "DELETE", "/v1/scm/connections/acme", None),
+  ("scm_github", "POST", "/v1/catalog/components", {"name": "hello-api", "system": "greeter"}),
+  ("registry", "POST", "/v1/registries", {"name": "ghcr-acme", "vendor": "ghcr", "host": "ghcr.io", "namespace": "acme"}),
+  ("scm_github", "POST", "/v1/builds", {"component": "hello-api", "branch": "main"}),
+  ("aws_account", "POST", "/v1/cloud/accounts", {"name": "nonprod", "vendor": "aws", "roleArn": "arn:aws:iam::123456789012:role/platform"}),
+  ("forager", "PUT", "/v1/environments/demo/binding-policy", {"provisioners": []}),
+  ("workload", "POST", "/v1/environments/demo/workloads/hello-api/revisions", {"component": "hello-api", "version": "0.1.0"}),
+  ("workload", "DELETE", "/v1/environments/demo/workloads/routes/hello-api", None),
+]
+
+
+def without(setup, provider):
+  setup["deployments"] = [item for item in setup["deployments"] if item["labels"][PROVIDER_LABEL] != provider]
+
+
+@pytest.mark.parametrize("provider,method,path,body", WRITES)
+def test_a_write_without_its_provider_is_503(setup, admin, provider, method, path, body):
+  without(setup, provider)
+  response = setup["client"]().request(method, path, json=body, headers=admin)
+  assert response.status_code == 503, response.text
+  error = response.json()["error"]
+  assert error["code"] == "NoProviderForCapability"
+  assert error["message"].endswith("has no provider installed: see platform status " + error["message"].split("'")[1])
+
+
+@pytest.mark.parametrize("provider,method,path,body", WRITES)
+def test_with_its_provider_the_route_answers_as_before(setup, admin, provider, method, path, body):
+  response = setup["client"]().request(method, path, json=body, headers=admin)
+  assert response.status_code != 503, response.text
+
+
+@pytest.mark.parametrize("provider,path", [
+  ("scm_github", "/v1/scm/connections"), ("registry", "/v1/registries"), ("aws_account", "/v1/cloud/accounts"),
+  ("workload", "/v1/environments/demo/workloads"),
+])
+def test_reads_stay_open_without_the_provider(setup, admin, provider, path):
+  without(setup, provider)
+  assert setup["client"]().get(path, headers=admin).status_code != 503
+
+
+def test_without_a_token_it_is_401_before_503(setup):
+  without(setup, "aws_account")
+  assert setup["client"]().post("/v1/cloud/accounts", json={}).status_code == 401
+
+
+def test_an_unreachable_provider_is_not_503(setup, admin):
+  next(item for item in setup["deployments"] if item["labels"][PROVIDER_LABEL] == "registry")["ready"] = 0
+  response = setup["client"]().post("/v1/registries", json={"name": "ghcr-acme", "vendor": "ghcr", "host": "ghcr.io", "namespace": "acme"}, headers=admin)
+  assert response.status_code != 503
