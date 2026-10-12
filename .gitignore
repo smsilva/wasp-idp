@@ -42,3 +42,6 @@ docs/superpowers/context/
 .venv/
 __pycache__/
 .pytest_cache/
+
+# Saída do `mkdocs build` local do guia da CLI (o CI gera em ${RUNNER_TEMP})
+cli/site/
