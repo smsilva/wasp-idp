@@ -28,6 +28,10 @@ rules:
   - apiGroups: [platform.wasp.silvios.me]
     resources: [environments]
     verbs: [get]
+  # The resources the Forager provisioned for a revision; a remove deletes them (the Forager undoes each).
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [resourcerequests]
+    verbs: [get, list, delete]
   # The Workload Spec of each version (spec.appSpec).
   - apiGroups: [catalog.platform.wasp.silvios.me]
     resources: [versions]

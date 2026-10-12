@@ -23,6 +23,7 @@ INSTANCE = {
   "kind": "WorkloadInstance", "name": "reviews@demo", "environment": "demo", "instance": "reviews", "component": "reviews",
   "version": "2.1.0", "image": "ghcr.io/acme/reviews@sha256:" + "b" * 64, "revision": 1, "status": "Available", "message": "2/2 replicas ready",
   "replicas": {"desired": 2, "ready": 2}, "url": "http://reviews.apps:80", "latestRevision": revision(status="Succeeded", open_=False),
+  "resources": [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}],
 }
 
 
@@ -117,6 +118,7 @@ def test_get(api):
   lines = result.output.splitlines()
   assert lines[0] == "reviews@demo (Available)"
   assert lines[4].split() == ["replicas", "2/2"]
+  assert "  resource      db (postgres, provision): Ready" in lines
 
 
 def test_history(api):

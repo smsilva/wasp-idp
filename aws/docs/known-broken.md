@@ -103,6 +103,10 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     de um component com repo privado termina em `RolloutFailed` (`ImagePullBackOff` até o
     `progressDeadlineSeconds` de 120 s). Só imagens públicas são implantadas; o pull secret pelo
     GitHub App fica para depois.
+34. **Postgres em modo `provision` sem volume** — *intentional* no `platform-local` (#304, ADR 0031):
+    o StatefulSet que o Forager cria no vcluster não tem PVC, como a recipe do spike. Os dados somem
+    quando o pod reinicia; serve a ambientes efêmeros. Um volume (ou o RDS por Crossplane) entra com
+    o primeiro provisioner AWS.
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e
