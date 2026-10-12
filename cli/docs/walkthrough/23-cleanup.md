@@ -5,7 +5,9 @@ platform environment delete demo
 
 platform environment delete greetings-test
 
-kubectl --context k3d-platform-local get namespaces | grep env- || echo "no environments"
+kubectl --context k3d-platform-local get namespaces \
+  | grep env- \
+  || echo "no environments"
 
 platform logout
 
