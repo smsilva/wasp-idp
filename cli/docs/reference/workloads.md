@@ -81,7 +81,7 @@ A revision that does not succeed leaves the running revision as it was.
 
 ## Resources
 
-A resource of the Score (`resources.db: {type: postgres}`) becomes a **`ResourceRequest`** per environment, `<environment>.<instance>.<resource>`, kept by the **Forager**. For each deploy, the Forager resolves the mode of each resource in the **binding policy** of the environment, then in the platform default (`BindingPolicy` `platform-default`), and the first item that matches the type, the `class` and the `id` of the resource wins. A `class` in the Score (`resources.db.class`) needs an item with that class: a class nobody offers ends as `ResourcesNotSupported`, never as a resource of another kind.
+A resource of the Score (`resources.db: {type: postgres}`) becomes a **`ResourceRequest`** per environment, `<environment>.<instance>.<resource>`, kept by the **Forager**. For each deploy, the Forager resolves the mode of each resource in the **binding policy** of the environment, then in the platform default (`BindingPolicy` `platform-default`), and the first item that matches the type, the `class` and the `id` of the resource wins. A `class` in the Score (`resources.db.class`) needs an item with that class: a class nobody offers ends as `ResourcesNotSupported`, never as a resource of another kind. How the Forager and the workload provider split a deploy, with diagrams: [The Forager](forager.md).
 
 | Mode | What the platform does | Status |
 |---|---|---|

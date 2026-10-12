@@ -93,6 +93,7 @@ nav:
       - SCM connections: reference/scm-connections.md
       - Builds: reference/builds.md
       - Workloads: reference/workloads.md
+      - The Forager: reference/forager.md
       - JSON output: reference/json-output.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md
