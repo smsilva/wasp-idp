@@ -40,6 +40,11 @@ def is_open(revision: dict) -> bool:
 
 
 # Resolved=False reasons of a ResourceRequest, and how they end the revision.
+def public_url(resources: dict) -> str | None:
+  """The url of the first route resource of the Score (by name): where the instance is reached from outside (ADR 0036)."""
+  return next((bound["outputs"]["url"] for _, bound in sorted(resources.items()) if bound.get("type") == "route" and (bound.get("outputs") or {}).get("url")), None)
+
+
 RESOLVE_FAILURES = {"NoProviderForCapability": "ResourcesNotSupported", "ResourceModeChanged": "ResourceModeChanged"}
 
 
@@ -182,10 +187,10 @@ class Reconciler:
       return True
     if state == "failed":
       self._close(revision, "False", "RolloutFailed", message)
-      self._write_instance(revision, instance, deployment, url, summary)
+      self._write_instance(revision, instance, deployment, url, summary, public_url(resources))
       return False
     self._close(revision, "True", "Succeeded", message)
-    self._write_instance(revision, instance, deployment, url, summary)
+    self._write_instance(revision, instance, deployment, url, summary, public_url(resources))
     return False
 
   def _resources(self, revision: dict, names: list[str]):
@@ -208,7 +213,7 @@ class Reconciler:
         waiting.append(f"{name}: {ready.get('message') or 'provisioning'}")
         continue
       status = request["status"]
-      resources[name] = {"outputs": status.get("outputs") or {}, "secretRef": status.get("secretRef")}
+      resources[name] = {"type": request["spec"]["type"], "outputs": status.get("outputs") or {}, "secretRef": status.get("secretRef")}
       summary.append({"name": name, "type": request["spec"]["type"], "mode": request["spec"].get("mode"), "status": ready.get("reason")})
     if waiting:
       return "pending", "; ".join(waiting)
@@ -230,7 +235,7 @@ class Reconciler:
     self._close(revision, "True", "Succeeded", f"removed from {spec['environment']}")
     return False
 
-  def _write_instance(self, revision: dict, instance: dict | None, deployment: dict | None, url: str | None, resources: list[dict]) -> None:
+  def _write_instance(self, revision: dict, instance: dict | None, deployment: dict | None, url: str | None, resources: list[dict], public: str | None = None) -> None:
     spec = revision["spec"]
     name = instance_name(revision)
     if instance is None:
@@ -252,6 +257,8 @@ class Reconciler:
       "image": f"{spec['image']}@{spec['digest']}",
       "replicas": replicas,
       "url": url,
+      # None clears it (merge patch): a version without route is reached only inside.
+      "publicUrl": public,
       "resources": resources,
       "conditions": [self._condition(**condition)],
     })

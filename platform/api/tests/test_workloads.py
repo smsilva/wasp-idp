@@ -172,7 +172,7 @@ def test_get_shows_the_instance_the_provider_keeps(client, state, owner):
     "spec": {"environment": "demo", "instance": "greeting-api", "component": "greeting-api"},
     "status": {
       "revision": 1, "version": "1.0.0", "image": "ghcr.io/wasp-foundry/greeting-api@sha256:" + "b" * 64,
-      "replicas": {"desired": 1, "ready": 1}, "url": "http://greeting-api.apps:80",
+      "replicas": {"desired": 1, "ready": 1}, "url": "http://greeting-api.apps:80", "publicUrl": "http://greeting-api.demo.localhost:7080/",
       "resources": [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}],
       "conditions": [{"type": "Ready", "status": "True", "reason": "Available"}],
     },
@@ -180,6 +180,7 @@ def test_get_shows_the_instance_the_provider_keeps(client, state, owner):
   body = client.get("/v1/environments/demo/workloads/greeting-api", headers=owner).json()
   assert body["resources"] == [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}]
   assert (body["status"], body["version"], body["revision"], body["url"]) == ("Available", "1.0.0", 1, "http://greeting-api.apps:80")
+  assert body["publicUrl"] == "http://greeting-api.demo.localhost:7080/"
   assert body["replicas"] == {"desired": 1, "ready": 1}
   assert body["latestRevision"]["status"] == "Succeeded"
 

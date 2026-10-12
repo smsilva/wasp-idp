@@ -337,7 +337,7 @@ def list_(
   environment: Annotated[str, typer.Option(help="Environment whose workloads to list.")],
   output: OutputOption = Format.table,
 ):
-  """List the workloads of an environment: version, status, replicas, revision, URL."""
+  """List the workloads of an environment: version, status, replicas, revision, URL (the public one when it has a route)."""
   try:
     items = _client().list_workloads(environment)
   except ApiError as error:
@@ -347,7 +347,7 @@ def list_(
     return
   print_table(
     ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"],
-    [[item["name"], item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("traffic") or "—", item.get("url") or "—"] for item in items],
+    [[item["name"], item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("traffic") or "—", item.get("publicUrl") or item.get("url") or "—"] for item in items],
   )
 
 
@@ -376,7 +376,8 @@ def get_(
     ("replicas", _replicas(item)),
     ("revision", item.get("revision")),
     ("traffic", item.get("traffic")),
-    ("url", item.get("url")),
+    ("url", item.get("publicUrl") or item.get("url")),
+    *((("internal url", item.get("url")),) if item.get("publicUrl") else ()),
     ("message", item.get("message")),
   ):
     typer.echo(f"  {field.ljust(13)} {value or '—'}")

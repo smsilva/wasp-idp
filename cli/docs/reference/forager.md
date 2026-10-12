@@ -184,6 +184,15 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <figcaption>The policy picks where the database lives, and the Score stays the same in all three: the app gets <code>host</code>, <code>port</code>, <code>database</code>, <code>username</code> and the password through a Secret. An ephemeral environment can use <code>provision</code> while another, with shared data, uses <code>compose</code>, and a branch asks for <code>bind</code> with <code>--resource-class db=restored</code>. Setting the policy: <a href="../environments/#binding-policy">Environments</a>.</figcaption>
 </figure>
 
+## dns and route
+
+The same flow reaches an instance from outside its environment (ADR 0036). Every environment has an entry point: the shared Traefik of `platform-local` (`127.0.0.1:7080`) sends `*.<environment>.localhost` to the `Gateway` `platform` of its vcluster.
+
+- `dns/provision` makes nothing: its output `host` is `<instance>.<environment>.localhost`, a name the entry point already routes.
+- `route/provision` writes an `HTTPRoute` in `apps`, with `parentRef` on that `Gateway`, the `host` and `path` of its params and the Service of the instance as backend. Its outputs are `host`, `path` and `url`, which the workload provider copies to the instance as `publicUrl`.
+- The params of a resource come from the Score (`spec.scoreParams` of the `ResourceRequest`), and `${resources.dns.host}` in them is replaced with the output of the `dns` of the same instance: the `route` stays `Provisioning` until the `dns` is `Ready`. The params of the policy item win over the Score's.
+- `workload remove` deletes the `HTTPRoute`: the host answers `404` from the `Gateway` again.
+
 ## Who writes what
 
 Each object has a single writer of its `status`, so the Forager and the workload provider never race on the same revision.
@@ -195,6 +204,7 @@ Each object has a single writer of its `status`, so the Forager and the workload
 | `ResourceRequest` | **Forager** (spec and status) | workload provider |
 | catalog `Resource` | **Forager**, when the Score has no `id` (`hello-api-db`) | API, Backstage |
 | database and Secrets | the **provisioner** of the mode, inside the Forager | the app, through `secretKeyRef` |
+| `HTTPRoute` in the vcluster (`route`) | the **provisioner** `route/provision`, inside the Forager | the `Gateway` of the environment |
 | Deployment in the vcluster | workload provider | the vcluster |
 
-Walkthrough: [A database for a workload](../walkthrough/workloads/resources.md) and [A database in the shared instance](../walkthrough/workloads/compose.md).
+Walkthrough: [A database for a workload](../walkthrough/workloads/resources.md), [A database in the shared instance](../walkthrough/workloads/compose.md) and [Reach an instance from outside](../walkthrough/workloads/public.md).

@@ -75,6 +75,9 @@ spec:
                 url:
                   description: The address inside the vcluster (namespace apps).
                   type: string
+                publicUrl:
+                  description: The address from outside the environment, when the Score has a route (ADR 0036).
+                  type: string
                 resources:
                   description: The resources of the running revision, from their ResourceRequests.
                   type: array

@@ -69,7 +69,7 @@ Writes revision `<n>` (the newest plus one) of the instance, `--instance` or by 
 | `ResourcesPending` | open: waits for the Forager to resolve and provision the resources of the Score |
 | `Succeeded` | the rollout finished; the instance runs this revision |
 | `SpecNotIndexed` | the version has no Workload Spec in the index |
-| `ResourcesNotSupported` | a resource has no provisioner in the environment's policy (`dns`, `route`, or a `class` nobody offers) |
+| `ResourcesNotSupported` | a resource has no provisioner in the environment's policy (a type the platform does not offer, or a `class` nobody offers) |
 | `ResourceModeChanged` | a resource already exists in another mode; remove the workload and deploy again to change it |
 | `ResourcesFailed` | the provisioner of a resource failed |
 | `UnsupportedSpec` | the Score uses a field outside phase 1 |
@@ -98,13 +98,22 @@ A resource of the Score (`resources.db: {type: postgres}`) becomes a **`Resource
 | `compose` | something inside a shared resource: for `postgres`, a role and a database of their own in `shared-pg` | available, by the policy of the environment |
 | `bind` | a resource that already exists: for `postgres`, the values of the policy item and the password of a bindable Secret, copied to `apps` | available, by a `class` in the policy of the environment |
 
+`dns` and `route` reach an instance from outside its environment, through the entry point of the environment (`http://*.<environment>.localhost:7080`, ADR 0036). Both are `provision` in the platform default:
+
+| Type | Params | Outputs | What the platform does |
+|---|---|---|---|
+| `dns` | — | `host`: `<instance>.<environment>.localhost` | nothing: the entry point already sends every host of the environment to its `Gateway` |
+| `route` | `host` (usually `${resources.dns.host}`), `path` (prefix, default `/`), `port` (of the Service) | `host`, `path`, `url` | an `HTTPRoute` in `apps`, attached to the `Gateway` `platform` of the vcluster; `Ready` once the `Gateway` accepts it |
+
+A `route` takes only the host of its own instance, `<instance>.<environment>.localhost` or a name under it: any other host ends as `ResourcesFailed`. `${resources.<name>.<key>}` in the `params` of a resource resolves against the outputs of another resource of the same instance, so the `route` waits for the `dns`.
+
 The revision waits as `ResourcesPending` until every resource is ready, then the outputs fill the placeholders: `${resources.db.host}`, `port`, `name`, `database`, `username`. A secret output (`password`) is accepted only as the whole value of a variable and becomes a `secretKeyRef` to a Secret in the vcluster: the password never appears in the Deployment, in the revision or in the API. Inside another string, in `command` or in `args`, it is `UnsupportedSpec`.
 
 The mode and the class of a resource never change in place: a deploy that would resolve it to another mode or ask for another class ends as `ResourceModeChanged`. `remove` and a new `deploy` change it. A resource without `id` also gets a Resource in the catalog, `<component>-<resource>`, with the component's owner and System; it stays when the workload goes.
 
 ## list and get
 
-`list` prints one line per instance: `WORKLOAD`, `COMPONENT`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running), `TRAFFIC` and `URL`. `TRAFFIC` is what the [route](#route) of the component sends to the instance: `x-sandbox=pr-42` (a header), `baggage sandbox=pr-42`, `10%` (its weight), several joined by `, `; `default` on the main instance when it only takes what no rule matched; `—` without a route. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
+`list` prints one line per instance: `WORKLOAD`, `COMPONENT`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running), `TRAFFIC` and `URL`. `TRAFFIC` is what the [route](#route) of the component sends to the instance: `x-sandbox=pr-42` (a header), `baggage sandbox=pr-42`, `10%` (its weight), several joined by `, `; `default` on the main instance when it only takes what no rule matched; `—` without a route. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the public one when the Score has a `route` (`http://<instance>.<environment>.localhost:7080/`), else the address inside the vcluster (`http://<instance>.apps:<port>`), which `get` also prints as `internal url` next to a public one. Without a `route`, reach it from your machine with `kubectl port-forward` and the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `url` is the address inside the vcluster, `publicUrl` the public one (or `null`), `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
 
 ## route
 
