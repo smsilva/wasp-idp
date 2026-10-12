@@ -27,6 +27,7 @@ platform catalog component create <name> --system <system> \
   [--visibility public|private] [--prd <file>|-] [--wait] [--timeout <seconds>]
 platform catalog component list [--system <system>] [--owner <team>]
 platform catalog component get <name>
+platform catalog component clone <name> [--directory <dir>] [--https]
 ```
 
 `create` creates the repo on the org of the SCM connection from a template ([Templates](templates.md)), pushes the rendered content as a single first commit and registers the component (`lifecycle: experimental`). Any authenticated user creates; the creation steps are visible to whoever requested it and to `platform-admins`.
@@ -40,6 +41,8 @@ platform catalog component get <name>
 | `--prd` | the template's `docs/prd.md` skeleton; the journal keeps only the hash of the text (at most 64 KiB) |
 
 `list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component and a `running in` line: the environments where a Workload Instance of it runs, with version and status ([Workloads](workloads.md#workload-instances)), only those you can use (JSON: `runningIn`). While the component is not in the index yet, `get` shows the creation steps.
+
+`clone` runs `git clone` of the component's repo with your own Git credentials, printing the command first and exiting with the code of `git`. The URL is SSH (`git@github.com:<org>/<repo>.git`) unless `--https` is given or `~/.config/platform/config.yaml` has `git_protocol: https`; `--https` wins over the config. A component not in the index is refused before `git` runs ([Clone the component](../walkthrough/components/clone.md)).
 
 | Step | Fails with |
 |---|---|

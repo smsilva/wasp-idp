@@ -5,7 +5,8 @@ A branch becomes a version without waiting for the merge. The platform does not 
 `hello-api` came from the `python-service` template when [creating the component](../components/create.md), which brings the workflow. Push a branch with a `feat:` commit, then build it:
 
 ```bash
-git clone git@github.com:wasp-foundry/hello-api.git /tmp/hello-api
+platform catalog component clone hello-api \
+  --directory /tmp/hello-api
 
 git -C /tmp/hello-api switch --create feat/greetings
 
