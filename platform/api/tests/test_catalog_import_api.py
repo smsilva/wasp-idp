@@ -176,14 +176,14 @@ def load_catalog():
 def test_the_repo_catalog_imports_cleanly(client, admin):
   plan = review(client, admin, load_catalog())
   summary = plan["summary"]
-  assert (summary["create"], summary["error"], summary["forbidden"]) == (17, 0, 0)
+  assert (summary["create"], summary["error"], summary["forbidden"]) == (18, 0, 0)
   assert summary["unchanged"] == 3  # the Groups of org.yaml: the fixture's teams already exist
   assert summary["skip"] == 2  # 2 mkdocs.yml
   created = {(item["kind"], item["name"]) for item in plan["items"] if item["action"] == "create"}
   assert {("Domain", "platform"), ("System", "platform"), ("Domain", "messaging"), ("Resource", "greeting-avatars")} <= created
   applied = client.post(ROUTE, json={"documents": load_catalog(), "dryRun": False, "planHash": plan["planHash"]}, headers=admin)
   assert applied.status_code == 200, applied.text
-  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 20  # 17 entities and 3 teams
+  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 21  # 18 entities and 3 teams
 
 
 class KubeError(Exception):
@@ -209,11 +209,11 @@ def test_the_repo_catalog_creates_its_teams(state, journal_path, tokens, admin):
   client = TestClient(create_app(state, Journal(journal_path), tokens.verifier(), teams=teams))
   plan = review(client, admin, load_catalog())
   assert [(item["kind"], item["action"]) for item in plan["items"][:3]] == [("Group", "create")] * 3
-  assert plan["summary"]["create"] == 20
+  assert plan["summary"]["create"] == 21
   applied = client.post(ROUTE, json={"documents": load_catalog(), "dryRun": False, "planHash": plan["planHash"]}, headers=admin)
   assert applied.status_code == 200, applied.text
   assert teams.names() == ["team-alpha", "team-beta", "team-platform"]
-  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 20
+  assert review(client, admin, load_catalog())["summary"]["unchanged"] == 21
 
 
 def test_import_needs_teams(state, journal_path, tokens, admin):
