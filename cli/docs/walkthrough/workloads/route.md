@@ -24,7 +24,7 @@ hello-api-pr-42@demo  hello-api  0.4.0-greetings.4444444  Available  1/1       1
 
 A call to `http://hello-api` with `x-sandbox: pr-42` reaches the pull request; any other call reaches the stable version. The route takes effect in about a second. Only calls from pods in the namespace `apps` go through the mesh, and the header only travels further down a chain of calls if each service passes it on.
 
-`--baggage sandbox=pr-42` matches the entry `sandbox=pr-42` of the `baggage` header instead, which OpenTelemetry passes on by itself. `--weight` is the canary: a percentage of the calls that no header or baggage rule took.
+`--baggage sandbox=pr-42` matches the entry `sandbox=pr-42` of the `baggage` header instead, which OpenTelemetry passes on by itself: it is the one that holds down a chain of calls ([Route a chain of calls](baggage.md)). `--weight` is the canary: a percentage of the calls that no header or baggage rule took.
 
 ```bash
 platform workload route \
