@@ -136,19 +136,21 @@ workloads:
   reviews:
     branch: feat/v3
     replicas: 2
+    resourceClasses:
+      db: restored
 ```
 
-The environment comes from the file. Each key under `workloads` is an instance of the component named like the key, or of the one `component:` names (an extra instance, see [Instances](#instances)); an instance that runs another component is refused (`409`). Each entry takes `version` or `branch` and optionally `replicas` (1 by default). An empty plan is written `workloads: {}`.
+The environment comes from the file. Each key under `workloads` is an instance of the component named like the key, or of the one `component:` names (an extra instance, see [Instances](#instances)); an instance that runs another component is refused (`409`). Each entry takes `version` or `branch`, optionally `replicas` (1 by default) and `resourceClasses` (resource to class, as `deploy --resource-class`: a resource the version does not have is refused with `422`). An empty plan is written `workloads: {}`.
 
 `POST /v1/environments/{environment}/workloads:apply` (`{"workloads": ..., "dryRun": true, "prune": false}`) diffs the plan against the newest revision of each instance:
 
 | Action | When |
 |---|---|
 | `add` | the instance does not run (never deployed, removed, or its first deploy failed) |
-| `change` | the version or the replicas differ, the newest revision has a `--resource-class` (the plan has none yet), or the newest revision failed: applying tries it again |
-| `unchanged` | same version and replicas, and the newest revision succeeded or is still open |
+| `change` | the version, the replicas or the resource classes differ, or the newest revision failed: applying tries it again |
+| `unchanged` | same version, replicas and resource classes, and the newest revision succeeded or is still open |
 | `remove` | with `--prune`, an instance that runs and the plan leaves out |
 
 Each `add` and `change` is a `deploy` revision, each `remove` a remove revision, as `deploy` and `remove` write them. Every instance is authorized and resolved (version in the index, branch to its newest version, `SpecNotIndexed`) before the first write: one refusal (`403`, `404`, `409`, `422`) applies nothing. The writes are not transactional: a revision number taken by a concurrent request stops the apply with `409` and the number of revisions applied before it; applying again converges.
 
-The output lists each workload with its action, `FROM`/`TO` as `<version> ×<replicas>` and the revision written, then `<environment>: N to add, N to change, N to remove`. `--dry-run` writes nothing. `--wait` follows every revision written, prints one line per revision as `deploy` and `remove` do, and exits `1` when one does not succeed; `--timeout` applies to each revision.
+The output lists each workload with its action, `FROM`/`TO` as `<version> ×<replicas>` (plus `<resource>=<class>` for each class) and the revision written, then `<environment>: N to add, N to change, N to remove`. `--dry-run` writes nothing. `--wait` follows every revision written, prints one line per revision as `deploy` and `remove` do, and exits `1` when one does not succeed; `--timeout` applies to each revision.

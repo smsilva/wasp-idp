@@ -78,8 +78,10 @@ class PlanEntry(BaseModel):
   version: str | None = None
   branch: str | None = None
   replicas: int | None = Field(default=None, ge=0, le=20)
+  resourceClasses: dict[str, str] | None = Field(default=None, max_length=MAX_RESOURCE_CLASSES)
 
   check_version = field_validator("version")(RevisionRequest.check_version.__func__)
+  check_classes = field_validator("resourceClasses")(RevisionRequest.check_classes.__func__)
 
 
 class ApplyRequest(BaseModel):
@@ -275,9 +277,14 @@ def router(state, journal: Journal) -> APIRouter:
     journal.mark_applied(entry)
     return revision_view(created)
 
+  def check_resources(verb: str, instance: str, version: dict, classes: dict[str, str] | None) -> None:
+    resources = version["spec"]["appSpec"].get("resources") or {}
+    for name in sorted(classes or {}):
+      if name not in resources:
+        raise HTTPException(422, f"{verb} of '{instance}': {version['spec']['version']} has no resource '{name}' to give a class")
+
   def wanted(revision: dict) -> dict:
     view = {"version": revision["version"], "replicas": DEFAULT_REPLICAS if revision["replicas"] is None else revision["replicas"]}
-    # The plan has no classes yet: an instance on one differs from it.
     if revision.get("resourceClasses"):
       view["resourceClasses"] = revision["resourceClasses"]
     return view
@@ -299,7 +306,10 @@ def router(state, journal: Journal) -> APIRouter:
       # The plan names the component of every instance: without component, the key.
       _, component = authorize(environment, instance, principal, "deploy", entry.component or instance)
       version = resolve(component, RevisionRequest(version=entry.version, branch=entry.branch))
+      check_resources("apply", instance, version, entry.resourceClasses)
       to = {"version": version["spec"]["version"], "replicas": entry.replicas if entry.replicas is not None else DEFAULT_REPLICAS}
+      if entry.resourceClasses:
+        to["resourceClasses"] = dict(sorted(entry.resourceClasses.items()))
       current = newest.get(instance)
       if current is None:
         action = "add"
@@ -311,8 +321,9 @@ def router(state, journal: Journal) -> APIRouter:
       spec = {"action": "deploy", **{field: version["spec"][field] for field in ("version", "image", "digest")}}
       if version["spec"].get("commit"):
         spec["commit"] = version["spec"]["commit"]
-      if entry.replicas is not None:
-        spec["overrides"] = {"replicas": entry.replicas}
+      overrides = overrides_of(entry.replicas, entry.resourceClasses)
+      if overrides:
+        spec["overrides"] = overrides
       items.append({"instance": instance, "component": component, "action": action, "from": wanted(current) if current else None, "to": to, "spec": spec})
     if request.prune:
       for instance, current in sorted(newest.items()):
@@ -346,10 +357,7 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(422, f"deploy of '{instance}': give either version or branch")
     env, component = authorize(environment, instance, principal, "deploy", request.component)
     version = resolve(component, request)
-    resources = version["spec"]["appSpec"].get("resources") or {}
-    for name in sorted(request.resourceClasses or {}):
-      if name not in resources:
-        raise HTTPException(422, f"deploy of '{instance}': {version['spec']['version']} has no resource '{name}' to give a class")
+    check_resources("deploy", instance, version, request.resourceClasses)
     spec = {"action": "deploy", **{field: version["spec"][field] for field in ("version", "image", "digest")}}
     if version["spec"].get("commit"):
       spec["commit"] = version["spec"]["commit"]
