@@ -122,7 +122,7 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 </figure>
 
 1. `platform workload deploy` reaches the API, which writes `WorkloadRevision` 10, still open.
-2. The Forager sees the open revision and reads the Score in `Version.spec.appSpec`. For each resource (`db: postgres`) it walks the `BindingPolicy`s: the environment's first (`env-demo`), then the platform default (`platform-default`). The first item that matches `type`, `class` and `id` wins.
+2. The Forager sees the open revision and reads the Score in `Version.spec.appSpec`. For each resource (`db: postgres`) it walks the `BindingPolicy`s: the environment's first (`env-demo`), then its profile's (`profile-ephemeral` for an `ephemeral` environment, #329), then the platform default (`platform-default`). The first item that matches `type`, `class` and `id` wins.
 3. It creates or reuses the `ResourceRequest` `demo.hello-api.db`, with the mode fixed in `spec`. When the policy now resolves another mode, the resource is left alone and the revision ends as `ResourceModeChanged`.
 4. The provisioner of the mode makes the database and writes `outputs` (`host`, `port`, `database`, `username`), `secretRef` and the condition `Ready` to the `status`.
 5. Meanwhile the workload provider keeps the revision in `ResourcesPending`. Once the `ResourceRequest` is `Ready`, it replaces `${resources.db.*}` with the `outputs`, turns the password into a `secretKeyRef` and applies the Deployment.
@@ -200,7 +200,7 @@ Each object has a single writer of its `status`, so the Forager and the workload
 | Object | Written by | Read by |
 |---|---|---|
 | `WorkloadRevision` | API (spec), workload provider (status) | Forager |
-| `BindingPolicy` | API (`env-<name>`, `platform-admins` only), `platform init` (`platform-default`) | Forager |
+| `BindingPolicy` | API (`env-<name>` and `profile-<profile>`, `platform-admins` only), `platform init` (`platform-default`, and `profile-ephemeral` when missing) | Forager |
 | `ResourceRequest` | **Forager** (spec and status) | workload provider |
 | catalog `Resource` | **Forager**, when the Score has no `id` (`hello-api-db`) | API, Backstage |
 | database and Secrets | the **provisioner** of the mode, inside the Forager | the app, through `secretKeyRef` |

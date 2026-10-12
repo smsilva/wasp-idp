@@ -1,10 +1,12 @@
 from forager_provider.policy import resolve
 
 
-def policy(name, items, environment=None):
+def policy(name, items, environment=None, profile=None):
   spec = {"provisioners": items}
   if environment:
     spec["environment"] = environment
+  if profile:
+    spec["profile"] = profile
   return {"metadata": {"name": name}, "spec": spec}
 
 
@@ -44,3 +46,20 @@ def test_order_by_name_then_position():
 
 def test_unknown_type():
   assert resolve([DEFAULT], "demo", "dns") is None
+
+
+EPHEMERAL = policy("profile-ephemeral", [{"type": "postgres", "mode": "compose", "params": {"instance": "shared-pg"}}], profile="ephemeral")
+
+
+def test_profile_layer_between_the_environment_and_the_default():
+  assert resolve([DEFAULT, EPHEMERAL], "demo", "postgres", profile="ephemeral")["mode"] == "compose"
+  # Another profile's policy is not a layer of this environment, and neither is it without a profile.
+  assert resolve([DEFAULT, EPHEMERAL], "demo", "postgres", profile="shared")["mode"] == "provision"
+  assert resolve([DEFAULT, EPHEMERAL], "demo", "postgres")["mode"] == "provision"
+  env = policy("env-demo", [{"type": "postgres", "mode": "provision"}], environment="demo")
+  assert resolve([EPHEMERAL, env, DEFAULT], "demo", "postgres", profile="ephemeral")["mode"] == "provision"
+
+
+def test_a_profile_policy_is_not_the_platform_default():
+  # Without spec.environment but with spec.profile: never part of the platform layer.
+  assert resolve([EPHEMERAL], "demo", "postgres") is None

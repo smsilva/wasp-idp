@@ -62,6 +62,12 @@ class PlatformClient:
   def set_binding_policy(self, name: str, provisioners: list[dict]) -> dict:
     return self._request("PUT", f"/v1/environments/{name}/binding-policy", json={"provisioners": provisioners})
 
+  def get_profile_policy(self, profile: str) -> dict:
+    return self._request("GET", f"/v1/profiles/{profile}/binding-policy")
+
+  def set_profile_policy(self, profile: str, provisioners: list[dict]) -> dict:
+    return self._request("PUT", f"/v1/profiles/{profile}/binding-policy", json={"provisioners": provisioners})
+
   def get_environment(self, name: str) -> dict:
     return self._request("GET", f"/v1/environments/{name}")
 

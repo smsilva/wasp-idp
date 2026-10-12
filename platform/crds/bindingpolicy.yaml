@@ -1,6 +1,7 @@
 # Binding policy (ADR 0022, 0031): which mode makes a resource of the Score, as an ordered list of
-# provisioners. Layers: the policies of the environment (spec.environment) before the platform
-# default (spec.environment empty); by name within a layer, by position within a policy. The first
+# provisioners. Layers: the policies of the environment (spec.environment), then those of its profile
+# (spec.profile, #329), then the platform default (neither); by name within a layer, by position
+# within a policy. The first
 # item that matches type, class and id wins. The branch layer is not a policy: it is the class a
 # revision asks for. Read by the Forager.
 apiVersion: apiextensions.k8s.io/v1
@@ -23,6 +24,9 @@ spec:
         - name: Environment
           type: string
           jsonPath: .spec.environment
+        - name: Profile
+          type: string
+          jsonPath: .spec.profile
       schema:
         openAPIV3Schema:
           type: object
@@ -30,9 +34,15 @@ spec:
             spec:
               type: object
               required: [provisioners]
+              x-kubernetes-validations:
+                - rule: "!(has(self.environment) && has(self.profile))"
+                  message: a policy is of an environment or of a profile, not both
               properties:
                 environment:
-                  description: Empty, the platform default.
+                  description: Empty, with profile empty too, the platform default.
+                  type: string
+                profile:
+                  description: The profile whose environments this policy applies to (#329).
                   type: string
                 provisioners:
                   type: array

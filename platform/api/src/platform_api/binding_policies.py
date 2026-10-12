@@ -1,9 +1,11 @@
 """The binding policy of an environment (ADR 0022, 0031, #305): which mode makes each resource there.
 
 The environment layer is one BindingPolicy per environment, env-<name>, owned by the Environment (it
-goes with it). The Forager reads it before the platform default (spec.environment empty, installed by
-`platform init`). Only platform-admins write it, since it decides where data lives; whoever uses the
-environment reads it, with the default, to see how a resource will resolve. An empty list removes it.
+goes with it). The profile layer is one per profile, profile-<profile> (spec.profile, #329). The
+Forager reads them in that order, then the platform default (neither spec.environment nor
+spec.profile, installed by `platform init`). Only platform-admins write them, since they decide where
+data lives; whoever uses the environment reads all three, to see how a resource will resolve. An
+empty list removes a policy.
 """
 import re
 from typing import Literal
@@ -12,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .auth import Principal, current_principal
-from .environments import ADMIN_GROUP, can_use
+from .environments import ADMIN_GROUP, PROFILES, can_use
 from .journal import Journal
 from .state import ENVIRONMENTS, GROUP, VERSION, AlreadyExists, Conflict, NotFound
 
@@ -29,6 +31,19 @@ BIND_PARAMS = (("secretRef", LABEL), ("host", HOST), ("database", SQL_NAME), ("u
 
 def policy_name(environment: str) -> str:
   return f"env-{environment}"
+
+
+def profile_policy_name(profile: str) -> str:
+  return f"profile-{profile}"
+
+
+def scope(policy: dict) -> tuple[str | None, str | None]:
+  spec = policy.get("spec") or {}
+  return (spec.get("environment") or None, spec.get("profile") or None)
+
+
+def items(policies: list[dict]) -> list[dict]:
+  return [item for policy in policies for item in (policy.get("spec") or {}).get("provisioners") or []]
 
 
 class Provisioner(BaseModel):
@@ -70,13 +85,18 @@ class PolicyRequest(BaseModel):
   provisioners: list[Provisioner] = Field(max_length=32)
 
 
-def view(environment: str, own: dict | None, defaults: list[dict]) -> dict:
+def view(environment: str, own: dict | None, profile: str | None, profile_policies: list[dict], defaults: list[dict]) -> dict:
   return {
     "kind": "BindingPolicy",
     "environment": environment,
-    "provisioners": ((own or {}).get("spec") or {}).get("provisioners") or [],
-    "default": [item for policy in defaults for item in (policy.get("spec") or {}).get("provisioners") or []],
+    "provisioners": items([own] if own else []),
+    "profile": {"name": profile, "provisioners": items(profile_policies)},
+    "default": items(defaults),
   }
+
+
+def profile_view(profile: str, policies: list[dict], defaults: list[dict]) -> dict:
+  return {"kind": "BindingPolicy", "profile": profile, "provisioners": items(policies), "default": items(defaults)}
 
 
 def router(state, journal: Journal) -> APIRouter:
@@ -94,15 +114,28 @@ def router(state, journal: Journal) -> APIRouter:
     except NotFound:
       return None
 
-  def defaults() -> list[dict]:
-    policies = [obj for obj in state.list(POLICIES) if not (obj.get("spec") or {}).get("environment")]
+  def of(environment: str | None, profile: str | None) -> list[dict]:
+    policies = [obj for obj in state.list(POLICIES) if scope(obj) == (environment, profile)]
     return sorted(policies, key=lambda obj: obj["metadata"]["name"])
+
+  def defaults() -> list[dict]:
+    return of(None, None)
+
+  def environment_view(name: str, own: dict | None, environment: dict) -> dict:
+    profile = (environment.get("spec") or {}).get("profile")
+    return view(name, own, profile, of(None, profile) if profile else [], defaults())
+
+  def known(profile: str) -> str:
+    if profile not in PROFILES:
+      raise HTTPException(404, f"profile '{profile}' not found (profiles: {', '.join(PROFILES)})")
+    return profile
 
   @routes.get("/environments/{name}/binding-policy")
   def get(name: str, principal: Principal = Depends(current_principal)):
-    if not can_use(environment_of(name), principal):
+    environment = environment_of(name)
+    if not can_use(environment, principal):
       raise HTTPException(403, f"environment '{name}': only its owner, the teams it is shared with and {ADMIN_GROUP} read its policy")
-    return view(name, current(name), defaults())
+    return environment_view(name, current(name), environment)
 
   @routes.put("/environments/{name}/binding-policy")
   def put(name: str, request: PolicyRequest, principal: Principal = Depends(current_principal)):
@@ -133,6 +166,41 @@ def router(state, journal: Journal) -> APIRouter:
     except (AlreadyExists, Conflict, NotFound):
       raise HTTPException(409, f"the policy of '{name}' changed while saving: try again")
     journal.mark_applied(entry)
-    return view(name, saved, defaults())
+    return environment_view(name, saved, environment)
+
+  @routes.get("/profiles/{profile}/binding-policy")
+  def get_profile(profile: str, principal: Principal = Depends(current_principal)):
+    return profile_view(known(profile), of(None, profile), defaults())
+
+  @routes.put("/profiles/{profile}/binding-policy")
+  def put_profile(profile: str, request: PolicyRequest, principal: Principal = Depends(current_principal)):
+    if ADMIN_GROUP not in principal.groups:
+      raise HTTPException(403, f"the binding policy of a profile is set by {ADMIN_GROUP}")
+    known(profile)
+    items_ = [provisioner.item() for provisioner in request.provisioners]
+    name = profile_policy_name(profile)
+    try:
+      existing = state.get(POLICIES, name)
+    except NotFound:
+      existing = None
+    entry = journal.record("set-policy", "BindingPolicy", name, {"profile": profile, "provisioners": items_}, principal.actor)
+    spec = {"profile": profile, "provisioners": items_}
+    try:
+      if not items_:
+        if existing is not None:
+          state.delete(POLICIES, name, existing["metadata"].get("uid"))
+      elif existing is None:
+        state.create(POLICIES, {
+          "apiVersion": f"{GROUP}/{VERSION}",
+          "kind": "BindingPolicy",
+          "metadata": {"name": name, "labels": {f"{GROUP}/profile": profile}},
+          "spec": spec,
+        })
+      else:
+        state.replace(POLICIES, {**existing, "spec": spec})
+    except (AlreadyExists, Conflict, NotFound):
+      raise HTTPException(409, f"the policy of profile '{profile}' changed while saving: try again")
+    journal.mark_applied(entry)
+    return profile_view(profile, of(None, profile), defaults())
 
   return routes
