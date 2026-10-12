@@ -7,11 +7,12 @@ Usage: ${0##*/} [--skip-init]
 
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
 init, login as the test user, the refusals a non-admin gets, an environment
-created and deleted, then login as the test admin, the catalog import of
-idp/catalog/, a team with two test users, checked in the token, an
-environment shared with that team (the teammate gets a personal kubeconfig whose
-token the Platform API issues (ADR 0028), cannot delete the environment nor get
-its admin kubeconfig, and loses access after unshare, in kubectl too), the
+created (its gateway answering at *.<name>.localhost:7080) and deleted, then
+login as the test admin, the catalog import of idp/catalog/, a team with two
+test users, checked in the token, an environment shared with that team (the
+teammate gets a personal kubeconfig whose token the Platform API issues (ADR
+0028), cannot delete the environment nor get its admin kubeconfig, and loses
+access after unshare, in kubectl too), the
 templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
@@ -154,6 +155,11 @@ cleanup() {
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" --ignore-not-found > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component})" > /dev/null 2>&1 || true
+  # The database restored by hand for bind (#306): a run stopped mid-step leaves it, and the next one
+  # fails on "role restored already exists".
+  kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
+    psql --username postgres --command "drop database if exists restored with (force)" --command "drop role if exists restored" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-resources delete secret restored-db --ignore-not-found > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}" "${render_directory}" "${clone_directory}" "${workload_directory}"
 }
 trap cleanup EXIT
@@ -201,6 +207,18 @@ mesh="$(kubectl --context k3d-platform-local --namespace platform-system get env
 echo "mesh: ${mesh}"
 if [[ ! "${mesh}" =~ ^1\.30\.[0-9]+\ v1\.5\.[0-9]+$ ]]; then
   echo "expected istio 1.30 and gateway api 1.5 in status.mesh of ${environment}, got '${mesh}'" >&2
+  exit 1
+fi
+
+step "environment get: the entry point of its workloads (ADR 0036, #357)"
+output="$(platform environment get "${environment}")"
+expect_output "workloads at http://*.${environment}.localhost:7080" "${output}"
+# No route yet: the shared Traefik reaches the environment's Gateway, which answers 404.
+headers="$(curl --silent --output /dev/null --dump-header - "http://smoke.${environment}.localhost:7080/" | tr --delete '\r' || true)"
+server="$(grep --ignore-case '^server:' <<< "${headers}" || true)"
+echo "${server}"
+if [[ "${server,,}" != "server: istio-envoy" ]]; then
+  echo "expected the Gateway of ${environment} (server: istio-envoy) at http://smoke.${environment}.localhost:7080/, got: ${headers:-no answer}" >&2
   exit 1
 fi
 

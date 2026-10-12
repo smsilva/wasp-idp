@@ -67,6 +67,16 @@ spec:
                       type: string
                     gatewayAPI:
                       type: string
+                ingress:
+                  description: Where the workloads of the environment are reached from outside (ADR 0036); absent while its Gateway is being created.
+                  type: object
+                  properties:
+                    domain:
+                      description: Workloads get hosts under *.<domain>.
+                      type: string
+                    port:
+                      description: Host port of the shared entry point.
+                      type: integer
                 conditions:
                   type: array
                   items:

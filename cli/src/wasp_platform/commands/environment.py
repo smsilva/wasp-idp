@@ -194,6 +194,8 @@ def get(
     typer.echo(f"  {environment['message']}")
   if environment["status"] == "ready" and environment.get("kubeconfig"):
     typer.echo(f"  kubectl --kubeconfig {environment['kubeconfig']} get nodes")
+  if environment.get("ingress"):
+    typer.echo(f"  workloads at {environment['ingress']}")
 
 
 @app.command("credential")

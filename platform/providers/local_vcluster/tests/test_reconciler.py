@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 import yaml
 
+from local_vcluster_provider.entrypoint import HOST_SERVICE, Entrypoint, gateway, ingress, programmed
 from local_vcluster_provider.helm import values
 from local_vcluster_provider.mesh import in_cluster, wanted
 from local_vcluster_provider.reconciler import FINALIZER, PORTS, RELEASE, Reconciler
@@ -65,6 +66,20 @@ class FakeMesh:
     return self.is_ready
 
 
+class FakeEntrypoint:
+  def __init__(self, ready=True):
+    self.installs, self.is_ready = [], ready
+
+  def wanted(self, name):
+    return Entrypoint().wanted(name)
+
+  def install(self, name, kubeconfig, namespace):
+    self.installs.append((name, namespace))
+
+  def ready(self, name, kubeconfig):
+    return self.is_ready
+
+
 def environment(name="greetings-test", expires=None, finalizers=None, deleting=False, status=None):
   obj = {"metadata": {"name": name, "finalizers": finalizers or []}, "spec": {"profile": "ephemeral"}}
   if expires:
@@ -76,12 +91,16 @@ def environment(name="greetings-test", expires=None, finalizers=None, deleting=F
   return obj
 
 
-def build(helm=None, secrets=None, mesh=None):
+def build(helm=None, secrets=None, mesh=None, entrypoint=None):
   store = FakeStore()
   helm = helm or FakeHelm()
   secrets = secrets or FakeSecrets()
   mesh = mesh or FakeMesh()
-  return store, helm, secrets, Reconciler(store, helm, secrets, mesh, now=lambda: NOW)
+  entrypoint = entrypoint or FakeEntrypoint()
+  return store, helm, secrets, Reconciler(store, helm, secrets, mesh, entrypoint, now=lambda: NOW)
+
+
+INGRESS = {"domain": "greetings-test.localhost", "port": 7080}
 
 
 def test_new_environment_installs_vcluster_on_first_free_port():
@@ -110,7 +129,7 @@ def test_ready_environment_is_left_alone():
   helm = FakeHelm()
   helm.releases[(RELEASE, "env-greetings-test")] = 7100
   store, _, _, reconciler = build(helm=helm, secrets=secrets)
-  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "conditions": [{"type": "Ready", "status": "True"}]}
+  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "ingress": INGRESS, "conditions": [{"type": "Ready", "status": "True"}]}
   reconciler.reconcile(environment(finalizers=[FINALIZER], status=status))
   assert "greetings-test" not in store.statuses
 
@@ -213,3 +232,67 @@ def test_values_expose_the_api_on_the_host_port(port):
 def test_values_replicate_the_shared_instances_into_namespace_resources():
   # The pods of an environment reach shared-pg.resources, the host Service compose writes into (#305).
   assert values(7100)["networking"]["replicateServices"] == {"fromHost": [{"from": "platform-resources/shared-pg", "to": "resources/shared-pg"}]}
+
+
+def test_gateway_created_after_istiod_and_ready_only_once_programmed():
+  entrypoint = FakeEntrypoint(ready=False)
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"}), entrypoint=entrypoint)
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100, "mesh": wanted()}))
+  assert entrypoint.installs == [("greetings-test", "env-greetings-test")]
+  statuses = store.statuses["greetings-test"]
+  assert {"ingress": INGRESS} in statuses
+  last = statuses[-1]["conditions"][0]
+  assert (last["status"], last["message"]) == ("False", "waiting for the gateway in the vcluster")
+
+
+def test_gateway_waits_for_istiod():
+  entrypoint = FakeEntrypoint()
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"}), mesh=FakeMesh(ready=False), entrypoint=entrypoint)
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100, "mesh": wanted()}))
+  assert entrypoint.installs == []
+
+
+def test_ready_environment_tells_where_its_workloads_are():
+  entrypoint = FakeEntrypoint()
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"}), entrypoint=entrypoint)
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100, "mesh": wanted(), "ingress": INGRESS}))
+  assert entrypoint.installs == []
+  last = store.statuses["greetings-test"][-1]
+  assert last["ingress"] == INGRESS
+  assert "workloads on http://*.greetings-test.localhost:7080" in last["conditions"][0]["message"]
+
+
+def test_environment_ready_before_the_gateway_gets_it():
+  # Created before ADR 0036: Ready, with the mesh, but no status.ingress.
+  kubeconfig = "apiVersion: v1\n"
+  entrypoint = FakeEntrypoint()
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": kubeconfig}), entrypoint=entrypoint)
+  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "conditions": [{"type": "Ready", "status": "True"}]}
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status=status))
+  assert entrypoint.installs == [("greetings-test", "env-greetings-test")]
+  assert store.statuses["greetings-test"][-1]["conditions"][0]["reason"] == "ClusterReady"
+
+
+def test_gateway_takes_the_hosts_of_its_environment_only():
+  namespace, obj = gateway("greetings-test")
+  assert namespace["metadata"]["name"] == obj["metadata"]["namespace"] == "istio-ingress"
+  assert obj["metadata"]["annotations"]["networking.istio.io/service-type"] == "ClusterIP"
+  listener = obj["spec"]["listeners"][0]
+  assert listener["hostname"] == "*.greetings-test.localhost"
+  assert listener["allowedRoutes"] == {"namespaces": {"from": "All"}}
+
+
+def test_ingress_sends_the_hosts_of_the_environment_to_its_gateway():
+  obj = ingress("greetings-test", "env-greetings-test")
+  assert obj["metadata"]["namespace"] == "env-greetings-test"
+  assert obj["spec"]["ingressClassName"] == "platform"
+  rule = obj["spec"]["rules"][0]
+  assert rule["host"] == "*.greetings-test.localhost"
+  assert rule["http"]["paths"][0]["backend"]["service"] == {"name": HOST_SERVICE, "port": {"number": 80}}
+  assert HOST_SERVICE == "platform-istio-x-istio-ingress-x-vcluster"
+
+
+def test_gateway_is_ready_only_when_programmed():
+  assert not programmed(None)
+  assert not programmed({"status": {"conditions": [{"type": "Accepted", "status": "True"}, {"type": "Programmed", "status": "False"}]}})
+  assert programmed({"status": {"conditions": [{"type": "Programmed", "status": "True"}]}})

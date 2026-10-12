@@ -176,6 +176,15 @@ def test_kubeconfig_data_only_on_single_get_for_owner(client, state):
   assert "client-key-data" not in single["kubeconfigData"]
 
 
+def test_environment_tells_where_its_workloads_are(client, state):
+  client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
+  assert client.get("/v1/environments/vc").json()["ingress"] is None
+  ready_with_kubeconfig(state, "vc")
+  state.objects["vc"]["status"]["ingress"] = {"domain": "vc.localhost", "port": 7080}
+  assert client.get("/v1/environments/vc").json()["ingress"] == "http://*.vc.localhost:7080"
+  assert client.get("/v1/environments").json()["items"][0]["ingress"] == "http://*.vc.localhost:7080"
+
+
 def test_kubeconfig_hidden_from_other_users(client, state, tokens):
   client.post("/v1/environments", json={"name": "vc", "profile": "ephemeral"})
   ready_with_kubeconfig(state, "vc")

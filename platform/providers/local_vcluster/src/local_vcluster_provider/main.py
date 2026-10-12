@@ -4,6 +4,7 @@ import signal
 import sys
 import time
 
+from .entrypoint import DOMAIN, PORT, Entrypoint
 from .helm import Helm
 from .mesh import Mesh
 from .reconciler import Reconciler
@@ -39,6 +40,8 @@ def main(argv: list[str] | None = None) -> None:
   parser.add_argument("--namespace", default="platform-system")
   parser.add_argument("--context", default=None, help="kubeconfig context, only when running outside the cluster")
   parser.add_argument("--resync-seconds", type=int, default=10)
+  parser.add_argument("--domain", default=DOMAIN, help="workloads of environment <name> are reached at *.<name>.<domain>")
+  parser.add_argument("--ingress-port", type=int, default=PORT, help="host port of the shared Traefik that platform init maps")
   args = parser.parse_args(argv)
 
   logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -46,7 +49,7 @@ def main(argv: list[str] | None = None) -> None:
   signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = EnvironmentStore(args.namespace, args.context)
-  reconciler = Reconciler(store, Helm(), KubeconfigSecrets(), Mesh())
+  reconciler = Reconciler(store, Helm(), KubeconfigSecrets(), Mesh(), Entrypoint(args.domain, args.ingress_port))
   log.info("watching environments in %s", args.namespace)
   run(store, reconciler, args.resync_seconds)
 
