@@ -100,7 +100,7 @@ def test_without_origin_the_template_is_an_error_and_the_rest_goes_on(client):
   template = next(item for item in result["items"] if item["kind"] == "Template")
   assert (template["action"], template["field"]) == ("error", "source.repo")
   assert template["reason"] == "required to import templates: pass --repo and --ref"
-  assert result["summary"]["create"] == 17
+  assert result["summary"]["create"] == 18
 
 
 def test_catalog_import_takes_templates_too(client, state):
