@@ -180,5 +180,16 @@ def test_agenda_range_skips_details(tmp_path):
 def test_divider_steps_are_marked(tmp_path):
   # A link (box, breadcrumb) to `full` skips its topic divider and lands on the diagram.
   page = deck(tmp_path)
-  assert "data-step='5' data-slide='full' data-divider>" in stage(page, 5)
+  assert "data-slide='full' data-last-step='6' data-divider>" in stage(page, 5)
   assert "data-divider" not in stage(page, 6)
+
+
+def test_breadcrumb_sits_above_the_diagram():
+  # `.inner` covers the whole stage (inset: 0): without a z-index it takes the clicks of the breadcrumb.
+  assert ".stage .section.crumbs { z-index: 2; }" in ro.CSS
+
+
+def test_first_step_knows_the_last(tmp_path):
+  # A breadcrumb link to a main-track slide opens its last step: the diagram complete, as `data-up` does.
+  page = deck(tmp_path)
+  assert "data-slide='map' data-last-step='4'" in stage(page, 1)

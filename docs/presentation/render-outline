@@ -104,6 +104,7 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram .part-focus > rect:first-of-type { stroke: #4a9ef4; stroke-width: 4; }
 .stage .diagram .part-link { cursor: pointer; }
 .stage .diagram .part-link:hover > rect:first-of-type { stroke: #7cc4ff; }
+.stage .section.crumbs { z-index: 2; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
 .stage .overlay { position: absolute; right: 5cqw; top: 12cqw; width: 30cqw; box-sizing: border-box; background: rgba(17, 24, 39, 0.96); border: 1px solid #4a9ef4; border-radius: 1cqw; padding: 2cqw 2.4cqw; display: flex; flex-direction: column; gap: 1cqw; }
@@ -280,9 +281,11 @@ function goSlide(name) {
   const target = deck.querySelector(`.stage[data-slide='${name}']`);
   if (!target) return;
   if (stages[current].dataset.detail === undefined) sessionStorage.setItem(ORIGIN_KEY, String(current));
-  // A link lands on the slide itself, past its topic divider.
+  // A main-track diagram opens complete (its last step); a detail slide opens past its topic divider.
   const step = Number(target.dataset.step);
-  show(target.dataset.divider !== undefined ? step + 1 : step);
+  if (target.dataset.detail === undefined && target.dataset.lastStep !== undefined
+      && stages[Number(target.dataset.lastStep)].querySelector('.diagram')) show(Number(target.dataset.lastStep));
+  else show(target.dataset.divider !== undefined ? step + 1 : step);
 }
 // Back: to the step the link came from; with none (direct link, index), to the parent slide.
 function back() {
@@ -921,7 +924,7 @@ def render_html(outline, base):
     up = last_step[parent] if is_root else first_step[parent]
     return (f" data-detail='{esc(step['detail'])}' data-up='{up}'"
             + (" data-entry" if step.get("entry") else "") + (" data-exit" if step.get("exit") else ""))
-  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}'" if first_of(i) else "") + detail_attrs(i) + (" data-divider" if steps[i].get("divider") else "") + f">{stage}</div>"
+  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}' data-last-step='{last_step[steps[i]['slide']['name']]}'" if first_of(i) else "") + detail_attrs(i) + (" data-divider" if steps[i].get("divider") else "") + f">{stage}</div>"
                       for i, stage in enumerate(stages))
   note_blocks = []
   for step in steps:
