@@ -461,6 +461,27 @@ def sources(text, topics_dir, base):
   return f"<ul class='sources'>{''.join(items)}</ul>" if items else ""
 
 
+def label(slide):
+  """A detail slide's name in breadcrumbs and overlays: `label`, else `heading`."""
+  return slide.get("label") or slide.get("heading")
+
+
+def ancestors(slides, slide):
+  """Parents of a detail slide, nearest first, ending at its main-track slide."""
+  chain = []
+  while slide.get("parent"):
+    slide = slides[slide["parent"]]
+    chain.append(slide)
+  return chain
+
+
+def detail_root(slides, slide):
+  """The detail slide right under the main track that `slide` hangs from (itself for a root)."""
+  while slides[slide["parent"]].get("parent"):
+    slide = slides[slide["parent"]]
+  return slide
+
+
 def validate(outline):
   errors = []
   audiences = set(outline.get("audiences", {}))
@@ -481,9 +502,43 @@ def validate(outline):
         errors.append(f"{name}: dependsOn '{dependency}', which comes later")
     seen.add(name)
   for slide in outline["slides"]:
-    parts = set(slide.get("show", [])) | set(slide.get("dim", [])) | set(slide.get("reveal", []))
+    parts = set(slide.get("show", [])) | set(slide.get("dim", [])) | set(slide.get("reveal", [])) | set(slide.get("focus", []))
     if parts and not slide.get("diagram"):
-      errors.append(f"{slide['name']}: show/dim/reveal without diagram")
+      errors.append(f"{slide['name']}: show/dim/reveal/focus without diagram")
+  # `parent`: detail slides, off the main track and opened by a link (`links`, overlay, breadcrumb).
+  by_name = {slide["name"]: slide for slide in outline["slides"]}
+  details = [slide for slide in outline["slides"] if slide.get("parent")]
+  tree_ok = True
+  for slide in details:
+    name = slide["name"]
+    if slide["parent"] not in by_name:
+      errors.append(f"{name}: parent unknown slide '{slide['parent']}'")
+      tree_ok = False
+      continue
+    seen, current = set(), slide
+    while current is not None and current.get("parent"):
+      if current["name"] in seen:
+        errors.append(f"{name}: parent cycle")
+        tree_ok = False
+        break
+      seen.add(current["name"])
+      current = by_name.get(current["parent"])
+    if not label(slide):
+      errors.append(f"{name}: detail slide without label or heading")
+    if not by_name[slide["parent"]].get("parent") and not slide.get("diagram"):
+      errors.append(f"{name}: a detail root needs a diagram")
+  if details and outline["deck"].get("home") not in by_name:
+    errors.append(f"deck.home: unknown slide '{outline['deck'].get('home')}'")
+  for slide in outline["slides"]:
+    for part, target in (slide.get("links") or {}).items():
+      if target not in by_name:
+        errors.append(f"{slide['name']}: link {part} goes to unknown slide '{target}'")
+  # → walks a subtree in YAML order and leaves it at its last step: its slides must be consecutive.
+  if tree_ok:
+    roots = [detail_root(by_name, slide)["name"] for slide in details]
+    for n in range(1, len(roots)):
+      if roots[n] != roots[n - 1] and roots[n] in roots[:n]:
+        errors.append(f"{details[n]['name']}: detail slides of '{roots[n]}' are not consecutive")
   # `parts`: every act and every item target (`go`, an act or a slide) must exist.
   slide_names = {slide["name"] for slide in outline["slides"]}
   for part in outline.get("parts") or []:
