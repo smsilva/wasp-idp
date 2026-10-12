@@ -1,12 +1,12 @@
 # Roll back and remove
 
-Deploy `0.3.0` again with one replica, then roll back. Without `--revision`, `rollback` goes back to the revision that succeeded before the running one: revision 1, with its 2 replicas.
+Deploy `feat/greetings` again with one replica, then roll back. Without `--revision`, `rollback` goes back to the revision that succeeded before the running one: revision 1, with its 2 replicas.
 
 ```bash
 platform workload deploy \
   --component hello-api \
   --environment demo \
-  --version 0.3.0 \
+  --branch feat/greetings \
   --replicas 1 \
   --wait
 
@@ -19,15 +19,21 @@ platform catalog component get hello-api
 ```
 
 ``` { .text .output title="output" }
-✓ hello-api@demo revision 3: 0.3.0 running · 1/1 replicas available
-  url           http://hello-api.apps:80
-✓ hello-api@demo revision 4: 0.3.0 running · 2/2 replicas available
-  url           http://hello-api.apps:80
+✓ hello-api@demo revision 3: 0.1.0-greetings.b5f9569 running · 1/1 replicas available
+  url           http://hello-api.demo.localhost:7080/
+  resource      db (postgres, provision): Ready
+  resource      dns (dns, provision): Ready
+  resource      route (route, provision): Ready
+✓ hello-api@demo revision 4: 0.1.0-greetings.b5f9569 running · 2/2 replicas available
+  url           http://hello-api.demo.localhost:7080/
+  resource      db (postgres, provision): Ready
+  resource      dns (dns, provision): Ready
+  resource      route (route, provision): Ready
 component/hello-api
   system       greeter
   owner        team-alpha
   ...
-  running in   demo (0.3.0, Available)
+  running in   demo (0.1.0-greetings.b5f9569, Available)
 ```
 
 - A rollback is a **new revision** (4) that copies the version and the overrides of revision 1, as `helm rollback` does: the history only moves forward.
@@ -48,12 +54,12 @@ platform workload history \
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 5: removed from demo
-WORKLOAD        REVISION  ACTION    VERSION  STATUS                 BY               CREATED
-hello-api@demo  1         deploy    0.3.0    Succeeded              dev@example.com  2026-10-11T22:04:48Z
-hello-api@demo  2         deploy    0.4.0    ResourcesNotSupported  dev@example.com  2026-10-11T22:04:54Z
-hello-api@demo  3         deploy    0.3.0    Succeeded              dev@example.com  2026-10-11T22:04:58Z
-hello-api@demo  4         rollback  0.3.0    Succeeded              dev@example.com  2026-10-11T22:05:04Z
-hello-api@demo  5         remove    —        Succeeded              dev@example.com  2026-10-11T22:05:22Z
+WORKLOAD        REVISION  ACTION    VERSION                  STATUS                 BY               CREATED
+hello-api@demo  1         deploy    0.1.0-greetings.b5f9569  Succeeded              dev@example.com  2026-10-12T19:02:42Z
+hello-api@demo  2         deploy    0.1.0-redis.b5f9569      ResourcesNotSupported  dev@example.com  2026-10-12T19:03:44Z
+hello-api@demo  3         deploy    0.1.0-greetings.b5f9569  Succeeded              dev@example.com  2026-10-12T19:03:54Z
+hello-api@demo  4         rollback  0.1.0-greetings.b5f9569  Succeeded              dev@example.com  2026-10-12T19:04:13Z
+hello-api@demo  5         remove    —                        Succeeded              dev@example.com  2026-10-12T19:04:41Z
 ```
 
-The Deployment and the Service leave the vcluster and `workload list` no longer shows `hello-api@demo`; the revisions stay until the environment is deleted ([Clean up](../cleanup.md)).
+The Deployment, the Service and the resources leave the vcluster (the database with its data) and `workload list` no longer shows `hello-api@demo`; the revisions stay until the environment is deleted ([Clean up](../cleanup.md)).

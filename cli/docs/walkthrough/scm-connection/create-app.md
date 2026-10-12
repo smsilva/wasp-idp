@@ -44,3 +44,6 @@ wasp-foundry                connection · the default
       --private-key-file wasp-foundry-platform.private-key.pem \
       --wait
     ```
+
+!!! warning "A cluster recreated from scratch"
+    The `<org>-platform` App lives on GitHub, not in the cluster: after `k3d cluster delete`, it is still there and its private key is gone with the cluster. A new `add` through the browser then fails on GitHub with **Name is already taken**. Either delete the App (org **Settings → GitHub Apps → wasp-foundry-platform → Advanced → Delete GitHub App**) and run `add` again, or keep it: generate a new private key on its page (**Private keys → Generate a private key**) and go in with **Existing App**, adding `--default`.

@@ -63,7 +63,7 @@ platform build create \
 ```
 
 ``` { .text .output title="output" }
-✗ 409: build of 'hello-api': version 1.0.0-rc.1 is already in the index (commit 86a7c08)
+✗ 409: build of 'hello-api': version 1.0.0-rc.1 is already in the index (commit b5f9569)
 ```
 
 A repo without the workflow on its default branch (created before the template had it, for example) stops at `WorkflowNotFound`; adding `platform-build.yaml` by pull request fixes it:

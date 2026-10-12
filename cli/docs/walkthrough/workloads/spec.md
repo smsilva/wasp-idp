@@ -1,25 +1,15 @@
 # The spec of a version
 
-When a build registers a version, it keeps the validated `app-spec.yaml` in the version index: deploying a version later reads the spec from the platform, not from GitHub. Build `feat/greetings` again, then read the spec of the newest version of the branch:
+When a build registers a version, it keeps the validated `app-spec.yaml` in the version index: deploying a version later reads the spec from the platform, not from GitHub. Read the spec of the newest version built from `feat/greetings` ([Build a branch](../builds/create.md)):
 
 ```bash
-git -C /tmp/hello-api switch feat/greetings
-
-platform build create \
-  --component hello-api \
-  --branch feat/greetings \
-  --wait
-
 platform workload spec get \
   --component hello-api \
   --branch feat/greetings
 ```
 
 ``` { .text .output title="output" }
-building from feat/greetings @ 4f1d2e9 …
-✓ app-spec.yaml valid · db (postgres), dns, route
-✓ image hello-api:0.2.0-greetings.4f1d2e9 pushed to the registry
-# hello-api 0.2.0-greetings.4f1d2e9 · feat/greetings @ 4f1d2e9
+# hello-api 0.1.0-greetings.b5f9569 · feat/greetings @ b5f9569
 apiVersion: score.dev/v1b1
 metadata:
   name: hello-api
@@ -55,7 +45,7 @@ service:
 - `--output json` adds the image, the digest and the creation time.
 - Only members of the owner team (`team-alpha`) and `platform-admins` read the spec: a Score may carry plain values from a private repo.
 
-A version registered before the index kept the spec has none:
+A version registered before the index kept the spec (on a cluster older than #291) has none:
 
 ```bash
 platform workload spec get \
@@ -68,4 +58,4 @@ platform workload spec get \
 ```
 
 !!! note
-    The spec is in `spec.appSpec` of the `Version`, in the catalog group: `kubectl --context k3d-platform-local --namespace platform-system get versions.catalog.platform.wasp.silvios.me hello-api.0.2.0-greetings.4f1d2e9 --output yaml`.
+    The spec is in `spec.appSpec` of the `Version`, in the catalog group: `kubectl --context k3d-platform-local --namespace platform-system get versions.catalog.platform.wasp.silvios.me hello-api.0.1.0-greetings.b5f9569 --output yaml`.
