@@ -15,13 +15,16 @@ WATCH_SECONDS = 300
 
 
 def wakes(event_type: str, obj: dict, seen: dict[str, int]) -> bool:
-  """Whether a watch event is a change of the desired state: a new object, a deleted one, a new
-  generation (spec or deletionTimestamp). The status writes of this provider change no generation, so
-  they never wake the loop that made them."""
+  """Whether a watch event is a change of the desired state: a new object, a deleted one, one being
+  deleted (its finalizer has work), a new generation. The status writes of this provider change no
+  generation, so they never wake the loop that made them."""
   name = obj["metadata"]["name"]
   generation = obj["metadata"].get("generation")
   if event_type == "DELETED":
     seen.pop(name, None)
+    return True
+  if obj["metadata"].get("deletionTimestamp"):
+    seen[name] = generation
     return True
   previous = seen.get(name)
   seen[name] = generation

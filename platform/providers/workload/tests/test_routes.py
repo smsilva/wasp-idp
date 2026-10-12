@@ -204,5 +204,6 @@ def test_wakes_on_spec_changes_only():
   # A status write by the provider itself.
   assert not wakes("MODIFIED", obj, seen)
   assert wakes("MODIFIED", {"metadata": {"name": "demo.reviews", "generation": 2}}, seen)
+  assert wakes("MODIFIED", {"metadata": {"name": "demo.reviews", "generation": 2, "deletionTimestamp": "2026-10-12T12:00:00Z"}}, seen)
   assert wakes("DELETED", obj, seen)
   assert seen == {}
