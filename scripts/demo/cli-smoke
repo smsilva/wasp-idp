@@ -623,8 +623,10 @@ $(sed --expression 's/^    type: dns$/    type: redis/' --expression 's/^/    /'
 MANIFEST
 # The test user owns the environment but is not in team-platform, the owner team of the component.
 platform login --test-user
+# shared: its profile has no binding policy, so the platform default (provision) applies until the
+# environment gets its own (#329).
 platform environment create "${workload_environment}" \
-  --profile ephemeral \
+  --profile shared \
   --wait
 expect_failure "only members of its owner team (team-platform)" \
   platform workload deploy \
@@ -1117,7 +1119,7 @@ kubectl --context k3d-platform-local --namespace platform-system wait \
   --for delete \
   --timeout 60s
 
-step "environment policy set|get: postgres in mode compose, in the shared instance (#305)"
+step "environment policy set|get: postgres in mode compose, in the shared instance (#305, #329)"
 # The policy of the environment comes before the platform default: the same 0.5.0 now gets a role
 # and a database in shared-pg (platform-resources), reached through the Service the vcluster
 # replicates into its namespace resources. remove drops them.
@@ -1137,6 +1139,18 @@ output="$(platform environment policy get "${workload_environment}")"
 echo "${output}"
 expect_output "environment  postgres  —      —   compose    instance=shared-pg" "${output}"
 expect_output "default      postgres  —      —   provision  —" "${output}"
+# The profile layer (#329): an ephemeral environment gets compose without an admin step. Only
+# platform-admins change it, since it applies to every environment of the profile.
+output="$(platform environment profile policy get ephemeral)"
+echo "${output}"
+expect_output "profile  postgres  —      —   compose    instance=shared-pg" "${output}"
+expect_output "default  postgres  —      —   provision  —" "${output}"
+expect_failure "profile 'nope' not found (profiles: ephemeral, shared)" \
+  platform environment profile policy get nope
+platform login --test-user
+expect_failure "the binding policy of a profile is set by platform-admins" \
+  platform environment profile policy set ephemeral --file - <<< "provisioners: []"
+platform login --test-admin
 output="$(platform workload deploy \
   --component "${workload_component}" \
   --environment "${workload_environment}" \

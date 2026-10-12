@@ -12,6 +12,6 @@ platform environment list
 ``` { .text .output title="output" }
 ✓ demo shared with team-alpha
 NAME            PROFILE    STATUS  EXPIRES  OWNER            SHARED
-demo            ephemeral  ready   52m      you@example.com  team-alpha
+demo            shared     ready   52m      you@example.com  team-alpha
 greetings-test  ephemeral  ready   48m      you@example.com  —
 ```

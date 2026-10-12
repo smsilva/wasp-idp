@@ -18,12 +18,15 @@ def api(monkeypatch):
   policies = {}
 
   def handler(request: httpx.Request) -> httpx.Response:
-    name = request.url.path.split("/")[3]
-    if name == "ghost":
-      return httpx.Response(404, json={"error": {"code": "not_found", "message": "environment 'ghost' not found"}})
+    kind, name = request.url.path.split("/")[2:4]
+    if name in ("ghost", "nope"):
+      return httpx.Response(404, json={"error": {"code": "not_found", "message": f"{kind[:-1]} '{name}' not found"}})
     if request.method == "PUT":
       policies[name] = json.loads(request.content)["provisioners"]
-    return httpx.Response(200, json={"kind": "BindingPolicy", "environment": name, "provisioners": policies.get(name, []), "default": DEFAULT})
+    if kind == "profiles":
+      return httpx.Response(200, json={"kind": "BindingPolicy", "profile": name, "provisioners": policies.get(name, [COMPOSE]), "default": DEFAULT})
+    profile = {"name": "ephemeral", "provisioners": policies.get("ephemeral", [COMPOSE])}
+    return httpx.Response(200, json={"kind": "BindingPolicy", "environment": name, "provisioners": policies.get(name, []), "profile": profile, "default": DEFAULT})
 
   transport = httpx.MockTransport(handler)
   original = client_module.PlatformClient.__init__
@@ -34,23 +37,24 @@ def api(monkeypatch):
   return policies
 
 
-def test_set_from_a_file_and_get_both_layers(api, tmp_path):
+def test_set_from_a_file_and_get_the_three_layers(api, tmp_path):
   path = tmp_path / "policy.yaml"
-  path.write_text("provisioners:\n  - type: postgres\n    mode: compose\n    params:\n      instance: shared-pg\n")
+  path.write_text("provisioners:\n  - type: postgres\n    mode: provision\n")
   result = runner.invoke(app, ["environment", "policy", "set", "demo", "--file", str(path)])
   assert result.exit_code == 0, result.output
-  assert api["demo"] == [COMPOSE]
+  assert api["demo"] == [{"type": "postgres", "mode": "provision"}]
   assert "✓ demo: policy set" in result.output
   rows = runner.invoke(app, ["environment", "policy", "get", "demo"]).output.splitlines()
   assert rows[0].split() == ["LAYER", "TYPE", "CLASS", "ID", "MODE", "PARAMS"]
-  assert rows[1].split() == ["environment", "postgres", "—", "—", "compose", "instance=shared-pg"]
-  assert rows[2].split() == ["default", "postgres", "—", "—", "provision", "—"]
+  assert rows[1].split() == ["environment", "postgres", "—", "—", "provision", "—"]
+  assert rows[2].split() == ["profile", "postgres", "—", "—", "compose", "instance=shared-pg"]
+  assert rows[3].split() == ["default", "postgres", "—", "—", "provision", "—"]
 
 
 def test_set_from_stdin_with_an_empty_list_removes(api):
   result = runner.invoke(app, ["environment", "policy", "set", "demo", "--file", "-"], input="provisioners: []\n")
   assert result.exit_code == 0, result.output
-  assert "policy removed, the platform default applies" in result.output
+  assert "policy removed, its profile and the platform default apply" in result.output
 
 
 def test_set_refuses_a_file_without_provisioners(api, tmp_path):
@@ -66,3 +70,23 @@ def test_get_json_and_errors(api):
   assert json.loads(runner.invoke(app, ["environment", "policy", "get", "demo", "--output", "json"]).output)["default"] == DEFAULT
   result = runner.invoke(app, ["environment", "policy", "get", "ghost"])
   assert result.exit_code != 0 and "environment 'ghost' not found" in result.output
+
+
+def test_profile_policy_get_shows_the_profile_then_the_default(api):
+  rows = runner.invoke(app, ["environment", "profile", "policy", "get", "ephemeral"]).output.splitlines()
+  assert rows[1].split() == ["profile", "postgres", "—", "—", "compose", "instance=shared-pg"]
+  assert rows[2].split() == ["default", "postgres", "—", "—", "provision", "—"]
+
+
+def test_profile_policy_set_and_remove(api):
+  result = runner.invoke(app, ["environment", "profile", "policy", "set", "shared", "--file", "-"], input="provisioners: [{type: postgres, mode: compose, params: {instance: shared-pg}}]\n")
+  assert result.exit_code == 0, result.output
+  assert api["shared"] == [COMPOSE]
+  assert "✓ profile shared: policy set" in result.output
+  result = runner.invoke(app, ["environment", "profile", "policy", "set", "shared", "--file", "-"], input="provisioners: []\n")
+  assert "profile shared: policy removed, the platform default applies" in result.output
+
+
+def test_unknown_profile(api):
+  result = runner.invoke(app, ["environment", "profile", "policy", "get", "nope"])
+  assert result.exit_code != 0 and "profile 'nope' not found" in result.output

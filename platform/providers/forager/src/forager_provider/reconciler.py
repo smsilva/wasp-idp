@@ -142,7 +142,7 @@ class Reconciler:
       kind, klass, resource_id = resource.get("type"), requested_class(revision, name, resource), resource.get("id")
       request_name = f"{spec['environment']}.{spec['instance']}.{name}"
       existing = by_name.get(request_name)
-      item = resolve(policies, spec["environment"], kind, klass, resource_id)
+      item = resolve(policies, spec["environment"], kind, klass, resource_id, (environment.get("spec") or {}).get("profile"))
       provisioner = f"{kind}/{item['mode']}" if item else None
       wanted = f" class {klass}" if klass else ""
       if item is None:

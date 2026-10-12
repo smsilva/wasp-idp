@@ -1,6 +1,5 @@
 import os
 import re
-from typing import Literal
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -22,7 +21,7 @@ NAME_PATTERN = re.compile(r"^[a-z]([-a-z0-9]{0,26}[a-z0-9])?$")
 
 class EnvironmentRequest(BaseModel):
   name: str
-  profile: Literal["ephemeral", "shared"]
+  profile: environments.Profile
   expires: str | None = None
   sharedWith: list[str] = []
 

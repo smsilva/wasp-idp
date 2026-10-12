@@ -10,8 +10,10 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | `platform environment get <name> --admin` | writes the vcluster admin kubeconfig (`platform-admins` only) |
 | `platform environment share\|unshare <name> --team <team>` | see [Teams](teams.md#sharing-environments) |
 | `platform environment credential <name>` | a 10-minute token as an `ExecCredential`; called by kubectl through the kubeconfig |
-| `platform environment policy get <name>` | the binding policy of the environment, then the platform default (LAYER, TYPE, CLASS, ID, MODE, PARAMS) |
+| `platform environment policy get <name>` | the binding policy of the environment, then the one of its profile and the platform default (LAYER `environment`, `profile`, `default`; TYPE, CLASS, ID, MODE, PARAMS) |
 | `platform environment policy set <name> --file <file\|->` | replaces the policy with the `provisioners` list of the file; an empty list removes it (`platform-admins` only) |
+| `platform environment profile policy get <profile>` | the binding policy of a profile (`ephemeral`, `shared`), then the platform default; anyone signed in |
+| `platform environment profile policy set <profile> --file <file\|->` | replaces the policy of the profile for all its environments; an empty list removes it (`platform-admins` only) |
 | `platform environment delete <name>` | removes the environment and the vcluster |
 
 `--expires` takes `30m`, `12h`, `3d` or `1w`; the provider deletes the environment when the deadline passes (checked every 10 s).
@@ -52,7 +54,13 @@ Every environment is reached from outside at `http://*.<name>.localhost:7080` (A
 
 ## Binding policy
 
-Which mode makes each resource of a workload in the environment (#305). The Forager reads the policy of the environment before the platform default (`platform-default`, `postgres` → `provision`); the first item that matches `type`, `class` and `id` wins.
+Which mode makes each resource of a workload in the environment (#305). The Forager reads three layers, and the first item that matches `type`, `class` and `id` wins:
+
+1. the policy of the environment (`env-<name>`), set with `environment policy set`;
+2. the policy of its profile (`profile-<profile>`, #329), set with `environment profile policy set`. `platform init` creates `profile-ephemeral` (`postgres` → `compose` in `shared-pg`) when it is missing and never overwrites it;
+3. the platform default (`platform-default`, `postgres` → `provision`).
+
+Changing a layer does not change a resource that already exists in another mode: its next deploy ends `ResourceModeChanged`, and changing the mode takes a `workload remove` and a new deploy. Environments `ephemeral` with a database made before #329 (`provision`) get that on their next deploy.
 
 ```yaml
 provisioners:

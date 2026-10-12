@@ -2,16 +2,17 @@ import copy
 from datetime import datetime, timezone
 
 from forager_provider.reconciler import FINALIZER, Reconciler
-from test_policy import DEFAULT, policy
+from test_policy import DEFAULT, EPHEMERAL, policy
 from test_postgres import FakeSecrets
 
 NOW = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
 
 
 class FakeStore:
-  def __init__(self, resources=None, component=True, environment_ready=True):
+  def __init__(self, resources=None, component=True, environment_ready=True, profile="shared"):
     self.environment = {
       "metadata": {"name": "demo", "uid": "uid-demo"},
+      "spec": {"profile": profile},
       "status": {"port": 7100, "kubeconfigData": "kubeconfig", "conditions": [{"type": "Ready", "status": "True" if environment_ready else "False"}]},
     }
     app_spec = {"apiVersion": "score.dev/v1b1", "containers": {"api": {"image": "."}}}
@@ -95,6 +96,14 @@ def test_resolves_creates_and_provisions():
   assert provisioner.ensured == [("demo.reviews.db", {})]
   assert store.status_patches[-1][1]["outputs"] == {"host": "reviews-db.apps"}
   assert store.status_patches[-1][1]["secretRef"] == {"name": "reviews-db", "keys": ["password"]}
+
+
+def test_the_profile_of_the_environment_picks_its_layer():
+  store, provisioner = FakeStore(resources={"db": {"type": "postgres"}}, profile="ephemeral"), FakeProvisioner()
+  rec = Reconciler(store, FakeVclusters(), FakeSecrets(), provisioners={"postgres/provision": provisioner, "postgres/compose": provisioner}, now=lambda: NOW)
+  rec.reconcile([revision()], [], [DEFAULT, EPHEMERAL])
+  request = store.created["demo.reviews.db"]
+  assert (request["spec"]["mode"], request["spec"]["params"]) == ("compose", {"instance": "shared-pg"})
 
 
 def test_derives_the_catalog_resource_without_id():

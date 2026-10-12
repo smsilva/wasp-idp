@@ -229,8 +229,12 @@ app.add_typer(policy_app, name="policy")
 
 
 def print_policy(policy: dict) -> None:
-  """Both layers, in the order the Forager resolves them: the first row that matches wins."""
-  layers = [("environment", item) for item in policy["provisioners"]] + [("default", item) for item in policy["default"]]
+  """The layers, in the order the Forager resolves them: the first row that matches wins."""
+  if isinstance(policy.get("profile"), str):  # the policy of a profile
+    layers = [("profile", item) for item in policy["provisioners"]]
+  else:
+    layers = [("environment", item) for item in policy["provisioners"]] + [("profile", item) for item in (policy.get("profile") or {}).get("provisioners") or []]
+  layers += [("default", item) for item in policy["default"]]
   rows = [
     [layer, item["type"], item.get("class") or "—", item.get("id") or "—", item["mode"], ", ".join(f"{key}={value}" for key, value in sorted((item.get("params") or {}).items())) or "—"]
     for layer, item in layers
@@ -238,9 +242,23 @@ def print_policy(policy: dict) -> None:
   print_table(["LAYER", "TYPE", "CLASS", "ID", "MODE", "PARAMS"], rows)
 
 
+def read_provisioners(file: Path) -> list[dict]:
+  try:
+    document = yaml.safe_load(sys.stdin.read() if str(file) == "-" else file.read_text())
+  except (OSError, yaml.YAMLError) as error:
+    fail(f"{file}: {error}")
+  provisioners = (document or {}).get("provisioners") if isinstance(document, dict) else None
+  if not isinstance(provisioners, list):
+    fail(f"{file}: expected a 'provisioners' list")
+  return provisioners
+
+
+PolicyFile = Annotated[Path, typer.Option("--file", help="YAML with a provisioners list (type, class, id, mode, params); '-' reads stdin.")]
+
+
 @policy_app.command("get")
 def policy_get(name: str, output: OutputOption = Format.table):
-  """Show the policy of an environment, followed by the platform default."""
+  """Show the policy of an environment, then the one of its profile and the platform default."""
   try:
     policy = _client().get_binding_policy(name)
   except ApiError as error:
@@ -252,19 +270,9 @@ def policy_get(name: str, output: OutputOption = Format.table):
 
 
 @policy_app.command("set")
-def policy_set(
-  name: str,
-  file: Annotated[Path, typer.Option("--file", help="YAML with a provisioners list (type, class, id, mode, params); '-' reads stdin.")],
-  output: OutputOption = Format.table,
-):
+def policy_set(name: str, file: PolicyFile, output: OutputOption = Format.table):
   """Replace the policy of an environment (platform-admins). An empty list removes it."""
-  try:
-    document = yaml.safe_load(sys.stdin.read() if str(file) == "-" else file.read_text())
-  except (OSError, yaml.YAMLError) as error:
-    fail(f"{file}: {error}")
-  provisioners = (document or {}).get("provisioners") if isinstance(document, dict) else None
-  if not isinstance(provisioners, list):
-    fail(f"{file}: expected a 'provisioners' list")
+  provisioners = read_provisioners(file)
   try:
     policy = _client().set_binding_policy(name, provisioners)
   except ApiError as error:
@@ -272,5 +280,39 @@ def policy_set(
   if output == Format.json:
     print_json(policy)
     return
-  success(f"{name}: policy set" if policy["provisioners"] else f"{name}: policy removed, the platform default applies")
+  success(f"{name}: policy set" if policy["provisioners"] else f"{name}: policy removed, its profile and the platform default apply")
+  print_policy(policy)
+
+
+profile_app = typer.Typer(help="Profiles: the kinds of environment, and what each one decides for its environments.", no_args_is_help=True)
+app.add_typer(profile_app, name="profile")
+profile_policy_app = typer.Typer(help="The binding policy of a profile: the layer between an environment's policy and the platform default.", no_args_is_help=True)
+profile_app.add_typer(profile_policy_app, name="policy")
+
+
+@profile_policy_app.command("get")
+def profile_policy_get(profile: str, output: OutputOption = Format.table):
+  """Show the policy of a profile, then the platform default."""
+  try:
+    policy = _client().get_profile_policy(profile)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(policy)
+  else:
+    print_policy(policy)
+
+
+@profile_policy_app.command("set")
+def profile_policy_set(profile: str, file: PolicyFile, output: OutputOption = Format.table):
+  """Replace the policy of a profile for all its environments (platform-admins). An empty list removes it."""
+  provisioners = read_provisioners(file)
+  try:
+    policy = _client().set_profile_policy(profile, provisioners)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(policy)
+    return
+  success(f"profile {profile}: policy set" if policy["provisioners"] else f"profile {profile}: policy removed, the platform default applies")
   print_policy(policy)

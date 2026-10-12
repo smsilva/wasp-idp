@@ -10,7 +10,7 @@ kubectl get environments \
 
 ``` { .text .output title="output" }
 NAME   PROFILE     READY   REASON         EXPIRES
-demo   ephemeral   True    ClusterReady   2026-10-13T17:01:16Z
+demo   shared      True    ClusterReady   2026-10-13T17:01:16Z
 ```
 
 ## Journal

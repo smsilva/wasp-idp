@@ -1,6 +1,20 @@
 # A database in the shared instance
 
-The binding policy of an environment changes how its resources are made, without touching the Score. With `postgres` in mode `compose`, the Forager no longer starts a Postgres per workload: it creates a role and a database of their own in `shared-pg`, the shared Postgres that `platform init` installs in `platform-local`. Only `platform-admins` set the policy, since it decides where data lives.
+The binding policy changes how resources are made, without touching the Score. With `postgres` in mode `compose`, the Forager no longer starts a Postgres per workload: it creates a role and a database of their own in `shared-pg`, the shared Postgres that `platform init` installs in `platform-local`.
+
+An `ephemeral` environment gets this from its profile, with no admin step (#329):
+
+```bash
+platform environment profile policy get ephemeral
+```
+
+``` { .text .output title="output" }
+LAYER    TYPE      CLASS  ID  MODE       PARAMS
+profile  postgres  —      —   compose    instance=shared-pg
+default  postgres  —      —   provision  —
+```
+
+`demo` is `shared`, whose profile has no policy, so the platform default (`provision`) applies there. Only `platform-admins` set the policy of an environment, since it decides where data lives, and it comes before the one of the profile:
 
 ```bash
 platform environment policy set demo --file - <<'POLICY'
@@ -19,7 +33,7 @@ environment  postgres  —      —   compose    instance=shared-pg
 default      postgres  —      —   provision  —
 ```
 
-`platform environment policy get demo` shows the same table: the policy of the environment, then the platform default, in the order the Forager reads them. The first row that matches the resource wins.
+`platform environment policy get demo` shows the same table: the policy of the environment, then the one of its profile (none for `shared`) and the platform default, in the order the Forager reads them. The first row that matches the resource wins.
 
 The same version `0.5.0` of [A database for a workload](resources.md), deployed after a `workload remove`:
 

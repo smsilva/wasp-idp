@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal, get_args
 
 from .durations import format_time
 from .state import GROUP, VERSION
@@ -9,6 +10,9 @@ OWNER_ANNOTATION = f"{GROUP}/owner"
 # The owner's e-mail, for display only: authorization always goes by OWNER_ANNOTATION (ADR 0026).
 OWNER_NAME_ANNOTATION = f"{GROUP}/owner-name"
 ADMIN_GROUP = "platform-admins"
+# The kinds of environment; each can carry a binding policy layer (#329).
+Profile = Literal["ephemeral", "shared"]
+PROFILES = get_args(Profile)
 
 
 def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_name: str | None = None, shared_with: list[str] | None = None) -> dict:

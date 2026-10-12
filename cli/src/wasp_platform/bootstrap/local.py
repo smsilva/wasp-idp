@@ -378,6 +378,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, forager_image)
   _kubectl("rollout", "status", f"deployment/{FORAGER_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
   install_shared_pg(forager_dir, log)
+  install_profile_policies(forager_dir, log)
 
   cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)
@@ -401,6 +402,18 @@ def install_ingress(provider_dir: Path, log) -> None:
       raise BootstrapError(f"Traefik not installed in {INGRESS_NAMESPACE} after 300s: kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-platform-ingress")
     time.sleep(3)
   _kubectl("rollout", "status", "deployment", "--selector", "app.kubernetes.io/name=traefik", "--namespace", INGRESS_NAMESPACE, "--timeout", "180s")
+
+
+def install_profile_policies(forager_dir: Path, log) -> None:
+  """The binding policy of each profile (#329): created when missing, never applied over, since
+  platform-admins change it through the API."""
+  log("creating the binding policies of the profiles …")
+  try:
+    _kubectl("create", "--filename", str(forager_dir / "deploy" / "profile-policies.yaml"))
+  except BootstrapError as error:
+    failures = [line for line in str(error).splitlines()[1:] if line.strip() and "AlreadyExists" not in line and "already exists" not in line]
+    if failures:
+      raise
 
 
 def install_shared_pg(forager_dir: Path, log) -> None:
