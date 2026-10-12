@@ -101,6 +101,15 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram svg { max-width: 100%; max-height: 100%; width: auto; height: 100%; display: block; }
 .stage .diagram .part-hidden { visibility: hidden; }
 .stage .diagram .part-dim { opacity: 0.32; }
+.stage .diagram .part-focus > rect:first-of-type { stroke: #4a9ef4; stroke-width: 4; }
+.stage .diagram .part-link { cursor: pointer; }
+.stage .diagram .part-link:hover > rect:first-of-type { stroke: #7cc4ff; }
+.stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
+.stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
+.stage .overlay { position: absolute; right: 5cqw; top: 12cqw; width: 30cqw; box-sizing: border-box; background: rgba(17, 24, 39, 0.96); border: 1px solid #4a9ef4; border-radius: 1cqw; padding: 2cqw 2.4cqw; display: flex; flex-direction: column; gap: 1cqw; }
+.stage .overlay .ov-title { font-size: 2.2cqw; font-weight: 700; color: #fff; margin-bottom: 0.6cqw; }
+.stage .overlay a { font-size: 1.6cqw; color: #c0d2e4; cursor: pointer; }
+.stage .overlay a::before { content: '→ '; color: #4a9ef4; }
 .stage .code .ln { padding: 0 1.4cqw; }
 .stage .code .no { width: 2.6cqw; margin-right: 1.4cqw; }
 .stage .code .bar { font-size: 1cqw; padding: 0.5cqw 1.4cqw; }
@@ -750,19 +759,37 @@ def render_stage(step, base, outline=None):
     section = f"<div class='section has-topic'><div class='act-name'>{esc(section[0])}</div><div class='topic'>{esc(section[1])}</div></div>"
   else:
     section = f"<div class='section'>{esc(section)}</div>" if section else ""
+  # Detail slides (`parent`): a breadcrumb of links replaces the act name, with "↩ back" before it.
+  if step.get("crumbs"):
+    trail = " › ".join(f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>" for text, name in step["crumbs"])
+    # A text slide shows its own heading as its first item: keep the topic line for the others.
+    topic = "" if step["slide"].get("heading") and step.get("diagram") is None and not step.get("code") else step["section"][1]
+    section = (f"<div class='section has-topic crumbs'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
+               + (f"<div class='topic'>{esc(topic)}</div>" if topic else "") + "</div>")
   if step.get("diagram") is not None:
     # The `heading` takes the topic line: the topic was already announced by its divider.
     heading = step["slide"].get("heading")
-    if heading:
+    if heading and not step.get("crumbs"):
       act_name = step["section"][0] if has_topic else step["section"]
       section = f"<div class='section has-topic'><div class='act-name'>{esc(act_name)}</div><div class='topic'>{esc(heading)}</div></div>"
     svg = (base / step["slide"]["diagram"]).read_text()
     # `dev.2` takes its own state, else its group's (`dev`).
     state = lambda part: step["diagram"].get(part) or step["diagram"].get(part.split(".")[0], "hidden")
-    svg = re.sub(r'<g data-part="([\w.-]+)">', lambda m: f'<g data-part="{m[1]}" class="part-{state(m[1])}">', svg)
+    focus, links = step.get("focus") or set(), step.get("links") or {}
+    def group(match):
+      part = match[1]
+      classes = f"part-{state(part)}" + (" part-focus" if part in focus else "") + (" part-link" if part in links else "")
+      link = f' data-go-slide="{esc(links[part])}"' if part in links else ""
+      return f'<g data-part="{part}" class="{classes}"{link}>'
+    svg = re.sub(r'<g data-part="([\w.-]+)">', group, svg)
     source = step["slide"].get("source")
     source_html = f"<div class='source'>Source: {esc(source)}</div>" if source else ""
-    return f"{section}<div class='inner diagram-inner'><div class='diagram'>{svg}</div></div><div class='footer'></div>{source_html}"
+    # A detail root lists its children over the dimmed diagram.
+    overlay = ""
+    if step.get("overlay"):
+      overlay = (f"<div class='overlay'><div class='ov-title'>{esc(step['section'][1])}</div>"
+                 + "".join(f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>" for text, name in step["overlay"]) + "</div>")
+    return f"{section}<div class='inner diagram-inner'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}"
   if step.get("code"):
     source = (base / step["code"]["file"]).read_text().splitlines()
     shown = sorted(line_set(step["code"].get("lines"), set(range(1, len(source) + 1))))
@@ -845,7 +872,21 @@ def render_html(outline, base):
   stages = [render_stage(step, base, outline) for step in steps]
   # data-slide on a slide's first step lets #present-<slide name> link to it while step numbers shift.
   first_of = lambda i: steps[i]["slide"] is not None and (i == 0 or steps[i - 1]["slide"] is not steps[i]["slide"])
-  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}'" if first_of(i) else "") + f">{stage}</div>"
+  first_step, last_step = {}, {}
+  for i, step in enumerate(steps):
+    if step["slide"] is not None:
+      first_step.setdefault(step["slide"]["name"], i)
+      last_step[step["slide"]["name"]] = i
+  # Detail steps: the JS walks them by these attributes (back target, subtree entry and exit).
+  def detail_attrs(i):
+    step = steps[i]
+    if not step.get("detail"):
+      return ""
+    parent, is_root = step["up"]
+    up = last_step[parent] if is_root else first_step[parent]
+    return (f" data-detail='{esc(step['detail'])}' data-up='{up}'"
+            + (" data-entry" if step.get("entry") else "") + (" data-exit" if step.get("exit") else ""))
+  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}'" if first_of(i) else "") + detail_attrs(i) + f">{stage}</div>"
                       for i, stage in enumerate(stages))
   note_blocks = []
   for step in steps:
@@ -876,7 +917,7 @@ def render_html(outline, base):
       return first(lambda step: step["slide"] is not None and step["slide"]["name"] == name)
     part_ranges = []
     for part in outline["parts"]:
-      own = [i for i, step in enumerate(steps) if step["act"]["name"] in part["acts"] and step.get("agenda") is None]
+      own = [i for i, step in enumerate(steps) if step["act"]["name"] in part["acts"] and step.get("agenda") is None and not step.get("detail")]
       part_ranges.append((own[0], own[-1]))
     links = {"part": part_ranges, "items": [[target(item["go"]) for item in part["items"]] for part in outline["parts"]]}
     index = [f"<div class='index agenda-index'><div class='index-hint'>{home_link + " · " if home_link else ""}↑ ↓ escolher · Enter ir · I ou Esc fechar</div><div class='agenda-stage'>{render_agenda(outline, None, links)}</div></div>"]

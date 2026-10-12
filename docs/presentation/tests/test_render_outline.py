@@ -1,4 +1,5 @@
 import copy
+import re
 import importlib.machinery
 import importlib.util
 import pathlib
@@ -134,3 +135,43 @@ def test_entry_and_exit():
   steps = ro.build_steps(outline())
   assert [i for i, step in enumerate(steps) if step.get("entry")] == [7]
   assert [i for i, step in enumerate(steps) if step.get("exit")] == [10]
+
+
+def deck(tmp_path):
+  (tmp_path / "d.svg").write_text(SVG)
+  return ro.render_html(outline(), tmp_path)
+
+
+def stage(page, n):
+  body = page.split("<div id='deck'>")[1]
+  start = body.index(f"<div class='stage' data-step='{n}'")
+  end = body.find("<div class='stage' data-step=", start + 1)
+  return body[start:end if end > 0 else body.index("<template")]
+
+
+def test_stage_attributes(tmp_path):
+  page = deck(tmp_path)
+  # root `box` goes up to the last step of `map` (4); `box-b` to the first step of `box-a` (8)
+  assert "data-detail='box' data-up='4' data-entry" in stage(page, 7)
+  assert "data-up='8' data-exit" in stage(page, 10)
+  assert "data-detail" not in stage(page, 6)
+
+
+def test_diagram_focus_and_links(tmp_path):
+  page = deck(tmp_path)
+  assert '<g data-part="p.1" class="part-on part-focus part-link" data-go-slide="box">' in stage(page, 3)
+  assert '<g data-part="plane" class="part-on part-focus">' in stage(page, 2)
+
+
+def test_breadcrumb_and_overlay(tmp_path):
+  page = deck(tmp_path)
+  box_b = stage(page, 10)
+  assert "<a data-back>↩ back</a>" in box_b
+  assert "<a data-go-slide='full'>Platform</a> › <a data-go-slide='map'>Plane</a> › <a data-go-slide='box'>Box</a> › <a data-go-slide='box-a'>A</a>" in box_b
+  root = stage(page, 7)
+  assert "<div class='overlay'><div class='ov-title'>Box</div><a data-go-slide='box-a'>A</a></div>" in root
+
+
+def test_agenda_range_skips_details(tmp_path):
+  page = deck(tmp_path)
+  assert "data-go='1' data-last='4'" in page
