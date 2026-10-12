@@ -110,7 +110,8 @@ SESSIONS = {
   "code": [
     # The platform resolves the repo from the catalog; the git command it runs shows as a comment.
     ("platform catalog component clone greeting-api",
-     ["# git clone git@github.com:wasp-foundry/greeting-api.git"]),
+     ["# git clone git@github.com:wasp-foundry/greeting-api.git",
+      "Cloning into 'greeting-api'..."]),
     ("cd greeting-api", []),
     ("git switch --create feat/greetings", []),
     # The spec the golden path generated: what the app needs, not where or how.
@@ -155,14 +156,12 @@ SESSIONS = {
       "--environment greetings-test",
       "--branch feat/greetings",
       "--wait"],
-     ["✓ greeting-api@greetings-test revision 1: 0.1.0-greetings.1a2b3c4 running · 1/1 replicas available"]),
-    # Real output also has component, image, replicas, revision and message.
-    (["platform workload get",
-      "--component greeting-api",
-      "--environment greetings-test"],
-     ["greeting-api@greetings-test (Available)",
-      "  url           https://greeting-api.greetings-test.platform.example.com",
-      "  resource      db (postgres, compose): Ready"]),
+     # The url and one line per resource come with --wait (#328); `workload get` also shows the internal url.
+     ["✓ greeting-api@greetings-test revision 1: 0.1.0-greetings.1a2b3c4 running · 1/1 replicas available",
+      "  url           https://greeting-api.greetings-test.platform.example.com/",
+      "  resource      db (postgres, compose): Ready",
+      "  resource      dns (dns, provision): Ready",
+      "  resource      route (route, provision): Ready"]),
   ],
   "run": [
     ("curl https://greeting-api.greetings-test.platform.example.com/greetings",

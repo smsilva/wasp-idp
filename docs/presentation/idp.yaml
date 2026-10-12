@@ -1983,7 +1983,7 @@ slides:
 
       **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `name`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no deploy. A spec na tela é a que o template `python-service` gera.
 
-      **`platform catalog component clone`** acha o repo pelo nome do component no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza. **Ilustrativo até a #327**; hoje é o `git clone` direto.
+      **`platform catalog component clone`** acha o repo pelo nome do component no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza, e o `git` usa a credencial do próprio dev. **Real hoje** (#327), com a saída da CLI.
 
       O template não traz driver de Postgres: é o agente quem acrescenta o `psycopg`.
 
@@ -2003,7 +2003,7 @@ slides:
 
       **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `name`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no deploy. A spec na tela é a que o template `python-service` gera.
 
-      **`platform catalog component clone`** acha o repo pelo nome do component no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza. **Ilustrativo até a #327**; hoje é o `git clone` direto.
+      **`platform catalog component clone`** acha o repo pelo nome do component no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza, e o `git` usa a credencial do próprio dev. **Real hoje** (#327), com a saída da CLI.
 
       O template não traz driver de Postgres: é o agente quem acrescenta o `psycopg`.
 
@@ -2047,7 +2047,7 @@ slides:
 
       **O dev escolhe o tipo de ambiente, não onde ele roda.** O perfil (`ephemeral`) é o golden path do ambiente, definido pela plataforma: nuvem, região, tamanho, observabilidade e política de custo vêm nele. Pedir `--provider` ao dev contradiria a spec, que diz o que a app precisa sem dizer onde.
 
-      **Real hoje:** `environment list` e `create --wait` (a lista real também tem `OWNER` e `SHARED`). **Ainda é alvo:** o perfil decidir a política de recursos do ambiente (#329); hoje o `profile` só é gravado no `Environment`.
+      **Real hoje:** `environment list` e `create --wait` (a lista real também tem `OWNER` e `SHARED`), e o perfil decide a política de recursos (#329): um ambiente `ephemeral` resolve `postgres` em `compose` na instância compartilhada, sem passo de admin (ADR 0038).
 
   - name: journey-release
     act: journey
@@ -2058,7 +2058,7 @@ slides:
     show: [strip]
     start: "empty"
     empty: [prompt]
-    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    reveal: [cmd.1, cmd.1-out]
     accumulate: true
     notes: |-
       O que queremos dizer: **deploy é ligar uma versão a um ambiente** — e a resposta é uma URL.
@@ -2067,11 +2067,11 @@ slides:
 
       O banco aparece aqui porque **a spec pediu**: o dev não abriu ticket nem escolheu serviço de nuvem.
 
-      **O modo resolvido aparece no `workload get`:** `db (postgres, compose)` — num ambiente efêmero, o banco é um database na instância Postgres compartilhada, não uma instância nova. Em produção o mesmo pedido resolveria para `provision`.
+      **O modo resolvido aparece na saída do próprio deploy:** `db (postgres, compose)` — num ambiente efêmero, o banco é um database na instância Postgres compartilhada, não uma instância nova. Em produção o mesmo pedido resolveria para `provision`. O `dns` e o `route` dão à instância o host e a rota no ponto de entrada do ambiente.
 
       **Forma da CLI:** `platform <recurso> <verbo>` com o component como escopo (`--component`), como `gh release create`, `gcloud builds list`, `fly releases --app`.
 
-      **Real hoje:** `workload deploy --wait` e `workload get`, com a saída recortada. **Ainda é alvo:** a URL externa (#324), a URL e o modo do recurso na própria saída do `deploy` (#328) e o `compose` num ambiente `ephemeral` sem passo de admin (#329).
+      **Real hoje:** `workload deploy --wait` com a URL externa (#357, #358), a URL e o modo de cada recurso na própria saída (#328) e o `compose` num ambiente `ephemeral` sem passo de admin (#329). **Ilustrativo:** o domínio `platform.example.com` é o de um target em nuvem; no local, a URL é `http://greeting-api.greetings-test.localhost:7080/`.
 
   - name: journey-run
     act: journey
@@ -2091,7 +2091,7 @@ slides:
 
       **O status é da Workload Instance** (uma versão rodando num ambiente), não do component: o catálogo descreve o que a app é, e mostra as instâncias só como `running in` no `catalog component get`.
 
-      **Ilustrativo:** o `curl` pela URL externa depende da #324, e os golden signals (`workload signals`) da #326; hoje nada na plataforma coleta métricas.
+      **Real hoje:** o `curl` pela URL externa (#357, #358; no local, `http://greeting-api.greetings-test.localhost:7080/greetings`). **Ilustrativo:** os golden signals (`workload signals`) dependem da #326; hoje nada na plataforma coleta métricas.
 
   # ── Desenho final ───────────────────────────────────
   - name: landscape-full
