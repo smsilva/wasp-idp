@@ -74,7 +74,7 @@ The app connects to the restored database:
 - A class with no item in the policy ends as `ResourcesNotSupported`. The branch never gets an empty database in its place.
 - Changing the class of a resource that already exists ends as `ResourceModeChanged`, just like changing the mode. `workload remove` and a new deploy change it.
 - `workload remove` deletes only the copy of the Secret in the vcluster. The database and the Secret of `platform-resources` stay.
-- `workload apply` has no classes in the plan yet: an instance deployed with a class shows as `change`, and applying the plan deploys it without the class.
+- In a plan, the class goes under `resourceClasses` (`resourceClasses: {db: restored}`): `workload apply` shows the instance as `unchanged` with the same class, and as `change` without it.
 
 !!! note
     The Forager copies the password once, when the resource becomes `Ready`. A password changed afterwards in the source Secret is not propagated: `workload remove` and a new deploy pick it up.

@@ -223,8 +223,42 @@ def test_concurrent_write_reports_what_was_applied(client, state, admin, ratings
 
 
 def test_a_resource_class_the_plan_leaves_out_is_a_change(client, state, owner):
-  # The plan has no classes (yet): applying it takes the instance back to the plain resources.
+  # Applying it takes the instance back to the plain resources.
   client.post("/v1/environments/demo/workloads/greeting-api/revisions", json={"version": "1.0.0", "resourceClasses": {"db": "restored"}}, headers=owner)
   body = client.post(APPLY, json={"workloads": {"greeting-api": {"version": "1.0.0"}}}, headers=owner).json()
   item = body["items"][0]
   assert (item["action"], item["from"], item["to"]) == ("change", {"version": "1.0.0", "replicas": 1, "resourceClasses": {"db": "restored"}}, {"version": "1.0.0", "replicas": 1})
+
+
+@pytest.mark.parametrize("classes,action", [
+  ({"db": "restored"}, "unchanged"),
+  ({"db": "other"}, "change"),
+])
+def test_resource_classes_in_the_plan_are_diffed(client, state, owner, classes, action):
+  client.post("/v1/environments/demo/workloads/greeting-api/revisions", json={"version": "1.0.0", "resourceClasses": {"db": "restored"}}, headers=owner)
+  item = apply(client, owner, {"greeting-api": {"version": "1.0.0", "resourceClasses": classes}}, dry_run=True).json()["items"][0]
+  assert (item["action"], item["to"]) == (action, {"version": "1.0.0", "replicas": 1, "resourceClasses": classes})
+
+
+def test_apply_writes_the_resource_classes(client, state, owner):
+  apply(client, owner, {"greeting-api": {"version": "1.0.0", "replicas": 2, "resourceClasses": {"db": "restored"}}})
+  spec = state.get("workloadrevisions", "demo.greeting-api.1")["spec"]
+  assert spec["overrides"] == {"replicas": 2, "resources": {"db": {"class": "restored"}}}
+
+
+def test_empty_resource_classes_are_none(client, state, owner):
+  apply(client, owner, {"greeting-api": {"version": "1.0.0"}})
+  deployed(state)
+  item = apply(client, owner, {"greeting-api": {"version": "1.0.0", "resourceClasses": {}}}, dry_run=True).json()["items"][0]
+  assert (item["action"], item["to"]) == ("unchanged", {"version": "1.0.0", "replicas": 1})
+
+
+@pytest.mark.parametrize("classes,message", [
+  ({"cache": "restored"}, "apply of 'greeting-api': 1.0.0 has no resource 'cache'"),
+  ({"db": "Not_Valid"}, "not a valid name"),
+])
+def test_resource_classes_refusals_apply_nothing(client, state, owner, classes, message):
+  response = apply(client, owner, {"greeting-api": {"version": "1.0.0", "resourceClasses": classes}})
+  assert response.status_code == 422, response.text
+  assert message in response.json()["error"]["message"]
+  assert state.stores["workloadrevisions"] == {}

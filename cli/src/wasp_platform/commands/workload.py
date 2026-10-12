@@ -253,7 +253,7 @@ PLAN_KEYS = {"environment", "workloads"}
 
 
 def _plan(file: Path) -> tuple[str, dict]:
-  """environment and workloads of a plan file: {instance: {component?, version | branch, replicas?}}."""
+  """environment and workloads of a plan file: {instance: {component?, version | branch, replicas?, resourceClasses?}}."""
   try:
     document = yaml.safe_load(file.read_text(encoding="utf-8"))
   except OSError as error:
@@ -271,7 +271,7 @@ def _plan(file: Path) -> tuple[str, dict]:
   workloads = document.get("workloads")
   # An empty plan is written as workloads: {}, so that it is never a forgotten key.
   if not isinstance(workloads, dict) or not all(isinstance(entry, dict) for entry in workloads.values()):
-    fail(f"{file}: workloads is a mapping of instance to {{version | branch, replicas}}; an empty plan is workloads: {{}}")
+    fail(f"{file}: workloads is a mapping of instance to {{version | branch, replicas, resourceClasses}}; an empty plan is workloads: {{}}")
   return environment, workloads
 
 
@@ -284,7 +284,7 @@ def _target(state: dict | None) -> str:
 
 @app.command("apply")
 def apply(
-  file: Annotated[Path, typer.Option(help="The plan: environment, and workloads by instance with version or branch and replicas.")],
+  file: Annotated[Path, typer.Option(help="The plan: environment, and workloads by instance with version or branch, replicas and resourceClasses.")],
   dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would change and exit.")] = False,
   prune: Annotated[bool, typer.Option("--prune", help="Remove the workloads of the environment that the plan leaves out.")] = False,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until every rollout ends.")] = False,

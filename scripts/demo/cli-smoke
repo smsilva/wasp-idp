@@ -923,6 +923,24 @@ if [[ "${connected}" != "true" ]]; then
   echo "the app never connected to the restored database" >&2
   exit 1
 fi
+# The plan carries the class too (#313): with it the instance is unchanged, without it a change.
+cat > "${workload_directory}/restored.yaml" <<PLAN
+environment: ${workload_environment}
+workloads:
+  ${workload_component}:
+    version: 0.5.0
+    resourceClasses:
+      db: restored
+PLAN
+output="$(platform workload apply --file "${workload_directory}/restored.yaml" --dry-run)"
+echo "${output}"
+expect_output "unchanged" "${output}"
+expect_output "0.5.0 ×1 db=restored" "${output}"
+expect_output "${workload_environment}: 0 to add, 0 to change, 0 to remove" "${output}"
+sed --in-place '/resourceClasses:/,$d' "${workload_directory}/restored.yaml"
+output="$(platform workload apply --file "${workload_directory}/restored.yaml" --dry-run)"
+echo "${output}"
+expect_output "${workload_environment}: 0 to add, 1 to change, 0 to remove" "${output}"
 output="$(platform workload remove \
   --component "${workload_component}" \
   --environment "${workload_environment}" \

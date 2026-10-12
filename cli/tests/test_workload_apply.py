@@ -19,6 +19,8 @@ workloads:
   reviews:
     version: 2.1.0-rc.1
     replicas: 2
+    resourceClasses:
+      db: restored
   ratings:
     version: 1.0.2
 """
@@ -83,7 +85,7 @@ def test_dry_run_shows_the_diff(api, plan):
   request = api["requests"][0]
   assert request.url.path == "/v1/environments/demo/workloads:apply"
   assert json.loads(request.content) == {
-    "workloads": {"productpage": {"version": "1.4.0"}, "reviews": {"version": "2.1.0-rc.1", "replicas": 2}, "ratings": {"version": "1.0.2"}},
+    "workloads": {"productpage": {"version": "1.4.0"}, "reviews": {"version": "2.1.0-rc.1", "replicas": 2, "resourceClasses": {"db": "restored"}}, "ratings": {"version": "1.0.2"}},
     "dryRun": True,
     "prune": False,
   }
