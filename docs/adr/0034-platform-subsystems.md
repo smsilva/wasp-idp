@@ -54,10 +54,13 @@ O mapa inicial:
 | catalog | core | identity | Developer · Software Catalog, Golden Paths |
 | environment | core | identity | Resource · Compute |
 | scm | optional | identity, catalog | Integration · Version Control |
-| build | optional | scm, catalog | Integration · CI, Registry |
+| registry | optional | identity | Integration · Registry |
+| build | optional | scm, catalog, registry | Integration · CI |
 | cloud-account | optional | identity | Resource |
 | resources | optional | environment, build, catalog | Resource · Data, Networking |
-| workload | optional | environment, build, resources | Integration · Orchestrator, Delivery |
+| workload | optional | environment, build, resources, registry | Integration · Orchestrator, Delivery |
+
+`registry` entrou no mapa com o ADR 0037: o registry era só um plane do `build`.
 
 Ficam previstos, ainda sem código: `observability` (#330, #326) e `usage` (#332, #333).
 

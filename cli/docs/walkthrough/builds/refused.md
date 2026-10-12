@@ -42,6 +42,7 @@ build/hello-api-8757ff (InvalidSpec)
   component     hello-api
   branch        feat/bad-spec
   version       0.1.0-bad-spec.9590d3e
+  registry      ghcr-wasp-foundry (ghcr.io/wasp-foundry/hello-api)
   commit        9590d3e
   run           https://github.com/wasp-foundry/hello-api/actions/runs/38166818390
   ✓ Dispatched    platform-build.yaml dispatched on feat/bad-spec

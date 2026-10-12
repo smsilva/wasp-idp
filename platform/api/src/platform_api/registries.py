@@ -13,7 +13,7 @@ to it, so removing the connection leaves the registry alone.
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from .auth import Principal, current_principal
 from .environments import ADMIN_GROUP
@@ -72,21 +72,20 @@ class RegistryRequest(BaseModel):
         raise ValueError("lowercase letters, digits, '-', '_' and '.', at most 63 characters")
     return value
 
-  @model_validator(mode="after")
-  def check_source(self):
+  def source(self) -> tuple[str, str, str] | None:
+    """vendor, host and namespace given explicitly; None with scmConnection. Refusals as 422."""
     if self.scmConnection is not None:
       if self.vendor or self.host or self.namespace:
-        raise ValueError("give either scmConnection or vendor and namespace, not both")
-      return self
+        raise HTTPException(422, "give either scmConnection or vendor and namespace, not both")
+      return None
     if not self.vendor or not self.namespace:
-      raise ValueError("vendor and namespace are required without scmConnection")
+      raise HTTPException(422, "vendor and namespace are required without scmConnection")
     fixed = FIXED_HOSTS.get(self.vendor)
     if fixed and self.host not in (None, fixed):
-      raise ValueError(f"a {self.vendor} registry is {fixed}")
-    self.host = self.host or fixed
-    if not self.host:
-      raise ValueError(f"host is required for a {self.vendor} registry")
-    return self
+      raise HTTPException(422, f"host: a {self.vendor} registry is {fixed}")
+    if not (self.host or fixed):
+      raise HTTPException(422, f"host is required for a {self.vendor} registry")
+    return self.vendor, self.host or fixed, self.namespace
 
 
 def ready_of(obj: dict) -> dict | None:
@@ -182,10 +181,7 @@ def router(state, journal: Journal) -> APIRouter:
   @routes.post("", status_code=201)
   def create(request: RegistryRequest, principal: Principal = Depends(current_principal)):
     admin(principal, "adding")
-    if request.scmConnection is not None:
-      vendor, host, namespace = from_connection(request.scmConnection)
-    else:
-      vendor, host, namespace = request.vendor, request.host, request.namespace
+    vendor, host, namespace = request.source() or from_connection(request.scmConnection)
     spec = {"vendor": vendor, "host": host, "namespace": namespace, "default": request.default, "pull": {"mode": "anonymous"}}
     same = next((obj for obj in state.list(REGISTRIES) if address(obj) == f"{host}/{namespace}"), None)
     if same is not None:
