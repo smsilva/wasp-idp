@@ -101,22 +101,27 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram svg { max-width: 100%; max-height: 100%; width: auto; height: 100%; display: block; }
 .stage .diagram .part-hidden { visibility: hidden; }
 .stage .diagram .part-dim { opacity: 0.32; }
+.stage .inner.diagram-inner.with-overlay .diagram { transform: translateX(-17cqw); }
 .stage .diagram .part-link { cursor: pointer; }
 .stage .diagram .part-link:hover > rect:first-of-type { stroke: #4a9ef4; }
 .stage .section.crumbs { z-index: 2; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
-.stage .overlay { position: absolute; right: 5cqw; top: 9.5cqw; bottom: 7cqw; width: 48cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 2cqw 2.2cqw; display: flex; flex-direction: column; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
-.stage .overlay .ov-title { font-size: 1.1cqw; letter-spacing: 0.3cqw; text-transform: uppercase; font-weight: 700; color: #6b7a8d; margin-bottom: 1.2cqw; }
-.stage .overlay .ov-list { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 0.5cqw; }
-.stage .overlay .ov-row { display: grid; grid-template-columns: 2.6cqw 1fr; column-gap: 1cqw; padding: 0.7cqw 1.4cqw; background: #070a13; border-radius: 0.6cqw; box-shadow: 0 0.4cqw 1.2cqw rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.03); }
-.stage .overlay .ov-num { font-size: 1.1cqw; line-height: 2.2cqw; font-weight: 600; color: #6b7a8d; font-variant-numeric: tabular-nums; }
-.stage .overlay a { cursor: pointer; }
-.stage .overlay .ov-head { font-size: 1.6cqw; line-height: 2.2cqw; font-weight: 700; color: #fff; }
-.stage .overlay .ov-subs { margin-top: 0.2cqw; font-size: 1.15cqw; line-height: 1.5; color: #6b7a8d; }
-.stage .overlay .ov-subs a { color: #9fb3c8; }
-.stage .overlay .ov-subs .ov-group { color: #c0d2e4; font-weight: 600; margin-right: 0.4cqw; }
-.stage .overlay a:hover { color: #4a9ef4; }
+.stage .overlay { position: absolute; right: 5cqw; top: 9cqw; max-height: calc(100% - 15.5cqw); overflow: hidden; width: 58cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 1.6cqw 2.2cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
+.stage .overlay .ov-title { font-size: 1.1cqw; letter-spacing: 0.3cqw; text-transform: uppercase; font-weight: 700; color: #6b7a8d; margin-bottom: 1cqw; }
+.stage .overlay .ov-tree { columns: 2; column-gap: 3.2cqw; }
+.stage .overlay .ov-topic { break-inside: avoid; }
+.stage .overlay .ov-r { font-size: 1.2cqw; line-height: 1.5; color: #9fb3c8; border-left: 1px solid #1f2937; margin-left: 0.4cqw; break-inside: avoid; }
+.stage .overlay .ov-d0 { border: 0; margin: 0.5cqw 0 0; font-size: 1.55cqw; font-weight: 700; break-after: avoid; }
+.stage .overlay .ov-d0:first-child { margin-top: 0; }
+.stage .overlay .ov-d0 a { color: #fff; }
+.stage .overlay .ov-d1 { padding-left: 1.3cqw; }
+.stage .overlay .ov-d2 { padding-left: 2.6cqw; }
+.stage .overlay .ov-d2 a:first-child, .stage .overlay .ov-d3 a:first-child { color: #6b7a8d; }
+.stage .overlay .ov-d3 { padding-left: 3.9cqw; }
+.stage .overlay a { cursor: pointer; color: inherit; }
+.stage .overlay .ov-ex { white-space: nowrap; margin-left: 0.5cqw; font-size: 0.75em; font-weight: 400; color: #e5c07b; opacity: 0.75; }
+.stage .overlay a:hover, .stage .overlay .ov-d2 a:hover, .stage .overlay .ov-ex:hover { color: #4a9ef4; opacity: 1; }
 .stage .code .ln { padding: 0 1.4cqw; }
 .stage .code .no { width: 2.6cqw; margin-right: 1.4cqw; }
 .stage .code .bar { font-size: 1cqw; padding: 0.5cqw 1.4cqw; }
@@ -798,27 +803,24 @@ def render_agenda(outline, current=None, links=None):
           f"<div class='list'>{''.join(rows)}</div></div>")
 
 
-def overlay_item(number, item):
-  """One topic of a root's overlay, as an agenda row: number, link, then its children.
+def overlay_tree(items, depth=0):
+  """A root's overlay: an indented tree, one row per slide, every row a link.
 
-  A child with children of its own takes a line ("Business view  System · Domain"); leaf children share one.
+  A child labelled "<parent> example" is a small "▸ ex" link on its parent's row, not a row of its own.
   """
   esc = html.escape
-  link = lambda text, name, css="": f"<a{f' class={chr(39)}{css}{chr(39)}' if css else ''} data-go-slide='{esc(name)}'>{esc(text)}</a>"
-  text, name, children = item
-  lines, leaves = [], []
-  for child_text, child_name, grandchildren in children:
-    if grandchildren:
-      if leaves:
-        lines.append(" · ".join(leaves))
-        leaves = []
-      lines.append(link(child_text, child_name, "ov-group") + " " + " · ".join(link(t, n) for t, n, _ in grandchildren))
-    else:
-      leaves.append(link(child_text, child_name))
-  if leaves:
-    lines.append(" · ".join(leaves))
-  subs = f"<div class='ov-subs'>{''.join(f'<div>{line}</div>' for line in lines)}</div>" if lines else ""
-  return f"<div class='ov-row'><div class='ov-num'>{number:02d}</div><div>{link(text, name, 'ov-head')}{subs}</div></div>"
+  example = lambda text: text.lower().endswith(" example")
+  rows = ""
+  for text, name, children in items:
+    # A top-level topic and its subtree stay in one column.
+    if depth == 0:
+      rows += "<div class='ov-topic'>"
+    marks = "".join(f"<a class='ov-ex' data-go-slide='{esc(n)}' title='{esc(t)}'>▸&nbsp;ex</a>" for t, n, _ in children if example(t))
+    rows += f"<div class='ov-r ov-d{depth}'><a data-go-slide='{esc(name)}'>{esc(text)}</a>{marks}</div>"
+    rows += overlay_tree([child for child in children if not example(child[0])], depth + 1)
+    if depth == 0:
+      rows += "</div>"
+  return rows
 
 
 def render_stage(step, base, outline=None):
@@ -866,8 +868,10 @@ def render_stage(step, base, outline=None):
     overlay = ""
     if step.get("overlay"):
       overlay = (f"<div class='overlay'><div class='ov-title'>{esc(step['section'][1])}</div>"
-                 + "<div class='ov-list'>" + "".join(overlay_item(n, item) for n, item in enumerate(step["overlay"], start=1)) + "</div></div>")
-    return f"{section}<div class='inner diagram-inner'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}"
+                 + f"<div class='ov-tree'>{overlay_tree(step['overlay'])}</div></div>")
+    # With an overlay, the diagram moves left (over the empty clients column) so the focused box stays visible.
+    inner = "inner diagram-inner with-overlay" if overlay else "inner diagram-inner"
+    return f"{section}<div class='{inner}'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}"
   if step.get("code"):
     source = (base / step["code"]["file"]).read_text().splitlines()
     shown = sorted(line_set(step["code"].get("lines"), set(range(1, len(source) + 1))))

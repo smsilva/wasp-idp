@@ -170,19 +170,10 @@ def test_breadcrumb_and_overlay(tmp_path):
   assert "<a data-back>↩ back</a>" in box_b
   assert "<a data-go-slide='full'>Platform</a> › <a data-go-slide='map'>Plane</a> › <a data-go-slide='box'>Box</a> › <a data-go-slide='box-a'>A</a>" in box_b
   root = stage(page, 7)
-  assert ("<div class='overlay'><div class='ov-title'>Box</div><div class='ov-list'>"
-          "<div class='ov-row'><div class='ov-num'>01</div><div><a class='ov-head' data-go-slide='box-a'>A</a>"
-          "<div class='ov-subs'><div><a data-go-slide='box-b'>B</a></div></div></div></div></div></div>") in root
+  assert ("<div class='overlay'><div class='ov-title'>Box</div><div class='ov-tree'>"
+          "<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='box-a'>A</a></div>"
+          "<div class='ov-r ov-d1'><a data-go-slide='box-b'>B</a></div></div></div></div>") in root
 
-
-def test_overlay_groups_grandchildren():
-  # A child with children of its own shows them after it: "Business view: System · Domain".
-  item = ("Two views", "levels", [("Business", "biz", [("System", "sys", []), ("Domain", "dom", [])]), ("Engineering", "eng", [])])
-  html = ro.overlay_item(2, item)
-  # Like the agenda: a numbered row; each child group on its own line, leaf children together on one.
-  assert html.startswith("<div class='ov-row'><div class='ov-num'>02</div>")
-  assert ("<div class='ov-subs'><div><a class='ov-group' data-go-slide='biz'>Business</a> <a data-go-slide='sys'>System</a> · "
-          "<a data-go-slide='dom'>Domain</a></div><div><a data-go-slide='eng'>Engineering</a></div></div>") in html
 
 
 def test_agenda_range_skips_details(tmp_path):
@@ -231,3 +222,21 @@ def test_every_detail_step_knows_the_way_out(tmp_path):
 def test_sync_carries_the_origin():
   # The presenter window gets the origin with the step, or its back and exit lose the way.
   assert "channel.postMessage({ step: current, origin: sessionStorage.getItem(ORIGIN_KEY) })" in ro.SCRIPT
+
+
+
+def test_overlay_tree_one_row_per_slide():
+  # An indented tree: one row per slide, the depth as a class.
+  items = [("Views", "views", [("Business", "biz", [("System", "sys", [])])]), ("Ours", "ours", [])]
+  # Each top-level topic is wrapped in `ov-topic`, so a column never splits it.
+  assert ro.overlay_tree(items) == ("<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='views'>Views</a></div>"
+                                    "<div class='ov-r ov-d1'><a data-go-slide='biz'>Business</a></div>"
+                                    "<div class='ov-r ov-d2'><a data-go-slide='sys'>System</a></div></div>"
+                                    "<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='ours'>Ours</a></div></div>")
+
+
+def test_overlay_examples_are_a_small_mark():
+  # A child labelled "<parent> example" is a "▸ ex" link on its parent's row, never a row of its own.
+  items = [("System", "sys", [("System example", "sys-ex", [])])]
+  assert ro.overlay_tree(items) == ("<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='sys'>System</a>"
+                                    "<a class='ov-ex' data-go-slide='sys-ex' title='System example'>▸&nbsp;ex</a></div></div>")

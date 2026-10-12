@@ -520,14 +520,26 @@ slides:
     audiences: [engineering, platform]
     message: "Component é uma peça de software que alguém mantém e entrega."
     heading: "Component"
-    screen: ["**What:** software you build and deploy", "**Example:**\nThe `shuffle-api` _shuffles_ the play queue"]
+    screen: ["**What:** software you build and deploy"]
     notes: |-
       O que queremos dizer: **Component é o software que um time mantém e entrega** — serviço, site, biblioteca, pipeline de dados.
 
-      **Exemplo:** `shuffle-api`, o serviço que embaralha a fila de reprodução. Vem do **catálogo de demonstração do Backstage**, que modela um Spotify (onde o Backstage nasceu).
-
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-engineering-view]
+
+  - name: entity-component-example
+    act: developer-control
+    parent: entity-component
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Component example"
+    message: "O shuffle-api, do catálogo de demonstração, é um Component."
+    animations: none
+    screen: ["The `shuffle-api` _shuffles_ the play queue"]
+    notes: |-
+      `shuffle-api`, o serviço que embaralha a fila de reprodução. Vem do **catálogo de demonstração do Backstage**, que modela um Spotify (onde o Backstage nasceu).
+
+    dependsOn: [entity-component]
 
   - name: entity-api
     act: developer-control
@@ -536,7 +548,7 @@ slides:
     audiences: [engineering, platform]
     message: "API é o contrato entre Components."
     heading: "API"
-    screen: ["**What:** the contract between components", "**Example:**\n`www-artist` site _consumes_ `artist-lookup` service"]
+    screen: ["**What:** the contract between components"]
     notes: |-
       O que queremos dizer: **API é o contrato**; quem consome depende dele, não da implementação.
 
@@ -545,10 +557,22 @@ slides:
 
       É uma **fronteira legível por máquina** (OpenAPI, AsyncAPI, gRPC, GraphQL).
 
-      **Exemplo:** o site `www-artist` (`type: website`) consome o que o microsserviço `artist-lookup` (`type: service`, em Java) expõe. O tipo vem do campo `spec.type` de cada Component no catálogo de demonstração.
-
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-component]
+
+  - name: entity-api-example
+    act: developer-control
+    parent: entity-api
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "API example"
+    message: "O site www-artist consome a API do artist-lookup."
+    animations: none
+    screen: ["`www-artist` site _consumes_ `artist-lookup` service"]
+    notes: |-
+      O site `www-artist` (`type: website`) consome o que o microsserviço `artist-lookup` (`type: service`, em Java) expõe. O tipo vem do campo `spec.type` de cada Component no catálogo de demonstração.
+
+    dependsOn: [entity-api]
 
   - name: entity-resource
     act: developer-control
@@ -557,16 +581,28 @@ slides:
     audiences: [engineering, platform]
     message: "Resource é a infraestrutura de que o Component precisa para rodar."
     heading: "Resource"
-    screen: ["**What:** infrastructure needed at runtime", "**Example:**\nThe `artists-db` database _used by_ `artist-lookup`"]
+    screen: ["**What:** infrastructure needed at runtime"]
     notes: |-
       O que queremos dizer: **Resource é a infraestrutura de que o Component precisa para rodar** — banco, fila, bucket.
-
-      **Exemplo:** o microsserviço `artist-lookup` (`type: service`) depende de `artists-db` (`type: database`), que guarda os dados dos artistas.
 
       **Gancho para o Resource Plane:** aqui o Resource é descrito **pelo papel** (database); lá vira um serviço concreto.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-api]
+
+  - name: entity-resource-example
+    act: developer-control
+    parent: entity-resource
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Resource example"
+    message: "O artist-lookup depende do banco artists-db."
+    animations: none
+    screen: ["The `artists-db` database _used by_ `artist-lookup`"]
+    notes: |-
+      O microsserviço `artist-lookup` (`type: service`) depende de `artists-db` (`type: database`), que guarda os dados dos artistas.
+
+    dependsOn: [entity-resource]
 
   - name: entity-system
     act: developer-control
@@ -575,12 +611,9 @@ slides:
     audiences: [engineering, platform]
     message: "System junta Components, APIs e Resources que entregam uma capacidade — e esconde o resto."
     heading: "System"
-    subitems: together
-    screen: ["**What:** components that deliver a capability", "**Example:**\nThe `artist-engagement-portal` system _groups_:\n- `www-artist` site\n- `artist-lookup` service\n- `artists-db` database"]
+    screen: ["**What:** components that deliver a capability"]
     notes: |-
       O que queremos dizer: **System junta as peças que entregam uma capacidade** e esconde o que há dentro.
-
-      **Exemplo:** o System `artist-engagement-portal` reúne o site `www-artist`, o microsserviço `artist-lookup` e o banco `artists-db` — as três peças dos slides anteriores. Um System junta **Components e Resources**.
 
       Quem está fora enxerga **só as APIs públicas** do System; o que há dentro pode mudar sem avisar ninguém.
 
@@ -589,6 +622,20 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-resource]
 
+  - name: entity-system-example
+    act: developer-control
+    parent: entity-system
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "System example"
+    message: "O System artist-engagement-portal junta as três peças anteriores."
+    animations: none
+    screen: ["The `artist-engagement-portal` system _groups_:", "`www-artist` site", "`artist-lookup` service", "`artists-db` database"]
+    notes: |-
+      O System `artist-engagement-portal` reúne o site `www-artist`, o microsserviço `artist-lookup` e o banco `artists-db` — as três peças dos slides anteriores. Um System junta **Components e Resources**.
+
+    dependsOn: [entity-system]
+
   - name: entity-domain
     act: developer-control
     parent: catalog-business-view
@@ -596,19 +643,30 @@ slides:
     audiences: [engineering, platform]
     message: "Domain agrupa Systems da mesma área de negócio."
     heading: "Domain"
-    subitems: together
-    screen: ["**What:** systems of one business area", "**Example:**\nThe `audio` domain _contains_:\n- `artists` subdomain\n- `playback` subdomain"]
+    screen: ["**What:** systems of one business area"]
     notes: |-
       O que queremos dizer: **Domain agrupa Systems da mesma área de negócio.**
 
       Domain = **bounded context**: mesma terminologia, mesmas métricas, mesmo propósito.
 
-      **Exemplo:** `audio` tem dois subdomínios (`subdomainOf`): `artists` e `playback`.
-
       Domain é **como a liderança conversa sobre o produto**.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-system]
+
+  - name: entity-domain-example
+    act: developer-control
+    parent: entity-domain
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Domain example"
+    message: "O Domain audio tem dois subdomínios."
+    animations: none
+    screen: ["The `audio` domain _contains_:", "`artists` subdomain", "`playback` subdomain"]
+    notes: |-
+      `audio` tem dois subdomínios (`subdomainOf`): `artists` e `playback`.
+
+    dependsOn: [entity-domain]
 
   - name: spotify-tree
     act: developer-control
@@ -775,14 +833,25 @@ slides:
     topic: "Software Catalog"
     message: "O catálogo não representa versões: guarda o conceito humano de uma coisa — dado estável, curado pelo dono."
     heading: "What the catalog stores"
-    screen: ["**Not:** versions", "**Only:** the human concept", "**Example:**\n`playback-order` _is_ 1 component, N versions running"]
+    screen: ["**Not:** versions", "**Only:** the human concept"]
     notes: |-
       O que queremos dizer: **o catálogo é o modelo mental humano da plataforma**, não o estado vivo dela.
 
-      Recomendação explícita da documentação do Backstage (FAQ do catálogo). `playback-order`, o serviço de ordem de reprodução do catálogo de demonstração, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
-
       Fonte: references/backstage-catalog.md.
     dependsOn: [declare-discovery]
+
+  - name: no-versions-example
+    act: developer-control
+    parent: no-versions
+    topic: "Software Catalog"
+    label: "What the catalog stores example"
+    message: "playback-order é um Component, com várias versões rodando."
+    animations: none
+    screen: ["`playback-order` _is_ 1 component, N versions running"]
+    notes: |-
+      Recomendação explícita da documentação do Backstage (FAQ do catálogo). `playback-order`, o serviço de ordem de reprodução do catálogo de demonstração, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
+
+    dependsOn: [no-versions]
 
   - name: major-breaking
     act: developer-control
@@ -791,14 +860,26 @@ slides:
     audiences: [engineering, platform]
     message: "A exceção é a quebra de contrato: uma major breaking vira uma entidade nova."
     heading: "The exception: breaking change"
-    screen: ["**Rule:** a major breaking _is_ a new entity", "**Example:**\n`customerinfo` → `customerinfo2`"]
+    screen: ["**Rule:** a major breaking _is_ a new entity"]
     notes: |-
       O que queremos dizer: **quebrou o contrato, mudou o conceito** — e os consumidores precisam migrar de forma explícita.
 
-      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
-
       Fonte: references/backstage-catalog.md.
     dependsOn: [no-versions]
+
+  - name: major-breaking-example
+    act: developer-control
+    parent: major-breaking
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Breaking change example"
+    message: "A FAQ do Backstage: customerinfo vira customerinfo2."
+    animations: none
+    screen: ["`customerinfo` → `customerinfo2`"]
+    notes: |-
+      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
+
+    dependsOn: [major-breaking]
 
   - name: plugins
     act: developer-control
