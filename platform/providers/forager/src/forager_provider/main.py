@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> None:
   parser.add_argument("--namespace", default="platform-system")
   parser.add_argument("--secrets-namespace", default="platform-resources", help="where the generated credentials are kept")
   parser.add_argument("--context", default=None, help="kubeconfig context, only when running outside the cluster")
-  parser.add_argument("--vcluster-server", default=SERVER, help="address of a vcluster API server, with {name} and {port}")
+  parser.add_argument("--vcluster-server", default=SERVER, help="address of a vcluster API server, with {name} (and {port}, the host port)")
   parser.add_argument("--resync-seconds", type=int, default=30)
   parser.add_argument("--poll-seconds", type=int, default=5)
   args = parser.parse_args(argv)

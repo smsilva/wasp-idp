@@ -11,8 +11,9 @@ CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
 REVISIONS = "workloadrevisions"
 REQUESTS = "resourcerequests"
-# The in-cluster address of the vcluster API server, as the Platform API reaches it (credentials.py).
-SERVER = "https://vcluster.env-{name}:{port}"
+# The in-cluster address of the vcluster API server (ClusterIP on 443, #307), as the Platform API
+# reaches it (credentials.py).
+SERVER = "https://vcluster.env-{name}"
 
 
 def _missing(error: client.ApiException) -> bool:

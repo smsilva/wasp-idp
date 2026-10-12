@@ -64,6 +64,8 @@ workload_directory="$(mktemp --directory)"
 workload_environment="smoke-workload-${RANDOM}"
 # ghcr.io/stefanprodan/podinfo:6.7.1, public: the vcluster pulls it without credentials.
 workload_digest="sha256:862ca45e61b32392f7941a1bdfdbe5ff8b6899070135f1bdca1c287d0057fc94"
+# postgres:17-alpine, public: the app of the Forager step is its psql client.
+postgres_digest="sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24"
 render_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
@@ -672,7 +674,8 @@ expect_output "revision 7: removed from ${workload_environment}" "${output}"
 
 step "workload deploy with a postgres: the Forager provisions it, remove undoes it (#304)"
 # The platform default policy (platform-default) resolves postgres as provision: a dedicated
-# Postgres in the vcluster, its outputs in the variables and the password as a secretKeyRef.
+# Postgres in the vcluster, its outputs in the variables and the password as a secretKeyRef. The app
+# is a psql client that selects until it connects: the deploy proves the wiring, its log the database.
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
 apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
 kind: Version
@@ -684,8 +687,8 @@ metadata:
 spec:
   component: ${workload_component}
   version: "0.5.0"
-  image: ghcr.io/stefanprodan/podinfo
-  digest: "${workload_digest}"
+  image: docker.io/library/postgres
+  digest: "${postgres_digest}"
   commit: "$(printf '5%.0s' {1..40})"
   branch: main
   createdAt: "2026-10-11T14:00:00Z"
@@ -699,16 +702,14 @@ spec:
     containers:
       app:
         image: .
+        command: ["sh", "-c"]
+        args: ["until psql --command 'select current_database()'; do sleep 2; done; sleep infinity"]
         variables:
-          DATABASE_HOST: \${resources.db.host}
-          DATABASE_PORT: \${resources.db.port}
-          DATABASE_NAME: \${resources.db.name}
-          DATABASE_USER: \${resources.db.username}
-          DATABASE_PASSWORD: \${resources.db.password}
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 9898
+          PGHOST: \${resources.db.host}
+          PGPORT: \${resources.db.port}
+          PGDATABASE: \${resources.db.name}
+          PGUSER: \${resources.db.username}
+          PGPASSWORD: \${resources.db.password}
 MANIFEST
 output="$(platform workload deploy \
   --component "${workload_component}" \
@@ -720,6 +721,19 @@ expect_output "revision 8: 0.5.0 running" "${output}"
 output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
 echo "${output}"
 expect_output "resource      db (postgres, provision): Ready" "${output}"
+connected="false"
+for attempt in $(seq 1 30); do
+  if kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" 2>/dev/null | grep --quiet "current_database"; then
+    connected="true"
+    break
+  fi
+  sleep 2
+done
+if [[ "${connected}" != "true" ]]; then
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" | tail -5 >&2
+  echo "the app never connected to its postgres" >&2
+  exit 1
+fi
 # The Resource of the catalog derived from the Score (no id): <component>-<resource>.
 output="$(platform catalog resource get "${workload_component}-db")"
 expect_output "team-platform" "${output}"

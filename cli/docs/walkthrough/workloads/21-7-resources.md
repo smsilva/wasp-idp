@@ -9,14 +9,17 @@ resources:
 containers:
   app:
     image: .
+    command: ["sh", "-c"]
+    args: ["until psql --command 'select current_database()'; do sleep 2; done; sleep infinity"]
     variables:
-      DATABASE_HOST: ${resources.db.host}
-      DATABASE_NAME: ${resources.db.name}
-      DATABASE_USER: ${resources.db.username}
-      DATABASE_PASSWORD: ${resources.db.password}
+      PGHOST: ${resources.db.host}
+      PGPORT: ${resources.db.port}
+      PGDATABASE: ${resources.db.name}
+      PGUSER: ${resources.db.username}
+      PGPASSWORD: ${resources.db.password}
 ```
 
-With a version `0.5.0` of `hello-api` with that Score (written by `kubectl` as in step 21.2):
+With a version `0.5.0` of `hello-api` with that Score, whose app is the `psql` client of the public image `postgres:17-alpine` (written by `kubectl` as in step 21.2):
 
 ```bash
 platform workload deploy \
@@ -35,16 +38,31 @@ platform workload get \
 hello-api@demo (Available)
   component     hello-api
   version       0.5.0
-  image         ghcr.io/stefanprodan/podinfo@sha256:862ca45e61b32392f7941a1bdfdbe5ff8b6899070135f1bdca1c287d0057fc94
+  image         docker.io/library/postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
   replicas      1/1
   revision      8
-  url           http://hello-api.apps:80
+  url           —
   message       1/1 replicas ready
   resource      db (postgres, provision): Ready
 ```
 
+The app connects with the outputs and nothing else:
+
+```bash
+kubectl --kubeconfig ~/.config/platform/environments/demo.kubeconfig \
+  --namespace apps \
+  logs deployment/hello-api
+```
+
+``` { .text .output title="output" }
+ current_database
+------------------
+ app
+(1 row)
+```
+
 - While the database starts, the revision waits as `ResourcesPending`, and `--wait` keeps following it.
-- `DATABASE_HOST` is `hello-api-db-<hash>.resources`, a namespace of the vcluster apart from the workloads, and `DATABASE_PASSWORD` is a `secretKeyRef` to the Secret of the same name in the namespace `apps`: the password is not in the Deployment.
+- `PGHOST` is `hello-api-db-<hash>.resources`, a namespace of the vcluster apart from the workloads, and `PGPASSWORD` is a `secretKeyRef` to the Secret of the same name in the namespace `apps`: the password is not in the Deployment.
 - The next deploy reuses the same database. `workload remove` deletes it, and its data with it.
 - The Score has no `id` for `db`, so the catalog gets the Resource `hello-api-db`, owned by the component's team: `platform catalog resource get hello-api-db`.
 
