@@ -534,7 +534,7 @@ def build_steps(outline):
     # `diagram`: an SVG whose <g data-part> groups are revealed one per step (`reveal`),
     # over parts already introduced: `show` at full color (the skeleton), `dim` dimmed
     # (the previous content). Earlier parts of the same `reveal` dim as the next one enters,
-    # unless `accumulate: true` (they stay at full color: the drawing grows).
+    # unless `accumulate: true` (they stay at full color: the drawing grows); `accumulate: commands` below.
     if slide.get("diagram"):
       reveal = slide.get("reveal") or []
       shown = {**{part: "dim" for part in slide.get("dim", [])}, **{part: "on" for part in slide.get("show", [])}}
@@ -542,9 +542,16 @@ def build_steps(outline):
       if not reveal or slide.get("start") == "empty":
         steps.append({"slide": slide, "act": act, "section": section, "items": [],
                       "diagram": {**shown, **{part: "on" for part in slide.get("empty", [])}}})
+      # `accumulate: commands`: a terminal; a command and its output (`cmd.N`, `cmd.N-out`, `cmd.N-editor`)
+      # stay lit together, and the commands before it dim.
+      group = lambda part: part.split("-")[0]
+      def kept(done, part):
+        if slide.get("accumulate") == "commands":
+          return "on" if group(done) == group(part) else "dim"
+        return "on" if slide.get("accumulate") else "dim"
       for n, part in enumerate(reveal):
         steps.append({"slide": slide, "act": act, "section": section, "items": [],
-                      "diagram": {**shown, **{done: "on" if slide.get("accumulate") else "dim" for done in reveal[:n]}, part: "on"}})
+                      "diagram": {**shown, **{done: kept(done, part) for done in reveal[:n]}, part: "on"}})
       continue
     screen = slide.get("screen") or []
     if slide.get("code") or not screen:

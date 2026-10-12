@@ -185,8 +185,18 @@ SETUP_SESSIONS = [
   ("platform login",
    ["Opening the browser to sign in …",
     "✓ Logged in as admin@example.com (platform-admins, platform-users)"]),
-  ("platform team member add team-alpha dev@example.com",
-   ["✓ dev@example.com added to team-alpha"]),
+  PAGE,
+  # A fresh platform has no team: `list` prints only its header.
+  ("platform team list", ["NAME"]),
+  ("platform team create team-alpha", ["✓ team team-alpha created"]),
+  ("platform team list", ["NAME", "+team-alpha"]),
+  PAGE,
+  ("platform team get team-alpha", ["team-alpha: 0 member(s)"]),
+  ("platform team member add team-alpha dev@example.com", ["✓ dev@example.com added to team-alpha"]),
+  ("platform team get team-alpha",
+   ["team-alpha: 1 member(s)",
+    "EMAIL            USERNAME",
+    "+dev@example.com  dev@example.com"]),
   PAGE,
   (["platform scm connection add wasp-foundry",
     "--vendor github",
@@ -211,13 +221,9 @@ SETUP_SESSIONS = [
     "# apply the printed trust policy (sts:ExternalId) to the role"]),
   ("platform cloud account verify nonprod-aws --wait",
    ["✓ nonprod-aws ready (account 123456789012)"]),
-  # Real output also has REF (a 40-char sha) and SOURCE (a URL) columns.
-  # Only python-service exists today: nodejs-service and go-service are illustrative (one stack per audience).
-  ("platform catalog template list",
-   ["NAME            TYPE     DEFAULT",
-    "go-service      service  —",
-    "nodejs-service  service  —",
-    "python-service  service  yes"]),
+  ("platform cloud account list",
+   ["NAME         VENDOR  ACCOUNT       STATUS  VALIDATED             OWNER",
+    "+nonprod-aws  aws     123456789012  ready   2026-10-12T19:30:00Z  admin@example.com"]),
   PAGE,
   # Cropped from the rows of `idp/catalog/`, realigned to the rows that stay. The two Component rows are
   # illustrative: the apps' repos hold them, and discovery (#205) indexes them; the reason drops its "(#205)".
@@ -232,6 +238,14 @@ SETUP_SESSIONS = [
     "19 to create, 0 to update, 1 unchanged, 4 skipped.",
     "Apply? [y/N]: y",
     "✓ 19 created, 0 updated"]),
+  PAGE,
+  # Real output also has REF (a 40-char sha) and SOURCE (a URL) columns.
+  # Only python-service exists today: nodejs-service and go-service are illustrative (one stack per audience).
+  ("platform catalog template list",
+   ["NAME            TYPE     DEFAULT",
+    "go-service      service  —",
+    "nodejs-service  service  —",
+    "python-service  service  yes"]),
 ]
 
 X0, X1 = 120, 1480
@@ -272,9 +286,32 @@ def url_spans(url, base):
          f'<tspan fill="{DOMAIN_C}">{esc(domain)}</tspan>')
   return out + (f'<tspan fill="{PATH_C}">{esc(path)}</tspan>' if path else "")
 
+# A `platform` command reads as noun, verb, names: `platform` dim, the command group (`team member`) in
+# NOUN, the verb in bold white, the names it acts on (`team-alpha`, `dev@example.com`) in VALUE like an
+# option's value. Other commands (git, cd, the agent) keep the plain colouring.
+NOUN = "#c3a6ff"
+VERBS = {"add", "clone", "create", "deploy", "get", "import", "init", "list", "login", "signals", "verify"}
+
 def command_line(x, y, text):
   import re
   spans, after_option = "", False
+  head = re.match(r"platform(?:\s+[^\s\\-]\S*)+", text)
+  if head:
+    seen_verb = False
+    for n, token in enumerate(re.split(r"(\s+)", head.group(0))):
+      if token.isspace():
+        spans += token
+        continue
+      if n == 0:
+        color = SOFT
+      elif not seen_verb and token in VERBS:
+        seen_verb = True
+        spans += f'<tspan fill="{WHITE}" font-weight="700">{esc(token)}</tspan>'
+        continue
+      else:
+        color = VALUE if seen_verb else NOUN
+      spans += f'<tspan fill="{color}">{esc(token)}</tspan>'
+    text = text[head.end():]
   for token in re.split(r"(\s+)", text):
     if token.startswith("https://"):
       spans += url_spans(token, WHITE)
@@ -296,7 +333,7 @@ def command_line(x, y, text):
           f'xml:space="preserve" {MONO}>{spans}</text>')
 
 # Working directory in the terminal title: the repo is cloned in Code, so Plan runs from home.
-CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", "setup-2": "~", "setup-3": "~", "setup-4": "~", "setup-5": "~"}  # per page: `code-2` runs after the `cd`
+CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", **{f"setup-{n}": "~" for n in range(2, 10)}}  # per page: `code-2` runs after the `cd`
 
 def session(key, commands, name):
   parts = {}
