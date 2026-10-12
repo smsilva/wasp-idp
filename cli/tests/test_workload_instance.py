@@ -107,8 +107,8 @@ def test_list(api):
   result = run("list", "--environment", "demo")
   assert result.exit_code == 0, result.output
   lines = result.output.splitlines()
-  assert lines[0].split() == ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "URL"]
-  assert lines[1].split() == ["reviews@demo", "reviews", "2.1.0", "Available", "2/2", "1", "http://reviews.apps:80"]
+  assert lines[0].split() == ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"]
+  assert lines[1].split() == ["reviews@demo", "reviews", "2.1.0", "Available", "2/2", "1", "—", "http://reviews.apps:80"]
 
 
 def test_get(api):

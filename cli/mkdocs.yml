@@ -79,6 +79,7 @@ nav:
           - A database in the shared instance: walkthrough/workloads/compose.md
           - A database that already exists: walkthrough/workloads/bind.md
           - Another instance of the same component: walkthrough/workloads/instances.md
+          - Route traffic to an instance: walkthrough/workloads/route.md
       - Remove the GitHub connection: walkthrough/scm-connection/remove.md
       - Clean up and sign out: walkthrough/cleanup.md
       - Without a browser: walkthrough/cli-smoke.md

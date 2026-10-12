@@ -16,12 +16,12 @@ platform workload list \
 
 ``` { .text .output title="output" }
 ✓ hello-api-pr-42@demo revision 1: 0.4.0-greetings.4444444 running · 1/1 replicas available
-WORKLOAD              COMPONENT  VERSION                  STATUS     REPLICAS  REVISION  URL
-hello-api@demo        hello-api  0.3.0                    Available  2/2       1         http://hello-api.apps:80
-hello-api-pr-42@demo  hello-api  0.4.0-greetings.4444444  Available  1/1       1         http://hello-api-pr-42.apps:80
+WORKLOAD              COMPONENT  VERSION                  STATUS     REPLICAS  REVISION  TRAFFIC  URL
+hello-api@demo        hello-api  0.3.0                    Available  2/2       1         —        http://hello-api.apps:80
+hello-api-pr-42@demo  hello-api  0.4.0-greetings.4444444  Available  1/1       1         —        http://hello-api-pr-42.apps:80
 ```
 
-- Each instance has a Deployment and a Service of its own. The Service `hello-api` selects only the pods of the instance `hello-api`, so the pull request gets no traffic from it. You reach it by its own Service, `http://hello-api-pr-42.apps`. Routing a request to it by header is phase 3.
+- Each instance has a Deployment and a Service of its own. The Service `hello-api` selects only the pods of the instance `hello-api`, so the pull request gets no traffic from it. You reach it by its own Service, `http://hello-api-pr-42.apps`, until a [route](route.md) sends it calls made to `http://hello-api`.
 - Its revisions, its history and its resources are its own: a `provision` database is one per instance.
 - The first deploy names the component of the instance, and the instance keeps it. A deploy that names another component is refused (`409`), and so is an instance named like another component: its Service would answer for it.
 
