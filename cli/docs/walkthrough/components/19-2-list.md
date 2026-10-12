@@ -26,7 +26,9 @@ The repo has a single commit (the README of `auto_init` is replaced), and its `c
 
 ```bash
 gh api repos/wasp-foundry/hello-api/contents/catalog-info.yaml \
-  --jq .content | base64 --decode | grep --extended-regexp 'template:|project-slug:'
+  --jq .content \
+  | base64 --decode \
+  | grep --extended-regexp 'template:|project-slug:'
 ```
 
 ``` { .text .output title="output" }

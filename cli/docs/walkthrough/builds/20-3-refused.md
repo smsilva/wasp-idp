@@ -5,9 +5,15 @@ A version whose `app-spec.yaml` is not valid does not exist for the platform. On
 ```bash
 git -C /tmp/hello-api switch --create feat/bad-spec main
 
-sed --in-place 's/^    type: postgres$/    type: postgres\n    id: orders-db\n  cache:\n    type: redis/' /tmp/hello-api/app-spec.yaml
+sed --in-place \
+  --expression '/^    type: postgres$/a\    id: orders-db' \
+  --expression '/^    type: postgres$/a\  cache:' \
+  --expression '/^    type: postgres$/a\    type: redis' \
+  /tmp/hello-api/app-spec.yaml
 
-git -C /tmp/hello-api commit --all --message "feat: cache and shared database"
+git -C /tmp/hello-api commit \
+  --all \
+  --message "feat: cache and shared database"
 
 git -C /tmp/hello-api push --set-upstream origin feat/bad-spec
 
