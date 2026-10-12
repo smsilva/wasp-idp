@@ -3,12 +3,12 @@
 ```bash
 platform workload spec validate [--file <app-spec.yaml>]
 platform workload spec get --component <component> [--version <version> | --branch <branch>]
-platform workload deploy --component <component> --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--resource-class <resource>=<class> ...] [--wait] [--timeout <seconds>]
+platform workload deploy --component <component> [--instance <instance>] --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--resource-class <resource>=<class> ...] [--wait] [--timeout <seconds>]
 platform workload list --environment <environment>
-platform workload get --component <component> --environment <environment>
-platform workload history --environment <environment> [--component <component>]
-platform workload rollback --component <component> --environment <environment> [--revision <n>] [--wait] [--timeout <seconds>]
-platform workload remove --component <component> --environment <environment> [--wait] [--timeout <seconds>]
+platform workload get (--component <component> | --instance <instance>) --environment <environment>
+platform workload history --environment <environment> [--component <component> | --instance <instance>]
+platform workload rollback (--component <component> | --instance <instance>) --environment <environment> [--revision <n>] [--wait] [--timeout <seconds>]
+platform workload remove (--component <component> | --instance <instance>) --environment <environment> [--wait] [--timeout <seconds>]
 platform workload apply --file <plan.yaml> [--dry-run] [--prune] [--wait] [--timeout <seconds>]
 ```
 
@@ -37,7 +37,7 @@ Prints the spec of a version as YAML, preceded by a comment line `# <component> 
 
 ## Workload Instances
 
-**The Workload Instance is to the Workload Spec what a Helm Release is to a Chart.** It is a Workload Spec live in an environment, kept by the platform, and the source of the runtime data. Each act on it (a deploy) is a **revision**, immutable, with its result. The short name of an instance is `<instance>@<environment>`; in phase 1 the instance is named after the component, so `--component` picks it and a component has at most one instance per environment.
+**The Workload Instance is to the Workload Spec what a Helm Release is to a Chart.** It is a Workload Spec live in an environment, kept by the platform, and the source of the runtime data. Each act on it (a deploy) is a **revision**, immutable, with its result. The short name of an instance is `<instance>@<environment>`. An instance is named after its component by default; a component may have more instances in the same environment (see [Instances](#instances)).
 
 Where the analogy breaks: the chart carries templates, while the Score declares what the app needs and the platform renders it; a Helm release lives in the target cluster, while the instance lives in the control plane, because the vcluster credential never leaves the platform; and the status of a release is the install's, while the instance follows the runtime health continuously.
 
@@ -50,9 +50,17 @@ The `workload` provider renders a Deployment and a Service named after the insta
 
 Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variables`, `resources`, `livenessProbe`/`readinessProbe` with `httpGet`) and `service.ports`. Placeholders: `${metadata.<key>}` and `${resources.<name>.<key>}` (see [Resources](#resources)); any other field is `UnsupportedSpec`. The image must be pullable by the vcluster without credentials.
 
+## Instances
+
+`deploy --instance <instance>` runs another instance of the component next to the default one, as the shared sandbox of a pull request does: the stable version and the version of a branch side by side, against the same services. Each instance has a Deployment and a Service of its own, `<instance>`; the Service of the component selects `app.kubernetes.io/instance: <component>` too, so an extra instance gets no traffic from it. Routing by header between them is phase 3. Its resources are its own as well: a `provision` resource is a database per instance (`<instance>-<resource>-<hash>`).
+
+An instance runs one component for as long as its history lives: the first deploy names it, and a deploy or a plan that names another component is refused (`409`). An extra instance cannot take the name of another component of the catalog (`409`): its Service would answer for that component (`http://<component>`) in the environment.
+
+`get`, `rollback` and `remove` take `--component` or `--instance`. With `--component`, the CLI picks the only instance of the component in the environment (the default one, or an extra one when it is alone); with more than one it stops with `<component> has N instances in <environment>: …; give --instance`. `history --component` lists the revisions of every instance of the component; `--instance`, only those of one.
+
 ## deploy
 
-Writes revision `<n>` (the newest plus one) of the instance and prints `<instance>@<environment> revision <n>: deploying <version> …`. `--branch` is resolved by the API to the newest version built from that branch, and the revision keeps that version: the instance does not follow the branch. `--replicas` (0 to 20, default 1) is an override of the environment, kept in the revision. `--resource-class db=restored` (repeatable) is an override too: the Forager resolves the resource `db` with that class, ahead of a `class` in the Score. A resource the version does not have is refused (`422`). With `--wait`, follows the revision until the provider closes it: `✓ <instance>@<environment> revision <n>: <version> running · <ready>/<desired> replicas available`, or `✗ … revision <n>: <reason>: <message>` and exit code `1`.
+Writes revision `<n>` (the newest plus one) of the instance, `--instance` or by default the component name, and prints `<instance>@<environment> revision <n>: deploying <version> …`. `--branch` is resolved by the API to the newest version built from that branch, and the revision keeps that version: the instance does not follow the branch. `--replicas` (0 to 20, default 1) is an override of the environment, kept in the revision. `--resource-class db=restored` (repeatable) is an override too: the Forager resolves the resource `db` with that class, ahead of a `class` in the Score. A resource the version does not have is refused (`422`). With `--wait`, follows the revision until the provider closes it: `✓ <instance>@<environment> revision <n>: <version> running · <ready>/<desired> replicas available`, or `✗ … revision <n>: <reason>: <message>` and exit code `1`.
 
 | Revision status | Meaning |
 |---|---|
@@ -77,6 +85,7 @@ A revision that does not succeed leaves the running revision as it was.
 | no access to the environment, or outside the component's owner team | `403` |
 | unknown environment or component, or no such version in the index | `404` |
 | `SpecNotIndexed` | `409` |
+| the instance runs another component, or `--instance` is the name of another component | `409`: pick another `--instance` |
 | another deploy of the same instance took the revision number | `409`: run it again |
 
 ## Resources
@@ -95,11 +104,11 @@ The mode and the class of a resource never change in place: a deploy that would 
 
 ## list and get
 
-`list` prints one line per instance: `WORKLOAD`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
+`list` prints one line per instance: `WORKLOAD`, `COMPONENT`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
 
 ## history
 
-The revisions of the environment, oldest first, optionally of one component: `WORKLOAD`, `REVISION`, `ACTION`, `VERSION`, `STATUS`, `BY` (who asked) and `CREATED`. Revisions stay until the environment is deleted.
+The revisions of the environment, oldest first, optionally of one component (all its instances) or of one instance: `WORKLOAD`, `REVISION`, `ACTION`, `VERSION`, `STATUS`, `BY` (who asked) and `CREATED`. Revisions stay until the environment is deleted.
 
 ## rollback
 
@@ -129,7 +138,7 @@ workloads:
     replicas: 2
 ```
 
-The environment comes from the file. Each key under `workloads` is an instance; in phase 1 it is named after its component, and a `component:` that differs from the key is refused (`422`, more instances per component is #294). Each entry takes `version` or `branch` and optionally `replicas` (1 by default). An empty plan is written `workloads: {}`.
+The environment comes from the file. Each key under `workloads` is an instance of the component named like the key, or of the one `component:` names (an extra instance, see [Instances](#instances)); an instance that runs another component is refused (`409`). Each entry takes `version` or `branch` and optionally `replicas` (1 by default). An empty plan is written `workloads: {}`.
 
 `POST /v1/environments/{environment}/workloads:apply` (`{"workloads": ..., "dryRun": true, "prune": false}`) diffs the plan against the newest revision of each instance:
 

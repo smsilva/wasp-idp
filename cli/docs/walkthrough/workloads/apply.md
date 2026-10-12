@@ -23,7 +23,7 @@ demo: 1 to add, 0 to change, 0 to remove
 dry run: nothing applied
 ```
 
-- The environment comes from the file; each key under `workloads` is an instance, named after its component in phase 1 (`component:`, if given, must equal the key).
+- The environment comes from the file; each key under `workloads` is an instance, named after its component unless `component:` names another one (an extra instance, see [Another instance of the same component](instances.md)).
 - Each workload takes `version` or `branch` (the newest version built from it, pinned in the revision) and optionally `replicas` (1 by default).
 - The API diffs the plan against the newest revision of each workload: `add` when it does not run, `change` when the version or the replicas differ or the newest revision failed, `unchanged` otherwise.
 

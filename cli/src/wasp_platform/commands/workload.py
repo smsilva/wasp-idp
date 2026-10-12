@@ -3,9 +3,11 @@
 The Workload Spec is the app-spec.yaml (Score) of a version, immutable, kept in the version index by
 the build. spec validate runs the same gate as the build on a local file, before any build. A Workload
 Instance is a Workload Spec live in an environment, as a Helm release is a chart installed: each deploy
-is a new revision, and its short name is <instance>@<environment> (in phase 1 the instance is the
-component). apply takes the plan of an environment, a file with every instance it runs, and writes a
-revision for each one that changes, as helmfile does for releases.
+is a new revision, and its short name is <instance>@<environment>. The instance is named after its
+component by default; an extra one (--instance, #294) runs another version of the same component next
+to it, with a Service of its own and no traffic from the component's. apply takes the plan of an
+environment, a file with every instance it runs, and writes a revision for each one that changes, as
+helmfile does for releases.
 """
 import time
 from pathlib import Path
@@ -94,6 +96,22 @@ def _replicas(item: dict) -> str:
   return f"{replicas.get('ready')}/{replicas.get('desired')}" if replicas else "—"
 
 
+InstanceOption = Annotated[str | None, typer.Option(help="Instance of the workload; needed when its component has more than one in the environment.")]
+
+
+def _instance(client: PlatformClient, environment: str, component: str | None, instance: str | None) -> str:
+  """The instance a command acts on: --instance, or the only instance of --component in the environment."""
+  if (component is None) == (instance is None):
+    fail("give either --component or --instance")
+  if instance is not None:
+    return instance
+  found = sorted(item["instance"] for item in client.list_workloads(environment) if item.get("component") == component)
+  if len(found) > 1:
+    fail(f"{component} has {len(found)} instances in {environment}: {', '.join(found)}; give --instance")
+  # None at all: the default instance, and the API says whether it exists.
+  return found[0] if found else component
+
+
 def _wait(client: PlatformClient, revision: dict, timeout: int) -> dict:
   """Until the provider closes the revision: Succeeded, or a reason that waiting does not heal."""
   deadline = time.monotonic() + timeout
@@ -108,8 +126,9 @@ def _wait(client: PlatformClient, revision: dict, timeout: int) -> dict:
 
 @app.command("deploy")
 def deploy(
-  component: Annotated[str, typer.Option(help="Component to deploy; in phase 1 it names the instance.")],
+  component: Annotated[str, typer.Option(help="Component to deploy.")],
   environment: Annotated[str, typer.Option(help="Environment to deploy to.")],
+  instance: Annotated[str | None, typer.Option(help="Instance to deploy; by default the component name. Another name runs an extra instance next to it.")] = None,
   version: Annotated[str | None, typer.Option(help="Version from the index.")] = None,
   branch: Annotated[str | None, typer.Option(help="The newest version built from this branch, pinned in the revision.")] = None,
   replicas: Annotated[int | None, typer.Option(min=0, max=20, help="Replicas in this environment; by default 1.")] = None,
@@ -122,11 +141,13 @@ def deploy(
   if (version is None) == (branch is None):
     fail("give either --version or --branch")
   body = {key: value for key, value in (("version", version), ("branch", branch), ("replicas", replicas)) if value is not None}
+  if instance is not None:
+    body = {"component": component, **body}
   if resource_class:
     body["resourceClasses"] = _resource_classes(resource_class)
   client = _client()
   try:
-    revision = client.deploy_workload(environment, component, body)
+    revision = client.deploy_workload(environment, instance or component, body)
     if wait:
       revision = _wait(client, revision, timeout)
   except ApiError as error:
@@ -144,6 +165,13 @@ def _resource_classes(values: list[str]) -> dict[str, str]:
   return classes
 
 
+def _flag(item: dict) -> str:
+  """--component for the default instance, --instance for an extra one."""
+  if item["instance"] == item["component"]:
+    return f"--component {item['component']}"
+  return f"--instance {item['instance']}"
+
+
 def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
   """The revision a command wrote: started, or with --wait how it ended."""
   name = f"{revision['instance']}@{revision['environment']}"
@@ -157,7 +185,7 @@ def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
     typer.echo(f"{heading}: {started}")
     # After a remove there is no workload to get: its history stays.
     follow = "history" if revision["action"] == "remove" else "get"
-    typer.echo(f"follow it with: platform workload {follow} --component {revision['component']} --environment {revision['environment']}")
+    typer.echo(f"follow it with: platform workload {follow} {_flag(revision)} --environment {revision['environment']}")
   elif revision["status"] != "Succeeded":
     fail(f"{heading}: {revision['status']}: {revision.get('message') or '—'}")
   elif revision["action"] == "remove":
@@ -166,22 +194,23 @@ def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
     success(f"{heading}: {revision['version']} running · {revision.get('message') or '—'}")
 
 
-def _previous(client: PlatformClient, environment: str, component: str) -> int:
+def _previous(client: PlatformClient, environment: str, instance: str) -> int:
   """The newest revision that succeeded before the one running: what `rollback` goes back to by default."""
-  running = client.get_workload(environment, component).get("revision")
+  running = client.get_workload(environment, instance).get("revision")
   candidates = [
-    item["revision"] for item in client.workload_history(environment, component)
+    item["revision"] for item in client.workload_history(environment, instance)
     if item["action"] != "remove" and item["status"] == "Succeeded" and running is not None and item["revision"] < running
   ]
   if not candidates:
-    fail(f"{component}@{environment}: no earlier revision that succeeded to roll back to")
+    fail(f"{instance}@{environment}: no earlier revision that succeeded to roll back to")
   return max(candidates)
 
 
 @app.command("rollback")
 def rollback(
-  component: Annotated[str, typer.Option(help="Component of the workload.")],
   environment: Annotated[str, typer.Option(help="Environment of the workload.")],
+  component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
+  instance: InstanceOption = None,
   revision: Annotated[int | None, typer.Option(min=1, help="Revision to go back to; by default the one that succeeded before the running one.")] = None,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the rollout ends.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
@@ -190,8 +219,9 @@ def rollback(
   """Roll back: a new revision with the version and overrides of an earlier one."""
   client = _client()
   try:
-    target = revision or _previous(client, environment, component)
-    created = client.deploy_workload(environment, component, {"rollbackTo": target})
+    name = _instance(client, environment, component, instance)
+    target = revision or _previous(client, environment, name)
+    created = client.deploy_workload(environment, name, {"rollbackTo": target})
     if wait:
       created = _wait(client, created, timeout)
   except ApiError as error:
@@ -201,8 +231,9 @@ def rollback(
 
 @app.command("remove")
 def remove(
-  component: Annotated[str, typer.Option(help="Component of the workload.")],
   environment: Annotated[str, typer.Option(help="Environment of the workload.")],
+  component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
+  instance: InstanceOption = None,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until it is gone from the environment.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
   output: OutputOption = Format.table,
@@ -210,7 +241,7 @@ def remove(
   """Remove a workload from an environment: a remove revision; the history stays with the environment."""
   client = _client()
   try:
-    created = client.remove_workload(environment, component)
+    created = client.remove_workload(environment, _instance(client, environment, component, instance))
     if wait:
       created = _wait(client, created, timeout)
   except ApiError as error:
@@ -222,7 +253,7 @@ PLAN_KEYS = {"environment", "workloads"}
 
 
 def _plan(file: Path) -> tuple[str, dict]:
-  """environment and workloads of a plan file: {instance: {version | branch, replicas?}}."""
+  """environment and workloads of a plan file: {instance: {component?, version | branch, replicas?}}."""
   try:
     document = yaml.safe_load(file.read_text(encoding="utf-8"))
   except OSError as error:
@@ -315,20 +346,22 @@ def list_(
     print_json(items)
     return
   print_table(
-    ["WORKLOAD", "VERSION", "STATUS", "REPLICAS", "REVISION", "URL"],
-    [[item["name"], item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("url") or "—"] for item in items],
+    ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "URL"],
+    [[item["name"], item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("url") or "—"] for item in items],
   )
 
 
 @app.command("get")
 def get_(
-  component: Annotated[str, typer.Option(help="Component of the workload.")],
   environment: Annotated[str, typer.Option(help="Environment of the workload.")],
+  component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
+  instance: InstanceOption = None,
   output: OutputOption = Format.table,
 ):
   """Show a workload in an environment and its newest revision."""
+  client = _client()
   try:
-    item = _client().get_workload(environment, component)
+    item = client.get_workload(environment, _instance(client, environment, component, instance))
   except ApiError as error:
     fail(str(error))
   if output == Format.json:
@@ -358,12 +391,13 @@ def get_(
 @app.command("history")
 def history(
   environment: Annotated[str, typer.Option(help="Environment whose revisions to list.")],
-  component: Annotated[str | None, typer.Option(help="Only the revisions of this component.")] = None,
+  component: Annotated[str | None, typer.Option(help="Only the revisions of this component, in all its instances.")] = None,
+  instance: Annotated[str | None, typer.Option(help="Only the revisions of this instance.")] = None,
   output: OutputOption = Format.table,
 ):
   """List the revisions of an environment, oldest first: who asked for what, and how it ended."""
   try:
-    items = _client().workload_history(environment, component)
+    items = _client().workload_history(environment, instance, component)
   except ApiError as error:
     fail(str(error))
   if output == Format.json:

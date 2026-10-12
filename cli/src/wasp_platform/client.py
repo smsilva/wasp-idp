@@ -137,8 +137,8 @@ class PlatformClient:
   def get_workload(self, environment: str, instance: str) -> dict:
     return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}")
 
-  def workload_history(self, environment: str, instance: str | None = None) -> list[dict]:
-    params = {"instance": instance} if instance else {}
+  def workload_history(self, environment: str, instance: str | None = None, component: str | None = None) -> list[dict]:
+    params = {key: value for key, value in (("instance", instance), ("component", component)) if value}
     return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/revisions", params=params)["items"]
 
   def list_teams(self) -> list[dict]:

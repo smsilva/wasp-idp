@@ -157,7 +157,6 @@ def test_admin_applies_any_component(client, state, admin, ratings):
   ({"greeting-api": {"version": "latest"}}, 422, "major"),
   ({"greeting-api": {"version": "1.0.0", "replicas": 50}}, 422, "replicas"),
   ({"greeting-api": {"version": "1.0.0", "image": "x"}}, 422, "image"),
-  ({"greeting-api": {"component": "ratings", "version": "1.0.0"}}, 422, "#294"),
   ({"Greeting_API": {"version": "1.0.0"}}, 422, "not an instance name"),
   ({"unknown": {"version": "1.0.0"}}, 404, "component 'unknown' not found"),
 ])
@@ -170,6 +169,34 @@ def test_refusals_apply_nothing(client, state, owner, workloads, status, message
 
 def test_component_equal_to_the_key_is_accepted(client, owner):
   assert apply(client, owner, {"greeting-api": {"component": "greeting-api", "version": "1.0.0"}}).status_code == 200
+
+
+def test_extra_instance_in_the_plan(client, state, owner):
+  body = apply(client, owner, {"greeting-api": {"version": "1.0.0"}, "greeting-api-pr-1": {"component": "greeting-api", "branch": "feat/greetings"}}).json()
+  assert [(item["instance"], item["component"], item["action"]) for item in body["items"]] == [
+    ("greeting-api", "greeting-api", "add"),
+    ("greeting-api-pr-1", "greeting-api", "add"),
+  ]
+  assert state.get("workloadrevisions", "demo.greeting-api-pr-1.1")["spec"]["component"] == "greeting-api"
+
+
+def test_plan_keeps_the_component_of_an_instance(client, state, owner, ratings):
+  apply(client, owner, {"greeting-api-pr-1": {"component": "greeting-api", "version": "1.0.0"}})
+  deployed(state, "greeting-api-pr-1")
+  # Without component, the plan means the component named after the key, which this instance does not run.
+  response = apply(client, owner, {"greeting-api-pr-1": {"version": "1.0.0"}})
+  assert response.status_code == 409
+  assert "runs component 'greeting-api'" in response.json()["error"]["message"]
+  assert list(state.stores["workloadrevisions"]) == ["demo.greeting-api-pr-1.1"]
+
+
+def test_prune_removes_an_extra_instance(client, state, owner):
+  apply(client, owner, {"greeting-api": {"version": "1.0.0"}, "greeting-api-pr-1": {"component": "greeting-api", "version": "1.0.0"}})
+  deployed(state)
+  deployed(state, "greeting-api-pr-1")
+  body = apply(client, owner, {"greeting-api": {"version": "1.0.0"}}, prune=True).json()
+  assert actions(body) == {"greeting-api": "unchanged", "greeting-api-pr-1": "remove"}
+  assert state.get("workloadrevisions", "demo.greeting-api-pr-1.2")["spec"]["component"] == "greeting-api"
 
 
 def test_apply_needs_can_use(client, owner):
