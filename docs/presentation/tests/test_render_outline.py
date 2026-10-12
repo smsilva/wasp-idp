@@ -96,3 +96,41 @@ def test_ancestors_and_root():
   assert [s["name"] for s in ro.ancestors(slides, slides["box-b"])] == ["box-a", "box", "map"]
   assert ro.detail_root(slides, slides["box-b"])["name"] == "box"
   assert ro.label(slides["box-b"]) == "B" and ro.label(slides["box-a"]) == "A"
+
+
+def names(steps):
+  return [step["slide"]["name"] if step["slide"] else None for step in steps]
+
+
+def test_details_come_after_the_main_track():
+  steps = ro.build_steps(outline())
+  assert names(steps) == ["title", "map", "map", "map", "map", "full", "full", "box", "box-a", "box-a", "box-b"]
+  assert [step.get("detail") for step in steps[7:]] == ["box"] * 4
+  assert not any(step.get("detail") for step in steps[:7])
+
+
+def test_no_divider_for_details():
+  steps = ro.build_steps(outline())
+  assert not any(step.get("divider") for step in steps[7:])
+
+
+def test_focus_and_spotlight():
+  steps = ro.build_steps(outline())
+  assert [steps[i]["focus"] for i in (2, 3, 4)] == [{"plane"}, {"plane", "p.1"}, {"plane", "p.2"}]
+  assert steps[3]["links"] == {"p.1": "box"}
+  assert steps[7]["focus"] == {"p.1"}
+
+
+def test_crumbs_overlay_and_up():
+  steps = ro.build_steps(outline())
+  box, box_b = steps[7], steps[10]
+  assert box["crumbs"] == [("Platform", "full"), ("Plane", "map")]
+  assert box_b["crumbs"] == [("Platform", "full"), ("Plane", "map"), ("Box", "box"), ("A", "box-a")]
+  assert box["overlay"] == [("A", "box-a")] and "overlay" not in steps[8]
+  assert box["up"] == ("map", True) and box_b["up"] == ("box-a", False)
+
+
+def test_entry_and_exit():
+  steps = ro.build_steps(outline())
+  assert [i for i, step in enumerate(steps) if step.get("entry")] == [7]
+  assert [i for i, step in enumerate(steps) if step.get("exit")] == [10]

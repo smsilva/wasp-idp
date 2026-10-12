@@ -551,6 +551,63 @@ def validate(outline):
   return errors
 
 
+def slide_steps(outline, slide, act, section):
+  """The steps of one slide (see build_steps)."""
+  steps = []
+  # `diagram`: an SVG whose <g data-part> groups are revealed one per step (`reveal`),
+  # over parts already introduced: `show` at full color (the skeleton), `dim` dimmed
+  # (the previous content). Earlier parts of the same `reveal` dim as the next one enters,
+  # unless `accumulate: true` (they stay at full color: the drawing grows); `accumulate: commands` below.
+  if slide.get("diagram"):
+    reveal = slide.get("reveal") or []
+    shown = {**{part: "dim" for part in slide.get("dim", [])}, **{part: "on" for part in slide.get("show", [])}}
+    # `start: empty`: a first step with nothing revealed yet; `empty` parts show only on it (an empty prompt).
+    # `focus`: parts with a highlighted border on every step; `spotlight: true` adds the part revealed in the step.
+    # `links`: parts that open a slide when clicked (detail slides, `parent`).
+    focus = set(slide.get("focus", []))
+    spot = lambda part: focus | ({part} if slide.get("spotlight") else set())
+    extra = {"focus": focus, "links": slide.get("links") or {}}
+    if not reveal or slide.get("start") == "empty":
+      steps.append({"slide": slide, "act": act, "section": section, "items": [], **extra,
+                    "diagram": {**shown, **{part: "on" for part in slide.get("empty", [])}}})
+    # `accumulate: commands`: a terminal; a command and its output (`cmd.N`, `cmd.N-out`, `cmd.N-editor`)
+    # stay lit together, and the commands before it dim.
+    group = lambda part: part.split("-")[0]
+    def kept(done, part):
+      if slide.get("accumulate") == "commands":
+        return "on" if group(done) == group(part) else "dim"
+      return "on" if slide.get("accumulate") else "dim"
+    for n, part in enumerate(reveal):
+      steps.append({"slide": slide, "act": act, "section": section, "items": [], **extra, "focus": spot(part),
+                    "diagram": {**shown, **{done: kept(done, part) for done in reveal[:n]}, part: "on"}})
+    return steps
+  screen = slide.get("screen") or []
+  if slide.get("code") or not screen:
+    steps.append({"slide": slide, "act": act, "section": section, "items": [], "code": slide.get("code")})
+  elif slide.get("animations") == "none":
+    # `deck.audience`: who the deck is for, discreet, on the first slide only.
+    audience = outline["deck"].get("audience") if slide is outline["slides"][0] else None
+    steps.append({"slide": slide, "act": act, "section": section, "items": [(item, "active") for item in screen]
+                  + ([(slide["subtitle"], "active subtitle")] if slide.get("subtitle") else [])
+                  + ([(audience, "active audience")] if audience else [])})
+  else:
+    # Optional `heading`: shown alone first, then stays on top, dimmed, while the items are revealed.
+    heading = slide.get("heading")
+    if heading:
+      steps.append({"slide": slide, "act": act, "section": section,
+                    "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
+    for shown in range(1, len(screen) + 1):
+      # An item with sub-items ("- " lines in its value) reveals them one per step.
+      # `subitems: together` on the slide shows them all in one step.
+      progressive = slide.get("subitems") != "together"
+      for subs in range(screen[shown - 1].count("\n- ") + 1 if progressive else 1):
+        active = "active" + (f" subs-{subs}" if progressive and "\n- " in screen[shown - 1] else "")
+        items = ([(heading, "dim heading")] if heading else []) + (
+                 [(item, "dim") for item in screen[:shown - 1]] + [(screen[shown - 1], active)]
+                 + [(item, "hidden") for item in screen[shown:]])
+        steps.append({"slide": slide, "act": act, "section": section, "items": items})
+  return steps
+
 def build_steps(outline):
   """Expand acts and slides into presentation steps (one per reveal, as duplicate slides).
 
@@ -563,7 +620,11 @@ def build_steps(outline):
   steps, current_act, previous_section = [], None, None
   parts = outline.get("parts") or []
   part_start = {part["acts"][0]: n for n, part in enumerate(parts)}
+  slides = {slide["name"]: slide for slide in outline["slides"]}
   for slide in outline["slides"]:
+    # `parent`: a detail slide, off the main track; its steps come after it (below).
+    if slide.get("parent"):
+      continue
     act = acts[slide["act"]]
     if slide["act"] != current_act:
       current_act = slide["act"]
@@ -586,53 +647,27 @@ def build_steps(outline):
       shown = (section[0], slide["divider"]) if isinstance(slide.get("divider"), str) else section
       steps.append({"slide": slide, "act": act, "section": shown, "items": [], "divider": True})
     previous_section = section
-    # `diagram`: an SVG whose <g data-part> groups are revealed one per step (`reveal`),
-    # over parts already introduced: `show` at full color (the skeleton), `dim` dimmed
-    # (the previous content). Earlier parts of the same `reveal` dim as the next one enters,
-    # unless `accumulate: true` (they stay at full color: the drawing grows); `accumulate: commands` below.
-    if slide.get("diagram"):
-      reveal = slide.get("reveal") or []
-      shown = {**{part: "dim" for part in slide.get("dim", [])}, **{part: "on" for part in slide.get("show", [])}}
-      # `start: empty`: a first step with nothing revealed yet; `empty` parts show only on it (an empty prompt).
-      if not reveal or slide.get("start") == "empty":
-        steps.append({"slide": slide, "act": act, "section": section, "items": [],
-                      "diagram": {**shown, **{part: "on" for part in slide.get("empty", [])}}})
-      # `accumulate: commands`: a terminal; a command and its output (`cmd.N`, `cmd.N-out`, `cmd.N-editor`)
-      # stay lit together, and the commands before it dim.
-      group = lambda part: part.split("-")[0]
-      def kept(done, part):
-        if slide.get("accumulate") == "commands":
-          return "on" if group(done) == group(part) else "dim"
-        return "on" if slide.get("accumulate") else "dim"
-      for n, part in enumerate(reveal):
-        steps.append({"slide": slide, "act": act, "section": section, "items": [],
-                      "diagram": {**shown, **{done: kept(done, part) for done in reveal[:n]}, part: "on"}})
+    steps.extend(slide_steps(outline, slide, act, section))
+  # Detail slides: after the main track, in YAML order, with no divider or agenda. A link opens them;
+  # → walks their root's subtree and, on its last step, returns to where the link came from.
+  home = outline["deck"].get("home")
+  for slide in outline["slides"]:
+    if not slide.get("parent"):
       continue
-    screen = slide.get("screen") or []
-    if slide.get("code") or not screen:
-      steps.append({"slide": slide, "act": act, "section": section, "items": [], "code": slide.get("code")})
-    elif slide.get("animations") == "none":
-      # `deck.audience`: who the deck is for, discreet, on the first slide only.
-      audience = outline["deck"].get("audience") if slide is outline["slides"][0] else None
-      steps.append({"slide": slide, "act": act, "section": section, "items": [(item, "active") for item in screen]
-                    + ([(slide["subtitle"], "active subtitle")] if slide.get("subtitle") else [])
-                    + ([(audience, "active audience")] if audience else [])})
-    else:
-      # Optional `heading`: shown alone first, then stays on top, dimmed, while the items are revealed.
-      heading = slide.get("heading")
-      if heading:
-        steps.append({"slide": slide, "act": act, "section": section,
-                      "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
-      for shown in range(1, len(screen) + 1):
-        # An item with sub-items ("- " lines in its value) reveals them one per step.
-        # `subitems: together` on the slide shows them all in one step.
-        progressive = slide.get("subitems") != "together"
-        for subs in range(screen[shown - 1].count("\n- ") + 1 if progressive else 1):
-          active = "active" + (f" subs-{subs}" if progressive and "\n- " in screen[shown - 1] else "")
-          items = ([(heading, "dim heading")] if heading else []) + (
-                   [(item, "dim") for item in screen[:shown - 1]] + [(screen[shown - 1], active)]
-                   + [(item, "hidden") for item in screen[shown:]])
-          steps.append({"slide": slide, "act": act, "section": section, "items": items})
+    act, chain, root = acts[slide["act"]], ancestors(slides, slide), detail_root(slides, slide)
+    crumbs = [("Platform", home)] + [(label(parent), parent["name"]) for parent in reversed(chain)]
+    children = [(label(child), child["name"]) for child in outline["slides"] if child.get("parent") == slide["name"]]
+    own = slide_steps(outline, slide, act, (act["title"], label(slide)))
+    for step in own:
+      step.update({"detail": root["name"], "crumbs": crumbs, "up": (slide["parent"], slide is root)})
+      if slide is root:
+        step["overlay"] = children
+    if slide is root:
+      own[0]["entry"] = True
+    steps.extend(own)
+  for n, step in enumerate(steps):
+    if step.get("detail") and (n + 1 == len(steps) or steps[n + 1].get("detail") != step["detail"]):
+      step["exit"] = True
   return steps
 
 
