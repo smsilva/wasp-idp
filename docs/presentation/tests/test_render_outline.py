@@ -168,7 +168,9 @@ def test_breadcrumb_and_overlay(tmp_path):
   page = deck(tmp_path)
   box_b = stage(page, 10)
   assert "<a data-back>↩ back</a>" in box_b
-  assert "<a data-go-slide='full'>Platform</a> › <a data-go-slide='map'>Plane</a> › <a data-go-slide='box'>Box</a> › <a data-go-slide='box-a'>A</a>" in box_b
+  # Powerline segments: one step of tone per level (`--i`), the last one the slide's parent.
+  assert ("<span class='trail'><a data-go-slide='full' style='--i:0'>Platform</a><a data-go-slide='map' style='--i:1'>Plane</a>"
+          "<a data-go-slide='box' style='--i:2'>Box</a><a class='last' data-go-slide='box-a' style='--i:3'>A</a></span>") in box_b
   root = stage(page, 7)
   assert ("<div class='overlay'><div class='ov-title'>Box</div><div class='ov-tree'>"
           "<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='box-a'>A</a></div>"
@@ -242,8 +244,6 @@ def test_overlay_examples_are_a_small_mark():
                                     "<a class='ov-ex' data-go-slide='sys-ex' title='System example'>▸&nbsp;example</a></div></div>")
 
 
-def test_deep_breadcrumb_is_smaller(tmp_path):
-  # Past the root's level the trail gets long: from 4 levels on, a smaller font keeps it on one line.
-  page = deck(tmp_path)
-  assert "class='section has-topic crumbs deep'" in stage(page, 10)
-  assert "crumbs deep" not in stage(page, 7)
+def test_breadcrumb_is_plain_case():
+  # The trail reads as a path, not as a header: no uppercase, no wide letter spacing.
+  assert ".stage .section.crumbs .act-name { font-size: 0.95cqw; letter-spacing: 0; text-transform: none; font-weight: 500; }" in ro.CSS

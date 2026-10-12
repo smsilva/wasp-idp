@@ -105,8 +105,14 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram .part-link { cursor: pointer; }
 .stage .diagram .part-link:hover > rect:first-of-type { stroke: #4a9ef4; }
 .stage .section.crumbs { z-index: 2; }
-.stage .section.crumbs.deep .act-name { font-size: 0.8cqw; letter-spacing: 0.25cqw; }
+.stage .section.crumbs .act-name { font-size: 0.95cqw; letter-spacing: 0; text-transform: none; font-weight: 500; }
+.stage .crumbs .act-name { display: flex; align-items: center; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
+.stage .crumbs .trail { display: inline-flex; }
+.stage .crumbs .trail a { color: #9fb3c8; background: hsl(218 30% calc(11% + var(--i) * 2.2%)); padding: 0.15cqw 0.9cqw 0.15cqw 1.2cqw; margin-right: 0.05cqw; clip-path: polygon(0 0, calc(100% - 0.55cqw) 0, 100% 50%, calc(100% - 0.55cqw) 100%, 0 100%, 0.55cqw 50%); }
+.stage .crumbs .trail a:first-child { padding-left: 0.7cqw; clip-path: polygon(0 0, calc(100% - 0.55cqw) 0, 100% 50%, calc(100% - 0.55cqw) 100%, 0 100%); }
+.stage .crumbs .trail a.last { background: #1e3a5f; color: #fff; }
+.stage .crumbs .trail a:hover { color: #fff; }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
 .stage .overlay { position: absolute; right: 5cqw; top: 9cqw; max-height: calc(100% - 15.5cqw); overflow: hidden; width: 58cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 1.6cqw 2.2cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
 .stage .overlay .ov-title { font-size: 1.1cqw; letter-spacing: 0.3cqw; text-transform: uppercase; font-weight: 700; color: #6b7a8d; margin-bottom: 1cqw; }
@@ -839,12 +845,14 @@ def render_stage(step, base, outline=None):
     section = f"<div class='section'>{esc(section)}</div>" if section else ""
   # Detail slides (`parent`): a breadcrumb of links replaces the act name, with "↩ back" before it.
   if step.get("crumbs"):
-    trail = " › ".join(f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>" for text, name in step["crumbs"])
+    # Powerline segments, one step of tone per level (`--i`); the last is the slide's parent.
+    last = len(step["crumbs"]) - 1
+    trail = "<span class='trail'>" + "".join(
+      f"<a{' class=' + chr(39) + 'last' + chr(39) if n == last else ''} data-go-slide='{esc(name)}' style='--i:{n}'>{esc(text)}</a>"
+      for n, (text, name) in enumerate(step["crumbs"])) + "</span>"
     # A text slide shows its own heading as its first item: keep the topic line for the others.
     topic = "" if step["slide"].get("heading") and step.get("diagram") is None and not step.get("code") else step["section"][1]
-    # From 4 levels on, the trail would wrap: a smaller font keeps it on one line.
-    deep = " deep" if len(step["crumbs"]) >= 4 else ""
-    section = (f"<div class='section has-topic crumbs{deep}'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
+    section = (f"<div class='section has-topic crumbs'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
                + (f"<div class='topic'>{esc(topic)}</div>" if topic else "") + "</div>")
   if step.get("diagram") is not None:
     # The `heading` takes the topic line: the topic was already announced by its divider.
