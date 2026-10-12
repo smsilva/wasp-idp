@@ -1,0 +1,107 @@
+# A Workload Route (ADR 0035, #344): how the traffic to a component's Service is split among its
+# instances in one Environment, named <environment>.<component>. Written by the Platform API (PUT with
+# the whole list of rules, last write wins); the workload provider turns it into one GAMMA HTTPRoute in
+# the vcluster, with parentRef on the Service of the main instance (<component>). Rules are tried in
+# order; whatever none of them matches goes to the main instance. Owned by the Environment.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workloadroutes.platform.wasp.silvios.me
+spec:
+  group: platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: WorkloadRoute
+    listKind: WorkloadRouteList
+    plural: workloadroutes
+    singular: workloadroute
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Environment
+          type: string
+          jsonPath: .spec.environment
+        - name: Component
+          type: string
+          jsonPath: .spec.component
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Reason
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [environment, component, rules]
+              properties:
+                environment:
+                  type: string
+                component:
+                  type: string
+                rules:
+                  description: 'In order: {match, to} sends the matching requests to one instance; {weights} (at most one, the last) splits the rest, in percent.'
+                  type: array
+                  maxItems: 16
+                  items:
+                    type: object
+                    properties:
+                      match:
+                        type: object
+                        properties:
+                          header:
+                            type: object
+                            required: [name, value]
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                          baggage:
+                            description: An OpenTelemetry Baggage entry (key=value in the baggage header).
+                            type: object
+                            required: [key, value]
+                            properties:
+                              key:
+                                type: string
+                              value:
+                                type: string
+                      to:
+                        type: string
+                      weights:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                conditions:
+                  description: 'Ready: True when the HTTPRoute is Accepted with its refs resolved; False with MeshNotInstalled, ApplyFailed or the reason of the HTTPRoute.'
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

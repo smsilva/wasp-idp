@@ -1,7 +1,7 @@
 """Workload Instances (#292, ADR 0033): a version from the index deployed in an Environment.
 
-The API writes only WorkloadRevisions, named <environment>.<instance>.<n>: the number is the newest
-plus one, so two concurrent requests collide on the name and the second gets a 409 (optimistic
+The API writes WorkloadRevisions (and WorkloadRoutes, below), never the vcluster. A revision is named
+<environment>.<instance>.<n>: the number is the newest plus one, so two concurrent requests collide on the name and the second gets a 409 (optimistic
 concurrency, no lock). The workload provider applies the newest revision in the vcluster and keeps
 the WorkloadInstance, the runtime view. Writing needs can_use on the environment and the component's
 owner team (or platform-admins); reading needs can_use. An instance is named after its component by
@@ -13,22 +13,31 @@ until the environment goes.
 apply (#293) takes the plan of an environment (the helmfile of its instances) and diffs it against the
 newest revision of each instance: one revision per instance that changes, and with prune a remove for
 each instance the plan leaves out. Every instance is authorized and resolved before the first write.
+
+A route (#344, ADR 0035) splits the traffic to a component's Service among its instances: one
+WorkloadRoute per component and environment, named <environment>.<component>, written whole on every
+PUT (last write wins: two clients that read and write at the same time keep the second one's rules).
+The workload provider turns it into a GAMMA HTTPRoute. While a route sends traffic to an instance, or
+the route exists at all for the main one (its parentRef), removing that instance is a 409.
 """
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .auth import Principal, current_principal
 from .builds import COMPONENTS, VERSION_PATTERN, VERSIONS
 from .catalog import LABEL
 from .environments import ADMIN_GROUP, can_use
 from .journal import Journal
-from .state import ENVIRONMENTS, GROUP, VERSION, AlreadyExists, NotFound
+from .state import ENVIRONMENTS, GROUP, VERSION, AlreadyExists, Conflict, NotFound
 
 REVISIONS = "workloadrevisions"
 INSTANCES = "workloadinstances"
+ROUTES = "workloadroutes"
 KIND = "WorkloadRevision"
+ROUTE_KIND = "WorkloadRoute"
 ENVIRONMENT_LABEL = f"{GROUP}/environment"
 COMPONENT_LABEL = f"{GROUP}/component"
 INSTANCE_LABEL = f"{GROUP}/instance"
@@ -38,6 +47,11 @@ MAX_PLAN = 100
 # Without the override the provider runs one replica.
 DEFAULT_REPLICAS = 1
 MAX_RESOURCE_CLASSES = 16
+MAX_RULES = 16
+# A header name (an HTTP token without the rarer symbols), and a header or baggage value: the provider
+# puts the baggage ones in an RE2 regular expression, so anything wider would need escaping there.
+HEADER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,62}")
+MATCH_VALUE = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
 class RevisionRequest(BaseModel):
@@ -90,6 +104,124 @@ class ApplyRequest(BaseModel):
   workloads: dict[str, PlanEntry] = Field(max_length=MAX_PLAN)
   dryRun: bool = True
   prune: bool = False
+
+
+class HeaderMatch(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  name: str
+  value: str
+
+  @field_validator("name")
+  @classmethod
+  def check_name(cls, value: str) -> str:
+    if not HEADER_NAME.fullmatch(value):
+      raise ValueError("letters, digits and '-', up to 63 characters")
+    return value
+
+  @field_validator("value")
+  @classmethod
+  def check_value(cls, value: str) -> str:
+    if not MATCH_VALUE.fullmatch(value):
+      raise ValueError("letters, digits, '.', '_' and '-', up to 64 characters")
+    return value
+
+
+class BaggageMatch(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  key: str
+  value: str
+
+  check_key = field_validator("key")(HeaderMatch.check_value.__func__)
+  check_value = field_validator("value")(HeaderMatch.check_value.__func__)
+
+
+class Match(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  header: HeaderMatch | None = None
+  baggage: BaggageMatch | None = None
+
+  @model_validator(mode="after")
+  def one_of(self) -> "Match":
+    if (self.header is None) == (self.baggage is None):
+      raise ValueError("give either header or baggage")
+    return self
+
+
+class RouteRule(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  match: Match | None = None
+  to: str | None = None
+  weights: dict[str, int] | None = Field(default=None, min_length=1, max_length=MAX_RULES)
+
+  @model_validator(mode="after")
+  def one_of(self) -> "RouteRule":
+    if self.weights is None and (self.match is None or self.to is None):
+      raise ValueError("give either match and to, or weights")
+    if self.weights is not None and (self.match is not None or self.to is not None):
+      raise ValueError("a weights rule takes no match nor to")
+    for weight in (self.weights or {}).values():
+      if not 1 <= weight <= 100:
+        raise ValueError("each weight is a percentage from 1 to 100")
+    return self
+
+
+class RouteRequest(BaseModel):
+  model_config = ConfigDict(extra="forbid")
+
+  rules: list[RouteRule] = Field(min_length=1, max_length=MAX_RULES)
+
+
+def match_of(rule: dict) -> tuple | None:
+  """What a rule matches on, to compare two rules: ("header", name, value), ("baggage", key, value), or
+  None for the weights rule. Header names are case-insensitive."""
+  match = rule.get("match") or {}
+  if match.get("header"):
+    return ("header", match["header"]["name"].lower(), match["header"]["value"])
+  if match.get("baggage"):
+    return ("baggage", match["baggage"]["key"], match["baggage"]["value"])
+  return None
+
+
+def routed(rules: list[dict]) -> set[str]:
+  """The instances the rules send traffic to."""
+  return {rule["to"] for rule in rules if rule.get("to")} | {name for rule in rules for name in rule.get("weights") or {}}
+
+
+def traffic_of(instance: str, component: str, route: dict | None) -> str | None:
+  """How the route sends traffic to the instance, for the TRAFFIC column: x-sandbox=pr-42,
+  baggage sandbox=pr-42, 10%; default for the main instance that only takes what no rule matched."""
+  if route is None:
+    return None
+  labels = []
+  for rule in route["spec"].get("rules") or []:
+    match = rule.get("match") or {}
+    if rule.get("to") == instance and match.get("header"):
+      labels.append(f"{match['header']['name']}={match['header']['value']}")
+    elif rule.get("to") == instance and match.get("baggage"):
+      labels.append(f"baggage {match['baggage']['key']}={match['baggage']['value']}")
+    elif instance in (rule.get("weights") or {}):
+      labels.append(f"{rule['weights'][instance]}%")
+  if not labels and instance == component:
+    return "default"
+  return ", ".join(labels) or None
+
+
+def route_view(obj: dict) -> dict:
+  spec = obj.get("spec", {})
+  ready = ready_of(obj)
+  return {
+    "kind": ROUTE_KIND,
+    "name": obj["metadata"]["name"],
+    "environment": spec.get("environment"),
+    "component": spec.get("component"),
+    "rules": spec.get("rules") or [],
+    "status": (ready or {}).get("reason") or "Pending",
+    "message": (ready or {}).get("message"),
+  }
 
 
 def ready_of(obj: dict) -> dict | None:
@@ -153,6 +285,7 @@ def instance_view(environment: str, instance: str, obj: dict | None, latest: dic
     "message": (ready or {}).get("message"),
     "replicas": {"desired": replicas.get("desired"), "ready": replicas.get("ready")} if replicas else None,
     "url": status.get("url"),
+    "traffic": None,
     "resources": [{key: item.get(key) for key in ("name", "type", "mode", "status")} for item in status.get("resources") or []],
     "latestRevision": revision_view(latest),
   }
@@ -186,13 +319,29 @@ def router(state, journal: Journal) -> APIRouter:
     for obj in revisions_of(environment):
       latest[obj["spec"]["instance"]] = obj
     kept = {obj["spec"]["instance"]: obj for obj in state.list(INSTANCES) if obj["spec"].get("environment") == environment}
+    routes = routes_of(environment)
     views = []
     for instance, revision in sorted(latest.items()):
       obj = kept.get(instance)
       if obj is None and not is_open(revision):
         continue
-      views.append(instance_view(environment, instance, obj, revision))
+      view = instance_view(environment, instance, obj, revision)
+      view["traffic"] = traffic_of(instance, view["component"], routes.get(view["component"]))
+      views.append(view)
     return views
+
+  def routes_of(environment: str) -> dict[str, dict]:
+    return {obj["spec"]["component"]: obj for obj in state.list(ROUTES) if obj["spec"].get("environment") == environment}
+
+  def check_unrouted(environment: str, instance: str, component: str, act: str) -> None:
+    """A 409 while a route sends traffic to the instance, or is attached to it (the main instance)."""
+    route = routes_of(environment).get(component)
+    if route is None:
+      return
+    if instance in routed(route["spec"].get("rules") or []):
+      raise HTTPException(409, f"{act} of {instance}@{environment}: the route of '{component}' sends traffic to it; change the route first")
+    if instance == component:
+      raise HTTPException(409, f"{act} of {instance}@{environment}: it is the main instance of the route of '{component}'; clear the route first")
 
   def resolve(component: str, request: RevisionRequest) -> dict:
     versions = [obj for obj in state.list(VERSIONS) if obj["spec"].get("component") == component]
@@ -235,13 +384,16 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(422, f"'{asked}' is not a component name")
     env = usable(environment, principal)
     component = component_of(environment, instance, asked)
+    check_owner(component, principal, act)
+    return env, component
+
+  def check_owner(component: str, principal: Principal, act: str) -> None:
     try:
       owner = (state.get(COMPONENTS, component).get("spec") or {}).get("owner")
     except NotFound:
       raise HTTPException(404, f"component '{component}' not found")
     if not (owner in principal.teams or ADMIN_GROUP in principal.groups):
       raise HTTPException(403, f"{act} of '{component}': only members of its owner team ({owner or 'none'}) and {ADMIN_GROUP} {act} it")
-    return env, component
 
   def write(env: dict, instance: str, component: str, spec: dict, principal: Principal) -> dict:
     """Revision <newest + 1>: a concurrent request that took the number first makes this one a 409."""
@@ -330,6 +482,7 @@ def router(state, journal: Journal) -> APIRouter:
         if instance in request.workloads:
           continue
         _, component = authorize(environment, instance, principal, "remove")
+        check_unrouted(environment, instance, component, "prune")
         items.append({"instance": instance, "component": component, "action": "remove", "from": wanted(current), "to": None, "spec": {"action": "remove"}})
     return env, items
 
@@ -392,6 +545,7 @@ def router(state, journal: Journal) -> APIRouter:
     env, component = authorize(environment, instance, principal, "remove")
     if not any(view["instance"] == instance for view in instances_of(environment)):
       raise HTTPException(404, f"workload '{instance}' not found in environment '{environment}'")
+    check_unrouted(environment, instance, component, "remove")
     return write(env, instance, component, {"action": "remove"}, principal)
 
   @routes.get("/workloads")
@@ -406,6 +560,92 @@ def router(state, journal: Journal) -> APIRouter:
     if found is None:
       raise HTTPException(404, f"workload '{instance}' not found in environment '{environment}'")
     return found
+
+  def route_target(environment: str, component: str, principal: Principal, act: str) -> dict:
+    if not LABEL.fullmatch(component):
+      raise HTTPException(422, f"'{component}' is not a component name")
+    env = usable(environment, principal)
+    check_owner(component, principal, act)
+    return env
+
+  def check_rules(environment: str, component: str, rules: list[RouteRule]) -> None:
+    alive = {instance: revision["component"] for instance, revision in live(environment).items()}
+    if alive.get(component) != component:
+      raise HTTPException(409, f"route of '{component}': its main instance {component}@{environment} is not deployed (the route attaches to its Service)")
+    seen = set()
+    for index, rule in enumerate(rules):
+      if rule.weights is not None and index != len(rules) - 1:
+        raise HTTPException(422, f"route of '{component}': the weights rule must be the last one, and there is at most one")
+      if rule.weights is not None and sum(rule.weights.values()) != 100:
+        raise HTTPException(422, f"route of '{component}': the weights add up to {sum(rule.weights.values())}, not 100")
+      key = match_of(rule.model_dump(exclude_none=True))
+      if key is not None and key in seen:
+        raise HTTPException(422, f"route of '{component}': two rules match on {key[0]} {key[1]}={key[2]}")
+      seen.add(key)
+      for target in ([rule.to] if rule.to else []) + sorted(rule.weights or {}):
+        if not LABEL.fullmatch(target):
+          raise HTTPException(422, f"'{target}' is not an instance name")
+        if target not in alive:
+          raise HTTPException(409, f"route of '{component}': no instance '{target}' in environment '{environment}'")
+        if alive[target] != component:
+          raise HTTPException(409, f"route of '{component}': {target}@{environment} runs component '{alive[target]}'")
+
+  @routes.put("/workloads/routes/{component}")
+  def put_route(environment: str, component: str, request: RouteRequest, principal: Principal = Depends(current_principal)):
+    env = route_target(environment, component, principal, "route")
+    check_rules(environment, component, request.rules)
+    name = f"{environment}.{component}"
+    spec = {"environment": environment, "component": component, "rules": [rule.model_dump(exclude_none=True) for rule in request.rules]}
+    try:
+      current = state.get(ROUTES, name)
+    except NotFound:
+      current = None
+    entry = journal.record("create" if current is None else "update", ROUTE_KIND, name, spec, principal.actor)
+    try:
+      if current is None:
+        written = state.create(ROUTES, {
+          "apiVersion": f"{GROUP}/{VERSION}",
+          "kind": ROUTE_KIND,
+          "metadata": {
+            "name": name,
+            "labels": {ENVIRONMENT_LABEL: environment, COMPONENT_LABEL: component},
+            "ownerReferences": [{"apiVersion": f"{GROUP}/{VERSION}", "kind": "Environment", "name": environment, "uid": env["metadata"]["uid"]}],
+          },
+          "spec": spec,
+        })
+      else:
+        # The whole object as read, finalizers included: only the spec changes.
+        written = state.replace(ROUTES, {**current, "spec": spec})
+    except (AlreadyExists, Conflict, NotFound):
+      raise HTTPException(409, f"route of '{component}' in '{environment}' changed while writing: try again")
+    journal.mark_applied(entry)
+    return route_view(written)
+
+  @routes.get("/workloads/routes/{component}")
+  def get_route(environment: str, component: str, principal: Principal = Depends(current_principal)):
+    usable(environment, principal)
+    try:
+      return route_view(state.get(ROUTES, f"{environment}.{component}"))
+    except NotFound:
+      raise HTTPException(404, f"no route of '{component}' in environment '{environment}'")
+
+  @routes.delete("/workloads/routes/{component}", status_code=202)
+  def delete_route(environment: str, component: str, principal: Principal = Depends(current_principal)):
+    route_target(environment, component, principal, "route")
+    name = f"{environment}.{component}"
+    try:
+      obj = state.get(ROUTES, name)
+    except NotFound:
+      raise HTTPException(404, f"no route of '{component}' in environment '{environment}'")
+    entry = journal.record("delete", ROUTE_KIND, name, None, principal.actor)
+    try:
+      state.delete(ROUTES, name, uid=obj["metadata"].get("uid"))
+    except NotFound:
+      raise HTTPException(404, f"no route of '{component}' in environment '{environment}'")
+    except Conflict:
+      raise HTTPException(409, f"route of '{component}' in '{environment}' changed while deleting: try again")
+    journal.mark_applied(entry)
+    return {"name": name, "status": "deleting"}
 
   @routes.get("/revisions")
   def history(environment: str, instance: str | None = None, component: str | None = None, principal: Principal = Depends(current_principal)):

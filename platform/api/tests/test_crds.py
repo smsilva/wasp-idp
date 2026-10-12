@@ -172,3 +172,22 @@ def test_workload_crds_match_the_api():
   verbs = {plural: set(rule["verbs"]) for rule in role["rules"] for plural in rule["resources"]}
   assert "create" in verbs[REVISIONS]
   assert not {"create", "update", "patch", "delete"} & verbs[INSTANCES]
+
+
+def test_workload_route_crd_matches_the_api():
+  from platform_api.workloads import MAX_RULES, ROUTES
+
+  crd = yaml.safe_load((CRDS / "workloadroute.yaml").read_text())
+  assert crd["metadata"]["name"] == f"{ROUTES}.{GROUP}"
+  assert group_of(ROUTES) == GROUP
+  version = crd["spec"]["versions"][0]
+  assert version["subresources"] == {"status": {}}
+  spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]
+  assert sorted(spec["required"]) == ["component", "environment", "rules"]
+  assert spec["properties"]["rules"]["maxItems"] == MAX_RULES
+  deploy = Path(__file__).parents[1] / "deploy" / "platform-api.yaml"
+  role = next(doc for doc in yaml.safe_load_all(deploy.read_text()) if doc and doc["kind"] == "Role")
+  verbs = {plural: set(rule["verbs"]) for rule in role["rules"] for plural in rule["resources"]}
+  # The API writes the spec; the status belongs to the workload provider.
+  assert {"create", "update", "delete"} <= verbs[ROUTES]
+  assert f"{ROUTES}/status" not in verbs
