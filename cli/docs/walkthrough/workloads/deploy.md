@@ -2,7 +2,7 @@
 
 A **Workload Instance** is a Workload Spec live in an environment: the Workload Instance is to the Workload Spec what a Helm release is to a chart. Each deploy is a new **revision** of the instance, and its short name is `<component>@<environment>`. The platform renders a Deployment and a Service from the Score in the namespace `apps` of the environment's vcluster and follows the rollout.
 
-The image must be one the vcluster can pull without credentials. The `hello-api` of [Create a component](../components/create.md) declares a database, a DNS name and a route; the platform provisions only `postgres` so far ([A database for a workload](resources.md)), so this step uses a version `0.3.0` whose Score has no resources, with the public image `ghcr.io/stefanprodan/podinfo` (written by `kubectl` as the build writes it, like in [The spec of a version](spec.md)):
+The image must be one the vcluster can pull without credentials. This step starts small: a version `0.3.0` whose Score has no resources, with the public image `ghcr.io/stefanprodan/podinfo` (written by `kubectl` as the build writes it, like in [The spec of a version](spec.md)). The database, the DNS name and the route of the `hello-api` of [Create a component](../components/create.md) come in [A database for a workload](resources.md) and [Reach an instance from outside](public.md); deploying the `hello-api` its build produced is #360.
 
 In the environment `demo` of [A second environment](../environments/second.md):
 
@@ -46,7 +46,7 @@ hello-api@demo (Available)
   message       2/2 replicas ready
 ```
 
-The URL is the address **inside the vcluster**: the environment exposes only its API server. To reach the instance from your machine, use the kubeconfig that `environment get demo` wrote in [A second environment](../environments/second.md):
+The URL is the address **inside the vcluster**: a Score without a `route` is not reached from outside ([Reach an instance from outside](public.md)). To reach the instance from your machine, use the kubeconfig that `environment get demo` wrote in [A second environment](../environments/second.md):
 
 ```bash
 kubectl --kubeconfig ~/.config/platform/environments/demo.kubeconfig \
