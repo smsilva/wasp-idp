@@ -1,7 +1,7 @@
 """The capabilities of the platform, computed (ADR 0034 §4, ADR 0039): which Deployments implement each one,
 whether they run, and whether what operators configure is there. platform-admins see the drivers and the
 detail; everyone else, the name and the status."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from . import cloud_accounts, registries, scm
 from .auth import Principal, current_principal
@@ -30,6 +30,15 @@ SUBSYSTEMS = {
 }
 
 ACTIVE, NOT_CONFIGURED, DEGRADED, UNREACHABLE, NO_PROVIDER = "Active", "NotConfigured", "Degraded", "Unreachable", "NoProviderForCapability"
+WRITES = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+class NoProvider(Exception):
+  """A write to an optional subsystem no Deployment implements: 503, never a CRD nothing reconciles (ADR 0034 §4)."""
+
+  def __init__(self, name: str):
+    super().__init__(f"capability '{name}' has no provider installed: see platform status {name}")
+    self.name = name
 
 
 class KubeDeployments:
@@ -237,6 +246,25 @@ def compute(deployments: list[dict], connections: list[dict], accounts: list[dic
     for found in item["drivers"]:
       found.pop("annotations")
   return list(items.values())
+
+
+def installed(deployments: list[dict], name: str) -> bool:
+  return any(name in deployment["labels"].get(CAPABILITIES_LABEL, "").split(".") for deployment in deployments)
+
+
+def requires(deployments, name: str):
+  """A router dependency: the writes of an optional subsystem need a provider; reads stay open.
+
+  Without a Deployment reader (outside a cluster, and in most tests) there is nothing to check."""
+  def check(request: Request) -> None:
+    if deployments is None or request.method not in WRITES:
+      return
+    # A caller without a token gets 401 first, as on every other route: absence is not news for strangers.
+    current_principal(request)
+    if not installed(deployments.list(), name):
+      raise NoProvider(name)
+
+  return check
 
 
 def visible(item: dict, principal: Principal) -> dict:

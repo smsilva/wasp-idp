@@ -40,4 +40,4 @@ The provider assumes the role twice: with the ExternalId it must work, without i
 
 - Each account belongs to whoever registered it: other users neither see nor remove it (`403`); `platform-admins` see all of them.
 - The same role is not registered twice (`409`), compared by account and role name, case-insensitive and without the path.
-- Without a base credential, `add` answers `409` asking for `init --aws-profile`.
+- Without a base credential, `init` does not install the provider: `add`, `verify` and `remove` answer `503: capability 'cloud-account' has no provider installed: see platform status cloud-account` ([NoProviderForCapability](status.md#noproviderforcapability)). With the provider up and no base identity, `add` answers `409` asking for `init --aws-profile`.

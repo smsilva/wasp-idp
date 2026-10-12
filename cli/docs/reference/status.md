@@ -57,6 +57,23 @@ The capability is installed, but none of its drivers has a ready replica. The de
 
 No Deployment implements the capability: it is not installed. `cloud-account` is in this state until `platform init --aws-profile` installs its provider.
 
+Its writes are refused before anything is stored, since nothing would ever reconcile them (ADR 0034 §4): every `POST`, `PUT` and `DELETE` of the subsystem answers `503`, with the code `NoProviderForCapability` in the JSON body:
+
+``` { .text .output title="output" }
+✗ 503: capability 'cloud-account' has no provider installed: see platform status cloud-account
+```
+
+| Capability | Refused |
+|---|---|
+| `scm` | `scm connection add`, `verify`, `default`, `remove`; `catalog component create` (it creates the repo through a connection) |
+| `registry` | `registry add`, `set-default`, `remove` |
+| `build` | `build create` |
+| `cloud-account` | `cloud account add`, `verify`, `remove` |
+| `resources` | `environment policy set`, `environment profile policy set` |
+| `workload` | `workload deploy`, `rollback`, `remove`, `apply`, `route` (and `route --clear`) |
+
+Reads (`list`, `get`, `history`) still answer: what exists stays visible. `Unreachable` and `NotConfigured` refuse nothing: the request is stored and waits for its provider.
+
 ## Errors
 
 | Error | Cause |

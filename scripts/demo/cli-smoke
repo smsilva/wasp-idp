@@ -1598,8 +1598,8 @@ if output="$(platform cloud account add "${cloud_account}" --role-arn "${cloud_r
   platform login --test-user
   platform cloud account remove "${cloud_account}"
 else
-  # init ran without --aws-profile: the capability has no provider.
-  expect_output "--aws-profile" "${output}"
+  # init ran without --aws-profile: the capability has no provider, and its writes answer 503 (#377).
+  expect_output "capability 'cloud-account' has no provider installed: see platform status cloud-account" "${output}"
   echo "${output}"
 fi
 

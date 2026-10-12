@@ -46,6 +46,6 @@ Para que cada provider publique um sinal de vida, cada um dos cinco projetos pre
 
 ## Consequências
 
-- Altera o "como" do ADR 0034 §4 (o controller não publica nada) e mantém o "o quê": a capability é calculada. O `503 NoProviderForCapability` nas rotas de um subsistema ausente, também do §4, fica para outra issue.
+- Altera o "como" do ADR 0034 §4 (o controller não publica nada) e mantém o "o quê": a capability é calculada. O `503 NoProviderForCapability` nas rotas de escrita de um subsistema ausente, também do §4, usa a mesma leitura dos Deployments (#377).
 - Um provider novo entra em `platform status` só com os labels no Deployment dele. Um segundo vendor (`scm_bitbucket`, `azure_subscription`) entra como mais um driver da mesma capability, sem mudar a API nem a CLI.
 - Um provider com o pod pronto e o loop travado aparece `Active`.
