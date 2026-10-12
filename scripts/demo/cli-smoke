@@ -15,7 +15,8 @@ its admin kubeconfig, and loses access after unshare, in kubectl too), the
 templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
-schema, a name already in the index, a connection that is not ready), the
+schema, a name already in the index, a connection that is not ready), component
+clone --https of a public repo in the index, and of a name outside it, the
 refusals of build create (outside the owner team, unknown component, a malformed
 version, an org with no connection), the Workload Spec (spec validate of a
 valid and an invalid Score, spec get of a Version written by kubectl, refused outside the owner team,
@@ -64,6 +65,7 @@ cloud_role="arn:aws:iam::123456789012:role/platform-smoke-${RANDOM}"
 connection="smoke-scm-${RANDOM}"
 component="smoke-component-${RANDOM}"
 taken_component="smoke-taken-${RANDOM}"
+clone_component="smoke-clone-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
 workload_component="smoke-workload-${RANDOM}"
 route_component="smoke-route-${RANDOM}"
@@ -77,6 +79,7 @@ workload_digest="sha256:862ca45e61b32392f7941a1bdfdbe5ff8b6899070135f1bdca1c287d
 # postgres:17-alpine, public: the app of the Forager step is its psql client.
 postgres_digest="sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24"
 render_directory="$(mktemp --directory)"
+clone_directory="$(mktemp --directory)"
 user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
 # The test logins replace the credentials file; a private config dir keeps the user's session.
@@ -149,9 +152,9 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" --ignore-not-found > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component})" > /dev/null 2>&1 || true
-  rm --recursive --force "${smoke_config}" "${render_directory}" "${workload_directory}"
+  rm --recursive --force "${smoke_config}" "${render_directory}" "${clone_directory}" "${workload_directory}"
 }
 trap cleanup EXIT
 
@@ -395,6 +398,29 @@ expect_failure "is not ready (AppNotCreated)" \
     --owner team-platform \
     --scm "${connection}"
 expect_failure "not found" platform catalog component get "${component}"
+
+step "component clone: the repo of a component in the index (#327)"
+# A component in the index pointing at a public repo of the foundry: an anonymous HTTPS clone needs
+# no credential.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${clone_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: wasp-foundry/details
+MANIFEST
+output="$(platform catalog component clone "${clone_component}" \
+  --https \
+  --directory "${clone_directory}/details" 2>&1)"
+expect_output "# git clone https://github.com/wasp-foundry/details.git" "${output}"
+test -f "${clone_directory}/details/catalog-info.yaml"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${clone_component}"
+expect_failure "platform catalog component list" platform catalog component clone "${component}"
 
 step "build create: every refusal happens before GitHub (#287)"
 # The happy path dispatches a real workflow, so it stays in the manual walkthrough (Builds). The repo's

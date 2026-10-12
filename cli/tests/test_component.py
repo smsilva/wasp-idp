@@ -35,7 +35,7 @@ DONE = creation(
 
 @pytest.fixture
 def api(monkeypatch):
-  state = {"requests": [], "polls": [DONE], "component": None, "error": None}
+  state = {"requests": [], "polls": [DONE], "component": None, "error": None, "creating": True}
 
   def handler(request: httpx.Request) -> httpx.Response:
     state["requests"].append(request)
@@ -45,6 +45,8 @@ def api(monkeypatch):
     if request.method == "POST":
       return httpx.Response(202, json=creation())
     if path.endswith("/creation"):
+      if not state["creating"]:
+        return httpx.Response(404, json={"error": {"code": "not_found", "message": "creation 'greeting-api' not found"}})
       return httpx.Response(200, json=state["polls"].pop(0) if len(state["polls"]) > 1 else state["polls"][0])
     if path == "/v1/catalog/components":
       items = [{"name": "greeting-api", "system": "greeter", "owner": "team-alpha", "lifecycle": "experimental", "template": "python-service@abc123"}]
@@ -168,3 +170,95 @@ def test_get_shows_an_extra_instance_with_its_name(api):
   result = run("get", "greeting-api")
   assert result.exit_code == 0, result.output
   assert "running in   demo (1.0.0, Available), greeting-api-pr-1@demo (1.1.0, Progressing)" in result.stdout
+
+
+INDEXED = {"name": "greeting-api", "system": "greeter", "owner": "team-alpha", "repo": "wasp-foundry/greeting-api"}
+
+
+@pytest.fixture
+def git(monkeypatch, tmp_path):
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+  calls = {"commands": [], "returncode": 0}
+
+  def fake_run(command, **kwargs):
+    calls["commands"].append(command)
+    return component_module.subprocess.CompletedProcess(command, calls["returncode"])
+
+  monkeypatch.setattr(component_module.subprocess, "run", fake_run)
+  return calls
+
+
+def git_protocol(tmp_path, value):
+  folder = tmp_path / "config" / "platform"
+  folder.mkdir(parents=True)
+  (folder / "config.yaml").write_text(f"git_protocol: {value}\n")
+
+
+def test_clone_uses_ssh_by_default(api, git):
+  api["component"] = INDEXED
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 0, result.output
+  assert git["commands"] == [["git", "clone", "--", "git@github.com:wasp-foundry/greeting-api.git"]]
+  assert "# git clone git@github.com:wasp-foundry/greeting-api.git" in result.output
+
+
+def test_clone_uses_https_with_the_flag(api, git):
+  api["component"] = INDEXED
+  result = run("clone", "greeting-api", "--https", "--directory", "/tmp/greeting")
+  assert result.exit_code == 0, result.output
+  assert git["commands"] == [["git", "clone", "--", "https://github.com/wasp-foundry/greeting-api.git", "/tmp/greeting"]]
+
+
+def test_clone_reads_the_protocol_from_the_config(api, git, tmp_path):
+  git_protocol(tmp_path, "https")
+  api["component"] = INDEXED
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 0, result.output
+  assert git["commands"][0][-1] == "https://github.com/wasp-foundry/greeting-api.git"
+
+
+def test_clone_flag_wins_over_the_config(api, git, tmp_path):
+  git_protocol(tmp_path, "ssh")
+  api["component"] = INDEXED
+  result = run("clone", "greeting-api", "--https")
+  assert result.exit_code == 0, result.output
+  assert git["commands"][0][-1] == "https://github.com/wasp-foundry/greeting-api.git"
+
+
+def test_clone_refuses_an_unknown_protocol_in_the_config(api, git, tmp_path):
+  git_protocol(tmp_path, "ftp")
+  api["component"] = INDEXED
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 1
+  assert "git_protocol takes ssh or https, got 'ftp'" in result.output
+  assert git["commands"] == []
+
+
+def test_clone_exits_with_the_code_of_git(api, git):
+  api["component"] = INDEXED
+  git["returncode"] = 128
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 128
+
+
+def test_clone_refuses_a_malformed_repo(api, git):
+  api["component"] = {**INDEXED, "repo": "--upload-pack=touch /tmp/x"}
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 1
+  assert "not <org>/<repo>" in result.output
+  assert git["commands"] == []
+
+
+def test_clone_of_an_unknown_component_suggests_list(api, git):
+  api["creating"] = False
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 1
+  assert "platform catalog component list" in result.output
+  assert git["commands"] == []
+
+
+def test_clone_while_the_component_is_created_points_to_get(api, git):
+  result = run("clone", "greeting-api")
+  assert result.exit_code == 1
+  assert "greeting-api is still being created: follow it with platform catalog component get greeting-api" in result.output
+  assert git["commands"] == []

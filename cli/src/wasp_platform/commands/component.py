@@ -3,6 +3,8 @@
 A component lives in its repo's catalog-info.yaml (ADR 0023): the platform creates the repo and
 indexes it; changing a component is a pull request in its repo.
 """
+import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import Annotated
 
 import typer
 
+from .. import config
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, fail, print_json, print_table, success
 from .template import _params
@@ -21,6 +24,9 @@ FINAL = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected", "
 # Protected=False with this reason is a warning: main is unprotected (a private repo on GitHub Free), the
 # creation still ends Ready.
 UNPROTECTED = "ProtectionUnavailable"
+# The only SCM vendor is GitHub (#199): repo is <org>/<repo> on github.com.
+GIT_URLS = {"ssh": "git@github.com:{repo}.git", "https": "https://github.com/{repo}.git"}
+REPO = re.compile(r"[\w.-]+/[\w.-]+")
 # Files the summary names when the template generated them.
 ANNOUNCED = ("docs/prd.md", "AGENTS.md")
 
@@ -191,3 +197,32 @@ def get(name: str, output: OutputOption = Format.table):
   # Only the environments you can use (ADR 0033).
   running = ", ".join(f"{_where(component['name'], item)} ({item.get('version') or '—'}, {item['status']})" for item in component.get("runningIn") or [])
   typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")
+
+
+@app.command("clone")
+def clone(
+  name: str,
+  directory: Annotated[str | None, typer.Option(help="Where to clone; defaults to the repo name.")] = None,
+  https: Annotated[bool, typer.Option("--https", help="Clone over HTTPS instead of SSH; wins over git_protocol in the config.")] = False,
+):
+  """Clone the repo of a component with your own Git credentials."""
+  protocol = "https" if https else config.load().get("git_protocol", "ssh")
+  if protocol not in GIT_URLS:
+    fail(f"git_protocol takes ssh or https, got '{protocol}' (in {config.config_path()})")
+  client = _client()
+  try:
+    component = client.get_component(name)
+  except ApiError as error:
+    try:
+      client.component_creation(name)
+    except ApiError:
+      fail(f"{error}: see the components with platform catalog component list")
+    fail(f"{name} is still being created: follow it with platform catalog component get {name}")
+  repo = component.get("repo") or ""
+  if not REPO.fullmatch(repo):
+    fail(f"{name}: repo '{repo}' is not <org>/<repo>")
+  url = GIT_URLS[protocol].format(repo=repo)
+  target = [directory] if directory else []
+  typer.echo(f"# git clone {' '.join([url, *target])}")
+  # The platform hands out no credential: git uses the developer's own, and its output passes through.
+  raise typer.Exit(subprocess.run(["git", "clone", "--", url, *target]).returncode)
