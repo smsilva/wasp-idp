@@ -104,7 +104,9 @@ def _build_and_import(name: str, context: Path, dockerfile: Path | None = None) 
   """Build, tag by image id and import into platform-local: an unchanged build keeps the tag, so the rollout is a no-op.
   dockerfile: when the context is wider than the project folder (a project with path dependencies)."""
   file = ["--file", str(dockerfile)] if dockerfile else []
-  _run("docker", "build", "--quiet", *file, "--tag", f"{name}:dev", str(context))
+  # Without provenance: its attestation changes the image id on every build (containerd image store),
+  # so an unchanged project would get a new tag and a rollout on every init.
+  _run("docker", "build", "--quiet", "--provenance=false", *file, "--tag", f"{name}:dev", str(context))
   image_id = _run("docker", "image", "inspect", "--format", "{{.Id}}", f"{name}:dev").strip()
   image = f"{name}:{image_id.removeprefix('sha256:')[:12]}"
   _run("docker", "tag", f"{name}:dev", image)

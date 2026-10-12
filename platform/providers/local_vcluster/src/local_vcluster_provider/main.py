@@ -1,5 +1,7 @@
 import argparse
 import logging
+import signal
+import sys
 import time
 
 from .helm import Helm
@@ -39,6 +41,8 @@ def main(argv: list[str] | None = None) -> None:
   args = parser.parse_args(argv)
 
   logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+  # PID 1 in the pod: without a handler the kernel drops SIGTERM, and every rollout waits the 30 s grace period.
+  signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = EnvironmentStore(args.namespace, args.context)
   reconciler = Reconciler(store, Helm(), KubeconfigSecrets())

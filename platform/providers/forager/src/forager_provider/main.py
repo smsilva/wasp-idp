@@ -1,5 +1,7 @@
 import argparse
 import logging
+import signal
+import sys
 import time
 
 from .postgres import provisioners
@@ -38,6 +40,8 @@ def main(argv: list[str] | None = None) -> None:
   args = parser.parse_args(argv)
 
   logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+  # PID 1 in the pod: without a handler the kernel drops SIGTERM, and every rollout waits the 30 s grace period.
+  signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = Store(args.namespace, args.context)
   reconciler = Reconciler(store, Vclusters(args.vcluster_server), Secrets(args.secrets_namespace), provisioners(SharedInstances(args.secrets_namespace), BindSources(args.secrets_namespace)))

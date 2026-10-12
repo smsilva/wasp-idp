@@ -1,5 +1,7 @@
 import argparse
 import logging
+import signal
+import sys
 import threading
 import time
 from pathlib import Path
@@ -44,6 +46,8 @@ def main(argv: list[str] | None = None) -> None:
   args = parser.parse_args(argv)
 
   logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+  # PID 1 in the pod: without a handler the kernel drops SIGTERM, and every rollout waits the 30 s grace period.
+  signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   logging.getLogger("httpx").setLevel(logging.WARNING)
   load_config(args.context)
