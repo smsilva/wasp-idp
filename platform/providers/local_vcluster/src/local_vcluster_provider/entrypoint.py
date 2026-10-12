@@ -14,9 +14,10 @@ from .mesh import SERVER, in_cluster
 GATEWAY_API = "gateway.networking.k8s.io/v1"
 GATEWAY = "platform"
 GATEWAY_NAMESPACE = "istio-ingress"
-# The Service Istio makes for the Gateway (<gateway>-<class>), as the vcluster syncs it to the host:
-# <name>-x-<namespace>-x-<release>.
-HOST_SERVICE = f"{GATEWAY}-istio-x-{GATEWAY_NAMESPACE}-x-vcluster"
+# The Deployment and Service Istio makes for the Gateway (<gateway>-<class>); the Service as the vcluster
+# syncs it to the host: <name>-x-<namespace>-x-<release>.
+DEPLOYMENT = f"{GATEWAY}-istio"
+HOST_SERVICE = f"{DEPLOYMENT}-x-{GATEWAY_NAMESPACE}-x-vcluster"
 INGRESS = "gateway"
 INGRESS_CLASS = "platform"
 MANAGER = "platform-local-vcluster"
@@ -98,10 +99,14 @@ class Entrypoint:
     host.server_side_apply(resource, body=obj, namespace=namespace, field_manager=MANAGER, force_conflicts=True)
 
   def ready(self, name: str, kubeconfig: str) -> bool:
+    """Programmed and serving: Istio programs the Gateway as soon as its Service exists, before the pod
+    of the gateway is up, and a request then gets no answer."""
     api = self._vcluster(name, kubeconfig)
-    resource = api.resources.get(api_version=GATEWAY_API, kind="Gateway")
+    gateways = api.resources.get(api_version=GATEWAY_API, kind="Gateway")
+    deployments = api.resources.get(api_version="apps/v1", kind="Deployment")
     try:
-      obj = resource.get(name=GATEWAY, namespace=GATEWAY_NAMESPACE).to_dict()
+      obj = gateways.get(name=GATEWAY, namespace=GATEWAY_NAMESPACE).to_dict()
+      deployment = deployments.get(name=DEPLOYMENT, namespace=GATEWAY_NAMESPACE).to_dict()
     except dynamic.exceptions.NotFoundError:
       return False
-    return programmed(obj)
+    return programmed(obj) and ((deployment.get("status") or {}).get("availableReplicas") or 0) >= 1
