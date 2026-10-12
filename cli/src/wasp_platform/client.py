@@ -47,6 +47,12 @@ class PlatformClient:
       body["sharedWith"] = shared_with
     return self._request("POST", "/v1/environments", json=body)
 
+  def list_capabilities(self) -> list[dict]:
+    return self._request("GET", "/v1/capabilities")["items"]
+
+  def get_capability(self, name: str) -> dict:
+    return self._request("GET", f"/v1/capabilities/{quote(name, safe='')}")
+
   def list_environments(self, all: bool = False) -> list[dict]:
     return self._request("GET", "/v1/environments", params={"all": "true"} if all else None)["items"]
 

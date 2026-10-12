@@ -65,6 +65,11 @@ kind: Deployment
 metadata:
   name: scm-github-provider
   namespace: platform-system
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: scm_github
+    platform.wasp.silvios.me/capabilities: scm.build
+    platform.wasp.silvios.me/vendor: github
 spec:
   replicas: 1
   strategy:

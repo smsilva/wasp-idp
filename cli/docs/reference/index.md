@@ -7,6 +7,7 @@ Look up a command, a flag or a status. To learn the CLI by doing, start with the
 | [Install the CLI](install.md) | prerequisites, `make cli` |
 | [Control plane](init.md) | `platform init` |
 | [Sign-in](login.md) | `platform login`, `whoami`, `logout` |
+| [Status](status.md) | `platform status`: each capability, its providers and whether it works |
 | [Environments](environments.md) | `platform environment …` |
 | [Catalog](catalog.md) | `platform catalog domain\|system\|resource …`, `platform catalog import` |
 | [Templates](templates.md) | `platform catalog template …` |

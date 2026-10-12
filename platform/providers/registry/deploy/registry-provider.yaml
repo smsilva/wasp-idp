@@ -38,6 +38,10 @@ kind: Deployment
 metadata:
   name: registry-provider
   namespace: platform-system
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: registry
+    platform.wasp.silvios.me/capabilities: registry
 spec:
   replicas: 1
   strategy:
