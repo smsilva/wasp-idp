@@ -1,8 +1,8 @@
 # Validate a spec before the build
 
-The Workload Spec is the `app-spec.yaml` (Score) of a version. `workload spec validate` runs the same check as the build (step 20.3) on a local file, before any commit: the Score schema, the resource types the platform provisions and each `resources.<name>.id` in the catalog. Anyone signed in can run it.
+The Workload Spec is the `app-spec.yaml` (Score) of a version. `workload spec validate` runs the same check as the build ([What a build refuses](../builds/refused.md)) on a local file, before any commit: the Score schema, the resource types the platform provisions and each `resources.<name>.id` in the catalog. Anyone signed in can run it.
 
-In the clone of step 20.1, on `feat/greetings`:
+In the clone of [Build a branch](../builds/create.md), on `feat/greetings`:
 
 ```bash
 cd /tmp/hello-api
@@ -14,7 +14,7 @@ platform workload spec validate
 ✓ app-spec.yaml valid · db (postgres), dns, route
 ```
 
-On `feat/bad-spec` (step 20.3), the same errors the build reported come back without a build:
+On `feat/bad-spec` ([What a build refuses](../builds/refused.md)), the same errors the build reported come back without a build:
 
 ```bash
 git -C /tmp/hello-api switch feat/bad-spec

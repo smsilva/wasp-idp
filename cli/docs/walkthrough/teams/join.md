@@ -1,6 +1,6 @@
 # Join the team
 
-As admin, join `team-alpha`, created in the [catalog](../catalog/13-1-hierarchy.md) (ADR 0026). The team reaches the token **on the next login**.
+As admin, join `team-alpha`, created in the [catalog](../catalog/hierarchy.md) (ADR 0026). The team reaches the token **on the next login**.
 
 ```bash
 platform team member add team-alpha you@example.com

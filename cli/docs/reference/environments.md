@@ -80,4 +80,4 @@ A `bind` item takes the values of the database that exists and the Secret with i
 | `compose` | a role and a database in the shared instance `params.instance` (`shared-pg`) |
 | `bind` | the database that already exists in the item's `params`; only the password of `params.secretRef` is copied to the vcluster, and nothing is created or dropped |
 
-A resource keeps the mode and the class it was created with: a policy or a `--resource-class` that changes them ends the next deploy as `ResourceModeChanged`, until `workload remove`. `bind` without `secretRef`, `host`, `database` and `username` is refused (`422`). Walkthroughs: [21.8](../walkthrough/workloads/21-8-compose.md) and [21.9](../walkthrough/workloads/21-9-bind.md).
+A resource keeps the mode and the class it was created with: a policy or a `--resource-class` that changes them ends the next deploy as `ResourceModeChanged`, until `workload remove`. `bind` without `secretRef`, `host`, `database` and `username` is refused (`422`). Walkthroughs: [A database in the shared instance](../walkthrough/workloads/compose.md) and [A database that already exists](../walkthrough/workloads/bind.md).

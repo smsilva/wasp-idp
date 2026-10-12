@@ -318,7 +318,7 @@ output="$(platform scm connection get "${connection}")"
 expect_output "AppNotCreated" "${output}"
 
 step "component create: every refusal happens before GitHub (#279)"
-# The happy path needs a ready connection, so it stays in the manual walkthrough (step 19).
+# The happy path needs a ready connection, so it stays in the manual walkthrough (Components).
 expect_failure "system 'smoke-missing' not found" \
   platform catalog component create "${component}" \
     --system smoke-missing \
@@ -359,7 +359,7 @@ expect_failure "is not ready (AppNotCreated)" \
 expect_failure "not found" platform catalog component get "${component}"
 
 step "build create: every refusal happens before GitHub (#287)"
-# The happy path dispatches a real workflow, so it stays in the manual walkthrough (step 20). The repo's
+# The happy path dispatches a real workflow, so it stays in the manual walkthrough (Builds). The repo's
 # org has no connection here, so no request can reach GitHub, even with a ready one for wasp-foundry.
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
 apiVersion: catalog.platform.wasp.silvios.me/v1alpha1

@@ -20,4 +20,4 @@ platform whoami
 ```
 
 !!! tip
-    `platform-local` stays up for the next round; to tear everything down, go back to [step 0](setup/00-from-scratch.md).
+    `platform-local` stays up for the next round; to tear everything down, go back to [From scratch](setup/from-scratch.md).

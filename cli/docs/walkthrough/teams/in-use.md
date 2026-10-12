@@ -1,6 +1,6 @@
 # A team in use
 
-**A team in use is not deleted:** the catalog imported in [step 14](../catalog/14-1-plan.md) has entities owned by `team-alpha`.
+**A team in use is not deleted:** the catalog imported [from Backstage](../catalog/plan.md) has entities owned by `team-alpha`.
 
 ```bash
 platform team delete team-alpha
