@@ -1,5 +1,6 @@
 # Provider workload (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment
-# (with the admin kubeconfig of Environment.status) and keeps the WorkloadInstance. Works with any
+# (with the admin kubeconfig of Environment.status) and keeps the WorkloadInstance; turns each
+# WorkloadRoute into a GAMMA HTTPRoute there (ADR 0035, #344). Works with any
 # Environment that is Ready with kubeconfigData. Installed by `platform init`.
 apiVersion: v1
 kind: ServiceAccount
@@ -24,6 +25,13 @@ rules:
     verbs: [get, list, watch, create, delete] # delete: a remove revision
   - apiGroups: [platform.wasp.silvios.me]
     resources: [workloadinstances/status]
+    verbs: [get, patch]
+  # patch: its finalizer, which removes the HTTPRoute from the vcluster before the route goes.
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadroutes]
+    verbs: [get, list, watch, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadroutes/status]
     verbs: [get, patch]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [environments]

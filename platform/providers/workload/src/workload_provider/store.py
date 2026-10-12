@@ -11,6 +11,7 @@ VERSION = "v1alpha1"
 REVISIONS = "workloadrevisions"
 INSTANCES = "workloadinstances"
 REQUESTS = "resourcerequests"
+ROUTES = "workloadroutes"
 # The in-cluster address of the vcluster API server (ClusterIP on 443, #307), as the Platform API reaches
 # it (credentials.py):
 # status.kubeconfigData points to 127.0.0.1, for the host.
@@ -40,21 +41,42 @@ class Store:
         return None
       raise
 
-  def list_revisions(self) -> tuple[list[dict], str]:
-    return self._list(GROUP, REVISIONS)
+  def list(self, plural: str) -> tuple[list[dict], str]:
+    """Revisions or routes, and the resourceVersion to watch from."""
+    return self._list(GROUP, plural)
 
   def list_instances(self) -> list[dict]:
     return self._list(GROUP, INSTANCES)[0]
 
-  def watch_revisions(self, resource_version: str, timeout_seconds: int):
+  def watch(self, plural: str, resource_version: str, timeout_seconds: int):
     stream = watch.Watch().stream(
       self.api.list_namespaced_custom_object,
-      GROUP, VERSION, self.namespace, REVISIONS,
+      GROUP, VERSION, self.namespace, plural,
       resource_version=resource_version,
       timeout_seconds=timeout_seconds,
     )
     for event in stream:
       yield event["type"], event["object"]
+
+  def patch_route_status(self, name: str, status: dict) -> None:
+    self.api.patch_namespaced_custom_object_status(GROUP, VERSION, self.namespace, ROUTES, name, {"status": status})
+
+  def add_route_finalizer(self, route: dict, finalizer: str) -> None:
+    self._finalizers(route, [*(route["metadata"].get("finalizers") or []), finalizer])
+
+  def remove_route_finalizer(self, route: dict, finalizer: str) -> None:
+    self._finalizers(route, [item for item in route["metadata"].get("finalizers") or [] if item != finalizer])
+
+  def _finalizers(self, route: dict, finalizers: list[str]) -> None:
+    """A JSON merge patch replaces the whole list; the resourceVersion makes a concurrent change a 409,
+    tried again on the next pass."""
+    body = {"metadata": {"finalizers": finalizers, "resourceVersion": route["metadata"]["resourceVersion"]}}
+    try:
+      self.api.patch_namespaced_custom_object(GROUP, VERSION, self.namespace, ROUTES, route["metadata"]["name"], body)
+    except client.ApiException as error:
+      if error.status != 404:
+        raise
+    route["metadata"]["finalizers"] = finalizers
 
   def get_environment(self, name: str) -> dict | None:
     return self._get(GROUP, "environments", name)
@@ -113,6 +135,24 @@ class Vcluster:
       self.dynamic.delete(resource, name=name, namespace=namespace)
     except dynamic.exceptions.NotFoundError:
       pass
+
+  def get(self, api_version: str, kind: str, namespace: str, name: str) -> dict | None:
+    resource = self.dynamic.resources.get(api_version=api_version, kind=kind)
+    try:
+      return self.dynamic.get(resource, name=name, namespace=namespace).to_dict()
+    except dynamic.exceptions.NotFoundError:
+      return None
+
+  def service_port(self, namespace: str, name: str) -> int | None:
+    """The first port of a Service, or None without it."""
+    try:
+      service = client.CoreV1Api(self.api_client).read_namespaced_service(name, namespace)
+    except client.ApiException as error:
+      if error.status == 404:
+        return None
+      raise
+    ports = service.spec.ports or []
+    return ports[0].port if ports else None
 
   def deployment(self, namespace: str, name: str) -> dict | None:
     try:
