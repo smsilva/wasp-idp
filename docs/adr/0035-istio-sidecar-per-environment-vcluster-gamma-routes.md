@@ -24,5 +24,5 @@ Os vclusters dos `Environment`s (provider `local_vcluster`, chart 0.37.2) não t
 - Trocar de mesh muda só a instalação no `local_vcluster`: as rotas são Gateway API.
 - As versões do Istio e do Gateway API ficam fixas na imagem do `local_vcluster` e andam juntas (Istio 1.30 → Gateway API 1.5); o Istio 1.30 tem EOL perto de dez/2026.
 - Ambientes criados antes desta mudança não têm mesh: a release do vcluster é instalada uma vez. `workload route` num ambiente sem mesh termina com uma condition de erro, não com roteamento silenciosamente ignorado.
-- O roteamento por header só vale além da primeira chamada se os serviços repassarem o header; o contrato do template (OpenTelemetry Baggage) é a #340.
+- O roteamento por header só vale além da primeira chamada se os serviços repassarem o header; o contrato é o OpenTelemetry Baggage, que o template `python-service` repassa e que está em [`cli/docs/walkthrough/workloads/baggage.md`](../../cli/docs/walkthrough/workloads/baggage.md) (#340).
 - Tráfego que entra no ambiente de fora continua fora: quando entrar, o gateway de entrada injeta ou valida o header.
