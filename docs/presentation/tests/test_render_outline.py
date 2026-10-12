@@ -152,8 +152,8 @@ def stage(page, n):
 def test_stage_attributes(tmp_path):
   page = deck(tmp_path)
   # root `box` goes up to the last step of `map` (4); `box-b` to the first step of `box-a` (8)
-  assert "data-detail='box' data-up='4' data-entry" in stage(page, 7)
-  assert "data-up='8' data-exit" in stage(page, 10)
+  assert "data-detail='box' data-up='4' data-out='4' data-entry" in stage(page, 7)
+  assert "data-up='8' data-out='4' data-exit" in stage(page, 10)
   assert "data-detail" not in stage(page, 6)
 
 
@@ -193,3 +193,28 @@ def test_first_step_knows_the_last(tmp_path):
   # A breadcrumb link to a main-track slide opens its last step: the diagram complete, as `data-up` does.
   page = deck(tmp_path)
   assert "data-slide='map' data-last-step='4'" in stage(page, 1)
+
+
+def test_focus_dims_the_rest(tmp_path):
+  # With a focus, every lit part outside it dims: p.1 (already revealed) when p.2 enters.
+  page = deck(tmp_path)
+  assert '<g data-part="p.1" class="part-dim part-link" data-go-slide="box">' in stage(page, 4)
+  assert '<g data-part="p.2" class="part-on part-focus">' in stage(page, 4)
+
+
+def test_focus_keeps_original_colors():
+  # The focus stands out because the rest dims: no border or text color of its own.
+  assert ".part-focus >" not in ro.CSS
+
+
+def test_every_detail_step_knows_the_way_out(tmp_path):
+  # With no origin (direct link, index), → on a subtree's last step and ← on its root leave to the
+  # main track (`data-out`, the root's parent), never to a slide inside the subtree.
+  page = deck(tmp_path)
+  for n in (7, 8, 9, 10):
+    assert "data-out='4'" in stage(page, n)
+
+
+def test_sync_carries_the_origin():
+  # The presenter window gets the origin with the step, or its back and exit lose the way.
+  assert "channel.postMessage({ step: current, origin: sessionStorage.getItem(ORIGIN_KEY) })" in ro.SCRIPT

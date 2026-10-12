@@ -101,9 +101,8 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram svg { max-width: 100%; max-height: 100%; width: auto; height: 100%; display: block; }
 .stage .diagram .part-hidden { visibility: hidden; }
 .stage .diagram .part-dim { opacity: 0.32; }
-.stage .diagram .part-focus > rect:first-of-type { stroke: #4a9ef4; stroke-width: 4; }
 .stage .diagram .part-link { cursor: pointer; }
-.stage .diagram .part-link:hover > rect:first-of-type { stroke: #7cc4ff; }
+.stage .diagram .part-link:hover > rect:first-of-type { stroke: #4a9ef4; }
 .stage .section.crumbs { z-index: 2; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
@@ -246,7 +245,9 @@ const ORIGIN_KEY = 'idp-outline-origin';
 const channel = new BroadcastChannel('idp-outline-' + location.pathname);
 channel.onmessage = (event) => {
   syncing = true;
-  if (!deck.classList.contains('on')) present(event.data); else show(event.data);
+  const { step, origin } = event.data;
+  if (origin === null) sessionStorage.removeItem(ORIGIN_KEY); else sessionStorage.setItem(ORIGIN_KEY, origin);
+  if (!deck.classList.contains('on')) present(step); else show(step);
   syncing = false;
 };
 const NOTES_KEY = 'idp-outline-notes';
@@ -273,7 +274,7 @@ function show(index) {
   fitAligned(stages[current]);
   deck.querySelector('.counter').textContent = (current + 1) + ' / ' + stages.length;
   deck.querySelector('.notes-panel').innerHTML = deck.querySelector(`template[data-notes='${current}']`).innerHTML;
-  if (!syncing) channel.postMessage(current);
+  if (!syncing) channel.postMessage({ step: current, origin: sessionStorage.getItem(ORIGIN_KEY) });
   history.replaceState(null, '', '#present-' + (current + 1));
 }
 function present(index) { deck.classList.add('on'); show(index); }
@@ -292,12 +293,17 @@ function back() {
   const origin = sessionStorage.getItem(ORIGIN_KEY);
   show(origin !== null ? Number(origin) : Number(stages[current].dataset.up));
 }
+// Leaving a subtree (→ on its last step, ← on its root): to the origin, else out to the main track.
+function leave() {
+  const origin = sessionStorage.getItem(ORIGIN_KEY);
+  show(origin !== null ? Number(origin) : Number(stages[current].dataset.out));
+}
 function next() {
-  if (stages[current].dataset.exit !== undefined) back();
+  if (stages[current].dataset.exit !== undefined) leave();
   else if (current !== lastMain) show(current + 1);
 }
 function previous() {
-  if (stages[current].dataset.entry !== undefined) back(); else show(current - 1);
+  if (stages[current].dataset.entry !== undefined) leave(); else show(current - 1);
 }
 // Clicks navigate only on links (box, breadcrumb, overlay, back): elsewhere a click keeps the text selection.
 deck.addEventListener('click', (event) => {
@@ -814,9 +820,12 @@ def render_stage(step, base, outline=None):
     # `dev.2` takes its own state, else its group's (`dev`).
     state = lambda part: step["diagram"].get(part) or step["diagram"].get(part.split(".")[0], "hidden")
     focus, links = step.get("focus") or set(), step.get("links") or {}
+    # `focus`: the focused parts keep their colors and every other lit part dims, so the eye goes to the focus.
+    # A group (`dev`) whose child is in focus (`dev.2`) keeps its own state.
+    lit = lambda part: "dim" if focus and state(part) == "on" and part not in focus and not any(f.startswith(part + ".") for f in focus) else state(part)
     def group(match):
       part = match[1]
-      classes = f"part-{state(part)}" + (" part-focus" if part in focus else "") + (" part-link" if part in links else "")
+      classes = f"part-{lit(part)}" + (" part-focus" if part in focus else "") + (" part-link" if part in links else "")
       link = f' data-go-slide="{esc(links[part])}"' if part in links else ""
       return f'<g data-part="{part}" class="{classes}"{link}>'
     svg = re.sub(r'<g data-part="([\w.-]+)">', group, svg)
@@ -911,6 +920,7 @@ def render_html(outline, base):
   # data-slide on a slide's first step lets #present-<slide name> link to it while step numbers shift.
   first_of = lambda i: steps[i]["slide"] is not None and (i == 0 or steps[i - 1]["slide"] is not steps[i]["slide"])
   first_step, last_step = {}, {}
+  slides_by_name = {slide["name"]: slide for slide in slides}
   for i, step in enumerate(steps):
     if step["slide"] is not None:
       first_step.setdefault(step["slide"]["name"], i)
@@ -922,7 +932,9 @@ def render_html(outline, base):
       return ""
     parent, is_root = step["up"]
     up = last_step[parent] if is_root else first_step[parent]
-    return (f" data-detail='{esc(step['detail'])}' data-up='{up}'"
+    # `data-out`: where the subtree leaves to with no origin, the last step of the root's main-track parent.
+    out = last_step[slides_by_name[step["detail"]]["parent"]]
+    return (f" data-detail='{esc(step['detail'])}' data-up='{up}' data-out='{out}'"
             + (" data-entry" if step.get("entry") else "") + (" data-exit" if step.get("exit") else ""))
   deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}' data-last-step='{last_step[steps[i]['slide']['name']]}'" if first_of(i) else "") + detail_attrs(i) + (" data-divider" if steps[i].get("divider") else "") + f">{stage}</div>"
                       for i, stage in enumerate(stages))
