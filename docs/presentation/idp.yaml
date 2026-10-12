@@ -57,10 +57,6 @@ acts:
     title: "Humans and agents"
     question: "What if the platform user is an agent?"
     opening: false
-  - name: where-we-are
-    title: "Where we are and next steps"
-    question: "What exists today and what comes next?"
-    opening: false
 
 # Partes: agenda (tecla I) e retorno opcional da agenda entre partes (deck.agendaSteps).
 # Cada parte agrupa atos; cada item aponta (`go`) para um ato ou um slide.
@@ -134,13 +130,6 @@ parts:
       - {label: "Contracts & gates", go: spec-is-contract}
       - {label: "Layers for agents", go: aep-layers}
       - {label: "Maturity", go: maturity-levels}
-  - title: "Where we are and next steps"
-    message: "What exists today and what comes next?"
-    acts: [where-we-are]
-    items:
-      - {label: "MVP 1", go: mvp1}
-      - {label: "Next steps", go: platform-api-next}
-      - {label: "closing", go: closing}
 
 # Campos por slide:
 #   name       slug estável (referenciado por dependsOn; reordenar não quebra)
@@ -168,11 +157,11 @@ slides:
     screen: ["Internal Developer Platform"]
     subtitle: "A shared journey to a platform for humans and agents"
     notes: |-
-      O que queremos dizer: **construir um IDP não é implantar o desenho final**. É uma jornada que fazemos juntos, com objetivos claros e um primeiro passo já entregue.
+      O que queremos dizer: **construir um IDP não é implantar o desenho final**. É uma jornada que fazemos juntos, com objetivos claros.
 
       **Quando começamos, a ideia era mostrar o desenho dos 5 planes.** No caminho ficou claro que ele envolve muito mais: catálogo e ownership, contratos e gates, identidade, custo, segurança, e agentes como novos usuários da plataforma.
 
-      **Roteiro:** o problema, cada plane peça por peça, a API e seus clientes, a jornada da ideia ao `curl`, o desenho completo, o que muda com agentes, e onde estamos hoje com o MVP 1 e os próximos passos.
+      **Roteiro:** o problema, cada plane peça por peça, a API e seus clientes, a jornada da ideia ao `curl`, o desenho completo, e o que muda quando o usuário é um agente.
 
       **Objetivo:** alinhar o que a plataforma é e o que não é, e sair daqui com aliados.
 
@@ -182,36 +171,17 @@ slides:
     topic: "Our starting point"
     message: "Times de infraestrutura cuidam da infra para os times de aplicação — e quem tem uma ideia ainda precisa pedir a outro time."
     heading: "Asking for infrastructure today"
-    screen: ["**Request:** to another team", "**Receives:** a whole environment", "**Knowledge:** documented, _not self-service_"]
+    screen: ["**Request:** to another team", "**Knowledge:** documented, _not self-service_"]
     notes: |-
       O que queremos dizer: **o dev não carrega a infra sozinho** — um time de infraestrutura cuida dela. O que ainda pesa é o caminho: **quem tem uma ideia precisa pedir**, e recebe o pacote que existe.
 
       **Pedido:** mesmo quando a criação de um ambiente já é automatizada para quem opera (um PR conduzido por um operator, por exemplo), continua sendo um pedido a outro time, que precisa ter agenda.
-
-      **O que se recebe:** um **ambiente inteiro** (rede, gateway, apps, mensageria). Um recurso avulso, como um banco ou uma fila, segue outro caminho, também por pedido.
 
       **Conhecimento:** o "como se faz" está escrito — how-tos, runbooks — e parte dele já roda sozinho. Mas foi escrito **para quem opera**: quem tem a ideia não o executa por conta própria. A plataforma leva esse mesmo conhecimento a um **golden path** que o dev usa sem pedir — e que um agente também usa, porque ele **só usa o que está escrito num formato que a máquina lê** (DORA, p. 41). DORA = DevOps Research and Assessment.
 
       Pedir à plateia um exemplo próprio funciona bem aqui.
 
       Fonte: references/dora-roi-ai.md.
-
-  - name: one-size-environment
-    act: problem
-    topic: "Our starting point"
-    message: "O modelo de um ambiente completo por cliente funciona e escala; o uso mudou, e o pacote ficou grande para o uso mais comum de hoje."
-    heading: "One environment fits all"
-    screen: ["**Works:** one isolated environment per client", "**Shape:** the full stack, every time", "**Today:** many only need `LiteLLM` for `Claude Code`"]
-    notes: |-
-      O que queremos dizer: um modelo comum de plataforma interna — **um ambiente completo e isolado por cliente** — **funciona e escala**. O que muda é o uso: hoje muitos só querem apontar o Claude Code para um gateway de modelos (LiteLLM), e **recebem o ambiente inteiro**.
-
-      **Forma:** cada ambiente sobe rede, runtime, as apps e mensageria; serviços compartilhados ficam num ambiente central, alcançado por um gateway.
-
-      **Por que a transição é gradual:** clientes com VPN própria e faixas de IP reservadas, login federado por cliente, apps que dependem do ambiente central. Os dois modelos convivem por um tempo.
-
-      **Não é correção de erro:** cada escolha teve um motivo no momento — decisões de baixo custo no início que o crescimento tornou caras. A plataforma nova **leva adiante o que o modelo anterior provou**.
-
-      Fonte: references/platform-illusion.md.
 
   - name: cognitive-load
     act: problem
@@ -229,7 +199,7 @@ slides:
       David Iyanu Jonathan, 'The platform engineering illusion' (platformengineering.com, 2026-07-31): o 'you build it, you run it' virou **'you build it, you run it, you secure it, you monitor it, you cost-optimize it, and you keep current on eleven CVE feeds.'** O trabalho da plataforma é **'reduce unnecessary complexity while preserving necessary complexity'** — sem esconder tanto que depurar vire arqueologia.
 
       Fonte: references/dora-roi-ai.md, references/platform-illusion.md.
-    dependsOn: [one-size-environment]
+    dependsOn: [delivery-friction]
 
   - name: empathy-gap
     act: problem
@@ -377,7 +347,7 @@ slides:
     heading: "From idea to Internal Product"
     screen: ["**Today:** good products start as someone's idea", "**Goal:** anyone takes an idea to a shared product"]
     notes: |-
-      O que queremos dizer: o MVP 1 facilita provisionar ambiente, mas **o objetivo é estimular a criatividade**: tornar fácil criar produto novo dentro da empresa.
+      O que queremos dizer: provisionar ambiente mais rápido ajuda, mas **o objetivo é estimular a criatividade**: tornar fácil criar produto novo dentro da empresa.
 
       Siglas:
       - **IP** (Internal Product): aplicação ou solução criada internamente.
@@ -393,7 +363,7 @@ slides:
       **Compartilhar tem estado:** o catálogo já marca cada app com um `lifecycle` (`experimental`, `production`, `deprecated`). Um IP validado passa para `production`; voltamos a isso ao declarar uma app.
 
       Fonte: references/internal-products.md.
-    dependsOn: [platform-as-product, one-size-environment]
+    dependsOn: [platform-as-product]
 
   - name: landscape-empty
     act: direction
@@ -1157,7 +1127,7 @@ slides:
       - Entre anéis, **verificação em tempo real** (golden signals, erros): a plataforma **para o rollout** e **faz rollback** do anel afetado sozinha — duas capacidades que hoje não existem.
 
       Fonte: references/golden-signals.md.
-    dependsOn: [gitops, one-size-environment]
+    dependsOn: [gitops]
 
   - name: ci-bottleneck
     act: integration-delivery
@@ -2290,216 +2260,8 @@ slides:
       Fonte: references/state-of-ai-in-platform-engineering.md, references/agent-evals.md, references/sandbox-routing.md, references/agents-md.md, references/dora-roi-ai.md.
     dependsOn: [level3-prerequisites]
 
-  # ── Onde estamos e próximos passos ──────────────────
-  - name: mvp1
-    act: where-we-are
-    topic: "MVP 1"
-    message: "MVP 1: quem pede um ambiente recebe um cluster pronto, com rede, DNS, certificado, identidade e GitOps — sem ticket."
-    heading: "What the dev gets"
-    screen: ["**Asks for:** an `Environment`", "**Gets:** a ready cluster with a URL", "**Without:** a ticket"]
-    notes: |-
-      O que queremos dizer: **o primeiro passo entregue é o ambiente sob demanda** — pedir e receber, sem ticket.
-
-      **Pedido:** um claim `Environment`, declarado em YAML.
-
-      **Entrega:** um cluster EKS (Elastic Kubernetes Service) com rede, DNS numa sub-zona própria, certificado, Gateway, identidade e GitOps já ligados.
-
-      É o conselho de 'The platform engineering illusion': **'Build the smallest platform that resolves a real, named problem'**. O problema nomeado aqui: ter um ambiente completo sem depender de outro time.
-
-      Fonte: references/current-state.md, references/poc.md, references/platform-illusion.md.
-    dependsOn: [journey-run]
-
-  - name: mvp1-core-component
-    act: where-we-are
-    topic: "MVP 1"
-    audiences: [executive, platform]
-    message: "O MVP 1 entrega um dos componentes centrais de qualquer IDP: ambientes sob demanda."
-    heading: "Environment management"
-    screen: ["**What:** self-service environments on demand", "**Context:** 1 of 5 core IDP components"]
-    notes: |-
-      O que queremos dizer: o MVP 1 entrega **um dos componentes centrais de qualquer IDP** (Internal Developer Platform).
-
-      **Os cinco core components** (internaldeveloperplatform.org):
-      - application configuration
-      - infrastructure orchestration
-      - **environment management**
-      - deployment management
-      - **RBAC** (role-based access control)
-
-      **Environment management:** 'developers can self-serve fully provisioned environments on demand', 'provisioned as defined by the platform team', criados por UI, **CLI** (command-line interface) ou **API** (application programming interface), com 'automated teardown or pausing' para evitar custo. É **exatamente o recorte do MVP 1**.
-
-      **Cuidado:** os cinco componentes (por capacidade) **não são os cinco planes** (por camada) — não misturar os dois 'cinco'.
-
-      **Ressalva:** o site é ligado à Humanitec, que vende platform orchestrator.
-
-      Fonte: references/internaldeveloperplatform-org.md.
-    dependsOn: [mvp1]
-
-  - name: mvp1-architecture
-    act: where-we-are
-    topic: "MVP 1"
-    audiences: [platform]
-    message: "Um control plane provisiona os Environments na AWS, numa topologia hub-and-spoke."
-    heading: "Hub and spokes"
-    screen: ["**Control plane:** runs `Crossplane`, `Argo CD`", "**Hub:** shared network and ingress", "**Spoke:** an Environment on AWS"]
-    notes: |-
-      O que queremos dizer: **um control plane provisiona os Environments**; a rede é hub-and-spoke.
-
-      Siglas:
-      - **EKS** (Elastic Kubernetes Service): o cluster de cada Environment.
-      - **DNS** (Domain Name System): nomes numa sub-zona delegada no Route 53.
-
-      **Control plane:** roda **Crossplane e Argo CD**. Hoje é um **k3d local**.
-
-      **Hub:** a conta `network` concentra conectividade e ingress; cada região tem células (spokes).
-
-      **Claim:** um claim `Environment` vira um **cluster EKS** com rede, DNS, certificado, identidade e GitOps.
-
-      As decisões de topologia estão registradas como ADRs no repo (`docs/adr/`).
-
-      Fonte: references/poc.md.
-    dependsOn: [mvp1, iac]
-
-  - name: poc-today
-    act: where-we-are
-    topic: "MVP 1"
-    message: "Já funciona hoje, em pequeno: um pedido vira uma URL."
-    heading: "Already working"
-    screen: ["**Today:** 1 claim _becomes_ a URL", "**Time:** ~30 min to HTTP 200"]
-    notes: |-
-      O que queremos dizer: **já funciona hoje, em pequeno**: um pedido vira uma URL.
-
-      **Walking skeleton da PoC:** um claim `Environment`, **~28-30 min** até o cluster EKS (Elastic Kubernetes Service) responder **HTTP 200** no echo. O control plane do EKS domina o tempo (~12-15 min).
-
-      É a **prova de ponta a ponta** antes de crescer.
-
-      Fonte: references/poc.md.
-    dependsOn: [mvp1-architecture]
-
-  - name: mvp1-level
-    act: where-we-are
-    topic: "MVP 1"
-    message: "O MVP 1 está no Level 1; o próximo passo são os pré-requisitos do Level 3."
-    heading: "Where MVP 1 stands"
-    screen: ["**Level:** 1, AI suggests", "**Next:** what Level 3 needs"]
-    notes: |-
-      O que queremos dizer: **o MVP 1 está no Level 1**; o próximo passo são **os pré-requisitos do Level 3**.
-
-      **Hoje:** o agente (Claude Code) sugere e o humano executa (**Level 1**).
-
-      **Não estamos atrasados:** **72%** da indústria está em L1 ou L2 (State of AI, p. 19).
-
-      **Próximo passo:** deixa de ser 'mais features' e vira **construir os quatro pré-requisitos juntos**.
-
-      Fonte: references/current-state.md, references/state-of-ai-in-platform-engineering.md.
-    dependsOn: [poc-today, maturity-levels]
-
-  - name: j-curve
-    act: where-we-are
-    topic: "MVP 1"
-    audiences: [executive]
-    message: "Espere a queda antes do ganho: a adoção de IA segue uma J-Curve."
-    heading: "J-Curve"
-    screen: ["**First:** a dip, then the gain", "**Why:** the verification tax", "**Plan:** budget it as tuition"]
-    source: "DORA ROI of AI-assisted Software Development (2026), pp. 4, 8-10"
-    notes: |-
-      O que queremos dizer: a adoção de IA tem **uma queda antes do ganho**, e é preciso **orçar essa queda**.
-
-      Siglas:
-      - **DORA** (DevOps Research and Assessment): o programa de pesquisa por trás do relatório.
-      - **ROI** (return on investment): retorno sobre o investimento.
-      - **CFR** (change failure rate): taxa de falha de mudanças.
-
-      **Citação** (DORA ROI, p. 4, p. 8-9): 'a temporary productivity dip and period of instability associated with early adoption. Think of this dip as the tuition cost of transformation.'
-
-      **Três causas:**
-      - learning curve
-      - **verification tax** (revisar código gerado)
-      - pipeline adaptation
-
-      **Profundidade:** depende da 'baseline health of its internal developer platforms' (p. 10). Iniciativas **falham quando a liderança corta o investimento na queda** (p. 8).
-
-      **Ressalva:** a curva é modelo conceitual; os números da calculadora (ROI 39%, CFR 5% → 6%) são **premissas ilustrativas**, não achados.
-
-      Fonte: references/dora-roi-ai.md.
-    dependsOn: [mvp1-level]
-
-  - name: platform-api-next
-    act: where-we-are
-    topic: "Next steps"
-    align: true
-    message: "Próximo: uma Platform API como fronteira única, com uma identidade só para todos os clients."
-    heading: "One API, one identity"
-    screen: ["**API:** the single boundary", "**Identity:** `Keycloak` as broker", "**State:** the Kubernetes API"]
-    notes: |-
-      O que queremos dizer: **o próximo passo é a fronteira**: uma Platform API na frente de tudo, com identidade única.
-
-      Siglas:
-      - **JWT** (JSON Web Token): o token que a API valida.
-      - **PKCE** (Proof Key for Code Exchange): login da CLI pelo navegador.
-
-      **Platform API:** CLI, portal e agentes falam só com ela; Crossplane e Argo CD ficam atrás, como implementação.
-
-      **Identidade:** Keycloak como broker — o Google autentica, o Keycloak guarda os grupos (`platform-admins`, `platform-users`), a API valida o JWT. A avaliação inicial com Dex foi descartada: o Dex não guarda usuários nem grupos.
-
-      **Estado:** a API do Kubernetes como fonte da verdade (watch, `spec`/`status`, finalizers, RBAC); Postgres como journal e projeção para as consultas do portal.
-
-      Decisões aceitas: ADR 0021 (Keycloak) e ADR 0022 (kube API como fonte da verdade), em `docs/adr/`. A primeira fatia já roda localmente: `platform init` sobe o control plane em k3d com o CRD `Environment` e a Platform API, ainda sem autenticação.
-
-      Fonte: references/current-state.md, references/sso-dex.md, docs/adr/0021-keycloak-as-platform-identity-broker.md, docs/adr/0022-kube-api-as-platform-source-of-truth.md.
-    dependsOn: [mvp1-level, single-sign-on, landscape-api]
-
-  - name: next-steps
-    act: where-we-are
-    topic: "Next steps"
-    align: true
-    message: "Próximo: vários clients sobre a mesma plataforma."
-    heading: "Many clients, one platform"
-    screen: ["**CLI:** `platform login`, `whoami`", "**Portal:** catalog + plugins", "**Agent:** the catalog via `MCP`"]
-    notes: |-
-      O que queremos dizer: **vários clients sobre a mesma plataforma**.
-
-      Siglas:
-      - **MCP** (Model Context Protocol): como o agente lê o catálogo.
-      - **CLI** (command-line interface): a interface de terminal.
-      - **DORA ROI**: relatório DORA (DevOps Research and Assessment) sobre ROI (return on investment) de IA.
-
-      **CLI:** a `platform` começa por `init`, `login` (PKCE e device code) e `whoami`, e cresce junto com as capacidades da API.
-
-      **Portal:** o Backstage como **developer portal**: guarda o modelo mental humano (catálogo) e conversa com a plataforma por plugins — a próxima fatia é a aba Environments na página de Component.
-
-      **Agente:** lê **o mesmo catálogo por MCP**.
-
-      O catálogo exposto por MCP é a **context layer** que o DORA ROI manda construir primeiro (p. 44).
-
-      Fonte: references/current-state.md, references/dora-roi-ai.md.
-    dependsOn: [platform-api-next, catalog-as-context]
-
-  - name: takeaways
-    act: where-we-are
-    topic: "Next steps"
-    audiences: [executive]
-    message: "Plataforma como produto, começando pela context layer, construída em fatias finas."
-    heading: "What to take away"
-    screen: ["**Build:** platform as a product", "**Start:** with the context layer", "**Grow:** in thin slices"]
-    notes: |-
-      O que queremos dizer: **três ideias para levar**.
-
-      Siglas:
-      - **DORA** (DevOps Research and Assessment): programa de pesquisa.
-      - **ROI** (return on investment): retorno sobre o investimento.
-
-      **Âncoras externas:** 'Quality internal platforms' é uma das **7 capacidades** do DORA AI Capabilities Model; DORA ROI (p. 49): 'the true risk for technology leaders is not failing at AI but failing to build the organizational system and culture that allow AI to deliver value.'
-
-      **O papel do platform engineer está mudando:** **43%** esperam foco em governança e guardrails, **36%** em plataformas para agentes (State of AI, p. 44).
-
-      **Adoção se conquista, não se impõe.** Em 'The platform engineering illusion', times que contam a outro time que a plataforma economizou um dia valem mais que um memorando — 'that word-of-mouth compounds in a way no mandate memo ever does'.
-
-      Fonte: references/dora-ai-report.md, references/dora-roi-ai.md, references/state-of-ai-in-platform-engineering.md, references/platform-illusion.md.
-    dependsOn: [next-steps]
-
   - name: closing
-    act: where-we-are
+    act: agentic
     animations: none
     message: "Obrigado."
     screen: ["Questions?"]
