@@ -1863,7 +1863,9 @@ slides:
 
       O `greeting-api` nasce `experimental` no catálogo; o PRD e o `AGENTS.md` já vêm no repo para dar contexto ao agente.
 
-      Comandos **ilustrativos**: a CLI `platform` não existe com esses verbos.
+      **O dev pede um tipo, não um template:** sem `--type`, o component é um `service`, e a plataforma escolhe o golden path padrão do tipo (`python-service`). Trocar o golden path de todos é trocar o padrão, sem mudar o comando de ninguém.
+
+      **Real hoje:** `catalog component list` e `create`. A saída foi recortada: a lista real tem a coluna `TEMPLATE` (`python-service@<sha>`), e o `create --wait` mostra antes os seis passos da criação (`Validated` … `Registered`).
 
   - name: journey-plan-2
     act: journey
@@ -1879,7 +1881,9 @@ slides:
 
       O `greeting-api` nasce `experimental` no catálogo; o PRD e o `AGENTS.md` já vêm no repo para dar contexto ao agente.
 
-      Comandos **ilustrativos**: a CLI `platform` não existe com esses verbos.
+      **O dev pede um tipo, não um template:** sem `--type`, o component é um `service`, e a plataforma escolhe o golden path padrão do tipo (`python-service`). Trocar o golden path de todos é trocar o padrão, sem mudar o comando de ninguém.
+
+      **Real hoje:** `catalog component list` e `create`. A saída foi recortada: a lista real tem a coluna `TEMPLATE` (`python-service@<sha>`), e o `create --wait` mostra antes os seis passos da criação (`Validated` … `Registered`).
 
   - name: journey-code
     act: journey
@@ -1895,9 +1899,11 @@ slides:
     notes: |-
       O que queremos dizer: **o agente trabalha com o contexto que a plataforma deu** — o PRD, o `AGENTS.md`, a spec e a entrada do catálogo.
 
-      **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no release.
+      **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `name`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no deploy. A spec na tela é a que o template `python-service` gera.
 
-      **`platform app clone`** acha o repo pelo nome da app no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza.
+      **`platform catalog component clone`** acha o repo pelo nome do component no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza. **Ilustrativo até a #327**; hoje é o `git clone` direto.
+
+      O template não traz driver de Postgres: é o agente quem acrescenta o `psycopg`.
 
       Tudo numa branch: nada chega à `main` sem PR.
 
@@ -1913,9 +1919,11 @@ slides:
     notes: |-
       Continuação: O que queremos dizer: **o agente trabalha com o contexto que a plataforma deu** — o PRD, o `AGENTS.md`, a spec e a entrada do catálogo.
 
-      **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no release.
+      **A spec veio do golden path** (`app-spec.yaml`): container, porta, rota e um banco `postgres`. As variáveis do container **referenciam o recurso** (`${resources.db.host}`, `name`, `username`, `password`): a app não sabe onde o banco vai rodar nem guarda senha — a plataforma preenche no deploy. A spec na tela é a que o template `python-service` gera.
 
-      **`platform app clone`** acha o repo pelo nome da app no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza.
+      **`platform catalog component clone`** acha o repo pelo nome do component no catálogo (como `heroku git:clone --app`): o dev não precisa saber em que org ou host o código mora. O `git clone` que ela executa aparece em cinza. **Ilustrativo até a #327**; hoje é o `git clone` direto.
+
+      O template não traz driver de Postgres: é o agente quem acrescenta o `psycopg`.
 
       Tudo numa branch: nada chega à `main` sem PR.
 
@@ -1935,7 +1943,9 @@ slides:
 
       O catálogo não guarda versões; quem guarda é o registry.
 
-      **A spec é validada no build** — gate determinístico e obrigatório: spec inválida não vira versão, e o erro volta com o motivo. O mesmo validador pode rodar localmente para errar mais cedo, mas é opcional; a garantia é a da CI. No release a plataforma valida de novo ao aplicar (`unknown field`, como no slide do gate determinístico).
+      **A spec é validada no build** — gate determinístico e obrigatório: spec inválida não vira versão, e o erro volta com o motivo. O mesmo validador pode rodar localmente para errar mais cedo, mas é opcional; a garantia é a da CI. No deploy a plataforma valida de novo ao aplicar (`unknown field`, como no slide do gate determinístico).
+
+      **A versão:** o primeiro build de um repo sem tag sai `0.1.0-<branch>.<sha7>` (o Commitizen começa em `0.1.0`). **Real hoje:** `build create` e `build list`, com a saída da CLI.
 
   - name: journey-env
     act: journey
@@ -1955,25 +1965,31 @@ slides:
 
       **O dev escolhe o tipo de ambiente, não onde ele roda.** O perfil (`ephemeral`) é o golden path do ambiente, definido pela plataforma: nuvem, região, tamanho, observabilidade e política de custo vêm nele. Pedir `--provider` ao dev contradiria a spec, que diz o que a app precisa sem dizer onde.
 
+      **Real hoje:** `environment list` e `create --wait` (a lista real também tem `OWNER` e `SHARED`). **Ainda é alvo:** o perfil decidir a política de recursos do ambiente (#329); hoje o `profile` só é gravado no `Environment`.
+
   - name: journey-release
     act: journey
     topic: "From idea to running product"
-    message: "A versão da branch é promovida para o ambiente novo, e a plataforma devolve a URL."
-    heading: "Release: version to environment"
-    diagram: "diagrams/journey/release.svg"
+    message: "A versão da branch é implantada no ambiente novo, e a plataforma devolve a URL."
+    heading: "Deploy: version to environment"
+    diagram: "diagrams/journey/deploy.svg"
     show: [strip]
     start: "empty"
     empty: [prompt]
-    reveal: [cmd.1, cmd.1-out]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
     accumulate: true
     notes: |-
-      O que queremos dizer: **release é ligar uma versão a um ambiente** — e a resposta é uma URL.
+      O que queremos dizer: **deploy é ligar uma versão a um ambiente** — e a resposta é uma URL.
+
+      **Workload Instance:** `--branch` escolhe a versão mais nova construída da branch e a fixa na revisão; a instância não segue a branch sozinha. A Workload Instance é para a spec da versão o que uma Helm Release é para um Chart: cada deploy é uma revisão nova, com histórico e rollback.
 
       O banco aparece aqui porque **a spec pediu**: o dev não abriu ticket nem escolheu serviço de nuvem.
 
-      **O modo resolvido aparece na saída:** `compose → shared-pg/greetings_test` — num ambiente efêmero, o banco é um database na instância Postgres compartilhada, não uma instância nova. Em produção o mesmo pedido resolveria para `provision`.
+      **O modo resolvido aparece no `workload get`:** `db (postgres, compose)` — num ambiente efêmero, o banco é um database na instância Postgres compartilhada, não uma instância nova. Em produção o mesmo pedido resolveria para `provision`.
 
-      **Forma da CLI:** `platform <recurso> <verbo>` com a app como escopo (`--app`), como `gh release create`, `gcloud builds list`, `fly releases --app`. O deploy devolve a URL na saída, como o `gcloud run deploy`: não há comando só para buscá-la.
+      **Forma da CLI:** `platform <recurso> <verbo>` com o component como escopo (`--component`), como `gh release create`, `gcloud builds list`, `fly releases --app`.
+
+      **Real hoje:** `workload deploy --wait` e `workload get`, com a saída recortada. **Ainda é alvo:** a URL externa (#324), a URL e o modo do recurso na própria saída do `deploy` (#328) e o `compose` num ambiente `ephemeral` sem passo de admin (#329).
 
   - name: journey-run
     act: journey
@@ -1990,6 +2006,10 @@ slides:
       O que queremos dizer: **da ideia ao produto rodando, sem abrir ticket** — o `curl` é a prova.
 
       Os golden signals vêm de graça: o ambiente nasceu observado.
+
+      **O status é da Workload Instance** (uma versão rodando num ambiente), não do component: o catálogo descreve o que a app é, e mostra as instâncias só como `running in` no `catalog component get`.
+
+      **Ilustrativo:** o `curl` pela URL externa depende da #324, e os golden signals (`workload signals`) da #326; hoje nada na plataforma coleta métricas.
 
   # ── Desenho final ───────────────────────────────────
   - name: landscape-full
@@ -2232,7 +2252,7 @@ slides:
     audiences: [executive, platform]
     message: "O objetivo: cada etapa da entrega tem um caminho governado pela plataforma, que pessoa ou agente executa com segurança."
     heading: "A governed path per stage"
-    screen: ["**Plan:** a **PRD** and the app _declared_ in the catalog", "**Code:** people and agents _follow_ **ADRs** and `AGENTS.md`", "**Review:** each **PR** or **app version** _runs in_ a **shared sandbox**", "**Test:** a failed **check** _returns_ to its author", "**Deploy:** an app version _promoted_ across Environments", "**Monitor:** **golden signals** _watch_ every Environment"]
+    screen: ["**Plan:** a **PRD** and the app _declared_ in the catalog", "**Code:** people and agents _follow_ **ADRs** and `AGENTS.md`", "**Review:** each **PR** or **app version** _runs in_ a **shared sandbox**", "**Test:** a failed **check** _returns_ to its author", "**Deploy:** an app version _deployed_ to an Environment", "**Monitor:** **golden signals** _watch_ every Environment"]
     source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 50"
     notes: |-
       O que queremos dizer: **cada etapa tem um caminho governado** pela plataforma, que pessoa ou agente executa com segurança. A autonomia segue a consequência: **o irreversível continua com uma pessoa** (slide `irreversible-gate`).
