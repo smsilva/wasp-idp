@@ -23,6 +23,10 @@
 
   Confirm with `gh api graphql -f query='query{node(id:"<itemId>"){... on ProjectV2Item{fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}'` — `item-list` lags minutes behind new items. `item-add` is idempotent, so re-running it is safe. Option ids: `Backlog` `2841e349`, `Todo` `1346028c`, `In Progress` `d9b40b84`, `Done` `1168c952`.
 
+- **Every issue also gets `Track` and `Theme` on the board** (single-select fields, the dashboard's grouping), set with the same `gh project item-edit` and `--field-id`/`--single-select-option-id`. `Track` (`PVTSSF_lAHOAARkfs4Bh2xzzhlTofg`): `Platform` `5383a638`, `AWS` `e9f72091`, `Backstage` `cf1c14da`, `Deck` `7283315f`. `Theme` (`PVTSSF_lAHOAARkfs4Bh2xzzhlTofk`) — Platform: `Deploy flow` `22fade41`, `Machine identity & MCP` `f36f1b41`, `API core` `975fae8f`, `Observability & CLI product` `4d5e5188`, `Catalog & SCM` `2affb827`, `CLI docs` `4cee7a79`; `Backstage` `fe1a8cce`; `Deck` `e1ad7c45`; AWS: `Accounts bootstrap` `4e47509b`, `Network foundation` `91e65e32`, `Control plane & EKS` `dd66f32f`, `Private access & ingress` `56a91fca`, `Edge security` `65046e02`, `ArgoCD & GitOps` `1503fac1`, `Crossplane` `7e26e4cd`, `CI & operations` `97c6042b`, `Architecture docs` `95bf3ea4`, `Script translation` `94ecc71e`. A new theme is a new option on the field (UI or GraphQL `updateProjectV2Field`), then a line here.
+
+- **Write new issues, comments and PR descriptions in English**: fewer tokens for an agent to read. Existing pt-BR issues stay as they are.
+
   Issues created outside a session (design conversations) often skip `item-add`: confirm membership per issue with GraphQL (`issue.projectItems`), since `item-list` lags behind.
 
   Audit now and then by diffing `gh issue list --state open --json number` against the `content.number` values from `gh project item-list` — pass `--limit 1000` to both, since `item-list` defaults to 30 items and a low limit silently truncates the newest items, which then look missing from the board.
