@@ -19,6 +19,12 @@ from .state import ENVIRONMENTS, GROUP, VERSION, AlreadyExists, Conflict, NotFou
 POLICIES = "bindingpolicies"
 # Names the Forager turns into manifests and SQL: checked here, and again there (ADR 0031).
 LABEL = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?")
+HOST = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*")
+PORT = re.compile(r"[0-9]{1,5}")
+SQL_NAME = re.compile(r"[a-z_][a-z0-9_-]{0,62}")
+# bind points at something that exists: its values, and a bindable Secret of platform-resources
+# holding the password (#306). The developer never passes the credential.
+BIND_PARAMS = (("secretRef", LABEL), ("host", HOST), ("database", SQL_NAME), ("username", SQL_NAME))
 
 
 def policy_name(environment: str) -> str:
@@ -46,6 +52,12 @@ class Provisioner(BaseModel):
     # compose needs the shared instance it composes into: there is no implicit one.
     if self.mode == "compose" and not LABEL.fullmatch(self.params.get("instance", "")):
       raise ValueError("compose needs params.instance, the shared instance (for example shared-pg)")
+    if self.mode == "bind":
+      for key, pattern in BIND_PARAMS:
+        if not pattern.fullmatch(self.params.get(key, "")):
+          raise ValueError(f"bind needs a valid params.{key} (secretRef, host, database and username; port is 5432 by default)")
+      if not PORT.fullmatch(self.params.get("port", "5432")):
+        raise ValueError("bind needs a valid params.port")
     return self
 
   def item(self) -> dict:

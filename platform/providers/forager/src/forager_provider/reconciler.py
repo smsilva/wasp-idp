@@ -118,6 +118,10 @@ class Reconciler:
         resolved = ("False", "NoProviderForCapability", f"{name}: the platform has no provider for {provisioner}")
       elif existing and existing["spec"].get("mode") and (existing["spec"]["mode"], existing["spec"].get("provisioner")) != (item["mode"], provisioner):
         resolved = ("False", "ResourceModeChanged", f"{name} is {existing['spec']['mode']} and the policy now resolves it as {item['mode']}: remove the workload and deploy again to change it")
+      # Another class with the same mode is another database: reusing the request would leave the
+      # revision on the old one without a word.
+      elif existing and existing["spec"].get("mode") and existing["spec"].get("class") != klass:
+        resolved = ("False", "ResourceModeChanged", f"{name} is class {existing['spec'].get('class') or '(none)'} and the revision now asks for class {klass or '(none)'}: remove the workload and deploy again to change it")
       else:
         resolved = ("True", "Resolved", f"{name}: {provisioner}")
       plans.append((request_name, name, kind, klass, resource_id, item if resolved[0] == "True" else None, resolved))
@@ -130,7 +134,8 @@ class Reconciler:
         if not resource_id:
           self._derive(spec["component"], name, kind)
       elif item and not request["spec"].get("mode"):
-        fields = {"mode": item["mode"], "provisioner": f"{kind}/{item['mode']}", "params": item.get("params") or {}}
+        # Resolved late: the class is the one this revision asks for (None removes it, merge patch).
+        fields = {"mode": item["mode"], "provisioner": f"{kind}/{item['mode']}", "params": item.get("params") or {}, "class": klass}
         self.store.patch_request(request_name, {"spec": fields})
         request["spec"].update(fields)
       self._status(request, number, resolved, complete)

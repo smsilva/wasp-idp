@@ -132,7 +132,7 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 
 <figure class="forager-figure" markdown="0">
 <div class="forager-scroll">
-<svg viewBox="0 0 990 330" role="img" aria-label="The three modes: provision makes a Postgres inside the vcluster; compose makes a database in a shared instance outside the vcluster; bind, not built yet, only copies the credentials of a database that already exists.">
+<svg viewBox="0 0 990 330" role="img" aria-label="The three modes: provision makes a Postgres inside the vcluster; compose makes a database in a shared instance outside the vcluster; bind only copies the credentials of a database that already exists, picked by a class.">
 <defs>
 <marker id="fg-arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
 </defs>
@@ -166,22 +166,22 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <path class="edge" d="M415,142 V228" marker-end="url(#fg-arr2)"/>
 <text class="lbl" x="423" y="188">its own database only</text>
 <text class="panel-title" x="675" y="30">bind</text>
-<text class="cap todo" x="975" y="30" text-anchor="end">#306 · not yet</text>
+<text class="cap" x="975" y="30" text-anchor="end">#306 · by class</text>
 <rect class="frame" x="675" y="46" width="300" height="120" rx="8"/>
 <text class="cap" x="689" y="66">vcluster of the environment</text>
 <rect class="box" x="695" y="86" width="100" height="56" rx="6"/>
 <text class="t" x="745" y="119" text-anchor="middle">app</text>
-<rect class="box todo" x="850" y="86" width="105" height="56" rx="6"/>
+<rect class="box" x="850" y="86" width="105" height="56" rx="6"/>
 <text class="t" x="902" y="112" text-anchor="middle">Secret</text>
 <text class="s" x="902" y="129" text-anchor="middle">copied</text>
-<rect class="box todo" x="675" y="196" width="300" height="120" rx="8"/>
+<rect class="box" x="675" y="196" width="300" height="120" rx="8"/>
 <text class="t" x="689" y="222">a database that exists</text>
 <text class="s" x="689" y="242">another team's, or an RDS</text>
 <text class="s" x="689" y="262">nothing created or dropped</text>
-<path class="edge dash" d="M745,142 V192" marker-end="url(#fg-arr2)"/>
+<path class="edge" d="M745,142 V192" marker-end="url(#fg-arr2)"/>
 </svg>
 </div>
-<figcaption>The policy picks where the database lives, and the Score stays the same in all three: the app gets <code>host</code>, <code>port</code>, <code>database</code>, <code>username</code> and the password through a Secret. An ephemeral environment can use <code>provision</code> while another, with shared data, uses <code>compose</code> or <code>bind</code>. Setting the policy: <a href="../environments/#binding-policy">Environments</a>.</figcaption>
+<figcaption>The policy picks where the database lives, and the Score stays the same in all three: the app gets <code>host</code>, <code>port</code>, <code>database</code>, <code>username</code> and the password through a Secret. An ephemeral environment can use <code>provision</code> while another, with shared data, uses <code>compose</code>, and a branch asks for <code>bind</code> with <code>--resource-class db=restored</code>. Setting the policy: <a href="../environments/#binding-policy">Environments</a>.</figcaption>
 </figure>
 
 ## Who writes what

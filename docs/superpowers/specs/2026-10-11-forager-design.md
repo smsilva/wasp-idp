@@ -54,9 +54,9 @@ Camadas em ordem: as políticas do ambiente, depois as do padrão. Dentro de cad
 - `class` igual à pedida. Item sem `class` casa só pedido sem `class`, e pedido com `class` exige item com a mesma `class`. Uma `class` sem item é `NoProviderForCapability`: a branch que pede `restored` nunca recebe um banco vazio em silêncio.
 - `id`, quando o item tem `id`, igual ao do recurso.
 
-A `class` vem do Score (`resources.<n>.class`) e, na #306, de `overrides.resources.<n>.class` na revisão, que tem precedência. Assim a camada de branch do ADR 0031 escolhe uma `class` e nunca uma credencial.
+A `class` vem do Score (`resources.<n>.class`) e de `overrides.resources.<n>.class` na revisão (#306, `platform workload deploy --resource-class db=restored`), que tem precedência. Assim a camada de branch do ADR 0031 escolhe uma `class` e nunca uma credencial. A API recusa a class de um recurso que a versão não tem, e o rollback copia o override como copia `replicas`.
 
-**Troca de modo é recusada.** Quando a resolução muda `mode` ou `provisioner` de um `ResourceRequest` que já existe, o Forager não toca o recurso e grava `Resolved=False`, reason `ResourceModeChanged`, para aquela revisão. O `workload` fecha a revisão com o mesmo reason. Migrar é uma ação explícita: `workload remove`, que apaga os `ResourceRequest` da instância, e um deploy novo.
+**Troca de modo é recusada.** Quando a resolução muda `mode`, `provisioner` ou `class` de um `ResourceRequest` que já existe, o Forager não toca o recurso e grava `Resolved=False`, reason `ResourceModeChanged`, para aquela revisão. O `workload` fecha a revisão com o mesmo reason. Migrar é uma ação explícita: `workload remove`, que apaga os `ResourceRequest` da instância, e um deploy novo.
 
 ## Provisioners
 
@@ -72,7 +72,7 @@ O Crossplane entra depois como backend de um provisioner (o primeiro tipo AWS: u
 |---|---|---|
 | `postgres/provision` | #304 | Cria no namespace `resources` do vcluster, separado dos workloads de `apps`, um StatefulSet `postgres:17-alpine` e um Service. O nome é `<instance>-<resource>-<hash>`, e o hash vem do nome do `ResourceRequest`. A senha gerada vai para um Secret com o mesmo nome em `apps`, que é onde o `secretKeyRef` do workload lê, e também para um Secret do control plane (`resource.<rr>`), de onde o do vcluster é reescrito. Os outputs são `host` `<nome>.resources`, `port` 5432 e `database`/`name`/`username` `app`. Fica `Ready` com o StatefulSet pronto. |
 | `postgres/compose` | #305 | Cria na instância `params.instance` (`shared-pg`, no namespace `platform-resources` do `platform-local`, instalada pelo `platform init`) um role e um database com o nome `<instance>-<resource>-<hash>`, só por `sql.Identifier`/`sql.Literal`. O role leva o nome do `ResourceRequest` como comentário, na mesma transação que o cria, e o database é dele só quando esse role é o dono: um role ou database de outro é recusado (`Failed`). `REVOKE ALL ... FROM PUBLIC` deixa só o próprio role conectar. A senha segue o caminho do `provision` (control plane → Secret em `apps`). Os outputs são `host` `shared-pg.resources` (o Service do host que cada vcluster replica, `networking.replicateServices.fromHost`), `port` 5432 e `database`/`name`/`username` com o nome do objeto. Fica `Ready` logo. No delete, `DROP DATABASE ... WITH (FORCE)` e `DROP ROLE`, também com o ambiente sendo apagado, porque a instância sobrevive ao vcluster. |
-| `postgres/bind` | #306 | Só devolve valores e copia para o vcluster um Secret existente. |
+| `postgres/bind` | #306 | Só devolve valores e copia uma credencial que já existe. Os valores (`host`, `port`, padrão 5432, `database`/`name` e `username`) vêm dos `params` do item da política. A senha vem do Secret `params.secretRef` de `platform-resources`, que precisa da label `platform.wasp.silvios.me/bindable=true`. A label impede que uma política aponte para as senhas que o próprio Forager gera ali ou para o admin de uma instância compartilhada. Só a chave `password` é copiada para o Secret `<instance>-<resource>-<hash>` em `apps`, e o pedido fica `Ready` logo. Nada é criado nem apagado no banco, e o delete apaga só a cópia. A senha é copiada uma vez: uma troca na origem não se propaga (`aws/docs/known-broken.md`). |
 
 Nomes que entram em manifest ou SQL (`instance`, `resource`) são validados com `re.fullmatch` antes de qualquer uso (ADR 0031). Sem o hash, nomes diferentes poderiam se encontrar: `a` + `b-db` e `a-b` + `db` dariam `a-b-db`. Além disso, cada objeto leva a anotação `platform.wasp.silvios.me/resource-request`. Um objeto que já existe com outro dono é recusado (`Failed`), nunca tomado, e o delete só apaga o que é do próprio pedido.
 
@@ -103,7 +103,7 @@ A criação é idempotente, e o Forager nunca apaga o `Resource`: ele é a ident
 
 - **`GET /v1/environments/{env}/workloads/{instance}`** passa a devolver `resources` com `name`, `type`, `mode` e `status`, lidos de `WorkloadInstance.status.resources`.
 - **`platform workload get`** mostra uma linha por recurso.
-- **Política de ambiente (#305):** `GET`/`PUT /v1/environments/{env}/binding-policy` grava a `BindingPolicy` `env-<env>`, com ownerReference no `Environment`. Escrita só por `platform-admins` (decide onde os dados moram), com journal; leitura por quem usa o ambiente, junto com o padrão. Lista vazia apaga a política. A API recusa `compose` sem `params.instance`. CLI: `platform environment policy set <env> --file` e `policy get <env>`.
+- **Política de ambiente (#305):** `GET`/`PUT /v1/environments/{env}/binding-policy` grava a `BindingPolicy` `env-<env>`, com ownerReference no `Environment`. Escrita só por `platform-admins` (decide onde os dados moram), com journal; leitura por quem usa o ambiente, junto com o padrão. Lista vazia apaga a política. A API recusa `compose` sem `params.instance` e `bind` sem `secretRef`, `host`, `database` e `username`. CLI: `platform environment policy set <env> --file` e `policy get <env>`.
 
 ## cli-smoke
 

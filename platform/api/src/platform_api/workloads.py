@@ -36,6 +36,7 @@ OPEN = "Unknown"
 MAX_PLAN = 100
 # Without the override the provider runs one replica.
 DEFAULT_REPLICAS = 1
+MAX_RESOURCE_CLASSES = 16
 
 
 class RevisionRequest(BaseModel):
@@ -44,6 +45,8 @@ class RevisionRequest(BaseModel):
   version: str | None = None
   branch: str | None = None
   replicas: int | None = Field(default=None, ge=0, le=20)
+  # resource -> class: the branch picks an item of the environment policy, never a credential (#306).
+  resourceClasses: dict[str, str] | None = Field(default=None, max_length=MAX_RESOURCE_CLASSES)
   # A rollback copies the version and the overrides of that revision of the same instance.
   rollbackTo: int | None = Field(default=None, ge=1)
 
@@ -52,6 +55,15 @@ class RevisionRequest(BaseModel):
   def check_version(cls, value: str | None) -> str | None:
     if value is not None and not VERSION_PATTERN.fullmatch(value):
       raise ValueError("<major>.<minor>.<patch>[-<pre-release>], e.g. 1.0.0-rc.1")
+    return value
+
+  @field_validator("resourceClasses")
+  @classmethod
+  def check_classes(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+    for name, klass in (value or {}).items():
+      for item in (name, klass):
+        if not LABEL.fullmatch(item):
+          raise ValueError(f"'{item}' is not a valid name")
     return value
 
 
@@ -84,6 +96,20 @@ def is_open(revision: dict) -> bool:
   return ready is None or ready.get("status") == OPEN
 
 
+def resource_classes(spec: dict) -> dict[str, str]:
+  resources = (spec.get("overrides") or {}).get("resources") or {}
+  return {name: item["class"] for name, item in sorted(resources.items()) if item.get("class")}
+
+
+def overrides_of(replicas: int | None, classes: dict[str, str] | None) -> dict:
+  overrides = {}
+  if replicas is not None:
+    overrides["replicas"] = replicas
+  if classes:
+    overrides["resources"] = {name: {"class": klass} for name, klass in sorted(classes.items())}
+  return overrides
+
+
 def revision_view(obj: dict) -> dict:
   spec = obj.get("spec", {})
   status = obj.get("status") or {}
@@ -93,6 +119,7 @@ def revision_view(obj: dict) -> dict:
     "name": obj["metadata"]["name"],
     **{field: spec.get(field) for field in ("environment", "instance", "component", "revision", "action", "version", "image", "digest", "commit", "requestedBy", "rollbackOf")},
     "replicas": (spec.get("overrides") or {}).get("replicas"),
+    "resourceClasses": resource_classes(spec),
     "status": (ready or {}).get("reason") or "Pending",
     "open": is_open(obj),
     "message": (ready or {}).get("message"),
@@ -222,7 +249,11 @@ def router(state, journal: Journal) -> APIRouter:
     return revision_view(created)
 
   def wanted(revision: dict) -> dict:
-    return {"version": revision["version"], "replicas": DEFAULT_REPLICAS if revision["replicas"] is None else revision["replicas"]}
+    view = {"version": revision["version"], "replicas": DEFAULT_REPLICAS if revision["replicas"] is None else revision["replicas"]}
+    # The plan has no classes yet: an instance on one differs from it.
+    if revision.get("resourceClasses"):
+      view["resourceClasses"] = revision["resourceClasses"]
+    return view
 
   def live(environment: str) -> dict[str, dict]:
     """The newest revision of each instance that runs or is on its way: a remove, or a failed first
@@ -279,8 +310,8 @@ def router(state, journal: Journal) -> APIRouter:
   @routes.post("/workloads/{instance}/revisions", status_code=202)
   def create(environment: str, instance: str, request: RevisionRequest, principal: Principal = Depends(current_principal)):
     if request.rollbackTo is not None:
-      if request.version is not None or request.branch is not None or request.replicas is not None:
-        raise HTTPException(422, f"rollback of '{instance}': rollbackTo takes the version and replicas of that revision, give nothing else")
+      if request.version is not None or request.branch is not None or request.replicas is not None or request.resourceClasses:
+        raise HTTPException(422, f"rollback of '{instance}': rollbackTo takes the version and overrides of that revision, give nothing else")
       env, component = authorize(environment, instance, principal, "rollback")
       source = rollback_source(environment, instance, request.rollbackTo)["spec"]
       spec = {"action": "rollback", "rollbackOf": request.rollbackTo, **{field: source[field] for field in ("version", "image", "digest", "commit", "overrides") if field in source}}
@@ -289,11 +320,16 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(422, f"deploy of '{instance}': give either version or branch")
     env, component = authorize(environment, instance, principal, "deploy")
     version = resolve(component, request)
+    resources = version["spec"]["appSpec"].get("resources") or {}
+    for name in sorted(request.resourceClasses or {}):
+      if name not in resources:
+        raise HTTPException(422, f"deploy of '{instance}': {version['spec']['version']} has no resource '{name}' to give a class")
     spec = {"action": "deploy", **{field: version["spec"][field] for field in ("version", "image", "digest")}}
     if version["spec"].get("commit"):
       spec["commit"] = version["spec"]["commit"]
-    if request.replicas is not None:
-      spec["overrides"] = {"replicas": request.replicas}
+    overrides = overrides_of(request.replicas, request.resourceClasses)
+    if overrides:
+      spec["overrides"] = overrides
     return write(env, instance, component, spec, principal)
 
   @routes.post("/workloads:apply")

@@ -3,7 +3,7 @@
 ```bash
 platform workload spec validate [--file <app-spec.yaml>]
 platform workload spec get --component <component> [--version <version> | --branch <branch>]
-platform workload deploy --component <component> --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--wait] [--timeout <seconds>]
+platform workload deploy --component <component> --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--resource-class <resource>=<class> ...] [--wait] [--timeout <seconds>]
 platform workload list --environment <environment>
 platform workload get --component <component> --environment <environment>
 platform workload history --environment <environment> [--component <component>]
@@ -52,7 +52,7 @@ Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variable
 
 ## deploy
 
-Writes revision `<n>` (the newest plus one) of the instance and prints `<instance>@<environment> revision <n>: deploying <version> …`. `--branch` is resolved by the API to the newest version built from that branch, and the revision keeps that version: the instance does not follow the branch. `--replicas` (0 to 20, default 1) is an override of the environment, kept in the revision. With `--wait`, follows the revision until the provider closes it: `✓ <instance>@<environment> revision <n>: <version> running · <ready>/<desired> replicas available`, or `✗ … revision <n>: <reason>: <message>` and exit code `1`.
+Writes revision `<n>` (the newest plus one) of the instance and prints `<instance>@<environment> revision <n>: deploying <version> …`. `--branch` is resolved by the API to the newest version built from that branch, and the revision keeps that version: the instance does not follow the branch. `--replicas` (0 to 20, default 1) is an override of the environment, kept in the revision. `--resource-class db=restored` (repeatable) is an override too: the Forager resolves the resource `db` with that class, ahead of a `class` in the Score. A resource the version does not have is refused (`422`). With `--wait`, follows the revision until the provider closes it: `✓ <instance>@<environment> revision <n>: <version> running · <ready>/<desired> replicas available`, or `✗ … revision <n>: <reason>: <message>` and exit code `1`.
 
 | Revision status | Meaning |
 |---|---|
@@ -86,16 +86,16 @@ A resource of the Score (`resources.db: {type: postgres}`) becomes a **`Resource
 | Mode | What the platform does | Status |
 |---|---|---|
 | `provision` | a dedicated resource in the environment: for `postgres`, a Postgres in the namespace `resources` of the vcluster, named `<instance>-<resource>-<hash>`, without a volume; its password is a Secret of the same name in `apps` | available, the platform default |
-| `compose` | something inside a shared resource: a database on a shared Postgres | #305 |
-| `bind` | the credentials of a resource that already exists | #306 |
+| `compose` | something inside a shared resource: for `postgres`, a role and a database of their own in `shared-pg` | available, by the policy of the environment |
+| `bind` | a resource that already exists: for `postgres`, the values of the policy item and the password of a bindable Secret, copied to `apps` | available, by a `class` in the policy of the environment |
 
 The revision waits as `ResourcesPending` until every resource is ready, then the outputs fill the placeholders: `${resources.db.host}`, `port`, `name`, `database`, `username`. A secret output (`password`) is accepted only as the whole value of a variable and becomes a `secretKeyRef` to a Secret in the vcluster: the password never appears in the Deployment, in the revision or in the API. Inside another string, in `command` or in `args`, it is `UnsupportedSpec`.
 
-The mode of a resource never changes in place: a deploy that would resolve it to another mode ends as `ResourceModeChanged`. `remove` and a new `deploy` change it. A resource without `id` also gets a Resource in the catalog, `<component>-<resource>`, with the component's owner and System; it stays when the workload goes.
+The mode and the class of a resource never change in place: a deploy that would resolve it to another mode or ask for another class ends as `ResourceModeChanged`. `remove` and a new `deploy` change it. A resource without `id` also gets a Resource in the catalog, `<component>-<resource>`, with the component's owner and System; it stays when the workload goes.
 
 ## list and get
 
-`list` prints one line per instance: `WORKLOAD`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
+`list` prints one line per instance: `WORKLOAD`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
 
 ## history
 
@@ -103,7 +103,7 @@ The revisions of the environment, oldest first, optionally of one component: `WO
 
 ## rollback
 
-Writes a new revision (`action: rollback`, `rollbackOf: <n>`) with the version and the overrides (`--replicas`) of revision `<n>` of the same instance: the history keeps moving forward, as `helm rollback` does. Without `--revision`, the newest revision that succeeded before the one running. `--wait` as in `deploy`.
+Writes a new revision (`action: rollback`, `rollbackOf: <n>`) with the version and the overrides (`--replicas`, `--resource-class`) of revision `<n>` of the same instance: the history keeps moving forward, as `helm rollback` does. Without `--revision`, the newest revision that succeeded before the one running. `--wait` as in `deploy`.
 
 | Refusal | Code |
 |---|---|
@@ -136,7 +136,7 @@ The environment comes from the file. Each key under `workloads` is an instance; 
 | Action | When |
 |---|---|
 | `add` | the instance does not run (never deployed, removed, or its first deploy failed) |
-| `change` | the version or the replicas differ, or the newest revision failed: applying tries it again |
+| `change` | the version or the replicas differ, the newest revision has a `--resource-class` (the plan has none yet), or the newest revision failed: applying tries it again |
 | `unchanged` | same version and replicas, and the newest revision succeeded or is still open |
 | `remove` | with `--prune`, an instance that runs and the plan leaves out |
 

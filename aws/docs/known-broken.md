@@ -113,6 +113,10 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     remove` e um deploy novo os recriam). E o `local_vcluster` só instala o release uma vez: um
     vcluster criado antes da #305 não tem o Service `shared-pg` replicado em `resources`, e o app
     não resolve `shared-pg.resources`. Recriar o ambiente resolve.
+36. **Senha de um `bind` não acompanha a rotação** — *intentional* (#306): o Forager copia a senha do
+    Secret de origem (`platform-resources`, label `bindable`) uma vez, quando o `ResourceRequest`
+    fica `Ready`. Uma senha trocada depois na origem não chega ao vcluster; `workload remove` e um
+    deploy novo copiam a atual.
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e

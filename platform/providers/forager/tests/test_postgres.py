@@ -1,6 +1,6 @@
 import pytest
 
-from forager_provider.postgres import OWNER, Compose, InvalidName, Provision, object_name
+from forager_provider.postgres import OWNER, Bind, Compose, InvalidName, Provision, object_name
 
 NAME = object_name({"metadata": {"name": "demo.reviews.db"}, "spec": {"instance": "reviews", "resource": "db"}})
 
@@ -208,3 +208,82 @@ def test_compose_delete_without_a_valid_instance_only_releases():
   secrets.put("demo.reviews.db", "secret")
   Compose(instances).delete(composed({}), None, secrets)
   assert instances.asked == [] and secrets.values == {}
+
+
+class FakeSources:
+  """Secrets a bind may copy: name -> password, or None for one without the bindable label."""
+
+  def __init__(self, secrets=None):
+    self.secrets, self.asked = secrets if secrets is not None else {"restored-db": "restored-secret"}, []
+
+  def password(self, name):
+    self.asked.append(name)
+    if name not in self.secrets:
+      raise InvalidName(f"Secret {name} not found")
+    if self.secrets[name] is None:
+      raise InvalidName(f"Secret {name} is not bindable")
+    return self.secrets[name]
+
+
+BIND = {"secretRef": "restored-db", "host": "shared-pg.resources", "port": "5432", "database": "restored", "username": "restored"}
+
+
+def test_bind_copies_the_existing_secret_and_returns_values():
+  secrets, vcluster, sources = FakeSecrets(), FakeVcluster(), FakeSources()
+  state, message, outputs, secret_ref = Bind(sources).ensure(request(), BIND, vcluster, secrets)
+  assert (state, message) == ("Ready", "bound to restored at shared-pg.resources")
+  assert sources.asked == ["restored-db"]
+  assert outputs == {"host": "shared-pg.resources", "port": 5432, "name": "restored", "database": "restored", "username": "restored"}
+  assert secret_ref == {"name": NAME, "keys": ["password"]}
+  secret = vcluster.applied[-1]
+  assert (secret["kind"], secret["metadata"]["namespace"], secret["metadata"]["name"], secret["stringData"]) == ("Secret", "apps", NAME, {"password": "restored-secret"})
+  assert secret["metadata"]["annotations"] == {OWNER: "demo.reviews.db"}
+  # Nothing generated: the credential is the one that exists.
+  assert secrets.values == {}
+
+
+def test_bind_port_defaults_to_5432():
+  params = {key: value for key, value in BIND.items() if key != "port"}
+  _, _, outputs, _ = Bind(FakeSources()).ensure(request(), params, FakeVcluster(), FakeSecrets())
+  assert outputs["port"] == 5432
+
+
+@pytest.mark.parametrize("field, value", [
+  ("secretRef", None), ("host", None), ("database", None), ("username", None),
+  ("secretRef", "resource.demo.reviews.db"), ("host", "evil host"), ("port", "54x"), ("database", "a; DROP"), ("username", ""),
+])
+def test_bind_needs_valid_params(field, value):
+  params = {key: v for key, v in BIND.items() if key != field}
+  if value is not None:
+    params[field] = value
+  sources, vcluster = FakeSources(), FakeVcluster()
+  with pytest.raises(InvalidName, match=f"params.{field}"):
+    Bind(sources).ensure(request(), params, vcluster, FakeSecrets())
+  assert sources.asked == [] and vcluster.applied == []
+
+
+@pytest.mark.parametrize("secrets", [{}, {"restored-db": None}])
+def test_bind_copies_only_a_bindable_secret(secrets):
+  vcluster = FakeVcluster()
+  with pytest.raises(InvalidName, match="Secret restored-db"):
+    Bind(FakeSources(secrets)).ensure(request(), BIND, vcluster, FakeSecrets())
+  assert vcluster.applied == []
+
+
+def test_bind_never_takes_a_secret_of_someone_else():
+  vcluster = FakeVcluster(existing={("Secret", "apps"): {"metadata": {"name": NAME}}})
+  with pytest.raises(InvalidName, match=f"Secret apps/{NAME}"):
+    Bind(FakeSources()).ensure(request(), BIND, vcluster, FakeSecrets())
+  assert vcluster.applied == []
+
+
+def test_bind_delete_removes_only_the_copy():
+  sources = FakeSources()
+  vcluster = FakeVcluster(existing={("Secret", "apps"): {"metadata": {"annotations": {OWNER: "demo.reviews.db"}}}})
+  Bind(sources).delete(request(), vcluster, FakeSecrets())
+  assert vcluster.deleted == [("Secret", "apps", NAME)]
+  assert sources.asked == []
+  other = FakeVcluster(existing={("Secret", "apps"): {"metadata": {"annotations": {OWNER: "other.reviews.db"}}}})
+  Bind(sources).delete(request(), other, FakeSecrets())
+  Bind(sources).delete(request(), None, FakeSecrets())
+  assert other.deleted == []
