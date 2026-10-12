@@ -152,7 +152,7 @@ def deploy(
       revision = _wait(client, revision, timeout)
   except ApiError as error:
     fail(str(error))
-  _report(revision, wait, output, f"deploying {revision['version']} …")
+  _report(client, revision, wait, output, f"deploying {revision['version']} …")
 
 
 def _resource_classes(values: list[str]) -> dict[str, str]:
@@ -172,7 +172,7 @@ def _flag(item: dict) -> str:
   return f"--instance {item['instance']}"
 
 
-def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
+def _report(client: PlatformClient, revision: dict, wait: bool, output: Format, started: str) -> None:
   """The revision a command wrote: started, or with --wait how it ended."""
   name = f"{revision['instance']}@{revision['environment']}"
   if output == Format.json:
@@ -192,6 +192,30 @@ def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
     success(f"{heading}: removed from {revision['environment']}")
   else:
     success(f"{heading}: {revision['version']} running · {revision.get('message') or '—'}")
+    _running(client, revision)
+
+
+def _details(item: dict) -> list[tuple[str, str]]:
+  """The url and the resources of an instance, as `get` shows them."""
+  classes = (item.get("latestRevision") or {}).get("resourceClasses") or {}
+  lines = [("url", item.get("publicUrl") or item.get("url") or "—")]
+  for resource in item.get("resources") or []:
+    klass = f", class {classes[resource['name']]}" if resource["name"] in classes else ""
+    lines.append(("resource", f"{resource['name']} ({resource.get('type')}, {resource.get('mode') or '—'}{klass}): {resource.get('status') or '—'}"))
+  return lines
+
+
+def _running(client: PlatformClient, revision: dict) -> None:
+  """Under the ✓ of a revision that ended running: where it answers and how each resource resolved (#328)."""
+  try:
+    item = client.get_workload(revision["environment"], revision["instance"])
+  except ApiError as error:
+    # The rollout succeeded: failing to show it is no reason to exit non-zero.
+    typer.secho(f"⚠ cannot show the url and resources: {error}", fg=typer.colors.YELLOW, err=True)
+    return
+  for field, value in _details(item):
+    if value != "—":
+      typer.echo(f"  {field.ljust(13)} {value}")
 
 
 def _previous(client: PlatformClient, environment: str, instance: str) -> int:
@@ -226,7 +250,7 @@ def rollback(
       created = _wait(client, created, timeout)
   except ApiError as error:
     fail(str(error))
-  _report(created, wait, output, f"rolling back to revision {target} ({created['version']}) …")
+  _report(client, created, wait, output, f"rolling back to revision {target} ({created['version']}) …")
 
 
 @app.command("remove")
@@ -246,7 +270,7 @@ def remove(
       created = _wait(client, created, timeout)
   except ApiError as error:
     fail(str(error))
-  _report(created, wait, output, "removing …")
+  _report(client, created, wait, output, "removing …")
 
 
 PLAN_KEYS = {"environment", "workloads"}
@@ -328,6 +352,7 @@ def apply(
       success(f"{heading}: removed from {environment}")
     else:
       success(f"{heading}: {revision['version']} running · {revision.get('message') or '—'}")
+      _running(client, revision)
   if failed:
     fail(f"{environment}: {len(failed)} of {len(ended)} revision(s) did not succeed")
 
@@ -376,15 +401,13 @@ def get_(
     ("replicas", _replicas(item)),
     ("revision", item.get("revision")),
     ("traffic", item.get("traffic")),
-    ("url", item.get("publicUrl") or item.get("url")),
+    _details(item)[0],
     *((("internal url", item.get("url")),) if item.get("publicUrl") else ()),
     ("message", item.get("message")),
   ):
     typer.echo(f"  {field.ljust(13)} {value or '—'}")
-  classes = latest.get("resourceClasses") or {}
-  for resource in item.get("resources") or []:
-    klass = f", class {classes[resource['name']]}" if resource["name"] in classes else ""
-    typer.echo(f"  {'resource'.ljust(13)} {resource['name']} ({resource.get('type')}, {resource.get('mode') or '—'}{klass}): {resource.get('status') or '—'}")
+  for field, value in _details(item)[1:]:
+    typer.echo(f"  {field.ljust(13)} {value}")
   if latest["revision"] != item.get("revision"):
     what = " ".join(part for part in (latest["action"], latest.get("version")) if part)
     typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")

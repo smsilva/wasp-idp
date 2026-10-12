@@ -40,6 +40,9 @@ curl http://hello-api.demo.localhost:7080/
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 14: 0.6.0 running · 1/1 replicas available
+  url           http://hello-api.demo.localhost:7080/
+  resource      dns (dns, provision): Ready
+  resource      route (route, provision): Ready
 hello-api@demo (Available)
   component     hello-api
   version       0.6.0

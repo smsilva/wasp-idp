@@ -78,7 +78,46 @@ def test_deploy_wait_follows_the_revision(api):
   result = run("deploy", "--component", "reviews", "--environment", "demo", "--branch", "feat/v3", "--wait")
   assert result.exit_code == 0, result.output
   assert json.loads(api["requests"][0].content) == {"component": "reviews", "branch": "feat/v3"}
+  assert result.output.splitlines() == [
+    "✓ reviews@demo revision 1: 2.1.0 running · 2/2 replicas available",
+    "  url           http://reviews.apps:80",
+    "  resource      db (postgres, provision): Ready",
+  ]
+
+
+def test_deploy_wait_shows_the_public_url_and_the_class(api):
+  latest = {**revision(status="Succeeded", open_=False), "resourceClasses": {"db": "restored"}}
+  api["instance"] = {**INSTANCE, "publicUrl": "http://reviews.demo.localhost:7080/", "latestRevision": latest, "resources": [{"name": "db", "type": "postgres", "mode": "bind", "status": "Ready"}]}
+  result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--wait")
+  assert result.exit_code == 0, result.output
+  assert result.output.splitlines()[1:] == [
+    "  url           http://reviews.demo.localhost:7080/",
+    "  resource      db (postgres, bind, class restored): Ready",
+  ]
+
+
+def test_deploy_wait_without_resources_or_url_prints_no_empty_lines(api):
+  api["instance"] = {**INSTANCE, "url": None, "resources": []}
+  result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--wait")
+  assert result.exit_code == 0, result.output
   assert result.output.splitlines() == ["✓ reviews@demo revision 1: 2.1.0 running · 2/2 replicas available"]
+
+
+def test_deploy_wait_json_is_the_revision(api):
+  result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--wait", "--output", "json")
+  assert result.exit_code == 0, result.output
+  assert json.loads(result.output)["kind"] == "WorkloadRevision"
+  assert not any(request.url.path == "/v1/environments/demo/workloads/reviews" for request in api["requests"])
+
+
+def test_deploy_wait_succeeds_when_the_details_cannot_be_read(api, monkeypatch):
+  def broken(self, environment, instance):
+    raise client_module.ApiError("unavailable", status=503)
+  monkeypatch.setattr(client_module.PlatformClient, "get_workload", broken)
+  result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--wait")
+  assert result.exit_code == 0, result.output
+  assert "✓ reviews@demo revision 1: 2.1.0 running" in result.output
+  assert "⚠ cannot show the url and resources" in result.output
 
 
 def test_deploy_wait_fails_on_a_final_reason(api):
@@ -151,7 +190,7 @@ def test_rollback_to_a_given_revision_and_wait(api):
   assert result.exit_code == 0, result.output
   post = next(request for request in api["requests"] if request.method == "POST")
   assert json.loads(post.content) == {"rollbackTo": 2}
-  assert result.output.splitlines() == ["✓ reviews@demo revision 4: 1.0.0 running · 2/2 replicas available"]
+  assert result.output.splitlines()[:2] == ["✓ reviews@demo revision 4: 1.0.0 running · 2/2 replicas available", "  url           http://reviews.apps:80"]
 
 
 def test_rollback_without_an_earlier_success(api):

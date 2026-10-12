@@ -20,7 +20,9 @@ platform catalog component get hello-api
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 3: 0.3.0 running · 1/1 replicas available
+  url           http://hello-api.apps:80
 ✓ hello-api@demo revision 4: 0.3.0 running · 2/2 replicas available
+  url           http://hello-api.apps:80
 component/hello-api
   system       greeter
   owner        team-alpha

@@ -20,6 +20,7 @@ platform workload list \
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 1: 0.3.0 running · 2/2 replicas available
+  url           http://hello-api.apps:80
 WORKLOAD        COMPONENT  VERSION  STATUS     REPLICAS  REVISION  TRAFFIC  URL
 hello-api@demo  hello-api  0.3.0    Available  2/2       1         —        http://hello-api.apps:80
 ```

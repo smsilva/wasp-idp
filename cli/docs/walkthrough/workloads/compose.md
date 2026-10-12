@@ -43,16 +43,10 @@ platform workload deploy \
   --environment demo \
   --version 0.5.0 \
   --wait
-
-platform workload get \
-  --component hello-api \
-  --environment demo
 ```
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 10: 0.5.0 running · 1/1 replicas available
-hello-api@demo (Available)
-  ...
   resource      db (postgres, compose): Ready
 ```
 
