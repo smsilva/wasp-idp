@@ -283,3 +283,32 @@ def test_component_get_shows_where_it_runs(client, state, owner, teammate, token
   assert body["runningIn"] == [{"environment": "demo", "instance": "greeting-api", "version": "1.0.0", "revision": 1, "status": "Available"}]
   admin = bearer(tokens, sub="admin-1", groups=("platform-users", "platform-admins"), teams=())
   assert [item["environment"] for item in client.get("/v1/catalog/components/greeting-api", headers=admin).json()["runningIn"]] == ["demo", "private"]
+
+
+def test_deploy_with_resource_class_writes_the_override(client, state, owner):
+  response = client.post(DEPLOY, json={"version": "1.0.0", "resourceClasses": {"db": "restored"}}, headers=owner)
+  assert response.status_code == 202, response.text
+  assert response.json()["resourceClasses"] == {"db": "restored"}
+  assert state.get("workloadrevisions", "demo.greeting-api.1")["spec"]["overrides"] == {"resources": {"db": {"class": "restored"}}}
+
+
+@pytest.mark.parametrize("classes,message", [
+  ({"cache": "restored"}, "has no resource 'cache'"),
+  ({"dns": "Restored"}, "not a valid name"),
+  ({"dns": "restored\n"}, "not a valid name"),
+  ({"d_ns": "restored"}, "not a valid name"),
+])
+def test_resource_class_refusals(client, state, owner, classes, message):
+  response = client.post(DEPLOY, json={"version": "1.0.0", "resourceClasses": classes}, headers=owner)
+  assert response.status_code == 422, response.text
+  assert message in response.json()["error"]["message"]
+  assert state.stores["workloadrevisions"] == {}
+
+
+def test_rollback_copies_the_resource_class(client, state, owner):
+  client.post(DEPLOY, json={"version": "1.0.0", "replicas": 2, "resourceClasses": {"db": "restored"}}, headers=owner)
+  close(state, "demo.greeting-api.1", "True", "Succeeded")
+  body = client.post(DEPLOY, json={"rollbackTo": 1}, headers=owner).json()
+  assert (body["replicas"], body["resourceClasses"]) == (2, {"db": "restored"})
+  response = client.post(DEPLOY, json={"rollbackTo": 1, "resourceClasses": {"dns": "x"}}, headers=owner)
+  assert response.status_code == 422 and "give nothing else" in response.json()["error"]["message"]

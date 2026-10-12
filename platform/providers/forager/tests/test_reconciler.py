@@ -165,6 +165,26 @@ def test_a_mode_change_is_refused():
   assert store.patches == [] and provisioner.ensured == []
 
 
+def test_a_class_change_is_refused():
+  # Same mode, another class: reusing the request would leave the branch on the old database.
+  store, provisioner = FakeStore(resources={"db": {"type": "postgres"}}), FakeProvisioner()
+  restored = policy("demo", [{"type": "postgres", "class": "restored", "mode": "provision"}], environment="demo")
+  reconciler(store, provisioner).reconcile([revision(2, overrides={"resources": {"db": {"class": "restored"}}})], [existing()], [DEFAULT, restored])
+  resolved = conditions(store, "demo.reviews.db")["Resolved"]
+  assert (resolved["status"], resolved["reason"]) == ("False", "ResourceModeChanged")
+  assert resolved["message"] == "db is class (none) and the revision now asks for class restored: remove the workload and deploy again to change it"
+  assert store.patches == [] and provisioner.ensured == []
+
+
+def test_a_late_resolution_takes_the_class_of_the_revision():
+  store, provisioner = FakeStore(resources={"db": {"type": "postgres"}}), FakeProvisioner()
+  unresolved = existing()
+  unresolved["spec"] = {key: value for key, value in unresolved["spec"].items() if key not in ("mode", "provisioner")} | {"class": "old"}
+  restored = policy("demo", [{"type": "postgres", "class": "restored", "mode": "provision"}], environment="demo")
+  reconciler(store, provisioner).reconcile([revision(2, overrides={"resources": {"db": {"class": "restored"}}})], [unresolved], [DEFAULT, restored])
+  assert store.patches == [("demo.reviews.db", {"spec": {"mode": "provision", "provisioner": "postgres/provision", "params": {}, "class": "restored"}})]
+
+
 def test_closed_and_remove_revisions_are_not_resolved():
   store = FakeStore(resources={"db": {"type": "postgres"}})
   assert reconciler(store, FakeProvisioner()).reconcile([revision(1, ready=("True", "Succeeded")), revision(2, action="remove")], [], [DEFAULT]) is False

@@ -16,6 +16,12 @@ through the driver with every name as an identifier. The role carries the Resour
 comment, created in the same transaction, and the database is ours only when that role owns it: a
 database or role of anyone else is refused, never taken over. The pods reach the instance through the
 Service the vcluster replicates from the host into namespace resources (local_vcluster, #305).
+
+bind: something that already exists (#306). The policy item gives the values (host, port, database,
+username) and secretRef, a Secret of the credentials namespace labeled bindable: only its password is
+copied into namespace apps. Nothing is generated, made or dropped in a database; delete removes only
+the copy. The label keeps a policy from pointing at the credentials the Forager keeps there itself
+(the shared instances' admin, the passwords of other requests).
 """
 import hashlib
 import re
@@ -31,6 +37,9 @@ PORT = 5432
 DATABASE = "app"
 # Names that end up in manifests (and, for compose, in SQL) are checked, never trusted (ADR 0031).
 DNS_LABEL = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?")
+HOST = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*")
+PORT_NUMBER = re.compile(r"[0-9]{1,5}")
+SQL_NAME = re.compile(r"[a-z_][a-z0-9_-]{0,62}")
 
 
 class InvalidName(Exception):
@@ -167,6 +176,41 @@ class Compose:
     secrets.delete(owner)
 
 
-def provisioners(instances) -> dict:
-  return {"postgres/provision": Provision(), "postgres/compose": Compose(instances)}
+def bind_params(params: dict) -> dict:
+  """The values of a bind, each checked against what it may look like."""
+  params = params or {}
+  checks = (("secretRef", DNS_LABEL), ("host", HOST), ("port", PORT_NUMBER), ("database", SQL_NAME), ("username", SQL_NAME))
+  values = {"port": str(PORT)} | {key: str(value) for key, value in params.items()}
+  for key, pattern in checks:
+    if not pattern.fullmatch(values.get(key) or "") or (key == "host" and len(values[key]) > 253):
+      raise InvalidName(f"bind needs a valid params.{key}, got {params.get(key)!r}")
+  return values
+
+
+class Bind:
+  def __init__(self, sources):
+    self.sources = sources  # bindable Secrets of the credentials namespace (store.BindSources)
+
+  def ensure(self, request: dict, params: dict, vcluster, secrets) -> tuple[str, str, dict, dict]:
+    values, name, owner = bind_params(params), object_name(request), request["metadata"]["name"]
+    if not _owned(vcluster.get("v1", "Secret", SECRET_NAMESPACE, name), owner):
+      raise InvalidName(f"Secret {SECRET_NAMESPACE}/{name} already exists and belongs to something else")
+    password = self.sources.password(values["secretRef"])
+    labels = {"app.kubernetes.io/name": "postgres", "app.kubernetes.io/instance": name, "app.kubernetes.io/managed-by": MANAGER}
+    for obj in (
+      {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": SECRET_NAMESPACE}},
+      {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": name, "namespace": SECRET_NAMESPACE, "labels": labels, "annotations": {OWNER: owner}}, "type": "Opaque", "stringData": {"password": password}},
+    ):
+      vcluster.apply(obj, MANAGER)
+    outputs = {"host": values["host"], "port": int(values["port"]), "name": values["database"], "database": values["database"], "username": values["username"]}
+    return "Ready", f"bound to {values['database']} at {values['host']}", outputs, {"name": name, "keys": ["password"]}
+
+  def delete(self, request: dict, vcluster, secrets) -> None:
+    name, owner = object_name(request), request["metadata"]["name"]
+    if vcluster is not None and _owned(vcluster.get("v1", "Secret", SECRET_NAMESPACE, name), owner):
+      vcluster.delete("v1", "Secret", SECRET_NAMESPACE, name)
+
+
+def provisioners(instances, sources) -> dict:
+  return {"postgres/provision": Provision(), "postgres/compose": Compose(instances), "postgres/bind": Bind(sources)}
 

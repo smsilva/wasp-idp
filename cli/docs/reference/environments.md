@@ -60,10 +60,24 @@ provisioners:
       instance: shared-pg # compose: the shared instance, required
 ```
 
+A `bind` item takes the values of the database that exists and the Secret with its password:
+
+```yaml
+  - type: postgres
+    class: restored
+    mode: bind
+    params:
+      secretRef: restored-db      # a Secret of platform-resources labeled platform.wasp.silvios.me/bindable=true, key password
+      host: shared-pg.resources
+      port: "5432"                # optional, 5432 by default
+      database: restored
+      username: restored
+```
+
 | Mode | `postgres` |
 |---|---|
 | `provision` | a Postgres of its own in the vcluster, namespace `resources` |
 | `compose` | a role and a database in the shared instance `params.instance` (`shared-pg`) |
-| `bind` | not yet (#306) |
+| `bind` | the database that already exists in the item's `params`; only the password of `params.secretRef` is copied to the vcluster, and nothing is created or dropped |
 
-A resource keeps the mode it was created with: a policy that changes it ends the next deploy as `ResourceModeChanged`, until `workload remove`. Walkthrough: [21.8](../walkthrough/workloads/21-8-compose.md).
+A resource keeps the mode and the class it was created with: a policy or a `--resource-class` that changes them ends the next deploy as `ResourceModeChanged`, until `workload remove`. `bind` without `secretRef`, `host`, `database` and `username` is refused (`422`). Walkthroughs: [21.8](../walkthrough/workloads/21-8-compose.md) and [21.9](../walkthrough/workloads/21-9-bind.md).

@@ -6,8 +6,8 @@ Roda **dentro do cluster**, como Deployment `forager-provider` em `platform-syst
 
 ## Reconciliação
 
-- **Resolução:** para a revisão aberta mais nova de cada instância (deploy ou rollback), lê o Score em `Version.spec.appSpec` e resolve cada recurso pelas `BindingPolicy`s (`policy.py`): primeiro as do ambiente, depois as do padrão; vence o primeiro item que casa `type`, `class` e `id`.
-- **`ResourceRequest`:** cria `<environment>.<instance>.<resource>` (finalizer `platform.wasp.silvios.me/forager`, ownerReference no `Environment`) ou reaproveita o que existe, e grava `status.revision` e a condition `Resolved`. Um modo diferente do já gravado é `ResourceModeChanged`; um tipo sem provisioner é `NoProviderForCapability`.
+- **Resolução:** para a revisão aberta mais nova de cada instância (deploy ou rollback), lê o Score em `Version.spec.appSpec` e resolve cada recurso, com a `class` do override da revisão (`--resource-class`) antes da do Score, pelas `BindingPolicy`s (`policy.py`): primeiro as do ambiente, depois as do padrão; vence o primeiro item que casa `type`, `class` e `id`.
+- **`ResourceRequest`:** cria `<environment>.<instance>.<resource>` (finalizer `platform.wasp.silvios.me/forager`, ownerReference no `Environment`) ou reaproveita o que existe, e grava `status.revision` e a condition `Resolved`. Um modo ou uma `class` diferente da já gravada é `ResourceModeChanged`; um tipo sem provisioner é `NoProviderForCapability`.
 - **Catálogo:** sem `id`, cria o `Resource` `<component>-<resource>` com o owner e o System do `Component`, e nunca o apaga.
 - **Provisionamento:** só quando todos os recursos da revisão resolveram. O provisioner (`postgres.py`) é chamado a cada passada até o `ResourceRequest` ficar `Ready`, e grava `status.outputs` e `status.secretRef`.
 - **Delete:** o provisioner desfaz o que criou e o finalizer sai. Com o `Environment` sendo apagado, o provisioner recebe `vcluster=None` e desfaz só o que vive fora dele (o database do `compose`) e a credencial do control plane.
@@ -19,6 +19,7 @@ Roda **dentro do cluster**, como Deployment `forager-provider` em `platform-syst
 |---|---|
 | `postgres/provision` | StatefulSet `postgres:17-alpine` (sem volume) e Service `<instance>-<resource>-<hash>` no namespace `resources` do vcluster, e o Secret com a senha no namespace `apps`, onde o workload o lê. O hash vem do nome do `ResourceRequest`, e um objeto de outro pedido é recusado, nunca tomado. A senha é gerada uma vez e guardada no Secret `resource.<request>` de `platform-resources`. |
 | `postgres/compose` | Role e database `<instance>-<resource>-<hash>` na instância `params.instance` (`shared-pg`), pelo driver (`shared.py`, só `sql.Identifier`/`sql.Literal`). O role leva o nome do `ResourceRequest` como comentário e o database é dele quando o role é o dono: o de outro é recusado. Só o próprio role conecta (`REVOKE ALL ... FROM PUBLIC`). O app chega em `shared-pg.resources`, o Service que o vcluster replica do host. O delete faz `DROP DATABASE ... WITH (FORCE)` e `DROP ROLE`. |
+| `postgres/bind` | Os valores (`host`, `port`, `database`, `username`) vêm dos `params` do item da política, e a senha vem do Secret `params.secretRef` de `platform-resources`. Esse Secret precisa da label `platform.wasp.silvios.me/bindable=true` (`store.BindSources`), e só a chave `password` é copiada para `apps`. Nada é criado nem apagado no banco, e o delete apaga só a cópia. |
 
 ## Permissões
 
@@ -26,7 +27,7 @@ Roda **dentro do cluster**, como Deployment `forager-provider` em `platform-syst
   - lê revisões, `BindingPolicy`s, `environments`, `versions` e `components`;
   - cria e corrige os `resourcerequests` e o status deles;
   - cria `resources` do catálogo.
-- **Em `platform-resources`:** cria, lê e apaga `secrets` (inclusive lê `shared-pg-admin`, a senha de admin da instância compartilhada). O Forager nunca lê os Secrets de `platform-system`, onde ficam as credenciais do SCM.
+- **Em `platform-resources`:** cria, lê e apaga `secrets` (inclusive lê `shared-pg-admin`, a senha de admin da instância compartilhada). O `bind` só copia os Secrets com a label `bindable`. O Forager nunca lê os Secrets de `platform-system`, onde ficam as credenciais do SCM.
 - **No vcluster:** o acesso vem do kubeconfig admin de `Environment.status.kubeconfigData`, pelo mesmo endereço que o provider `workload` usa.
 
 ## Testes

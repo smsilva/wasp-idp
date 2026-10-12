@@ -6,6 +6,7 @@ import hashlib
 import yaml
 from kubernetes import client, config, dynamic, watch
 
+from .postgres import InvalidName
 from .shared import SharedPostgres
 
 GROUP = "platform.wasp.silvios.me"
@@ -16,6 +17,8 @@ REQUESTS = "resourcerequests"
 # The in-cluster address of the vcluster API server (ClusterIP on 443, #307), as the Platform API
 # reaches it (credentials.py).
 SERVER = "https://vcluster.env-{name}"
+# The Secrets a bind may copy into a vcluster carry this label, set by whoever made them (#306).
+BINDABLE = f"{GROUP}/bindable"
 
 
 def _missing(error: client.ApiException) -> bool:
@@ -182,3 +185,25 @@ class SharedInstances:
   def of(self, instance: str) -> SharedPostgres:
     secret = self.api.read_namespaced_secret(f"{instance}-admin", self.namespace)
     return SharedPostgres(f"{instance}.{self.namespace}", base64.b64decode(secret.data["password"]).decode())
+
+
+class BindSources:
+  """The Secrets a bind copies (#306): only those labeled bindable, so a policy never reaches the
+  generated credentials or a shared instance's admin kept in the same namespace."""
+
+  def __init__(self, namespace: str):
+    self.namespace = namespace
+    self.api = client.CoreV1Api()
+
+  def password(self, name: str) -> str:
+    try:
+      secret = self.api.read_namespaced_secret(name, self.namespace)
+    except client.ApiException as error:
+      if _missing(error):
+        raise InvalidName(f"Secret {name} not found in {self.namespace}")
+      raise
+    if (secret.metadata.labels or {}).get(BINDABLE) != "true":
+      raise InvalidName(f"Secret {name} in {self.namespace} is not bindable (label {BINDABLE}=true)")
+    if "password" not in (secret.data or {}):
+      raise InvalidName(f"Secret {name} in {self.namespace} has no key password")
+    return base64.b64decode(secret.data["password"]).decode()

@@ -815,6 +815,92 @@ if [[ "$(shared_databases)" != "0" ]]; then
   echo "remove left the database of ${workload_component} in shared-pg" >&2
   exit 1
 fi
+
+step "workload deploy --resource-class: postgres in mode bind, to a database that exists (#306)"
+# A database restored by hand in shared-pg, with its password in a bindable Secret of
+# platform-resources. The branch asks for the class restored; the policy item binds it, and the
+# developer never sees the credential. remove takes only the copy of the Secret: the database stays.
+shared_psql() {
+  kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
+    psql \
+      --username postgres \
+      --tuples-only \
+      --no-align \
+      --command "${1?}"
+}
+restored_password="$(openssl rand -hex 16)"
+shared_psql "create role restored login password '${restored_password}'"
+shared_psql "create database restored owner restored"
+kubectl --context k3d-platform-local --namespace platform-resources create secret generic restored-db \
+  --from-literal "password=${restored_password}"
+kubectl --context k3d-platform-local --namespace platform-resources label secret restored-db \
+  platform.wasp.silvios.me/bindable=true
+expect_failure "bind needs a valid params.host" \
+  platform environment policy set "${workload_environment}" --file - <<< "provisioners: [{type: postgres, class: restored, mode: bind, params: {secretRef: restored-db}}]"
+output="$(platform environment policy set "${workload_environment}" --file - <<POLICY
+provisioners:
+  - type: postgres
+    mode: compose
+    params:
+      instance: shared-pg
+  - type: postgres
+    class: restored
+    mode: bind
+    params:
+      secretRef: restored-db
+      host: shared-pg.resources
+      database: restored
+      username: restored
+POLICY
+)"
+echo "${output}"
+expect_output "environment  postgres  restored  —   bind       database=restored, host=shared-pg.resources, secretRef=restored-db, username=restored" "${output}"
+expect_failure "has no resource 'cache'" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${workload_environment}" \
+    --version 0.5.0 \
+    --resource-class cache=restored
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --version 0.5.0 \
+  --resource-class db=restored \
+  --wait)"
+echo "${output}"
+expect_output "revision 12: 0.5.0 running" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
+echo "${output}"
+expect_output "resource      db (postgres, bind, class restored): Ready" "${output}"
+connected="false"
+for attempt in $(seq 1 30); do
+  if kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" 2>/dev/null | grep --quiet --extended-regexp '^ restored *$'; then
+    connected="true"
+    break
+  fi
+  sleep 2
+done
+if [[ "${connected}" != "true" ]]; then
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" | tail -5 >&2
+  echo "the app never connected to the restored database" >&2
+  exit 1
+fi
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --wait)"
+expect_output "revision 13: removed from ${workload_environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${workload_environment}.${workload_component}.db" \
+  --for delete \
+  --timeout 60s
+if [[ "$(shared_psql "select count(*) from pg_database where datname = 'restored'")" != "1" ]]; then
+  echo "remove dropped the database a bind only pointed at" >&2
+  exit 1
+fi
+shared_psql "drop database restored with (force)"
+shared_psql "drop role restored"
+kubectl --context k3d-platform-local --namespace platform-resources delete secret restored-db
 platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
 kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${workload_component}-db" "${workload_component}-dns" "${workload_component}-route"

@@ -4,7 +4,7 @@ import time
 
 from .postgres import provisioners
 from .reconciler import Reconciler
-from .store import SERVER, Secrets, SharedInstances, Store, Vclusters
+from .store import SERVER, BindSources, Secrets, SharedInstances, Store, Vclusters
 
 log = logging.getLogger("forager")
 
@@ -30,7 +30,7 @@ def run(store: Store, reconciler: Reconciler, resync_seconds: int, poll_seconds:
 def main(argv: list[str] | None = None) -> None:
   parser = argparse.ArgumentParser(prog="forager-provider", description="Resolve the resources of each WorkloadRevision into ResourceRequests and provision them.")
   parser.add_argument("--namespace", default="platform-system")
-  parser.add_argument("--secrets-namespace", default="platform-resources", help="where the generated credentials and the shared instances (Service <name>, Secret <name>-admin) are")
+  parser.add_argument("--secrets-namespace", default="platform-resources", help="where the generated credentials, the shared instances (Service <name>, Secret <name>-admin) and the bindable Secrets are")
   parser.add_argument("--context", default=None, help="kubeconfig context, only when running outside the cluster")
   parser.add_argument("--vcluster-server", default=SERVER, help="address of a vcluster API server, with {name} (and {port}, the host port)")
   parser.add_argument("--resync-seconds", type=int, default=30)
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> None:
   logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = Store(args.namespace, args.context)
-  reconciler = Reconciler(store, Vclusters(args.vcluster_server), Secrets(args.secrets_namespace), provisioners(SharedInstances(args.secrets_namespace)))
+  reconciler = Reconciler(store, Vclusters(args.vcluster_server), Secrets(args.secrets_namespace), provisioners(SharedInstances(args.secrets_namespace), BindSources(args.secrets_namespace)))
   log.info("resolving resources of workload revisions in %s", args.namespace)
   run(store, reconciler, args.resync_seconds, args.poll_seconds)
 

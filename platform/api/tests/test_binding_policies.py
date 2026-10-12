@@ -10,6 +10,7 @@ from fakes import FakeState, FakeTeams
 from tokens import TokenFactory
 
 COMPOSE = {"type": "postgres", "mode": "compose", "params": {"instance": "shared-pg"}}
+BIND = {"type": "postgres", "class": "restored", "mode": "bind", "params": {"secretRef": "restored-db", "host": "shared-pg.resources", "port": "5432", "database": "restored", "username": "restored"}}
 
 
 @pytest.fixture
@@ -102,7 +103,20 @@ def test_unknown_environment(client, as_):
   {"type": "Postgres", "mode": "provision"},
   {"type": "postgres", "class": "restored\n", "mode": "provision"},
   {"type": "postgres", "mode": "provision", "credential": "x"},
+  {"type": "postgres", "class": "restored", "mode": "bind"},  # no params at all
+  {**BIND, "params": {k: v for k, v in BIND["params"].items() if k != "secretRef"}},
+  {**BIND, "params": {k: v for k, v in BIND["params"].items() if k != "host"}},
+  {**BIND, "params": {**BIND["params"], "secretRef": "resource.demo.app.db"}},
+  {**BIND, "params": {**BIND["params"], "host": "evil host"}},
+  {**BIND, "params": {**BIND["params"], "port": "54x"}},
+  {**BIND, "params": {**BIND["params"], "database": "a; DROP"}},
 ])
 def test_invalid_items_are_refused(client, as_, environment, state, item):
   assert put(client, as_, [item]).status_code == 422
   assert "env-demo" not in state.stores["bindingpolicies"]
+
+
+def test_bind_with_its_values_is_accepted(client, as_, environment, state):
+  response = put(client, as_, [COMPOSE, BIND])
+  assert response.status_code == 200, response.text
+  assert state.get("bindingpolicies", "env-demo")["spec"]["provisioners"] == [COMPOSE, BIND]

@@ -175,3 +175,24 @@ def test_remove_wait(api):
   result = run("remove", "--component", "reviews", "--environment", "demo", "--wait")
   assert result.exit_code == 0, result.output
   assert result.output.splitlines() == ["✓ reviews@demo revision 2: removed from demo"]
+
+
+def test_deploy_with_resource_classes(api):
+  result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--resource-class", "db=restored", "--resource-class", "cache=warm")
+  assert result.exit_code == 0, result.output
+  assert json.loads(api["requests"][0].content) == {"version": "2.1.0", "resourceClasses": {"db": "restored", "cache": "warm"}}
+
+
+@pytest.mark.parametrize("value", ["db", "=restored", "db=", "db=a=b"])
+def test_deploy_resource_class_is_name_equals_class(api, value):
+  result = run("deploy", "--component", "reviews", "--environment", "demo", "--version", "2.1.0", "--resource-class", value)
+  assert result.exit_code == 1
+  assert "--resource-class takes <resource>=<class>" in result.output
+  assert api["requests"] == []
+
+
+def test_get_shows_the_resource_classes_of_the_newest_revision(api):
+  latest = {**revision(status="Succeeded", open_=False), "resourceClasses": {"db": "restored"}}
+  api["instance"] = {**INSTANCE, "latestRevision": latest, "resources": [{"name": "db", "type": "postgres", "mode": "bind", "status": "Ready"}]}
+  lines = run("get", "--component", "reviews", "--environment", "demo").output.splitlines()
+  assert "  resource      db (postgres, bind, class restored): Ready" in lines

@@ -77,6 +77,7 @@ nav:
           - 21.6 The plan of an environment: walkthrough/workloads/21-6-apply.md
           - 21.7 A database for a workload: walkthrough/workloads/21-7-resources.md
           - 21.8 A database in the shared instance: walkthrough/workloads/21-8-compose.md
+          - 21.9 A database that already exists: walkthrough/workloads/21-9-bind.md
       - 22. Remove the GitHub connection: walkthrough/scm-connection/22-remove.md
       - 23. Clean up and sign out: walkthrough/23-cleanup.md
       - Without a browser: walkthrough/cli-smoke.md

@@ -113,6 +113,7 @@ def deploy(
   version: Annotated[str | None, typer.Option(help="Version from the index.")] = None,
   branch: Annotated[str | None, typer.Option(help="The newest version built from this branch, pinned in the revision.")] = None,
   replicas: Annotated[int | None, typer.Option(min=0, max=20, help="Replicas in this environment; by default 1.")] = None,
+  resource_class: Annotated[list[str] | None, typer.Option("--resource-class", help="<resource>=<class>: the item of the environment policy a resource of the spec resolves with (repeatable).")] = None,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the rollout ends.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
   output: OutputOption = Format.table,
@@ -121,6 +122,8 @@ def deploy(
   if (version is None) == (branch is None):
     fail("give either --version or --branch")
   body = {key: value for key, value in (("version", version), ("branch", branch), ("replicas", replicas)) if value is not None}
+  if resource_class:
+    body["resourceClasses"] = _resource_classes(resource_class)
   client = _client()
   try:
     revision = client.deploy_workload(environment, component, body)
@@ -129,6 +132,16 @@ def deploy(
   except ApiError as error:
     fail(str(error))
   _report(revision, wait, output, f"deploying {revision['version']} …")
+
+
+def _resource_classes(values: list[str]) -> dict[str, str]:
+  classes = {}
+  for value in values:
+    name, _, klass = value.partition("=")
+    if not name or not klass or "=" in klass:
+      fail(f"--resource-class takes <resource>=<class>, got '{value}'")
+    classes[name] = klass
+  return classes
 
 
 def _report(revision: dict, wait: bool, output: Format, started: str) -> None:
@@ -232,7 +245,10 @@ def _plan(file: Path) -> tuple[str, dict]:
 
 
 def _target(state: dict | None) -> str:
-  return f"{state['version']} ×{state['replicas']}" if state else "—"
+  if not state:
+    return "—"
+  classes = "".join(f" {name}={klass}" for name, klass in sorted((state.get("resourceClasses") or {}).items()))
+  return f"{state['version']} ×{state['replicas']}{classes}"
 
 
 @app.command("apply")
@@ -330,8 +346,10 @@ def get_(
     ("message", item.get("message")),
   ):
     typer.echo(f"  {field.ljust(13)} {value or '—'}")
+  classes = latest.get("resourceClasses") or {}
   for resource in item.get("resources") or []:
-    typer.echo(f"  {'resource'.ljust(13)} {resource['name']} ({resource.get('type')}, {resource.get('mode') or '—'}): {resource.get('status') or '—'}")
+    klass = f", class {classes[resource['name']]}" if resource["name"] in classes else ""
+    typer.echo(f"  {'resource'.ljust(13)} {resource['name']} ({resource.get('type')}, {resource.get('mode') or '—'}{klass}): {resource.get('status') or '—'}")
   if latest["revision"] != item.get("revision"):
     what = " ".join(part for part in (latest["action"], latest.get("version")) if part)
     typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")
