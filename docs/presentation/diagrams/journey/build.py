@@ -185,8 +185,18 @@ SETUP_SESSIONS = [
   ("platform login",
    ["Opening the browser to sign in …",
     "✓ Logged in as admin@example.com (platform-admins, platform-users)"]),
-  ("platform team member add team-alpha dev@example.com",
-   ["✓ dev@example.com added to team-alpha"]),
+  PAGE,
+  # A fresh platform has no team: `list` prints only its header.
+  ("platform team list", ["NAME"]),
+  ("platform team create team-alpha", ["✓ team team-alpha created"]),
+  ("platform team list", ["NAME", "+team-alpha"]),
+  PAGE,
+  ("platform team get team-alpha", ["team-alpha: 0 member(s)"]),
+  ("platform team member add team-alpha dev@example.com", ["✓ dev@example.com added to team-alpha"]),
+  ("platform team get team-alpha",
+   ["team-alpha: 1 member(s)",
+    "EMAIL            USERNAME",
+    "+dev@example.com  dev@example.com"]),
   PAGE,
   (["platform scm connection add wasp-foundry",
     "--vendor github",
@@ -211,13 +221,6 @@ SETUP_SESSIONS = [
     "# apply the printed trust policy (sts:ExternalId) to the role"]),
   ("platform cloud account verify nonprod-aws --wait",
    ["✓ nonprod-aws ready (account 123456789012)"]),
-  # Real output also has REF (a 40-char sha) and SOURCE (a URL) columns.
-  # Only python-service exists today: nodejs-service and go-service are illustrative (one stack per audience).
-  ("platform catalog template list",
-   ["NAME            TYPE     DEFAULT",
-    "go-service      service  —",
-    "nodejs-service  service  —",
-    "python-service  service  yes"]),
   PAGE,
   # Cropped from the rows of `idp/catalog/`, realigned to the rows that stay. The two Component rows are
   # illustrative: the apps' repos hold them, and discovery (#205) indexes them; the reason drops its "(#205)".
@@ -232,6 +235,14 @@ SETUP_SESSIONS = [
     "19 to create, 0 to update, 1 unchanged, 4 skipped.",
     "Apply? [y/N]: y",
     "✓ 19 created, 0 updated"]),
+  PAGE,
+  # Real output also has REF (a 40-char sha) and SOURCE (a URL) columns.
+  # Only python-service exists today: nodejs-service and go-service are illustrative (one stack per audience).
+  ("platform catalog template list",
+   ["NAME            TYPE     DEFAULT",
+    "go-service      service  —",
+    "nodejs-service  service  —",
+    "python-service  service  yes"]),
 ]
 
 X0, X1 = 120, 1480
@@ -296,7 +307,7 @@ def command_line(x, y, text):
           f'xml:space="preserve" {MONO}>{spans}</text>')
 
 # Working directory in the terminal title: the repo is cloned in Code, so Plan runs from home.
-CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", "setup-2": "~", "setup-3": "~", "setup-4": "~", "setup-5": "~"}  # per page: `code-2` runs after the `cd`
+CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", **{f"setup-{n}": "~" for n in range(2, 10)}}  # per page: `code-2` runs after the `cd`
 
 def session(key, commands, name):
   parts = {}
