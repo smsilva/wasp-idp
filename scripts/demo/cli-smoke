@@ -28,7 +28,8 @@ in the vcluster reaches the Service of the instance by DNS), a second instance o
 component without the pods of the second instance, remove --instance), a route (workload route
 --header to the second instance: a client with the sidecar reaches it with the header and the first
 one without; TRAFFIC in list; refused to another component's instance, remove of a routed instance
-refused; --clear), the plan
+refused; --clear), a chain of two calls (productpage -> reviews) routed by --baggage to a second
+instance of reviews, which a --header route does not reach past the first call (#340), the plan
 of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), a postgres
 provisioned by the Forager (deploy until Ready, an app that connects to it with psql, the derived catalog Resource,
 released on remove), and a cloud account (ADR 0029): refused with a clear message without an
@@ -66,6 +67,9 @@ taken_component="smoke-taken-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
 workload_component="smoke-workload-${RANDOM}"
 route_component="smoke-route-${RANDOM}"
+chain_suffix="${RANDOM}"
+productpage_component="smoke-productpage-${chain_suffix}"
+reviews_component="smoke-reviews-${chain_suffix}"
 workload_directory="$(mktemp --directory)"
 workload_environment="smoke-workload-${RANDOM}"
 # ghcr.io/stefanprodan/podinfo:6.7.1, public: the vcluster pulls it without credentials.
@@ -145,8 +149,8 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${workload_component}" "${route_component}" --ignore-not-found > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component})" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component})" > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}" "${render_directory}" "${workload_directory}"
 }
 trap cleanup EXIT
@@ -815,6 +819,139 @@ output="$(platform workload history --environment "${workload_environment}")"
 echo "${output}"
 expect_output "rollback" "${output}"
 expect_output "remove" "${output}"
+
+step "workload route --baggage: the route holds down a chain of calls, a header does not (#340)"
+# podinfo as both services: POST /api/echo calls PODINFO_BACKEND_URL with OpenTelemetry instrumentation,
+# which passes the baggage on (its propagators are set only with PODINFO_OTEL_SERVICE_NAME; with no
+# collector, the trace export fails in its logs), but not x-sandbox. /env answers with the HOSTNAME of
+# the pod of reviews that the call reached.
+podinfo_component() {
+  local name="${1?}"
+  local variables="${2?}"
+  kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${name}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${name}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${name}.0.3.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${name}
+spec:
+  component: ${name}
+  version: "0.3.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '3%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${name}
+    containers:
+      app:
+        image: .
+        variables: ${variables}
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+MANIFEST
+}
+podinfo_component "${reviews_component}" "{}"
+podinfo_component "${productpage_component}" "{PODINFO_BACKEND_URL: 'http://${reviews_component}/env', PODINFO_OTEL_SERVICE_NAME: ${productpage_component}}"
+platform workload deploy \
+  --component "${reviews_component}" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --replicas 1 \
+  --wait
+platform workload deploy \
+  --component "${reviews_component}" \
+  --instance "${reviews_component}-pr-1" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --wait
+platform workload deploy \
+  --component "${productpage_component}" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --replicas 1 \
+  --wait
+output="$(platform workload route \
+  --component "${reviews_component}" \
+  --environment "${workload_environment}" \
+  --baggage sandbox=pr-1 \
+  --to "${reviews_component}-pr-1")"
+echo "${output}"
+expect_output "baggage sandbox=pr-1 → ${reviews_component}-pr-1" "${output}"
+platform workload route \
+  --component "${reviews_component}" \
+  --environment "${workload_environment}" \
+  --header x-sandbox=pr-1 \
+  --to "${reviews_component}-pr-1"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps run chain-check \
+  --image curlimages/curl:8.11.1 \
+  --command -- sleep 3600
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/chain-check \
+  --for condition=Ready \
+  --timeout 120s
+# The HOSTNAME of the pod of reviews that the chain reached, from the /env that productpage echoes back.
+reviews_through() {
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps exec chain-check -- \
+    curl --silent --max-time 5 --request POST --data '{}' "$@" "http://${productpage_component}/api/echo" \
+    | grep --only-matching 'HOSTNAME=[a-z0-9-]*' \
+    | cut --delimiter = --fields 2
+}
+for attempt in $(seq 30); do
+  routed="$(reviews_through --header 'baggage: userid=7,sandbox=pr-1' || true)"
+  [[ "${routed}" == "${reviews_component}-pr-1-"* ]] && break
+  sleep 2
+done
+echo "with the baggage: ${routed}"
+if [[ "${routed}" != "${reviews_component}-pr-1-"* ]]; then
+  echo "expected the chain to reach a pod of ${reviews_component}-pr-1 with baggage sandbox=pr-1, got '${routed}'" >&2
+  exit 1
+fi
+for attempt in $(seq 5); do
+  for header in "x-sandbox: pr-1" "baggage: sandbox=pr-2"; do
+    reached="$(reviews_through --header "${header}")"
+    if [[ "${reached}" != "${reviews_component}-"* || "${reached}" == "${reviews_component}-pr-1-"* ]]; then
+      echo "expected a pod of ${reviews_component} with '${header}' through ${productpage_component}, got '${reached}'" >&2
+      exit 1
+    fi
+  done
+done
+echo "with x-sandbox through ${productpage_component}: ${reached}"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod chain-check --wait=false
+platform workload route \
+  --component "${reviews_component}" \
+  --environment "${workload_environment}" \
+  --clear
+platform workload remove \
+  --component "${productpage_component}" \
+  --environment "${workload_environment}" \
+  --wait
+platform workload remove \
+  --instance "${reviews_component}-pr-1" \
+  --environment "${workload_environment}" \
+  --wait
+platform workload remove \
+  --component "${reviews_component}" \
+  --environment "${workload_environment}" \
+  --wait
 
 step "workload apply: the plan of an environment, with --dry-run and --prune (#293)"
 cat > "${workload_directory}/plan.yaml" <<PLAN

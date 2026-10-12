@@ -2,9 +2,12 @@ import os
 
 from fastapi import FastAPI
 
+from app.telemetry import instrument
+
 APP_NAME = os.environ.get("APP_NAME", "python-service")
 
 app = FastAPI(title=APP_NAME)
+instrument(app)
 
 
 @app.get("/")

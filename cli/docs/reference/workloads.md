@@ -113,7 +113,7 @@ Splits the calls made to a component's Service (`http://<component>`) among its 
 | Option | Rule |
 |---|---|
 | `--header name=value --to <instance>` | calls with the header go to the instance |
-| `--baggage key=value --to <instance>` | calls whose `baggage` header (OpenTelemetry Baggage) has the entry go to the instance |
+| `--baggage key=value --to <instance>` | calls whose `baggage` header (OpenTelemetry Baggage) has the entry go to the instance; the services pass it on, so it holds down a chain of calls ([contract](../walkthrough/workloads/baggage.md)) |
 | `--weight n --to <instance>` | `n`% of the calls that no header or baggage rule took go to the instance; the main instance takes the rest |
 | `--clear` | removes the route |
 
