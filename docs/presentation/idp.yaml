@@ -116,7 +116,8 @@ parts:
     message: "What does it look like end to end?"
     acts: [journey]
     items:
-      - {label: "From idea to running product", go: journey}
+      - {label: "Before the developer arrives", go: journey}
+      - {label: "From idea to running product", go: journey-plan}
   - title: "The final picture"
     message: "How does it all fit together?"
     acts: [final]
@@ -1847,6 +1848,87 @@ slides:
     dependsOn: [catalog-as-context, declare-name]
 
   # ── A jornada ───────────────────────────────────────
+  # ── A jornada: momento 0 (time de plataforma) ─────
+  - name: journey-setup
+    act: journey
+    message: "Antes do primeiro dev, o time de plataforma sobe a plataforma e diz quem é de qual time."
+    topic: "Before the developer arrives"
+    heading: "Setup: the platform team"
+    diagram: "diagrams/journey/setup.svg"
+    show: [terminal]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **este é o momento 0**, feito uma vez pelo time de plataforma, antes de qualquer dev aparecer. Ele responde de onde vêm o `greeter`, a org e o golden path que a jornada usa.
+
+      **`init`** sobe o control plane: a Platform API e o Keycloak, o emissor único de tokens. **`login`** entra pelo navegador (PKCE), e os grupos vêm no token.
+
+      **`team member add`:** o dev só cria component, faz build e deploy se for membro do time dono. Sem esse passo, a jornada começa com `403`.
+
+      **Real hoje:** os três comandos, com a saída da CLI. O `init` também imprime as linhas de progresso (cluster, CRDs, Keycloak, API), recortadas aqui.
+
+  - name: journey-setup-2
+    act: journey
+    message: "O time de plataforma liga a plataforma à org de código, e a chave nunca passa pela máquina de ninguém."
+    topic: "Before the developer arrives"
+    heading: "Setup: the platform team"
+    diagram: "diagrams/journey/setup-2.svg"
+    show: [terminal]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **a plataforma passa a criar repos na org** com uma credencial própria, não com o token de uma pessoa.
+
+      O GitHub App nasce pelo **manifest flow**: o `add` abre o navegador na Platform API, o GitHub devolve a chave privada **direto para a plataforma**, e ela nunca passa pela CLI. Depois é instalar o App na org e verificar.
+
+      **Real hoje:** os dois comandos, com a saída da CLI (#199, ADR 0025).
+
+  - name: journey-setup-3
+    act: journey
+    message: "O time de plataforma liga uma conta de nuvem e publica o golden path padrão de cada tipo."
+    topic: "Before the developer arrives"
+    heading: "Setup: the platform team"
+    diagram: "diagrams/journey/setup-3.svg"
+    show: [terminal]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **a nuvem e o caminho pavimentado são escolhas da plataforma**, feitas uma vez.
+
+      **`cloud account`:** a plataforma gera o `ExternalId` e imprime a trust policy; aplicá-la na role prova que quem cadastrou administra a conta. O `ExternalId` nunca vem do cliente. **Ligar uma conta a um Environment vem depois.**
+
+      **`template list`:** os golden paths que a plataforma oferece, um por stack (Go, Node.js, Python), e qual é o padrão de cada tipo. Quando o dev pede um `service` sem dizer o template, é o `python-service` que responde; quem prefere outra stack passa `--template`. A lista real também tem as colunas `REF` e `SOURCE`, recortadas aqui.
+
+      **Real hoje:** os três comandos (#193, ADR 0029; #201). **Ilustrativo:** `go-service` e `nodejs-service`; hoje só o `python-service` existe.
+
+  - name: journey-setup-4
+    act: journey
+    message: "O catálogo que já existe entra sem recadastro."
+    topic: "Before the developer arrives"
+    heading: "Setup: the platform team"
+    diagram: "diagrams/journey/setup-4.svg"
+    show: [terminal]
+    start: "empty"
+    empty: [prompt]
+    reveal: [cmd.1, cmd.1-out]
+    accumulate: true
+    notes: |-
+      O que queremos dizer: **a plataforma começa do catálogo que a empresa já tem**: domains, systems, resources e times entram sem recadastro.
+
+      O `import` lê os `catalog-info.yaml` do Backstage, mostra o plano e só aplica com confirmação. É daqui que vêm o domain `messaging` e o system `greeter` da jornada; o `team-alpha` já existe como time.
+
+      **Components não entram pelo import:** cada um vive no `catalog-info.yaml` do próprio repo, e o discovery pela scm connection os indexa. É assim que `greeting-web` e `greeting-worker` aparecem no `component list` do próximo slide, já no `greeter`.
+
+      **Real hoje:** o `import` sobre `idp/catalog/`, com a saída recortada. **Ilustrativo:** as duas linhas de Component (o `idp/catalog/` não tem esses repos) e o discovery, que depende da #205; o motivo real termina em `(#205)`.
+
+      **A partir daqui, a persona é o dev**, e a linha da jornada aparece.
+
   - name: journey-plan
     act: journey
     topic: "From idea to running product"
