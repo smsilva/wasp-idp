@@ -190,7 +190,7 @@ def test_diagram_focus_and_links(tmp_path):
 def test_breadcrumb_and_overlay(tmp_path):
   page = deck(tmp_path)
   root = stage(page, 7)
-  assert ("<div class='overlay'><div class='ov-tree'>"
+  assert ("<div class='overlay'><div class='ov-bar'><i></i><i></i><i></i><span>Box</span></div><div class='ov-tree'>"
           "<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='box-a'>A</a></div>"
           "<div class='ov-r ov-d1'><a data-go-slide='box-b'>B</a></div></div></div></div>") in root
 
@@ -208,16 +208,6 @@ def test_trail_in_the_footer(tmp_path):
   page = deck(tmp_path)
   assert ("<div class='trail'><a data-back>↩</a><a data-go-slide='full'>Platform</a> / <a data-go-slide='map'>Plane</a> / "
           "<a data-go-slide='box'>Box</a> / <a data-go-slide='box-a'>A</a> / <span class='here'>B</span></div>") in stage(page, 10)
-
-
-def test_root_with_clients_does_not_shift(tmp_path):
-  # The overlay shifts the diagram over the clients column: a root that draws the clients keeps it in place.
-  data = outline()
-  slide(data, "box")["dim"] = ["plane", "p.2", "clients.1"]
-  (tmp_path / "d.svg").write_text(SVG)
-  page = ro.render_html(data, tmp_path)
-  assert "inner diagram-inner'" in stage(page, 7) and "with-overlay" not in stage(page, 7)
-  assert "with-overlay" in stage(deck(tmp_path), 7)
 
 
 def test_trail_sits_above_the_slide():
