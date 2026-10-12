@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 from local_vcluster_provider.helm import values
+from local_vcluster_provider.mesh import in_cluster, wanted
 from local_vcluster_provider.reconciler import FINALIZER, PORTS, RELEASE, Reconciler
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
@@ -53,6 +54,17 @@ class FakeSecrets:
     return self.used
 
 
+class FakeMesh:
+  def __init__(self, ready=True):
+    self.installs, self.is_ready = [], ready
+
+  def install(self, name, kubeconfig):
+    self.installs.append(name)
+
+  def ready(self, name, kubeconfig):
+    return self.is_ready
+
+
 def environment(name="greetings-test", expires=None, finalizers=None, deleting=False, status=None):
   obj = {"metadata": {"name": name, "finalizers": finalizers or []}, "spec": {"profile": "ephemeral"}}
   if expires:
@@ -64,11 +76,12 @@ def environment(name="greetings-test", expires=None, finalizers=None, deleting=F
   return obj
 
 
-def build(helm=None, secrets=None):
+def build(helm=None, secrets=None, mesh=None):
   store = FakeStore()
   helm = helm or FakeHelm()
   secrets = secrets or FakeSecrets()
-  return store, helm, secrets, Reconciler(store, helm, secrets, now=lambda: NOW)
+  mesh = mesh or FakeMesh()
+  return store, helm, secrets, Reconciler(store, helm, secrets, mesh, now=lambda: NOW)
 
 
 def test_new_environment_installs_vcluster_on_first_free_port():
@@ -97,9 +110,60 @@ def test_ready_environment_is_left_alone():
   helm = FakeHelm()
   helm.releases[(RELEASE, "env-greetings-test")] = 7100
   store, _, _, reconciler = build(helm=helm, secrets=secrets)
-  status = {"port": 7100, "kubeconfigData": kubeconfig, "conditions": [{"type": "Ready", "status": "True"}]}
+  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "conditions": [{"type": "Ready", "status": "True"}]}
   reconciler.reconcile(environment(finalizers=[FINALIZER], status=status))
   assert "greetings-test" not in store.statuses
+
+
+def test_mesh_installed_once_the_vcluster_is_up_and_ready_only_with_istiod():
+  secrets = FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"})
+  mesh = FakeMesh(ready=False)
+  store, _, _, reconciler = build(secrets=secrets, mesh=mesh)
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100}))
+  assert mesh.installs == ["greetings-test"]
+  statuses = store.statuses["greetings-test"]
+  assert any("installing the mesh" in status["conditions"][0]["message"] for status in statuses if "conditions" in status)
+  assert {"mesh": wanted()} in statuses
+  last = statuses[-1]["conditions"][0]
+  assert (last["status"], last["reason"], last["message"]) == ("False", "Provisioning", "waiting for istiod in the vcluster")
+
+
+def test_mesh_not_reinstalled_while_istiod_starts():
+  secrets = FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"})
+  mesh = FakeMesh()
+  store, _, _, reconciler = build(secrets=secrets, mesh=mesh)
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100, "mesh": wanted()}))
+  assert mesh.installs == []
+  last = store.statuses["greetings-test"][-1]
+  assert last["conditions"][0]["reason"] == "ClusterReady" and last["mesh"] == wanted()
+
+
+def test_environment_ready_before_the_mesh_gets_it():
+  # Created before ADR 0035: Ready, with the kubeconfig, but no status.mesh.
+  kubeconfig = "apiVersion: v1\n"
+  helm = FakeHelm()
+  helm.releases[(RELEASE, "env-greetings-test")] = 7100
+  mesh = FakeMesh()
+  store, _, _, reconciler = build(helm=helm, secrets=FakeSecrets(kubeconfigs={"env-greetings-test": kubeconfig}), mesh=mesh)
+  status = {"port": 7100, "kubeconfigData": kubeconfig, "conditions": [{"type": "Ready", "status": "True"}]}
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status=status))
+  assert mesh.installs == ["greetings-test"]
+  assert store.statuses["greetings-test"][-1]["conditions"][0]["reason"] == "ClusterReady"
+
+
+def test_mesh_failure_becomes_condition():
+  class Failing(FakeMesh):
+    def install(self, name, kubeconfig):
+      raise RuntimeError("helm: istiod failed")
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"}), mesh=Failing())
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100}))
+  last = store.statuses["greetings-test"][-1]["conditions"][0]
+  assert last["reason"] == "ProvisioningFailed" and "istiod failed" in last["message"]
+
+
+def test_mesh_reaches_the_vcluster_at_its_in_cluster_address():
+  kubeconfig = yaml.safe_dump({"clusters": [{"name": "c", "cluster": {"server": "https://127.0.0.1:7100"}}]})
+  assert in_cluster(kubeconfig, "greetings-test")["clusters"][0]["cluster"]["server"] == "https://vcluster.env-greetings-test"
 
 
 def test_no_free_port_fails_with_condition():

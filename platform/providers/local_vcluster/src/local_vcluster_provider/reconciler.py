@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime, timezone
 
+from .mesh import wanted
+
 FINALIZER = "platform.wasp.silvios.me/local-vcluster"
 RELEASE = "vcluster"
 # Host ports published by the k3d load balancer of platform-local (platform init maps this range).
@@ -45,13 +47,15 @@ class Reconciler:
   """One vcluster (Helm release `vcluster`) per Environment, in namespace env-<name>.
 
   It runs inside platform-local and cannot write files on the host: the kubeconfig goes to
-  status.kubeconfigData and the CLI writes it locally.
+  status.kubeconfigData and the CLI writes it locally. The environment is Ready only once istiod runs
+  in the vcluster (ADR 0035); status.mesh keeps the versions installed.
   """
 
-  def __init__(self, store, helm, secrets, now=utcnow):
+  def __init__(self, store, helm, secrets, mesh, now=utcnow):
     self.store = store
     self.helm = helm
     self.secrets = secrets
+    self.mesh = mesh
     self.now = now
 
   def reconcile(self, obj: dict) -> None:
@@ -117,11 +121,29 @@ class Reconciler:
 
     ready = current_ready(obj)
     status = obj.get("status") or {}
-    if ready and ready.get("status") == "True" and status.get("kubeconfigData") == kubeconfig:
+    mesh = wanted()
+    if ready and ready.get("status") == "True" and status.get("kubeconfigData") == kubeconfig and status.get("mesh") == mesh:
+      return
+    # The mesh (ADR 0035), also in an environment created before it: installing it touches neither the
+    # vcluster release nor the pods already running, which get a sidecar on their next deploy.
+    if status.get("mesh") != mesh:
+      log.info("installing the mesh in %s (istio %s, gateway api %s)", namespace, mesh["istio"], mesh["gatewayAPI"])
+      self.store.patch_status(name, {
+        "port": port,
+        "conditions": [ready_condition("False", "Provisioning", f"installing the mesh (istio {mesh['istio']}) in the vcluster")],
+      })
+      self.mesh.install(name, kubeconfig)
+      self.store.patch_status(name, {"mesh": mesh})
+    if not self.mesh.ready(name, kubeconfig):
+      self.store.patch_status(name, {
+        "port": port,
+        "conditions": [ready_condition("False", "Provisioning", "waiting for istiod in the vcluster")],
+      })
       return
     self.store.patch_status(name, {
       "port": port,
       "kubeconfigData": kubeconfig,
+      "mesh": mesh,
       "conditions": [ready_condition("True", "ClusterReady", f"vcluster running in namespace {namespace}, API on 127.0.0.1:{port}")],
     })
     log.info("environment %s ready", name)

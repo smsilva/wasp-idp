@@ -115,7 +115,8 @@ def render(app_spec: dict, revision: dict, resources: dict | None = None) -> tup
   annotations = {"platform.wasp.silvios.me/revision": str(spec["revision"]), "platform.wasp.silvios.me/version": spec["version"]}
   replicas = (spec.get("overrides") or {}).get("replicas", 1)
   objects = [
-    {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE, "labels": {"app.kubernetes.io/managed-by": MANAGER}}},
+    # Sidecar injection (ADR 0035): the mesh routes between the instances of a component.
+    {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE, "labels": {"app.kubernetes.io/managed-by": MANAGER, "istio-injection": "enabled"}}},
     {
       "apiVersion": "apps/v1",
       "kind": "Deployment",

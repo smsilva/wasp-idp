@@ -106,3 +106,9 @@ def test_unsupported_spec(change, message):
   change(spec)
   with pytest.raises(UnsupportedSpec, match=message):
     render(spec, revision())
+
+
+def test_namespace_has_sidecar_injection():
+  # ADR 0035: the mesh of the environment routes between the instances of a component.
+  objects, _ = render(score(), revision())
+  assert objects[0]["metadata"]["labels"]["istio-injection"] == "enabled"
