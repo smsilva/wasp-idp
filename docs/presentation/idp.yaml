@@ -108,7 +108,6 @@ parts:
     items:
       - {label: "Runtime health", go: detail-runtime-health}
       - {label: "Cost & AI usage", go: detail-cost}
-      - {label: "Platform as a product", go: platform-as-product-signals}
       - {label: "Guardrails", go: detail-guardrails}
       - {label: "Identity & access", go: detail-identity}
   - title: "Platform API"
@@ -140,6 +139,7 @@ parts:
       - {label: "Layers for agents", go: aep-layers}
       - {label: "Maturity", go: maturity-levels}
       - {label: "Verification before the PR", go: ci-bottleneck}
+      - {label: "Platform as a product", go: platform-as-product-signals}
 
 # Campos por slide:
 #   name       slug estável (referenciado por dependsOn; reordenar não quebra)
@@ -1680,102 +1680,6 @@ slides:
       Fonte: references/mercadolibre-fury.md, https://www.youtube.com/watch?v=aFJTxKak6sM.
     dependsOn: [token-finops, puppy-for-christmas, catalog-ownership]
 
-  - name: platform-as-product-signals
-    act: operate
-    topic: "Platform as a product"
-    audiences: [executive, platform]
-    message: "A plataforma também se observa como produto: satisfação, onde o dev desiste e quando ele a contorna."
-    heading: "The platform measures itself"
-    align: true
-    screen: ["**Satisfaction:** NPS at key moments", "**Behavior:** session replay", "**Drop-off:** funnel per offer", "**Bypass:** how often devs route around it"]
-    notes: |-
-      O que queremos dizer: **o que a plataforma mede é a experiência do dev**, não o volume de uso.
-
-      **Caso real:** a Stone, no IDP (Internal Developer Platform) Caravela, usa Hotjar para **NPS** (Net Promoter Score) em momentos-chave, gravação de sessão e análise de cliques (31:05–35:00). Usa Amplitude para **funis de conversão de cada oferta** — os templates de provisionamento —, mostrando onde o dev abandona o fluxo (35:30–43:00).
-
-      É a **user observability** do Platform as a Product (pp. 17-18) na prática; evita **vanity metrics** (p. 35), como número de serviços no catálogo ou page views do portal.
-
-      Mesma ideia em 'The empathy gap' (platformengineering.org): **medir o sentimento do dev** junto com as métricas **DORA** (DevOps Research and Assessment).
-
-      **Bypass:** quantas vezes o dev **contorna a plataforma**. Para 'The platform engineering illusion', é 'the platform's real adoption curve', e quase nunca está no dashboard mostrado à liderança.
-
-      Fonte: references/stone-caravela.md, references/platform-as-a-product.md, references/empathy-gap.md, https://www.youtube.com/live/xACNR0cBzTQ, references/platform-illusion.md.
-    dependsOn: [platform-as-product, signals]
-
-  - name: north-star-metric
-    act: operate
-    topic: "Platform as a product"
-    audiences: [executive, platform]
-    message: "A métrica que importa: quantos dias um dev novo leva para mergear o 10º pull request."
-    heading: "Days until a new hire merges their 10th PR"
-    align: true
-    screen: ["**Spotify, before:** 60 days", "**Spotify, after Backstage:** under 20 days"]
-    source: "Spotify, How we measure Backstage success (2021, updated 2026)"
-    notes: |-
-      O que queremos dizer: a métrica que importa **mede a complexidade que o dev novo enfrenta**, não o uso do portal.
-
-      Siglas:
-      - **PR** (pull request).
-      - **KPI** (Key Performance Indicator).
-      - **MTTR** (Mean Time To Recovery).
-      - **eNPS** (employee Net Promoter Score).
-
-      **Onboarding time:** quantos dias um dev recém-chegado leva até mergear o **10º PR**. No Spotify tinha chegado a **60 dias**; com o Backstage, caiu para **menos de 20** (blog 'How we measure Backstage success at Spotify', Helen Greul, 2021, atualizado em 2026).
-
-      A doc oficial do Backstage ('Strategies for adopting', seção KPIs and metrics) cita a mesma métrica com **queda de 55%** dois anos após a adoção. **São números de momentos diferentes:** citar a fonte do número usado.
-
-      É proxy da **complexidade do ecossistema**, não de uso do portal.
-
-      **Ressalvas para o apresentador:**
-      - A própria Pia Nilsson (Spotify) disse que falta nuance e que a métrica foi copiada da Meta.
-      - É o caso de quem criou o Backstage.
-
-      **Outros KPIs da doc:** deploys, MTTR, context switching, eNPS, fragmentação.
-
-      **Para esta plataforma,** candidata: tempo do pedido de um Environment até a primeira URL respondendo.
-
-      Fonte: references/adoption-metrics.md.
-    dependsOn: [platform-as-product-signals]
-
-  - name: dora-metrics
-    act: operate
-    topic: "Platform as a product"
-    audiences: [executive, engineering, platform]
-    message: "Para a entrega, o mercado já tem a régua: as métricas DORA."
-    heading: "DORA metrics"
-    screen: ["**Lead time:** commit to production", "**Deploy frequency:** how often", "**Recovery time:** after a failed deploy", "**Change fail rate:** deploys that fail", "**Rework rate:** unplanned deploys after incidents"]
-    notes: |-
-      O que queremos dizer: para a entrega, **já existe régua de mercado**: as métricas DORA (DevOps Research and Assessment).
-
-      DORA (dora.dev, 2026):
-      - **Throughput:** change lead time, deployment frequency, failed deployment recovery time.
-      - **Instability:** change fail rate, deployment rework rate.
-
-      Eram quatro ('four keys'); **hoje são cinco**, e recovery time substituiu o **MTTR** (Mean Time To Recovery). A plataforma coleta e devolve ao portal por plugin.
-
-      **Guia do próprio DORA:** não virar meta, não comparar times nem aplicações diferentes, não medir por uma métrica só.
-
-      Complementa o **time to 10th PR** (onboarding; PR = pull request) e o **sentimento do dev** (empathy gap).
-
-      Fonte: references/dora-metrics.md.
-    dependsOn: [north-star-metric]
-
-  - name: feature-flags
-    act: operate
-    topic: "Platform as a product"
-    audiences: [platform]
-    message: "Funcionalidade nova da plataforma chega aos poucos, sem segurar o release."
-    heading: "Gradual delivery"
-    align: true
-    screen: ["**Feature flags:** turn on per user", "**A/B tests:** compare two versions", "**Rollout:** a few users first"]
-    notes: |-
-      O que queremos dizer: **funcionalidade nova da plataforma chega aos poucos**, sem segurar o release.
-
-      A Stone usa a parte de experimentação do Amplitude para **feature flags e testes A/B**: SDK (Software Development Kit) no IDP (Internal Developer Platform) e hooks no frontend condicionam o comportamento. O **rollout é gradual** e o release não espera (59:00–1:03:00).
-
-      Fonte: https://www.youtube.com/live/xACNR0cBzTQ (references/stone-caravela.md).
-    dependsOn: [platform-as-product-signals]
-
   - name: landscape-sec
     act: operate
     topic: "Guardrails"
@@ -2865,6 +2769,102 @@ slides:
 
       Fonte: references/sandbox-routing.md.
     dependsOn: [request-sandbox, iac]
+
+  - name: platform-as-product-signals
+    act: agentic
+    topic: "Platform as a product"
+    audiences: [executive, platform]
+    message: "A plataforma também se observa como produto: satisfação, onde o dev desiste e quando ele a contorna."
+    heading: "The platform measures itself"
+    align: true
+    screen: ["**Satisfaction:** NPS at key moments", "**Behavior:** session replay", "**Drop-off:** funnel per offer", "**Bypass:** how often devs route around it"]
+    notes: |-
+      O que queremos dizer: **o que a plataforma mede é a experiência do dev**, não o volume de uso.
+
+      **Caso real:** a Stone, no IDP (Internal Developer Platform) Caravela, usa Hotjar para **NPS** (Net Promoter Score) em momentos-chave, gravação de sessão e análise de cliques (31:05–35:00). Usa Amplitude para **funis de conversão de cada oferta** — os templates de provisionamento —, mostrando onde o dev abandona o fluxo (35:30–43:00).
+
+      É a **user observability** do Platform as a Product (pp. 17-18) na prática; evita **vanity metrics** (p. 35), como número de serviços no catálogo ou page views do portal.
+
+      Mesma ideia em 'The empathy gap' (platformengineering.org): **medir o sentimento do dev** junto com as métricas **DORA** (DevOps Research and Assessment).
+
+      **Bypass:** quantas vezes o dev **contorna a plataforma**. Para 'The platform engineering illusion', é 'the platform's real adoption curve', e quase nunca está no dashboard mostrado à liderança.
+
+      Fonte: references/stone-caravela.md, references/platform-as-a-product.md, references/empathy-gap.md, https://www.youtube.com/live/xACNR0cBzTQ, references/platform-illusion.md.
+    dependsOn: [platform-as-product, signals]
+
+  - name: north-star-metric
+    act: agentic
+    topic: "Platform as a product"
+    audiences: [executive, platform]
+    message: "A métrica que importa: quantos dias um dev novo leva para mergear o 10º pull request."
+    heading: "Days until a new hire merges their 10th PR"
+    align: true
+    screen: ["**Spotify, before:** 60 days", "**Spotify, after Backstage:** under 20 days"]
+    source: "Spotify, How we measure Backstage success (2021, updated 2026)"
+    notes: |-
+      O que queremos dizer: a métrica que importa **mede a complexidade que o dev novo enfrenta**, não o uso do portal.
+
+      Siglas:
+      - **PR** (pull request).
+      - **KPI** (Key Performance Indicator).
+      - **MTTR** (Mean Time To Recovery).
+      - **eNPS** (employee Net Promoter Score).
+
+      **Onboarding time:** quantos dias um dev recém-chegado leva até mergear o **10º PR**. No Spotify tinha chegado a **60 dias**; com o Backstage, caiu para **menos de 20** (blog 'How we measure Backstage success at Spotify', Helen Greul, 2021, atualizado em 2026).
+
+      A doc oficial do Backstage ('Strategies for adopting', seção KPIs and metrics) cita a mesma métrica com **queda de 55%** dois anos após a adoção. **São números de momentos diferentes:** citar a fonte do número usado.
+
+      É proxy da **complexidade do ecossistema**, não de uso do portal.
+
+      **Ressalvas para o apresentador:**
+      - A própria Pia Nilsson (Spotify) disse que falta nuance e que a métrica foi copiada da Meta.
+      - É o caso de quem criou o Backstage.
+
+      **Outros KPIs da doc:** deploys, MTTR, context switching, eNPS, fragmentação.
+
+      **Para esta plataforma,** candidata: tempo do pedido de um Environment até a primeira URL respondendo.
+
+      Fonte: references/adoption-metrics.md.
+    dependsOn: [platform-as-product-signals]
+
+  - name: dora-metrics
+    act: agentic
+    topic: "Platform as a product"
+    audiences: [executive, engineering, platform]
+    message: "Para a entrega, o mercado já tem a régua: as métricas DORA."
+    heading: "DORA metrics"
+    screen: ["**Lead time:** commit to production", "**Deploy frequency:** how often", "**Recovery time:** after a failed deploy", "**Change fail rate:** deploys that fail", "**Rework rate:** unplanned deploys after incidents"]
+    notes: |-
+      O que queremos dizer: para a entrega, **já existe régua de mercado**: as métricas DORA (DevOps Research and Assessment).
+
+      DORA (dora.dev, 2026):
+      - **Throughput:** change lead time, deployment frequency, failed deployment recovery time.
+      - **Instability:** change fail rate, deployment rework rate.
+
+      Eram quatro ('four keys'); **hoje são cinco**, e recovery time substituiu o **MTTR** (Mean Time To Recovery). A plataforma coleta e devolve ao portal por plugin.
+
+      **Guia do próprio DORA:** não virar meta, não comparar times nem aplicações diferentes, não medir por uma métrica só.
+
+      Complementa o **time to 10th PR** (onboarding; PR = pull request) e o **sentimento do dev** (empathy gap).
+
+      Fonte: references/dora-metrics.md.
+    dependsOn: [north-star-metric]
+
+  - name: feature-flags
+    act: agentic
+    topic: "Platform as a product"
+    audiences: [platform]
+    message: "Funcionalidade nova da plataforma chega aos poucos, sem segurar o release."
+    heading: "Gradual delivery"
+    align: true
+    screen: ["**Feature flags:** turn on per user", "**A/B tests:** compare two versions", "**Rollout:** a few users first"]
+    notes: |-
+      O que queremos dizer: **funcionalidade nova da plataforma chega aos poucos**, sem segurar o release.
+
+      A Stone usa a parte de experimentação do Amplitude para **feature flags e testes A/B**: SDK (Software Development Kit) no IDP (Internal Developer Platform) e hooks no frontend condicionam o comportamento. O **rollout é gradual** e o release não espera (59:00–1:03:00).
+
+      Fonte: https://www.youtube.com/live/xACNR0cBzTQ (references/stone-caravela.md).
+    dependsOn: [platform-as-product-signals]
 
   - name: closing
     act: agentic
