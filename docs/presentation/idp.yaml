@@ -1921,9 +1921,11 @@ slides:
     notes: |-
       O que queremos dizer: **a plataforma começa do catálogo que a empresa já tem**: domains, systems, resources e times entram sem recadastro.
 
-      O `import` lê os `catalog-info.yaml` do Backstage, mostra o plano e só aplica com confirmação. É daqui que vêm o `greeter` e o `team-alpha` da jornada.
+      O `import` lê os `catalog-info.yaml` do Backstage, mostra o plano e só aplica com confirmação. É daqui que vêm o domain `messaging` e o system `greeter` da jornada; o `team-alpha` já existe como time.
 
-      **Real hoje:** a saída da CLI sobre `idp/catalog/`, recortada (são 22 linhas).
+      **Components não entram pelo import:** cada um vive no `catalog-info.yaml` do próprio repo, e o discovery pela scm connection os indexa. É assim que `greeting-web` e `greeting-worker` aparecem no `component list` do próximo slide, já no `greeter`.
+
+      **Real hoje:** o `import` sobre `idp/catalog/`, com a saída recortada. **Ilustrativo:** as duas linhas de Component (o `idp/catalog/` não tem esses repos) e o discovery, que depende da #205; o motivo real termina em `(#205)`.
 
       **A partir daqui, a persona é o dev**, e a linha da jornada aparece.
 

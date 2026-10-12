@@ -212,16 +212,17 @@ SETUP_SESSIONS = [
     "nodejs-service  service  —",
     "python-service  service  yes"]),
   PAGE,
-  # Cropped from the 22 rows of `idp/catalog/`, realigned to the rows that stay.
+  # Cropped from the rows of `idp/catalog/`, realigned to the rows that stay. The two Component rows are
+  # illustrative: the apps' repos hold them, and discovery (#205) indexes them; the reason drops its "(#205)".
   ("platform catalog import idp/catalog/",
-   ["KIND      NAME           ACTION  DETAIL",
-    "Group     team-beta      create",
-    "Domain    communication  create",
-    "Domain    messaging      create  parent communication",
-    "System    greeter        create  domain messaging",
-    "Resource  greeting-db    create  system greeter",
+   ["KIND       NAME             ACTION  DETAIL",
+    "Domain     communication    create",
+    "Domain     messaging        create  parent communication",
+    "System     greeter          create  domain messaging",
+    "Component  greeting-web     skip    lives in the repo catalog-info.yaml; indexed by discovery",
+    "Component  greeting-worker  skip    lives in the repo catalog-info.yaml; indexed by discovery",
     "…",
-    "19 to create, 0 to update, 1 unchanged, 2 skipped.",
+    "19 to create, 0 to update, 1 unchanged, 4 skipped.",
     "Apply? [y/N]: y",
     "✓ 19 created, 0 updated"]),
 ]
