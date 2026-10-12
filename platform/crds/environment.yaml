@@ -59,6 +59,14 @@ spec:
                 port:
                   description: Host port of the environment API server (provider local_vcluster).
                   type: integer
+                mesh:
+                  description: Versions of the mesh installed in the environment (ADR 0035); absent while it is being installed.
+                  type: object
+                  properties:
+                    istio:
+                      type: string
+                    gatewayAPI:
+                      type: string
                 conditions:
                   type: array
                   items:

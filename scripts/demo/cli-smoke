@@ -178,12 +178,20 @@ expect_failure "403" \
 step "a non-admin cannot list SCM connections"
 expect_failure "403" platform scm connection list
 
-step "environment create --wait"
+step "environment create --wait: a vcluster with the mesh (ADR 0035, #343)"
 platform environment create "${environment}" \
   --profile ephemeral \
   --wait
 output="$(platform environment list)"
 expect_output "${environment}" "${output}"
+# Ready only with istiod up: status.mesh holds the versions the provider installed.
+mesh="$(kubectl --context k3d-platform-local --namespace platform-system get environment "${environment}" \
+  --output jsonpath='{.status.mesh.istio} {.status.mesh.gatewayAPI}')"
+echo "mesh: ${mesh}"
+if [[ ! "${mesh}" =~ ^1\.30\.[0-9]+\ v1\.5\.[0-9]+$ ]]; then
+  echo "expected istio 1.30 and gateway api 1.5 in status.mesh of ${environment}, got '${mesh}'" >&2
+  exit 1
+fi
 
 step "environment delete"
 platform environment delete "${environment}"

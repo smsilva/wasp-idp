@@ -13,7 +13,7 @@ provisioning greetings-test (profile: ephemeral) …
   Provisioning
 ✓ greetings-test ready
 
-real    0m32s
+real    0m51s
 ```
 
 !!! note

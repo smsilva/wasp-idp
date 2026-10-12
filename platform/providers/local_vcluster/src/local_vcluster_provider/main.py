@@ -5,6 +5,7 @@ import sys
 import time
 
 from .helm import Helm
+from .mesh import Mesh
 from .reconciler import Reconciler
 from .store import EnvironmentStore, KubeconfigSecrets
 
@@ -45,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
   signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = EnvironmentStore(args.namespace, args.context)
-  reconciler = Reconciler(store, Helm(), KubeconfigSecrets())
+  reconciler = Reconciler(store, Helm(), KubeconfigSecrets(), Mesh())
   log.info("watching environments in %s", args.namespace)
   run(store, reconciler, args.resync_seconds)
 

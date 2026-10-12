@@ -21,8 +21,8 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | Status | Meaning |
 |---|---|
 | `NoProviderForCapability` | no provider has picked up the request yet |
-| `Provisioning` | vcluster being created (about 30 s) |
-| `ready` | vcluster up; `get` or `--wait` writes the kubeconfig |
+| `Provisioning` | vcluster being created, then the mesh installed in it (about 50 s) |
+| `ready` | vcluster and `istiod` up; `get` or `--wait` writes the kubeconfig |
 | `ProvisioningFailed` | provider error; see `message` in the JSON |
 | `deleting` | removal in progress |
 
