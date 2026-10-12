@@ -239,4 +239,11 @@ def test_overlay_examples_are_a_small_mark():
   # A child labelled "<parent> example" is a "▸ ex" link on its parent's row, never a row of its own.
   items = [("System", "sys", [("System example", "sys-ex", [])])]
   assert ro.overlay_tree(items) == ("<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='sys'>System</a>"
-                                    "<a class='ov-ex' data-go-slide='sys-ex' title='System example'>▸&nbsp;ex</a></div></div>")
+                                    "<a class='ov-ex' data-go-slide='sys-ex' title='System example'>▸&nbsp;example</a></div></div>")
+
+
+def test_deep_breadcrumb_is_smaller(tmp_path):
+  # Past the root's level the trail gets long: from 4 levels on, a smaller font keeps it on one line.
+  page = deck(tmp_path)
+  assert "class='section has-topic crumbs deep'" in stage(page, 10)
+  assert "crumbs deep" not in stage(page, 7)

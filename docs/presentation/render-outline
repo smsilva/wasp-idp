@@ -105,6 +105,7 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram .part-link { cursor: pointer; }
 .stage .diagram .part-link:hover > rect:first-of-type { stroke: #4a9ef4; }
 .stage .section.crumbs { z-index: 2; }
+.stage .section.crumbs.deep .act-name { font-size: 0.8cqw; letter-spacing: 0.25cqw; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
 .stage .overlay { position: absolute; right: 5cqw; top: 9cqw; max-height: calc(100% - 15.5cqw); overflow: hidden; width: 58cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 1.6cqw 2.2cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
@@ -815,7 +816,7 @@ def overlay_tree(items, depth=0):
     # A top-level topic and its subtree stay in one column.
     if depth == 0:
       rows += "<div class='ov-topic'>"
-    marks = "".join(f"<a class='ov-ex' data-go-slide='{esc(n)}' title='{esc(t)}'>▸&nbsp;ex</a>" for t, n, _ in children if example(t))
+    marks = "".join(f"<a class='ov-ex' data-go-slide='{esc(n)}' title='{esc(t)}'>▸&nbsp;example</a>" for t, n, _ in children if example(t))
     rows += f"<div class='ov-r ov-d{depth}'><a data-go-slide='{esc(name)}'>{esc(text)}</a>{marks}</div>"
     rows += overlay_tree([child for child in children if not example(child[0])], depth + 1)
     if depth == 0:
@@ -841,7 +842,9 @@ def render_stage(step, base, outline=None):
     trail = " › ".join(f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>" for text, name in step["crumbs"])
     # A text slide shows its own heading as its first item: keep the topic line for the others.
     topic = "" if step["slide"].get("heading") and step.get("diagram") is None and not step.get("code") else step["section"][1]
-    section = (f"<div class='section has-topic crumbs'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
+    # From 4 levels on, the trail would wrap: a smaller font keeps it on one line.
+    deep = " deep" if len(step["crumbs"]) >= 4 else ""
+    section = (f"<div class='section has-topic crumbs{deep}'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
                + (f"<div class='topic'>{esc(topic)}</div>" if topic else "") + "</div>")
   if step.get("diagram") is not None:
     # The `heading` takes the topic line: the topic was already announced by its divider.
