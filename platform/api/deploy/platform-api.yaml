@@ -49,13 +49,17 @@ rules:
   - apiGroups: [catalog.platform.wasp.silvios.me]
     resources: [versions]
     verbs: [get, list, watch]
-  # Workload Instances (ADR 0033): the API writes only revisions; the workload provider keeps the instances.
+  # Workload Instances (ADR 0033): the API writes revisions (and routes, #344); the workload provider keeps the instances.
   - apiGroups: [platform.wasp.silvios.me]
     resources: [workloadrevisions]
     verbs: [get, list, watch, create]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [workloadinstances]
     verbs: [get, list, watch]
+  # The route of each component (#344): written whole on every PUT; the workload provider keeps its status.
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadroutes]
+    verbs: [get, list, watch, create, update, delete]
   # The environment layer of the binding policy (#305); the platform default is read only.
   - apiGroups: [platform.wasp.silvios.me]
     resources: [bindingpolicies]

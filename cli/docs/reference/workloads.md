@@ -45,14 +45,14 @@ The `workload` provider renders a Deployment and a Service named after the insta
 
 | Access | Who |
 |---|---|
-| `deploy`, `rollback`, `remove`, `apply` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
+| `deploy`, `rollback`, `remove`, `apply`, `route` | access to the environment (owner, a team it is shared with, `platform-admins`) **and** the component's owner team or `platform-admins` |
 | `list`, `get`, `history` | access to the environment |
 
 Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variables`, `resources`, `livenessProbe`/`readinessProbe` with `httpGet`) and `service.ports`. Placeholders: `${metadata.<key>}` and `${resources.<name>.<key>}` (see [Resources](#resources)); any other field is `UnsupportedSpec`. The image must be pullable by the vcluster without credentials.
 
 ## Instances
 
-`deploy --instance <instance>` runs another instance of the component next to the default one, as the shared sandbox of a pull request does: the stable version and the version of a branch side by side, against the same services. Each instance has a Deployment and a Service of its own, `<instance>`; the Service of the component selects `app.kubernetes.io/instance: <component>` too, so an extra instance gets no traffic from it. Routing by header between them is phase 3. Its resources are its own as well: a `provision` resource is a database per instance (`<instance>-<resource>-<hash>`).
+`deploy --instance <instance>` runs another instance of the component next to the default one, as the shared sandbox of a pull request does: the stable version and the version of a branch side by side, against the same services. Each instance has a Deployment and a Service of its own, `<instance>`; the Service of the component selects `app.kubernetes.io/instance: <component>` too, so an extra instance gets no traffic from it until a [route](#route) sends it some. Its resources are its own as well: a `provision` resource is a database per instance (`<instance>-<resource>-<hash>`).
 
 An instance runs one component for as long as its history lives: the first deploy names it, and a deploy or a plan that names another component is refused (`409`). An extra instance cannot take the name of another component of the catalog (`409`): its Service would answer for that component (`http://<component>`) in the environment.
 
@@ -104,7 +104,33 @@ The mode and the class of a resource never change in place: a deploy that would 
 
 ## list and get
 
-`list` prints one line per instance: `WORKLOAD`, `COMPONENT`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running) and `URL`. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
+`list` prints one line per instance: `WORKLOAD`, `COMPONENT`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running), `TRAFFIC` and `URL`. `TRAFFIC` is what the [route](#route) of the component sends to the instance: `x-sandbox=pr-42` (a header), `baggage sandbox=pr-42`, `10%` (its weight), several joined by `, `; `default` on the main instance when it only takes what no rule matched; `—` without a route. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the address inside the vcluster (`http://<instance>.apps:<port>`); from your machine, `kubectl port-forward` with the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
+
+## route
+
+Splits the calls made to a component's Service (`http://<component>`) among its instances in an environment. A route is one object per component and environment, a `WorkloadRoute` named `<environment>.<component>`, with an ordered list of rules; the `workload` provider turns it into a Gateway API `HTTPRoute` (GAMMA, `parentRef` on the Service `<component>`) in the namespace `apps` of the vcluster, which the environment's Istio applies. A call that no rule matches goes to the main instance, `<component>`.
+
+| Option | Rule |
+|---|---|
+| `--header name=value --to <instance>` | calls with the header go to the instance |
+| `--baggage key=value --to <instance>` | calls whose `baggage` header (OpenTelemetry Baggage) has the entry go to the instance |
+| `--weight n --to <instance>` | `n`% of the calls that no header or baggage rule took go to the instance; the main instance takes the rest |
+| `--clear` | removes the route |
+
+The CLI reads the route (`GET /v1/environments/{environment}/workloads/routes/{component}`), changes one rule and writes the whole list back (`PUT`, `{"rules": [...]}`); `--clear` is a `DELETE`. A header or baggage rule replaces the one with the same match (header names are case-insensitive); a weight keeps the share of the other instances and gives the rest to the main one, and `--weight 0` takes the instance out. The write is last-write-wins: two people changing the route of the same component at the same time keep only the second one's rules.
+
+Header names take letters, digits and `-`; values and baggage keys letters, digits, `.`, `_` and `-`. The route takes effect in about a second; `GET` shows its status: `Accepted`, `Pending` (the mesh has not looked at it yet), `InstancePending` (an instance with no Service yet), `MeshNotInstalled` (an environment created before the mesh: create it again), `ApplyFailed`, or the reason the mesh gave.
+
+| Refusal | Code |
+|---|---|
+| `--to` an instance that does not run in the environment | `409` |
+| `--to` an instance of another component | `409` |
+| the main instance `<component>` does not run (the route attaches to its Service) | `409` |
+| weights that do not add up to 100, a weights rule that is not the last, two rules with the same match | `422` |
+| `remove` of an instance a rule sends traffic to, or of the main instance while the route exists | `409` |
+| `apply --prune` that would remove one of those | `409`, before any write |
+
+Only calls from pods in the namespace `apps` go through the mesh, and a header only travels down a chain of calls when each service passes it on. Traffic from outside the environment is not routed.
 
 ## history
 
@@ -122,7 +148,7 @@ Writes a new revision (`action: rollback`, `rollbackOf: <n>`) with the version a
 
 ## remove
 
-Writes a revision `action: remove`: the provider deletes the Deployment and the Service from the vcluster, the `ResourceRequest`s of the instance (the Forager undoes each resource: a provisioned Postgres goes with its data), then the `WorkloadInstance`. The revisions stay until the environment is deleted, so `history` still shows them and `rollback` cannot target the remove itself. A later `deploy` starts the instance again, with the next revision number. With `--wait`: `✓ <instance>@<environment> revision <n>: removed from <environment>`. `404` when the environment has no such workload.
+Writes a revision `action: remove`: the provider deletes the Deployment and the Service from the vcluster, the `ResourceRequest`s of the instance (the Forager undoes each resource: a provisioned Postgres goes with its data), then the `WorkloadInstance`. The revisions stay until the environment is deleted, so `history` still shows them and `rollback` cannot target the remove itself. A later `deploy` starts the instance again, with the next revision number. With `--wait`: `✓ <instance>@<environment> revision <n>: removed from <environment>`. `404` when the environment has no such workload; `409` while a [route](#route) sends traffic to it, or when it is the main instance of a route.
 
 ## apply
 

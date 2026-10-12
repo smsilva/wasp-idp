@@ -5,9 +5,9 @@ the build. spec validate runs the same gate as the build on a local file, before
 Instance is a Workload Spec live in an environment, as a Helm release is a chart installed: each deploy
 is a new revision, and its short name is <instance>@<environment>. The instance is named after its
 component by default; an extra one (--instance, #294) runs another version of the same component next
-to it, with a Service of its own and no traffic from the component's. apply takes the plan of an
-environment, a file with every instance it runs, and writes a revision for each one that changes, as
-helmfile does for releases.
+to it, with a Service of its own and no traffic from the component's until a route sends some (route,
+#344: by header, by baggage or by weight). apply takes the plan of an environment, a file with every
+instance it runs, and writes a revision for each one that changes, as helmfile does for releases.
 """
 import time
 from pathlib import Path
@@ -346,8 +346,8 @@ def list_(
     print_json(items)
     return
   print_table(
-    ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "URL"],
-    [[item["name"], item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("url") or "—"] for item in items],
+    ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"],
+    [[item["name"], item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("traffic") or "—", item.get("url") or "—"] for item in items],
   )
 
 
@@ -375,6 +375,7 @@ def get_(
     ("image", item.get("image")),
     ("replicas", _replicas(item)),
     ("revision", item.get("revision")),
+    ("traffic", item.get("traffic")),
     ("url", item.get("url")),
     ("message", item.get("message")),
   ):
@@ -407,3 +408,112 @@ def history(
     ["WORKLOAD", "REVISION", "ACTION", "VERSION", "STATUS", "BY", "CREATED"],
     [[f"{item['instance']}@{item['environment']}", str(item["revision"]), item["action"], item.get("version") or "—", item["status"], item.get("requestedBy") or "—", item.get("createdAt") or "—"] for item in items],
   )
+
+
+def _pair(value: str, option: str) -> tuple[str, str]:
+  key, sep, val = value.partition("=")
+  if not sep or not key or not val:
+    fail(f"{option} takes key=value, e.g. {option} x-sandbox=pr-42")
+  return key, val
+
+
+def _match_key(rule: dict) -> tuple | None:
+  """What a rule matches on; header names are case-insensitive. None for the weights rule."""
+  match = rule.get("match") or {}
+  if match.get("header"):
+    return ("header", match["header"]["name"].lower(), match["header"]["value"])
+  if match.get("baggage"):
+    return ("baggage", match["baggage"]["key"], match["baggage"]["value"])
+  return None
+
+
+def routed_rules(rules: list[dict], component: str, to: str, header: tuple[str, str] | None = None, baggage: tuple[str, str] | None = None, weight: int | None = None) -> list[dict]:
+  """The rules after one change: a match rule replaces the one with the same match (header names are
+  case-insensitive); a weight sets the share of one instance in the weights rule (the last), and the
+  main instance takes the rest. Weight 0 takes the instance out, and a weights rule left with the main
+  instance alone goes away."""
+  if weight is None:
+    match = {"header": {"name": header[0], "value": header[1]}} if header else {"baggage": {"key": baggage[0], "value": baggage[1]}}
+    new = {"match": match, "to": to}
+    kept = [rule for rule in rules if "weights" not in rule and _match_key(rule) != _match_key(new)]
+    # The weights rule stays the last one.
+    return [*kept, new, *(rule for rule in rules if "weights" in rule)]
+  if to == component:
+    fail(f"--weight sets the share of another instance of {component}: {component} takes the rest")
+  current = next((dict(rule["weights"]) for rule in rules if "weights" in rule), {})
+  current.pop(component, None)
+  if weight:
+    current[to] = weight
+  else:
+    current.pop(to, None)
+  others = sum(current.values())
+  if others > 100:
+    fail(f"the weights of the other instances add up to {others}%, more than 100%")
+  kept = [rule for rule in rules if "weights" not in rule]
+  if not current:
+    return kept
+  weights = dict(sorted(current.items()))
+  if others < 100:
+    weights[component] = 100 - others
+  return [*kept, {"weights": weights}]
+
+
+def _rule_text(rule: dict) -> str:
+  match = rule.get("match") or {}
+  if match.get("header"):
+    return f"{match['header']['name']}={match['header']['value']} → {rule['to']}"
+  if match.get("baggage"):
+    return f"baggage {match['baggage']['key']}={match['baggage']['value']} → {rule['to']}"
+  return " · ".join(f"{instance} {weight}%" for instance, weight in rule["weights"].items())
+
+
+@app.command("route")
+def route(
+  component: Annotated[str, typer.Option(help="Component whose traffic to route; the route attaches to the Service of its main instance.")],
+  environment: Annotated[str, typer.Option(help="Environment of the instances.")],
+  to: Annotated[str | None, typer.Option(help="Instance of the component that takes the matching traffic.")] = None,
+  header: Annotated[str | None, typer.Option(help="name=value: requests with this header go to --to.")] = None,
+  baggage: Annotated[str | None, typer.Option(help="key=value: requests with this OpenTelemetry Baggage entry go to --to.")] = None,
+  weight: Annotated[int | None, typer.Option(min=0, max=100, help="Percent of the remaining traffic for --to; the main instance takes the rest, 0 takes --to out.")] = None,
+  clear: Annotated[bool, typer.Option("--clear", help="Remove the route: every request goes to the main instance.")] = False,
+  output: OutputOption = Format.table,
+):
+  """Route the traffic to a component among its instances: by header, by baggage, or by weight."""
+  client = _client()
+  if clear:
+    if any(value is not None for value in (to, header, baggage, weight)):
+      fail("--clear takes no --to, --header, --baggage nor --weight")
+    try:
+      result = client.delete_workload_route(environment, component)
+    except ApiError as error:
+      fail(str(error))
+    if output == Format.json:
+      print_json(result)
+    else:
+      success(f"route of {component} in {environment} cleared: every request goes to {component}")
+    return
+  if sum(value is not None for value in (header, baggage, weight)) != 1 or to is None:
+    fail("give --to and one of --header, --baggage or --weight (or --clear)")
+  try:
+    current = client.get_workload_route(environment, component)
+    # Last write wins: a change made by someone else between this read and the write below is lost.
+    rules = routed_rules(
+      (current or {}).get("rules") or [], component, to,
+      header=_pair(header, "--header") if header else None,
+      baggage=_pair(baggage, "--baggage") if baggage else None,
+      weight=weight,
+    )
+    result = client.put_workload_route(environment, component, rules) if rules else client.delete_workload_route(environment, component)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(result)
+    return
+  if not rules:
+    success(f"route of {component} in {environment} cleared: every request goes to {component}")
+    return
+  success(f"route of {component} in {environment}:")
+  for rule in rules:
+    typer.echo(f"  {_rule_text(rule)}")
+  if "weights" not in rules[-1]:
+    typer.echo(f"  otherwise → {component}")

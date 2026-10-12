@@ -91,3 +91,4 @@ referência fica aqui.
   client to provide credentials". Para depurar de dentro, ou resolver a #56, ou criar uma access
   entry fora do Terraform (`aws eks create-access-entry` + `associate-access-policy`; não gera drift
   porque `var.access_entries` está vazio, então o `for_each` não gerencia nada).
+- **Como rotear o tráfego que entra num `Environment` de fora dele?** A rota de workload (#344, [ADR 0035](../../docs/adr/0035-istio-sidecar-per-environment-vcluster-gamma-routes.md)) é east-west: um `HTTPRoute` GAMMA vale só para chamadas feitas de dentro do namespace `apps` do vcluster. Quando houver entrada externa, o gateway de entrada precisa injetar ou validar o header (`x-sandbox`) ou o baggage, e decidir quem pode pedir um sandbox; sem isso, qualquer cliente externo escolheria a instância.

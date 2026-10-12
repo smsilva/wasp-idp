@@ -7,10 +7,11 @@ from . import auth, config
 
 
 class ApiError(Exception):
-  def __init__(self, message: str, plan: dict | None = None):
+  def __init__(self, message: str, plan: dict | None = None, status: int | None = None):
     super().__init__(message)
     # The catalog import answers 409/422 with the plan, so the CLI can show what happened.
     self.plan = plan
+    self.status = status
 
 
 class PlatformClient:
@@ -33,7 +34,7 @@ class PlatformClient:
     if response.status_code == 401:
       raise ApiError("not authenticated: run 'platform login'")
     if response.is_error:
-      raise ApiError(_detail(response), plan=_plan(response))
+      raise ApiError(_detail(response), plan=_plan(response), status=response.status_code)
     # 204 (delete) has no body.
     return response.json() if response.content else {}
 
@@ -136,6 +137,21 @@ class PlatformClient:
 
   def get_workload(self, environment: str, instance: str) -> dict:
     return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}")
+
+  def get_workload_route(self, environment: str, component: str) -> dict | None:
+    """The route of a component, or None when it has none."""
+    try:
+      return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/routes/{quote(component, safe='')}")
+    except ApiError as error:
+      if error.status == 404 and "no route of" in str(error):
+        return None
+      raise
+
+  def put_workload_route(self, environment: str, component: str, rules: list[dict]) -> dict:
+    return self._request("PUT", f"/v1/environments/{quote(environment, safe='')}/workloads/routes/{quote(component, safe='')}", json={"rules": rules})
+
+  def delete_workload_route(self, environment: str, component: str) -> dict:
+    return self._request("DELETE", f"/v1/environments/{quote(environment, safe='')}/workloads/routes/{quote(component, safe='')}")
 
   def workload_history(self, environment: str, instance: str | None = None, component: str | None = None) -> list[dict]:
     params = {key: value for key, value in (("instance", instance), ("component", component)) if value}
