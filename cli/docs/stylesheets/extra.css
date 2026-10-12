@@ -340,3 +340,39 @@
   border-radius: 0 0 8px 8px;
   padding-top: 1.2em;
 }
+
+/* Hand-drawn SVG diagrams (reference/forager.md): colors from the Material scheme, so both themes work. */
+.md-typeset .forager-figure {
+  --fg-accent: var(--md-typeset-a-color);
+  --fg-accent-soft: color-mix(in srgb, var(--md-typeset-a-color) 12%, var(--md-default-bg-color));
+  --fg-panel: var(--md-default-bg-color);
+  --fg-frame: var(--md-code-bg-color);
+  --fg-line: var(--md-default-fg-color--lighter);
+  --fg-ink: var(--md-default-fg-color);
+  --fg-muted: var(--md-default-fg-color--light);
+  --fg-pending: var(--t-val);
+  margin: 1.5em 0;
+}
+.md-typeset .forager-figure .forager-scroll { overflow-x: auto; border: 1px solid var(--fg-line); border-radius: 8px; background: var(--fg-panel); }
+.md-typeset .forager-figure svg { display: block; width: 100%; min-width: 860px; height: auto; }
+.md-typeset .forager-figure figcaption { max-width: none; text-align: left; font-style: normal; color: var(--fg-muted); }
+.forager-figure svg text { font-family: var(--md-text-font-family); fill: var(--fg-ink); }
+.forager-figure .frame { fill: var(--fg-frame); stroke: var(--fg-line); }
+.forager-figure .ns { fill: none; stroke: var(--fg-line); stroke-dasharray: 4 4; }
+.forager-figure .box { fill: var(--fg-panel); stroke: var(--fg-line); stroke-width: 1.2; }
+.forager-figure .box.hot { fill: var(--fg-accent-soft); stroke: var(--fg-accent); stroke-width: 2; }
+.forager-figure .box.todo { stroke: var(--fg-pending); stroke-dasharray: 5 4; }
+.forager-figure .t { font-size: 13.5px; font-weight: 600; }
+.forager-figure .s { font-size: 11.5px; fill: var(--fg-muted); }
+.forager-figure .m { font-family: var(--md-code-font-family); font-size: 11px; }
+.forager-figure .m.dim { fill: var(--fg-muted); }
+.forager-figure .lbl { font-size: 11px; fill: var(--fg-muted); }
+.forager-figure .lbl.hot { fill: var(--fg-accent); font-weight: 600; }
+.forager-figure .cap { font-family: var(--md-code-font-family); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; fill: var(--fg-muted); }
+.forager-figure .cap.todo { fill: var(--fg-pending); }
+.forager-figure .panel-title { font-size: 17px; font-weight: 700; }
+.forager-figure .edge { fill: none; stroke: var(--fg-muted); stroke-width: 1.4; }
+.forager-figure .edge.hot { stroke: var(--fg-accent); stroke-width: 2; }
+.forager-figure .edge.dash { stroke-dasharray: 5 4; }
+.forager-figure .head { fill: var(--fg-muted); }
+.forager-figure .head.hot { fill: var(--fg-accent); }

@@ -15,6 +15,7 @@ Look up a command, a flag or a status. To learn the CLI by doing, start with the
 | [SCM connections](scm-connections.md) | `platform scm connection …` |
 | [Builds](builds.md) | `platform build …`, the build contract with the CI |
 | [Workloads](workloads.md) | `platform workload spec …` |
+| [The Forager](forager.md) | no command: how a deploy gets its database, with diagrams |
 | [JSON output](json-output.md) | `--output json` |
 | [Under the hood](under-the-hood.md) | CRDs, journal, ports |
 | [Tear down](teardown.md) | removing everything |
