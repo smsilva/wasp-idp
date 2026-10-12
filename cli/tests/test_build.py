@@ -28,7 +28,8 @@ RESULT = {"version": "0.3.0-greetings.1a2b3c4", "image": "ghcr.io/wasp-foundry/g
 APP_SPEC = {"resources": [{"name": "db", "type": "postgres"}, {"name": "dns", "type": "dns"}, {"name": "route", "type": "route"}]}
 RUNNING = build(commit=COMMIT, run_url="https://github.com/wasp-foundry/greeting-api/actions/runs/1",
                 conditions=[condition("Dispatched"), condition("Running"), condition("Ready", False, "Building")])
-DONE = build("ready", commit=COMMIT, result=RESULT, app_spec=APP_SPEC, conditions=[condition("Ready", True, "Registered")])
+DONE = {**build("ready", commit=COMMIT, result=RESULT, app_spec=APP_SPEC, conditions=[condition("Ready", True, "Registered")]),
+        "registry": "ghcr-wasp-foundry", "image": "ghcr.io/wasp-foundry/greeting-api"}
 
 
 @pytest.fixture
@@ -43,7 +44,7 @@ def api(monkeypatch):
       return httpx.Response(202, json=build())
     if request.url.path == "/v1/versions":
       items = [
-        {"version": "0.3.0-greetings.1a2b3c4", "branch": "feat/greetings", "createdAt": "2026-10-11T17:47:40Z"},
+        {"version": "0.3.0-greetings.1a2b3c4", "branch": "feat/greetings", "registry": "ghcr-wasp-foundry", "createdAt": "2026-10-11T17:47:40Z"},
         {"version": "0.2.0", "branch": "main", "createdAt": "2026-10-10T10:00:00Z"},
       ]
       return httpx.Response(200, json={"items": items})
@@ -76,8 +77,27 @@ def test_create_wait_prints_the_deck_lines(api):
   assert result.output.splitlines() == [
     "building from feat/greetings @ 1a2b3c4 …",
     "✓ app-spec.yaml valid · db (postgres), dns, route",
-    "✓ image greeting-api:0.3.0-greetings.1a2b3c4 pushed to the registry",
+    "✓ image greeting-api:0.3.0-greetings.1a2b3c4 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/greeting-api)",
   ]
+
+
+def test_create_sends_the_registry(api):
+  result = run("create", "--component", "greeting-api", "--branch", "main", "--registry", "ghcr-wasp-foundry")
+  assert result.exit_code == 0, result.output
+  assert json.loads(api["requests"][0].content) == {"component": "greeting-api", "branch": "main", "registry": "ghcr-wasp-foundry"}
+
+
+def test_get_names_the_registry(api):
+  api["polls"] = [DONE]
+  result = run("get", "greeting-api-a1b2c3")
+  assert "registry      ghcr-wasp-foundry (ghcr.io/wasp-foundry/greeting-api)" in result.output
+
+
+def test_workflow_outdated_stops_the_wait(api):
+  api["polls"] = [build("WorkflowOutdated", conditions=[condition("Ready", False, "WorkflowOutdated", ".github/workflows/platform-build.yaml has no input 'image'")])]
+  result = run("create", "--component", "greeting-api", "--branch", "main", "--wait")
+  assert result.exit_code == 1
+  assert "WorkflowOutdated: .github/workflows/platform-build.yaml has no input 'image'" in result.output
 
 
 def test_wait_shows_the_spec_errors(api):
@@ -118,8 +138,10 @@ def test_list_reads_the_version_index(api):
   assert api["requests"][0].url.path == "/v1/versions"
   assert api["requests"][0].url.params["component"] == "greeting-api"
   lines = result.output.splitlines()
-  assert lines[0].split() == ["VERSION", "BRANCH", "CREATED"]
-  assert lines[1].split() == ["0.3.0-greetings.1a2b3c4", "feat/greetings", "2026-10-11T17:47:40Z"]
+  assert lines[0].split() == ["VERSION", "BRANCH", "REGISTRY", "CREATED"]
+  assert lines[1].split() == ["0.3.0-greetings.1a2b3c4", "feat/greetings", "ghcr-wasp-foundry", "2026-10-11T17:47:40Z"]
+  # Indexed before #365: no registry recorded.
+  assert lines[2].split() == ["0.2.0", "main", "—", "2026-10-10T10:00:00Z"]
 
 
 def test_get_shows_the_steps(api):

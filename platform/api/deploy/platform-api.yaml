@@ -21,6 +21,10 @@ rules:
   - apiGroups: [platform.wasp.silvios.me]
     resources: [environments/status]
     verbs: [get, update, patch]
+  # OCI registries (ADR 0037): platform-admins write them; update keeps at most one default.
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [ociregistries]
+    verbs: [get, list, watch, create, update, delete]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [cloudaccounts]
     verbs: [get, list, watch, create, update, delete] # update: verify-requested-at (ADR 0029)

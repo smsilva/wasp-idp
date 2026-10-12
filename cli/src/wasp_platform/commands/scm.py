@@ -103,7 +103,7 @@ def add(
   if quiet:
     print_json(connection)
   else:
-    _next_steps(connection)
+    _next_steps(connection, client)
 
 
 def _wait_ready(client: PlatformClient, name: str, timeout: int, quiet: bool) -> dict:
@@ -119,10 +119,11 @@ def _wait_ready(client: PlatformClient, name: str, timeout: int, quiet: bool) ->
   return connection
 
 
-def _next_steps(connection: dict) -> None:
+def _next_steps(connection: dict, client: PlatformClient | None = None) -> None:
   name = connection["name"]
   if connection["status"] == "ready":
     success(f"{name} ready ({connection['org']}, all repositories)")
+    _suggest_registry(connection, client)
     return
   if connection.get("installUrl"):
     typer.echo(f"→ install it on the org: {connection['installUrl']}")
@@ -131,6 +132,20 @@ def _next_steps(connection: dict) -> None:
     typer.echo(f"{name}: {connection['status']}")
     if connection.get("message"):
       typer.echo(f"  {connection['message']}")
+
+
+def _suggest_registry(connection: dict, client: PlatformClient | None) -> None:
+  """The GHCR of the org, where its repos' CI pushes (ADR 0037): a hint when no registry has it yet."""
+  org = (connection.get("org") or "").lower()
+  if client is None or connection.get("vendor") != "github" or not org:
+    return
+  try:
+    registries = client.list_registries()
+  except ApiError:
+    return  # a hint, never a failure
+  if not any(item.get("address") == f"ghcr.io/{org}" for item in registries):
+    default = "" if any(item.get("default") for item in registries) else " --default"
+    typer.echo(f"→ register its GHCR, where builds of {org} repos push: platform registry add ghcr-{org} --scm-connection {connection['name']}{default}")
 
 
 @connection_app.command("list")
@@ -188,7 +203,7 @@ def verify(
   if output == Format.json:
     print_json(connection)
   elif wait:
-    _next_steps(connection)
+    _next_steps(connection, client)
   else:
     typer.echo(f"verification of {name} requested: platform scm connection get {name}")
 

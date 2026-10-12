@@ -22,6 +22,10 @@ def version(component, number, created, commit="a" * 40):
   }}
 
 
+def registry(name, namespace, default=False):
+  return {"metadata": {"name": name}, "spec": {"vendor": "ghcr", "host": "ghcr.io", "namespace": namespace, "default": default, "pull": {"mode": "anonymous"}}}
+
+
 @pytest.fixture
 def state():
   state = FakeState()
@@ -30,6 +34,9 @@ def state():
   state.create("components", {"metadata": {"name": "no-repo"}, "spec": {"owner": "team-alpha", "system": "greeter"}})
   state.create("scmconnections", connection("wasp-foundry", "wasp-foundry", ready=True))
   state.create("scmconnections", connection("other", "other-org", ready=False))
+  state.create("ociregistries", registry("ghcr-wasp-foundry", "wasp-foundry", default=True))
+  state.create("ociregistries", registry("ghcr-smsilva", "smsilva"))
+  state.create("ociregistries", registry("ghcr-other-org", "other-org"))
   return state
 
 
@@ -91,7 +98,7 @@ def test_create_passes_the_version(client, state, user):
 @pytest.mark.parametrize("body,status,message", [
   ({"component": "nope", "branch": "main"}, 422, "component not found"),
   ({"component": "no-repo", "branch": "main"}, 422, "has no repo"),
-  ({"component": "elsewhere", "branch": "main"}, 409, "is not ready"),
+  ({"component": "elsewhere", "branch": "main", "registry": "ghcr-other-org"}, 409, "is not ready"),
   ({"component": "greeting-api", "branch": "main", "version": "v1.0"}, 422, "major"),
   ({"component": "greeting-api", "branch": "feat/../x"}, 422, "branch"),
   ({"component": "greeting-api", "branch": "-x"}, 422, "branch"),
@@ -105,7 +112,7 @@ def test_refusals_create_nothing(client, state, user, body, status, message):
 
 def test_no_connection_for_the_org(client, state, user):
   state.delete("scmconnections", "other")
-  response = client.post("/v1/builds", json={"component": "elsewhere", "branch": "main"}, headers=user)
+  response = client.post("/v1/builds", json={"component": "elsewhere", "branch": "main", "registry": "ghcr-other-org"}, headers=user)
   assert response.status_code == 409
   assert "no scm connection for the org 'other-org'" in response.text
 
@@ -163,3 +170,31 @@ def test_reads_stay_open_to_any_signed_in_user(client, state, user, outsider):
   name = client.post("/v1/builds", json={"component": "greeting-api", "branch": "main"}, headers=user).json()["name"]
   assert client.get(f"/v1/builds/{name}", headers=outsider).status_code == 200
   assert client.get("/v1/versions", params={"component": "greeting-api"}, headers=outsider).status_code == 200
+
+
+def test_the_build_names_its_registry_and_image(client, state, user):
+  name = client.post("/v1/builds", json={"component": "greeting-api", "branch": "main"}, headers=user).json()["name"]
+  spec = state.get("builds", name)["spec"]
+  assert (spec["registry"], spec["image"]) == ("ghcr-wasp-foundry", "ghcr.io/wasp-foundry/greeting-api")
+  view = client.get(f"/v1/builds/{name}", headers=user).json()
+  assert (view["registry"], view["image"]) == ("ghcr-wasp-foundry", "ghcr.io/wasp-foundry/greeting-api")
+
+
+@pytest.mark.parametrize("body,status,message", [
+  ({"registry": "nowhere"}, 422, "registry 'nowhere' not found"),
+  ({"registry": "ghcr-smsilva"}, 422, "registry ghcr-smsilva (ghcr.io/smsilva) is not writable by the CI of wasp-foundry/greeting-api: GITHUB_TOKEN pushes only to ghcr.io/wasp-foundry (RegistryNotWritableByCI)"),
+  ({"registry": "Bad"}, 422, "registry"),
+])
+def test_registry_refusals(client, state, user, body, status, message):
+  response = client.post("/v1/builds", json={"component": "greeting-api", "branch": "main", **body}, headers=user)
+  assert response.status_code == status, response.text
+  assert message in response.text
+  assert state.list("builds") == []
+
+
+def test_no_default_registry(client, state, user):
+  state.delete("ociregistries", "ghcr-wasp-foundry")
+  response = client.post("/v1/builds", json={"component": "greeting-api", "branch": "main"}, headers=user)
+  assert response.status_code == 409
+  assert "no default registry (NoDefaultRegistry)" in response.text
+  assert state.list("builds") == []

@@ -1,0 +1,93 @@
+# An OCI registry of the platform (ADR 0037, #365): where a build pushes (images, and later Helm charts
+# or Crossplane packages; the Version says what was published). Written by the Platform API
+# (platform-admins); the registry controller checks that <host>/v2/ answers and sets Ready.
+# At most one is spec.default: the registry build create uses without --registry.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ociregistries.platform.wasp.silvios.me
+spec:
+  group: platform.wasp.silvios.me
+  scope: Namespaced
+  names:
+    kind: OCIRegistry
+    listKind: OCIRegistryList
+    plural: ociregistries
+    singular: ociregistry
+    shortNames: [ocireg]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Vendor
+          type: string
+          jsonPath: .spec.vendor
+        - name: Host
+          type: string
+          jsonPath: .spec.host
+        - name: Namespace
+          type: string
+          jsonPath: .spec.namespace
+        - name: Default
+          type: boolean
+          jsonPath: .spec.default
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [vendor, host, namespace]
+              x-kubernetes-validations:
+                - rule: self.vendor != 'ghcr' || self.host == 'ghcr.io'
+                  message: a ghcr registry is ghcr.io
+              properties:
+                vendor:
+                  description: ghcr only in this slice; harbor, ecr, acr, gar and generic come with their push and pull (#367, #369).
+                  type: string
+                  enum: [ghcr]
+                host:
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)+(:[0-9]{1,5})?$'
+                namespace:
+                  description: The org (GHCR), project (Harbor) or repository prefix (ECR) the images go under.
+                  type: string
+                  pattern: '^[a-z0-9]([-a-z0-9_.]{0,61}[a-z0-9])?$'
+                default:
+                  description: What build create uses without --registry; the API keeps at most one.
+                  type: boolean
+                pull:
+                  type: object
+                  properties:
+                    mode:
+                      description: anonymous only in this slice (#367 adds issued and static).
+                      type: string
+                      enum: [anonymous]
+            status:
+              type: object
+              properties:
+                conditions:
+                  description: 'Ready: True with Verified; False with Unreachable.'
+                  type: array
+                  items:
+                    type: object
+                    required: [type, status]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time

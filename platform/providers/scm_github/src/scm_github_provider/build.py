@@ -27,6 +27,7 @@ STEPS = ("Dispatched", "Running", "Succeeded", "SpecValidated")
 # Ready=False with these reasons does not heal by trying again: the build stops until it is removed.
 FINAL = {
   "WorkflowNotFound", "BranchNotFound", "BuildFailed", "ContractViolation", "InvalidSpec", "VersionConflict", "GitHubRejected",
+  "WorkflowOutdated",
 }
 # While the run is queued or in progress: Ready=False with this reason, and the next pass looks again.
 BUILDING = "Building"
@@ -112,6 +113,9 @@ def check_result(result: dict, spec: dict, component: str) -> dict:
     errors.append(f"requestId '{result['requestId']}' is not this build's")
   if result["branch"] != spec["branch"]:
     errors.append(f"branch '{result['branch']}' is not '{spec['branch']}'")
+  # The registry the build asked for (ADR 0037): an image pushed anywhere else is not this build's.
+  if spec.get("image") and result["image"] != spec["image"]:
+    errors.append(f"image is '{result['image']}', the build asked for '{spec['image']}' (registry {spec.get('registry')})")
   if errors:
     raise Outcome("ContractViolation", f"{RESULT_FILE}: {'; '.join(errors)}")
   return {field: result[field] for field in ("version", "image", "digest", "commit", "branch", "requestId")}
@@ -243,9 +247,14 @@ class BuildReconciler:
       inputs = {"request-id": spec["requestId"]}
       if spec.get("version"):
         inputs["version"] = spec["version"]
+      # Always sent when the build names one: the contract has one shape (ADR 0037).
+      if spec.get("image"):
+        inputs["image"] = spec["image"]
       try:
         installation.dispatch(repo, WORKFLOW, spec["branch"], inputs)
       except GitHubError as error:
+        if error.status == 422 and "Unexpected inputs" in str(error) and "image" in str(error):
+          raise Outcome("WorkflowOutdated", f".github/workflows/{WORKFLOW} has no input 'image' (GitHub: {error}): update it from its template")
         if error.status == 422:  # no workflow_dispatch trigger, or inputs the workflow does not declare
           raise Outcome("ContractViolation", f"{WORKFLOW} refused the dispatch: {error}")
         raise
@@ -324,6 +333,7 @@ class BuildReconciler:
         "component": spec["component"],
         "version": result["version"],
         "image": result["image"],
+        **({"registry": spec["registry"]} if spec.get("registry") else {}),
         "digest": result["digest"],
         "commit": result["commit"],
         "branch": result["branch"],

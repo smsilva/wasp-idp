@@ -196,6 +196,21 @@ class PlatformClient:
   def remove_cloud_account(self, name: str) -> dict:
     return self._request("DELETE", f"/v1/cloud/accounts/{name}")
 
+  def add_registry(self, body: dict) -> dict:
+    return self._request("POST", "/v1/registries", json=body)
+
+  def list_registries(self) -> list[dict]:
+    return self._request("GET", "/v1/registries")["items"]
+
+  def get_registry(self, name: str) -> dict:
+    return self._request("GET", f"/v1/registries/{name}")
+
+  def set_default_registry(self, name: str) -> dict:
+    return self._request("PUT", f"/v1/registries/{name}/default")
+
+  def remove_registry(self, name: str) -> dict:
+    return self._request("DELETE", f"/v1/registries/{name}")
+
   def import_catalog(self, documents: list[dict], dry_run: bool, plan_hash: str | None = None, source: dict | None = None, templates_only: bool = False) -> dict:
     body = {"documents": documents, "dryRun": dry_run, "planHash": plan_hash}
     if source:

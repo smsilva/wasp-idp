@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import binding_policies, builds, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, scm, templates, teams as team_routes, workload_specs, workloads
+from . import binding_policies, builds, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, registries, scm, templates, teams as team_routes, workload_specs, workloads
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -55,6 +55,7 @@ CAPABILITIES = {
   "catalog": "Active",
   "scm": "Active",
   "build": "NoProviderForCapability",
+  "registry": "Active",
   "workload": "Active",
   # Active once the aws_account controller publishes the base identity (ADR 0029).
   cloud_accounts.CAPABILITY: "NoProviderForCapability",
@@ -264,6 +265,7 @@ def create_app(
   app.include_router(templates.router(state, journal, teams))
   app.include_router(components.router(state, journal, teams))
   app.include_router(builds.router(state, journal))
+  app.include_router(registries.router(state, journal))
   app.include_router(workload_specs.router(state))
   app.include_router(workloads.router(state, journal))
   app.include_router(binding_policies.router(state, journal))

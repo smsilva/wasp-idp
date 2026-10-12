@@ -17,9 +17,14 @@ templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
 schema, a name already in the index, a connection that is not ready), component
-clone --https of a public repo in the index, and of a name outside it, the
-refusals of build create (outside the owner team, unknown component, a malformed
-version, an org with no connection), the Workload Spec (spec validate of a
+clone --https of a public repo in the index, and of a name outside it, the OCI
+registries (add refused to a non-admin, NoDefaultRegistry when the cluster has no
+default, add with --vendor and --scm-connection, a non-ghcr.io host and a taken
+address refused, ready once /v2/ answers, set-default keeping one default, remove
+refused while a version is in it), the refusals of build create (outside the
+owner team, unknown component, a malformed version, an unknown registry, a GHCR
+of another org with RegistryNotWritableByCI, an org with no connection), the
+Workload Spec (spec validate of a
 valid and an invalid Score, spec get of a Version written by kubectl, refused outside the owner team,
 by version and by branch, and SpecNotIndexed for a Version without it), a Workload Instance
 (deploy of a public image by digest with --wait, list, get, history, rollback to the previous
@@ -69,6 +74,9 @@ component="smoke-component-${RANDOM}"
 taken_component="smoke-taken-${RANDOM}"
 clone_component="smoke-clone-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
+smoke_registry="smoke-reg-${RANDOM}"
+other_registry="smoke-reg-other-${RANDOM}"
+other_namespace="smoke-other-${RANDOM}"
 workload_component="smoke-workload-${RANDOM}"
 route_component="smoke-route-${RANDOM}"
 public_component="smoke-public-${RANDOM}"
@@ -155,6 +163,8 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
+  platform registry remove "${smoke_registry}" > /dev/null 2>&1 || true
+  platform registry remove "${other_registry}" > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" "${public_component}" --ignore-not-found > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component},${public_component})" > /dev/null 2>&1 || true
   # The database restored by hand for bind (#306): a run stopped mid-step leaves it, and the next one
@@ -442,6 +452,109 @@ test -f "${clone_directory}/details/catalog-info.yaml"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${clone_component}"
 expect_failure "platform catalog component list" platform catalog component clone "${component}"
 
+step "registry add|list|get|set-default|remove: the OCI registries builds push to (ADR 0037, #365)"
+# Registries of the smoke only: a GHCR of smoke-no-connection (the org of the build step below) and one
+# of another org. The default of the cluster, if any, is restored at the end.
+platform login --test-user
+expect_failure "requires group 'platform-admins'" \
+  platform registry add "${smoke_registry}" \
+    --vendor ghcr \
+    --namespace smoke-no-connection
+platform registry list > /dev/null
+platform login --test-admin
+previous_default="$(platform registry list --output json | jq --raw-output '.[] | select(.default) | .name')"
+if [[ -z "${previous_default}" ]]; then
+  # No default in this cluster: a build without --registry is refused before the connection is looked up.
+  kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${build_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${build_component}
+MANIFEST
+  expect_failure "NoDefaultRegistry" \
+    platform build create \
+      --component "${build_component}" \
+      --branch main
+else
+  echo "the cluster has a default registry (${previous_default}): NoDefaultRegistry is not checked"
+fi
+output="$(platform registry add "${smoke_registry}" \
+  --vendor ghcr \
+  --namespace smoke-no-connection \
+  --default)"
+echo "${output}"
+expect_output "registry ${smoke_registry} added (default) · ghcr.io/smoke-no-connection" "${output}"
+platform registry add "${other_registry}" \
+  --vendor ghcr \
+  --namespace "${other_namespace}"
+expect_failure "a ghcr registry is ghcr.io" \
+  platform registry add smoke-reg-bad \
+    --vendor ghcr \
+    --host registry.example.com \
+    --namespace acme
+expect_failure "is already registry '${smoke_registry}'" \
+  platform registry add smoke-reg-twice \
+    --vendor ghcr \
+    --namespace smoke-no-connection
+# --scm-connection fills ghcr.io/<org> from the connection added above (wasp-foundry): refused here
+# only when the cluster already has that address.
+if platform registry list --output json | jq --exit-status '.[] | select(.address == "ghcr.io/wasp-foundry")' > /dev/null; then
+  expect_failure "ghcr.io/wasp-foundry is already registry" \
+    platform registry add smoke-reg-from-connection \
+      --scm-connection "${connection}"
+else
+  output="$(platform registry add smoke-reg-from-connection --scm-connection "${connection}")"
+  expect_output "ghcr.io/wasp-foundry, pushed by the CI of wasp-foundry repos" "${output}"
+  platform registry remove smoke-reg-from-connection
+fi
+# The registry controller checks https://ghcr.io/v2/ (401 with a token challenge): ready.
+for attempt in $(seq 1 30); do
+  output="$(platform registry get "${smoke_registry}")"
+  grep --quiet "^${smoke_registry}: ready" <<< "${output}" && break
+  sleep 2
+done
+echo "${output}"
+expect_output "${smoke_registry}: ready" "${output}"
+expect_output "address   ghcr.io/smoke-no-connection" "${output}"
+output="$(platform registry list)"
+echo "${output}"
+expect_output "${other_registry}" "${output}"
+output="$(platform registry set-default "${other_registry}")"
+expect_output "${other_registry} is the default registry" "${output}"
+if [[ "$(platform registry list --output json | jq --raw-output '[.[] | select(.default) | .name] | join(",")')" != "${other_registry}" ]]; then
+  echo "expected ${other_registry} as the only default registry" >&2
+  exit 1
+fi
+platform registry set-default "${smoke_registry}" > /dev/null
+# A version in the registry keeps it.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${build_component}.0.0.1
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${build_component}
+spec:
+  component: ${build_component}
+  version: "0.0.1"
+  image: ghcr.io/smoke-no-connection/${build_component}
+  registry: ${other_registry}
+  digest: "sha256:$(printf 'c%.0s' {1..64})"
+  commit: "$(printf 'c%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-12T12:00:00Z"
+MANIFEST
+expect_failure "holds 1 version(s) of the index" \
+  platform registry remove "${other_registry}"
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me "${build_component}.0.0.1"
+
 step "build create: every refusal happens before GitHub (#287)"
 # The happy path dispatches a real workflow, so it stays in the manual walkthrough (Builds). The repo's
 # org has no connection here, so no request can reach GitHub, even with a ready one for wasp-foundry.
@@ -473,10 +586,21 @@ expect_failure "<major>.<minor>.<patch>" \
     --component "${build_component}" \
     --branch main \
     --version v1
+expect_failure "registry 'smoke-reg-missing' not found" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --registry smoke-reg-missing
+expect_failure "RegistryNotWritableByCI" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --registry "${other_registry}"
 expect_failure "no scm connection for the org 'smoke-no-connection'" \
   platform build create \
     --component "${build_component}" \
-    --branch main
+    --branch main \
+    --registry "${smoke_registry}"
 output="$(platform build list --component "${build_component}")"
 expect_output "VERSION" "${output}"
 if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
@@ -485,6 +609,11 @@ if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
   exit 1
 fi
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${build_component}"
+platform registry remove "${other_registry}"
+platform registry remove "${smoke_registry}"
+if [[ -n "${previous_default}" ]]; then
+  platform registry set-default "${previous_default}" > /dev/null
+fi
 
 step "workload spec validate|get: the Score gate and the spec of a version (#291)"
 # The seed Score, rendered: what a component created from python-service carries.

@@ -59,6 +59,7 @@ nav:
           - Create the App: walkthrough/scm-connection/create-app.md
           - Install on the org: walkthrough/scm-connection/install.md
           - Verify: walkthrough/scm-connection/verify.md
+          - Register the registry of the org: walkthrough/scm-connection/registry.md
           - The key stays off this machine: walkthrough/scm-connection/private-key.md
       - Components:
           - Create a component: walkthrough/components/create.md
@@ -98,6 +99,7 @@ nav:
       - Cloud accounts: reference/cloud-accounts.md
       - SCM connections: reference/scm-connections.md
       - Builds: reference/builds.md
+      - Registries: reference/registries.md
       - Workloads: reference/workloads.md
       - The Forager: reference/forager.md
       - JSON output: reference/json-output.md
