@@ -63,7 +63,8 @@ class FakeActions:
     self.calls.append(f"{method} {path}")
     for key, status in self.fail.items():
       if f"{method} {path}".endswith(key):
-        return httpx.Response(status, json={"message": "nope"})
+        status, message = status if isinstance(status, tuple) else (status, "nope")
+        return httpx.Response(status, json={"message": message})
     if request.url.host == "blob.test":
       return httpx.Response(200, content=self.artifacts[path.strip("/")])
     if path.endswith("/access_tokens"):
@@ -106,10 +107,12 @@ class FakeActions:
     return GitHubApp(app_id, key, transport=httpx.MockTransport(self.handler), base_url="https://api.github.test")
 
 
-def build(version=None, name="greeting-api-a1b2c3"):
+def build(version=None, name="greeting-api-a1b2c3", registry=None):
   spec = {"component": "greeting-api", "branch": "feat/greetings", "requestId": REQUEST_ID, "repo": REPO, "scmConnection": "wasp-foundry"}
   if version:
     spec["version"] = version
+  if registry:
+    spec["registry"], spec["image"] = registry
   return {"metadata": {"name": name, "uid": "uid-1"}, "spec": spec}
 
 
@@ -238,6 +241,37 @@ def test_missing_branch_is_branch_not_found(world):
 def test_a_workflow_without_the_inputs_breaks_the_contract(world):
   world.github.fail["/dispatches"] = 422
   assert ready(world.run()) == ("False", "ContractViolation")
+
+
+GHCR = ("ghcr-wasp-foundry", "ghcr.io/wasp-foundry/greeting-api")
+
+
+def test_the_image_of_the_registry_goes_to_the_workflow_and_the_version():
+  world = World(build(registry=GHCR))
+  world.run()
+  assert world.github.dispatches == [{"ref": "feat/greetings", "inputs": {"request-id": REQUEST_ID, "image": "ghcr.io/wasp-foundry/greeting-api"}}]
+  world.github.finish()
+  assert ready(world.run()) == ("True", "Registered")
+  assert world.versions.get("greeting-api.0.3.0-greetings.86a7c08")["spec"]["registry"] == "ghcr-wasp-foundry"
+
+
+def test_a_workflow_without_the_image_input_is_outdated():
+  world = World(build(registry=GHCR))
+  world.github.fail["/dispatches"] = (422, 'Unexpected inputs provided: ["image"]')
+  status = world.run()
+  assert ready(status) == ("False", "WorkflowOutdated")
+  assert "has no input 'image'" in status["conditions"][-1]["message"]
+  assert "update it from its template" in status["conditions"][-1]["message"]
+
+
+def test_an_image_pushed_elsewhere_breaks_the_contract():
+  world = World(build(registry=("ghcr-wasp-foundry", "ghcr.io/wasp-foundry/other")))
+  world.run()
+  world.github.finish()
+  status = world.run()
+  assert ready(status) == ("False", "ContractViolation")
+  assert "image is 'ghcr.io/wasp-foundry/greeting-api', the build asked for 'ghcr.io/wasp-foundry/other' (registry ghcr-wasp-foundry)" in status["conditions"][-1]["message"]
+  assert world.versions.get("greeting-api.0.3.0-greetings.86a7c08") is None
 
 
 def test_a_failed_run_is_build_failed_with_the_run_url(world):

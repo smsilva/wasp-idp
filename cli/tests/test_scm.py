@@ -19,12 +19,15 @@ class FakeApi:
     self.connections = {}
     self.requests = []
     self.script = []
+    self.registries = []
 
   def view(self, name):
     return dict(self.connections[name])
 
   def handler(self, request: httpx.Request) -> httpx.Response:
     self.requests.append(request)
+    if request.url.path == "/v1/registries":
+      return httpx.Response(200, json={"items": self.registries})
     parts = request.url.path.split("/")[4:]
     if parts == [] and request.method == "POST":
       body = json.loads(request.content)
@@ -123,6 +126,21 @@ def test_add_with_an_existing_app_sends_the_key(api, browser, tmp_path):
   body = json.loads(api.requests[0].content)
   assert (body["appId"], body["privateKeyPem"]) == (123456, PEM)
   assert "acme ready" in result.output
+  assert "→ register its GHCR, where builds of acme repos push: platform registry add ghcr-acme --scm-connection acme --default" in result.output
+
+
+def test_no_registry_hint_when_the_org_has_one(api):
+  api.connections["acme"] = {**installed(), "status": "ready"}
+  api.registries = [{"name": "ghcr-acme", "address": "ghcr.io/acme", "default": True}]
+  result = run("verify", "acme", "--wait")
+  assert result.exit_code == 0, result.output
+  assert "register its GHCR" not in result.output
+
+
+def test_registry_hint_without_default_flag_when_another_is_default(api):
+  api.connections["acme"] = {**installed(), "status": "ready"}
+  api.registries = [{"name": "ghcr-other", "address": "ghcr.io/other", "default": True}]
+  assert "platform registry add ghcr-acme --scm-connection acme\n" in run("verify", "acme", "--wait").output
 
 
 def test_add_needs_both_app_options(api):

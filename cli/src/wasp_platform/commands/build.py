@@ -16,7 +16,7 @@ app = typer.Typer(help="Builds: a branch of a component becomes a version in the
 # Ready=False with these reasons does not heal by waiting: --wait stops at once.
 FINAL = {
   "WorkflowNotFound", "BranchNotFound", "BuildFailed", "ContractViolation", "InvalidSpec", "VersionConflict", "GitHubRejected",
-  "ConnectionNotFound", "ConnectionNotReady", "CredentialMissing",
+  "ConnectionNotFound", "ConnectionNotReady", "CredentialMissing", "WorkflowOutdated",
 }
 
 
@@ -42,9 +42,10 @@ def summary(build: dict) -> list[str]:
   result = build["result"]
   resources = _resources(build)
   image = result["image"].rsplit("/", 1)[-1]
+  where = f"{build['registry']} ({result['image']})" if build.get("registry") else result["image"]
   return [
     f"app-spec.yaml valid · {resources}" if resources else "app-spec.yaml valid",
-    f"image {image}:{result['version']} pushed to the registry",
+    f"image {image}:{result['version']} pushed to {where}",
   ]
 
 
@@ -81,12 +82,13 @@ def create(
   component: Annotated[str, typer.Option(help="Component to build, from the index.")],
   branch: Annotated[str, typer.Option(help="Branch of the component's repo.")],
   version: Annotated[str | None, typer.Option(help="Version for the CI to use; by default the CI computes it from the Conventional Commits.")] = None,
+  registry: Annotated[str | None, typer.Option(help="Registry to push to (platform registry list); by default the default registry.")] = None,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the version is registered.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 1200,
   output: OutputOption = Format.table,
 ):
   """Build a branch: dispatch the repo's platform-build workflow and register the version."""
-  body = {"component": component, "branch": branch, "version": version}
+  body = {"component": component, "branch": branch, "version": version, "registry": registry}
   client = _client()
   try:
     build = client.create_build({key: value for key, value in body.items() if value is not None})
@@ -100,7 +102,7 @@ def create(
     for line in summary(build):
       success(line)
   else:
-    typer.echo(f"build {build['name']}: {component} from {branch} dispatched …")
+    typer.echo(f"build {build['name']}: {component} from {branch} dispatched, pushing to {build.get('registry') or '—'} …")
     typer.echo(f"follow it with: platform build get {build['name']}")
 
 
@@ -117,7 +119,7 @@ def list_(
   if output == Format.json:
     print_json(items)
     return
-  print_table(["VERSION", "BRANCH", "CREATED"], [[item["version"], item.get("branch") or "—", item.get("createdAt") or "—"] for item in items])
+  print_table(["VERSION", "BRANCH", "REGISTRY", "CREATED"], [[item["version"], item.get("branch") or "—", item.get("registry") or "—", item.get("createdAt") or "—"] for item in items])
 
 
 @app.command("get")
@@ -136,6 +138,7 @@ def get(name: str, output: OutputOption = Format.table):
     ("component", build.get("component")),
     ("branch", build.get("branch")),
     ("version", result.get("version") or build.get("requestedVersion")),
+    ("registry", f"{build['registry']} ({build.get('image')})" if build.get("registry") else None),
     ("commit", (build.get("commit") or "")[:7]),
     ("run", build.get("runUrl")),
   ):

@@ -18,6 +18,7 @@ from .auth import Principal, current_principal
 from .catalog import CREATED_BY_ANNOTATION, LABEL
 from .environments import ADMIN_GROUP
 from .journal import Journal
+from .registries import push_target
 from .scm import PLURAL as CONNECTIONS, status_of as connection_status
 from .state import GROUP, VERSION, AlreadyExists, NotFound
 
@@ -37,6 +38,7 @@ class BuildRequest(BaseModel):
   component: str
   branch: str
   version: str | None = None
+  registry: str | None = None
 
   @field_validator("component")
   @classmethod
@@ -50,6 +52,13 @@ class BuildRequest(BaseModel):
   def check_branch(cls, value: str) -> str:
     if not BRANCH.fullmatch(value) or ".." in value or "//" in value or value.endswith(("/", ".", ".lock")):
       raise ValueError("not a git branch name")
+    return value
+
+  @field_validator("registry")
+  @classmethod
+  def check_registry(cls, value: str | None) -> str | None:
+    if value is not None and not LABEL.fullmatch(value):
+      raise ValueError("a registry name: lowercase letters, digits and '-'")
     return value
 
   @field_validator("version")
@@ -79,6 +88,8 @@ def build_view(obj: dict) -> dict:
     "branch": spec.get("branch"),
     "requestedVersion": spec.get("version"),
     "repo": spec.get("repo"),
+    "registry": spec.get("registry"),
+    "image": spec.get("image"),
     "requestId": spec.get("requestId"),
     "status": state,
     "runUrl": status.get("runUrl"),
@@ -96,7 +107,7 @@ def version_view(obj: dict) -> dict:
   return {
     "kind": "Version",
     "name": obj["metadata"]["name"],
-    **{field: spec.get(field) for field in ("component", "version", "image", "digest", "commit", "branch", "createdAt", "build")},
+    **{field: spec.get(field) for field in ("component", "version", "image", "registry", "digest", "commit", "branch", "createdAt", "build")},
   }
 
 
@@ -135,6 +146,8 @@ def router(state, journal: Journal) -> APIRouter:
         existing = None
       if existing is not None:
         raise HTTPException(409, f"build of '{request.component}': version {existing['spec'].get('version')} is already in the index (commit {str(existing['spec'].get('commit'))[:7]})")
+    # Before the connection: where the image goes is the caller's choice, and a wrong one is cheaper to say first.
+    registry, image = push_target(state, request.component, repo, request.registry)
     connection = connection_of(request.component, repo)
     spec = {
       "component": request.component,
@@ -142,6 +155,8 @@ def router(state, journal: Journal) -> APIRouter:
       "requestId": str(uuid.uuid4()),
       "repo": repo,
       "scmConnection": connection["metadata"]["name"],
+      "registry": registry,
+      "image": image,
     }
     if request.version is not None:
       spec["version"] = request.version

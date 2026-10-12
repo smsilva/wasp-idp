@@ -31,6 +31,9 @@ spec:
         - name: Version
           type: string
           jsonPath: .status.result.version
+        - name: Registry
+          type: string
+          jsonPath: .spec.registry
         - name: Ready
           type: string
           jsonPath: .status.conditions[?(@.type=="Ready")].status
@@ -66,6 +69,12 @@ spec:
                   type: string
                 scmConnection:
                   description: The connection of the repo's org, resolved by the API.
+                  type: string
+                registry:
+                  description: The OCIRegistry the CI pushes to (ADR 0037), resolved by the API; absent on builds before #365.
+                  type: string
+                image:
+                  description: <host>/<namespace>/<component>, sent to the workflow as the input image; the result must name it.
                   type: string
             status:
               type: object

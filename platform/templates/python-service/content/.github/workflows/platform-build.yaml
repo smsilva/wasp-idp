@@ -1,6 +1,7 @@
 # The build contract with the platform (#206): the platform dispatches this workflow by its file
 # name, finds the run by run-name, and reads the result from the platform-build artifact. The CI
-# decides the version (Commitizen) and holds no platform credential.
+# decides the version (Commitizen) and holds no platform credential. The platform names the image
+# (ADR 0037): the repository in the registry the build chose, <host>/<namespace>/<component>.
 name: platform-build
 run-name: platform-build ${{ inputs.request-id }}
 
@@ -14,6 +15,9 @@ on:
         description: Version to build; computed from the Conventional Commits when empty
         required: false
         default: ""
+      image:
+        description: Repository to push to, without the tag, as <host>/<namespace>/<name> (the registry of the build)
+        required: true
 
 jobs:
   test:
@@ -44,7 +48,12 @@ jobs:
         id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_IMAGE: ${{ inputs.image }}
         run: |
+          if [[ ! "${INPUT_IMAGE}" =~ ^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+$ ]]; then
+            echo "image '${INPUT_IMAGE}' is not <host>/<namespace>/<name>" >&2
+            exit 1
+          fi
           if [[ -n "${INPUT_VERSION}" ]]; then
             if [[ ! "${INPUT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
               echo "version '${INPUT_VERSION}' is not <major>.<minor>.<patch>[-<pre-release>]" >&2
@@ -61,11 +70,13 @@ jobs:
             fi
           fi
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "${GITHUB_OUTPUT}"
+          echo "image=${INPUT_IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "registry=${INPUT_IMAGE%%/*}" >> "${GITHUB_OUTPUT}"
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
+        # GITHUB_TOKEN writes to the GHCR of this repo's org: the platform refuses any other registry for it.
         with:
-          registry: ghcr.io
+          registry: ${{ steps.version.outputs.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # buildx with oci-mediatypes: the docker driver pushes a Docker v2 manifest and drops the

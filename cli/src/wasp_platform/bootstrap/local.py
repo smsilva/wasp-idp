@@ -54,6 +54,8 @@ SCM_PROVIDER_IMAGE = "scm-github-provider"
 # Workload Instances (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment.
 WORKLOAD_PROVIDER_IMAGE = "workload-provider"
 FORAGER_PROVIDER_IMAGE = "forager-provider"
+# OCI registries (ADR 0037): checks that each one answers; pull credentials come later (#367).
+REGISTRY_PROVIDER_IMAGE = "registry-provider"
 # The shared instance of postgres in mode compose and its admin password (#305).
 SHARED_PG_NAMESPACE = "platform-resources"
 SHARED_PG_SECRET = "shared-pg-admin"
@@ -378,6 +380,13 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, forager_image)
   _kubectl("rollout", "status", f"deployment/{FORAGER_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
   install_shared_pg(forager_dir, log)
+
+  registry_dir = root / "platform" / "providers" / "registry"
+  log("building the registry provider image …")
+  registry_image = _build_and_import(REGISTRY_PROVIDER_IMAGE, registry_dir)
+  log("deploying the registry provider (OCI registries) …")
+  _deploy(registry_dir / "deploy" / "registry-provider.yaml", REGISTRY_PROVIDER_IMAGE, registry_image)
+  _kubectl("rollout", "status", f"deployment/{REGISTRY_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
   install_profile_policies(forager_dir, log)
 
   cloud = install_aws_account(root, aws_profile, log)
