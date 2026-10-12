@@ -84,8 +84,27 @@ platform() {
   uv run --quiet --project "${repo_root}/cli" platform "$@"
 }
 
+# Each step header shows its position and the elapsed time, so a slow --wait reads apart from a hung one.
+step_total="$(grep --count --extended-regexp '^ *step "' "${0}")"
+if [[ "${skip_init}" == "true" ]]; then
+  step_total="$(( step_total - 1 ))"
+fi
+step_number=0
+
+# Color only on a terminal: a log file keeps plain text.
+if [[ -t 1 ]]; then
+  bold=$'\033[1m'
+  green=$'\033[32m'
+  reset=$'\033[0m'
+else
+  bold=""
+  green=""
+  reset=""
+fi
+
 step() {
-  printf '\n\033[1m== %s\033[0m\n' "$*"
+  step_number="$(( step_number + 1 ))"
+  printf '\n%s== [%d/%d · %dm%02ds] %s%s\n' "${bold}" "${step_number}" "${step_total}" "$(( SECONDS / 60 ))" "$(( SECONDS % 60 ))" "$*" "${reset}"
 }
 
 expect_output() {
@@ -109,7 +128,8 @@ expect_failure() {
     exit 1
   fi
   expect_output "${expected}" "${output}"
-  echo "${output}"
+  # Prefixed, so that a refusal the step expects never reads as a failure.
+  sed 's/^/  expected refusal: /' <<< "${output}"
 }
 
 cleanup() {
@@ -994,4 +1014,4 @@ step "logout"
 platform logout
 expect_failure "not logged in" platform whoami
 
-printf '\n\033[32m✓ cli-smoke passed\033[0m\n'
+printf '\n%s✓ cli-smoke passed in %dm%02ds%s\n' "${green}" "$(( SECONDS / 60 ))" "$(( SECONDS % 60 ))" "${reset}"
