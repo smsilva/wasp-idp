@@ -166,14 +166,30 @@ def test_diagram_focus_and_links(tmp_path):
 
 def test_breadcrumb_and_overlay(tmp_path):
   page = deck(tmp_path)
-  box_b = stage(page, 10)
-  assert "<a data-back>↩ back</a>" in box_b
-  assert "<a data-back>↩ back</a><span class='trail'>" in box_b
   root = stage(page, 7)
-  assert ("<div class='overlay'><div class='ov-title'>Box</div><div class='ov-tree'>"
+  assert ("<div class='overlay'><div class='ov-tree'>"
           "<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='box-a'>A</a></div>"
           "<div class='ov-r ov-d1'><a data-go-slide='box-b'>B</a></div></div></div></div>") in root
 
+
+def test_detail_header_matches_the_main_track(tmp_path):
+  # A detail slide keeps the main track's header: the plane small, the box as the title.
+  page = deck(tmp_path)
+  header = "<div class='section has-topic'><div class='act-name'>Plane</div><div class='topic'>Box</div></div>"
+  assert stage(page, 7).startswith(f"<div class='stage' data-step='7' data-slide='box'") and header in stage(page, 7)
+  assert header in stage(page, 10)
+
+
+def test_trail_in_the_footer(tmp_path):
+  # The whole path, faint, in the footer: back, every level as a link, then the slide itself.
+  page = deck(tmp_path)
+  assert ("<div class='trail'><a data-back>↩</a><a data-go-slide='full'>Platform</a> / <a data-go-slide='map'>Plane</a> / "
+          "<a data-go-slide='box'>Box</a> / <a data-go-slide='box-a'>A</a> / <span class='here'>B</span></div>") in stage(page, 10)
+
+
+def test_trail_sits_above_the_slide():
+  # `.inner` covers the whole stage (inset: 0): without a z-index it takes the trail's clicks.
+  assert ".stage .trail { position: absolute; z-index: 2;" in ro.CSS
 
 
 def test_agenda_range_skips_details(tmp_path):
@@ -186,11 +202,6 @@ def test_divider_steps_are_marked(tmp_path):
   page = deck(tmp_path)
   assert "data-slide='full' data-last-step='6' data-divider>" in stage(page, 5)
   assert "data-divider" not in stage(page, 6)
-
-
-def test_breadcrumb_sits_above_the_diagram():
-  # `.inner` covers the whole stage (inset: 0): without a z-index it takes the clicks of the breadcrumb.
-  assert ".stage .section.crumbs { z-index: 2; }" in ro.CSS
 
 
 def test_first_step_knows_the_last(tmp_path):
@@ -242,33 +253,11 @@ def test_overlay_examples_are_a_small_mark():
                                     "<a class='ov-ex' data-go-slide='sys-ex' title='System example'>▸&nbsp;example</a></div></div>")
 
 
-def test_breadcrumb_is_plain_case():
-  # The trail reads as a path, not as a header: no uppercase, no wide letter spacing.
-  assert ".stage .section.crumbs .act-name { font-size: 0.95cqw; letter-spacing: 0; text-transform: none; font-weight: 500; }" in ro.CSS
-
-
 SVG_COLORS = ('<svg><g data-part="obs-plane"><rect fill="#101010" stroke="#aa8800" /></g>'
               '<g data-part="dev-plane"><rect fill="#202020" stroke="#303030" /><text fill="#fefefe">P</text></g>'
               '<g data-part="dev.1"><rect fill="#050505" stroke="#404040" /><text fill="#909090">B</text></g></svg>')
 
-
-def test_crumb_roles_take_the_diagram_colors():
-  # Platform: the amber border of the cross-cutting planes; plane: the plane box; box: the capability box.
-  # Each role is (fill, text, stroke); the plane is the box's own (`dev.1` → `dev-plane`).
-  roles = ro.crumb_roles(SVG_COLORS, "dev.1")
-  assert roles == {"home": ("#101010", "#aa8800", "#aa8800"), "plane": ("#202020", "#fefefe", "#303030"),
-                   "box": ("#050505", "#909090", "#404040")}
-
-
-def test_crumb_colors_go_to_css_variables():
-  style = ro.crumb_style(ro.crumb_roles(SVG_COLORS, "dev.1"))
-  assert "--home-fill:#101010;--home-text:#aa8800;--home-stroke:#aa8800;" in style
-  assert "--box-fill:#050505;--box-text:#909090;--box-stroke:#404040" in style
-
-
-def test_crumbs_carry_their_role(tmp_path):
-  # Crumb levels: Platform, then the main-track slide (the plane), then the root (the box), then topics.
+def test_detail_slide_without_heading_shows_its_label(tmp_path):
+  # `box-b` has a `label` and no `heading`: the label opens the slide, dimmed like a heading over its items.
   page = deck(tmp_path)
-  box_b = stage(page, 10)
-  assert ("<a class='c-home' data-go-slide='full' style='--i:0'>Platform</a><a class='c-plane' data-go-slide='map' style='--i:1'>Plane</a>"
-          "<a class='c-box' data-go-slide='box' style='--i:2'>Box</a><a class='c-topic last' data-go-slide='box-a' style='--i:3'>A</a>") in box_b
+  assert "<div class='item dim heading'>B</div>" in stage(page, 10)
