@@ -71,3 +71,32 @@ def test_a_deleted_registry_is_left_alone():
   obj = registry()
   obj["metadata"]["deletionTimestamp"] = "2026-10-12T11:00:00Z"
   assert reconcile(lambda request: httpx.Response(200), obj) == []
+
+
+def test_a_registry_removed_meanwhile_is_not_an_error(monkeypatch):
+  from kubernetes import client
+
+  from registry_provider.store import RegistryStore
+
+  class Gone:
+    def patch_namespaced_custom_object_status(self, *args):
+      raise client.ApiException(status=404, reason="Not Found")
+
+  store = RegistryStore.__new__(RegistryStore)
+  store.namespace, store.api = "platform-system", Gone()
+  store.patch_status("smoke-reg-from-connection", {"conditions": []})
+
+
+def test_other_api_errors_still_raise():
+  from kubernetes import client
+
+  from registry_provider.store import RegistryStore
+
+  class Broken:
+    def patch_namespaced_custom_object_status(self, *args):
+      raise client.ApiException(status=500, reason="Internal Server Error")
+
+  store = RegistryStore.__new__(RegistryStore)
+  store.namespace, store.api = "platform-system", Broken()
+  with pytest.raises(client.ApiException):
+    store.patch_status("x", {"conditions": []})

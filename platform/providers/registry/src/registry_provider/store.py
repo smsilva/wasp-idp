@@ -31,4 +31,9 @@ class RegistryStore:
       yield event["type"], event["object"]
 
   def patch_status(self, name: str, status: dict) -> None:
-    self.api.patch_namespaced_custom_object_status(GROUP, VERSION, self.namespace, PLURAL, name, {"status": status})
+    try:
+      self.api.patch_namespaced_custom_object_status(GROUP, VERSION, self.namespace, PLURAL, name, {"status": status})
+    except client.ApiException as error:
+      # Removed while it was being checked (registry remove): nothing left to report on.
+      if error.status != 404:
+        raise
