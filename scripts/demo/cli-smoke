@@ -781,7 +781,7 @@ expect_failure "the route of '${workload_component}' sends traffic to it" \
     --environment "${workload_environment}"
 expect_failure "main instance of the route" \
   platform workload remove \
-    --component "${workload_component}" \
+    --instance "${workload_component}" \
     --environment "${workload_environment}"
 output="$(platform workload route \
   --component "${workload_component}" \
