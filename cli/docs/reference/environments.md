@@ -6,7 +6,7 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 |---|---|
 | `platform environment create <name> --profile ephemeral\|shared [--expires <duration>] [--share-with <team>]... [--wait]` | requests an environment, private unless shared; `--wait` waits for `ready` and writes the kubeconfig |
 | `platform environment list [--all]` | NAME, PROFILE, STATUS, EXPIRES, OWNER, SHARED: yours and your teams'; `--all` (the default for `platform-admins`) shows every environment, without kubeconfig |
-| `platform environment get <name>` | status and message; writes your kubeconfig when ready |
+| `platform environment get <name>` | status, message and where its workloads are reached (`http://*.<name>.localhost:7080`); writes your kubeconfig when ready |
 | `platform environment get <name> --admin` | writes the vcluster admin kubeconfig (`platform-admins` only) |
 | `platform environment share\|unshare <name> --team <team>` | see [Teams](teams.md#sharing-environments) |
 | `platform environment credential <name>` | a 10-minute token as an `ExecCredential`; called by kubectl through the kubeconfig |
@@ -21,8 +21,8 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | Status | Meaning |
 |---|---|
 | `NoProviderForCapability` | no provider has picked up the request yet |
-| `Provisioning` | vcluster being created, then the mesh installed in it (about 50 s) |
-| `ready` | vcluster and `istiod` up; `get` or `--wait` writes the kubeconfig |
+| `Provisioning` | vcluster being created, then the mesh and the gateway installed in it (about 60 s) |
+| `ready` | vcluster, `istiod` and the gateway up; `get` or `--wait` writes the kubeconfig |
 | `ProvisioningFailed` | provider error; see `message` in the JSON |
 | `deleting` | removal in progress |
 
@@ -36,6 +36,10 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 With the personal kubeconfig, the CLI must be installed and signed in where kubectl runs. Inside the vcluster you are the ServiceAccount `platform-identities/<sub>`, with `cluster-admin`; `kubectl auth whoami` shows it.
 
 Each environment gets one port from `127.0.0.1:7100`–`7119`. The pods run in the outer cluster, in the namespace `env-<name>`.
+
+## Entry point
+
+Every environment is reached from outside at `http://*.<name>.localhost:7080` (ADR 0036). `*.localhost` resolves to the loopback without DNS. Port `7080` is a Traefik shared by every environment, installed by `platform init`: it sends each `*.<name>.localhost` to the `Gateway` `platform` (Istio, namespace `istio-ingress`) of that environment's vcluster. A route of a workload attaches to that `Gateway`; a host of another environment never reaches it.
 
 ## Permissions
 

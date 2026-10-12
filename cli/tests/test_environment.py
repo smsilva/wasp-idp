@@ -241,3 +241,11 @@ def test_get_admin_writes_admin_kubeconfig(tmp_path, monkeypatch):
   path = tmp_path / "platform" / "environments" / "vc-admin.kubeconfig"
   assert path.read_text() == "apiVersion: v1\nkind: Config\n"
   assert str(path) in result.stdout
+
+
+def test_get_shows_where_the_workloads_are(tmp_path, monkeypatch):
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  credential_api(monkeypatch, lambda request: httpx.Response(200, json={"name": "vc", "status": "ready", "kubeconfigData": PERSONAL, "ingress": "http://*.vc.localhost:7080"}))
+  result = runner.invoke(app, ["environment", "get", "vc"])
+  assert result.exit_code == 0
+  assert "workloads at http://*.vc.localhost:7080" in result.stdout

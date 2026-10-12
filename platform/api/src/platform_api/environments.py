@@ -57,6 +57,14 @@ def can_use(obj: dict, principal) -> bool:
   return is_owner_or_admin(obj, principal) or bool(set(principal.teams) & set(shared_with(obj)))
 
 
+def ingress_url(ingress: dict | None) -> str | None:
+  """http://*.<domain>:<port>: where the workloads of the environment are reached (ADR 0036)."""
+  if not ingress or not ingress.get("domain"):
+    return None
+  port = ingress.get("port")
+  return f"http://*.{ingress['domain']}" + (f":{port}" if port and port != 80 else "")
+
+
 def view(obj: dict, kubeconfig: str | None = None) -> dict:
   """The API view of an Environment: clients never couple to the CR shape.
 
@@ -82,6 +90,7 @@ def view(obj: dict, kubeconfig: str | None = None) -> dict:
     "status": state,
     "message": ready.get("message") if ready else None,
     "port": status.get("port"),
+    "ingress": ingress_url(status.get("ingress")),
     "createdAt": metadata.get("creationTimestamp"),
     "owner": (metadata.get("annotations") or {}).get(OWNER_NAME_ANNOTATION),
     "sharedWith": shared_with(obj),

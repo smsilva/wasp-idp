@@ -41,6 +41,10 @@ API_ADMIN_KEY = "PLATFORM_API_ADMIN_SECRET"
 # One host port per vcluster environment (provider local_vcluster, #183); must match PORTS in
 # platform/providers/local_vcluster/src/local_vcluster_provider/reconciler.py.
 ENV_PORTS = "7100-7119"
+# The shared Traefik in front of every environment (ADR 0036): workloads at http://*.<environment>.localhost:7080.
+# Must match PORT in platform/providers/local_vcluster/src/local_vcluster_provider/entrypoint.py.
+INGRESS_PORT = "7080"
+INGRESS_NAMESPACE = "platform-ingress"
 PROVIDER_IMAGE = "local-vcluster-provider"
 # Cloud accounts (ADR 0029): the base credential the aws_account controller assumes roles from.
 AWS_PROVIDER_IMAGE = "aws-account-provider"
@@ -321,9 +325,11 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
       "--app-port", f"127.0.0.1:{APP_PORT}",
       "--extra-port", f"127.0.0.1:{KEYCLOAK_PORT}:{KEYCLOAK_PORT}",
       "--extra-port", f"127.0.0.1:{ENV_PORTS}:{ENV_PORTS}",
+      "--extra-port", f"127.0.0.1:{INGRESS_PORT}:{INGRESS_PORT}",
     )
   _ensure_port(KEYCLOAK_PORT, log)
   _ensure_port(ENV_PORTS, log)
+  _ensure_port(INGRESS_PORT, log)
 
   log("applying CRDs …")
   _kubectl("apply", "--filename", str(root / "platform" / "crds"))
@@ -349,6 +355,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   log("deploying the environment provider (local_vcluster) …")
   _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
   _kubectl("rollout", "status", "deployment/local-vcluster-provider", "--namespace", NAMESPACE, "--timeout", "180s")
+  install_ingress(provider_dir, log)
 
   scm_dir = root / "platform" / "providers" / "scm_github"
   log("building the SCM provider image …")
@@ -381,6 +388,19 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
     "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
   })
   return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": image, "config": str(path), **identity, **cloud}
+
+
+def install_ingress(provider_dir: Path, log) -> None:
+  """The shared Traefik of the environments (ADR 0036), through the helm-controller of k3s."""
+  log(f"deploying the environments' entry point (Traefik on 127.0.0.1:{INGRESS_PORT}) …")
+  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "traefik.yaml"))
+  deadline = time.monotonic() + 300
+  # The Deployment exists only once the helm-controller's install job ran.
+  while not _kubectl("get", "deployment", "--namespace", INGRESS_NAMESPACE, "--selector", "app.kubernetes.io/name=traefik", "--output", "name").strip():
+    if time.monotonic() > deadline:
+      raise BootstrapError(f"Traefik not installed in {INGRESS_NAMESPACE} after 300s: kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-platform-ingress")
+    time.sleep(3)
+  _kubectl("rollout", "status", "deployment", "--selector", "app.kubernetes.io/name=traefik", "--namespace", INGRESS_NAMESPACE, "--timeout", "180s")
 
 
 def install_shared_pg(forager_dir: Path, log) -> None:

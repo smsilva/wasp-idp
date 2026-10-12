@@ -48,14 +48,16 @@ class Reconciler:
 
   It runs inside platform-local and cannot write files on the host: the kubeconfig goes to
   status.kubeconfigData and the CLI writes it locally. The environment is Ready only once istiod runs
-  in the vcluster (ADR 0035); status.mesh keeps the versions installed.
+  in the vcluster (ADR 0035) and its Gateway is programmed (ADR 0036); status.mesh keeps the versions
+  installed, status.ingress the domain and the host port of its workloads.
   """
 
-  def __init__(self, store, helm, secrets, mesh, now=utcnow):
+  def __init__(self, store, helm, secrets, mesh, entrypoint, now=utcnow):
     self.store = store
     self.helm = helm
     self.secrets = secrets
     self.mesh = mesh
+    self.entrypoint = entrypoint
     self.now = now
 
   def reconcile(self, obj: dict) -> None:
@@ -122,7 +124,8 @@ class Reconciler:
     ready = current_ready(obj)
     status = obj.get("status") or {}
     mesh = wanted()
-    if ready and ready.get("status") == "True" and status.get("kubeconfigData") == kubeconfig and status.get("mesh") == mesh:
+    entry = self.entrypoint.wanted(name)
+    if ready and ready.get("status") == "True" and status.get("kubeconfigData") == kubeconfig and status.get("mesh") == mesh and status.get("ingress") == entry:
       return
     # The mesh (ADR 0035), also in an environment created before it: installing it touches neither the
     # vcluster release nor the pods already running, which get a sidecar on their next deploy.
@@ -140,10 +143,27 @@ class Reconciler:
         "conditions": [ready_condition("False", "Provisioning", "waiting for istiod in the vcluster")],
       })
       return
+    # The entry point (ADR 0036) needs istiod: it programs the Gateway. Environments created before it get
+    # it the same way as the mesh.
+    if status.get("ingress") != entry:
+      log.info("creating the gateway of %s (*.%s)", namespace, entry["domain"])
+      self.store.patch_status(name, {
+        "port": port,
+        "conditions": [ready_condition("False", "Provisioning", f"creating the gateway of *.{entry['domain']}")],
+      })
+      self.entrypoint.install(name, kubeconfig, namespace)
+      self.store.patch_status(name, {"ingress": entry})
+    if not self.entrypoint.ready(name, kubeconfig):
+      self.store.patch_status(name, {
+        "port": port,
+        "conditions": [ready_condition("False", "Provisioning", "waiting for the gateway in the vcluster")],
+      })
+      return
     self.store.patch_status(name, {
       "port": port,
       "kubeconfigData": kubeconfig,
       "mesh": mesh,
-      "conditions": [ready_condition("True", "ClusterReady", f"vcluster running in namespace {namespace}, API on 127.0.0.1:{port}")],
+      "ingress": entry,
+      "conditions": [ready_condition("True", "ClusterReady", f"vcluster running in namespace {namespace}, API on 127.0.0.1:{port}, workloads on http://*.{entry['domain']}:{entry['port']}")],
     })
     log.info("environment %s ready", name)

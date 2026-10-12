@@ -7,11 +7,12 @@ Usage: ${0##*/} [--skip-init]
 
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
 init, login as the test user, the refusals a non-admin gets, an environment
-created and deleted, then login as the test admin, the catalog import of
-idp/catalog/, a team with two test users, checked in the token, an
-environment shared with that team (the teammate gets a personal kubeconfig whose
-token the Platform API issues (ADR 0028), cannot delete the environment nor get
-its admin kubeconfig, and loses access after unshare, in kubectl too), the
+created (its gateway answering at *.<name>.localhost:7080) and deleted, then
+login as the test admin, the catalog import of idp/catalog/, a team with two
+test users, checked in the token, an environment shared with that team (the
+teammate gets a personal kubeconfig whose token the Platform API issues (ADR
+0028), cannot delete the environment nor get its admin kubeconfig, and loses
+access after unshare, in kubectl too), the
 templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
@@ -201,6 +202,17 @@ mesh="$(kubectl --context k3d-platform-local --namespace platform-system get env
 echo "mesh: ${mesh}"
 if [[ ! "${mesh}" =~ ^1\.30\.[0-9]+\ v1\.5\.[0-9]+$ ]]; then
   echo "expected istio 1.30 and gateway api 1.5 in status.mesh of ${environment}, got '${mesh}'" >&2
+  exit 1
+fi
+
+step "environment get: the entry point of its workloads (ADR 0036, #357)"
+output="$(platform environment get "${environment}")"
+expect_output "workloads at http://*.${environment}.localhost:7080" "${output}"
+# No route yet: the shared Traefik reaches the environment's Gateway, which answers 404.
+server="$(curl --silent --output /dev/null --dump-header - "http://smoke.${environment}.localhost:7080/" | tr --delete '\r' | grep --ignore-case '^server:' || true)"
+echo "${server}"
+if [[ "${server,,}" != "server: istio-envoy" ]]; then
+  echo "expected the Gateway of ${environment} (server: istio-envoy) at http://smoke.${environment}.localhost:7080/, got '${server}'" >&2
   exit 1
 fi
 
