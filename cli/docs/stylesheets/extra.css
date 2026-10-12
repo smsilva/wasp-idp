@@ -263,6 +263,13 @@
   content: "  ";
   user-select: none;
 }
+
+/* Here-document lines: the `> ` bash shows while reading them. Not copied. */
+.md-typeset .t-heredoc::before {
+  content: "> ";
+  color: var(--t-op);
+  user-select: none;
+}
 .md-typeset .t-arg { color: var(--t-arg); }
 .md-typeset .t-opt { color: var(--t-opt); }
 .md-typeset .t-val { color: var(--t-val); }

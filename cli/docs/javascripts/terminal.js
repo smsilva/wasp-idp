@@ -21,7 +21,15 @@
 
   function shell(text) {
     let continued = false;
+    // Delimiter of an open here-document: its lines are input to the command, not commands.
+    let heredoc = null;
     return text.replace(/\n$/, "").split("\n").map((line) => {
+      if (heredoc !== null) {
+        if (line === heredoc) heredoc = null;
+        return '<span class="t-heredoc"></span>' + escape(line);
+      }
+      const opened = line.match(/<<-?\s*['"]?(\w+)['"]?/);
+      if (opened) heredoc = opened[1];
       if (!line.trim()) {
         continued = false;
         return "";
