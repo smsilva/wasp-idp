@@ -14,12 +14,12 @@ platform build list \
 ```
 
 ``` { .text .output title="output" }
-building from feat/greetings @ 86a7c08 …
+building from feat/greetings @ b5f9569 …
 ✓ app-spec.yaml valid · db (postgres), dns, route
 ✓ image hello-api:1.0.0-rc.1 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/hello-api)
 VERSION                  BRANCH          REGISTRY           CREATED
-1.0.0-rc.1               feat/greetings  ghcr-wasp-foundry  2026-10-11T19:09:22Z
-0.1.0-greetings.86a7c08  feat/greetings  ghcr-wasp-foundry  2026-10-11T19:08:02Z
+1.0.0-rc.1               feat/greetings  ghcr-wasp-foundry  2026-10-12T19:12:49Z
+0.1.0-greetings.b5f9569  feat/greetings  ghcr-wasp-foundry  2026-10-12T18:37:33Z
 ```
 
 Underneath, a build is a `Build` and a version is a `Version` in the catalog group:

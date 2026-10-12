@@ -23,12 +23,12 @@ platform build create \
 ```
 
 ``` { .text .output title="output" }
-building from feat/greetings @ 86a7c08 …
+building from feat/greetings @ b5f9569 …
 ✓ app-spec.yaml valid · db (postgres), dns, route
-✓ image hello-api:0.1.0-greetings.86a7c08 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/hello-api)
+✓ image hello-api:0.1.0-greetings.b5f9569 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/hello-api)
 ```
 
-- The version is `0.1.0` (no tag yet: Commitizen starts there), plus `-<branch>.<sha7>` outside `main`. With a `v0.2.0` tag and a `feat:` commit since, it would be `0.3.0-greetings.86a7c08`.
+- The version is `0.1.0` (no tag yet: Commitizen starts there), plus `-<branch>.<sha7>` outside `main`. With a `v0.2.0` tag and a `feat:` commit since, it would be `0.3.0-greetings.b5f9569`.
 - The image is `ghcr.io/wasp-foundry/hello-api:<version>`, in the default registry `ghcr-wasp-foundry`, with an OCI manifest carrying the `source`, `revision`, `version` and `me.silvios.wasp.request-id` annotations. `--registry <name>` picks another registry; for GHCR it must be the one of the repo's org (`RegistryNotWritableByCI`).
 - Only members of the component's owner team (`team-alpha`, [joined earlier](../teams/join.md)) and `platform-admins` build it; anyone signed in reads `build list` and `build get`.
 - `--version 1.0.0-rc.1` makes the CI use that version as is.

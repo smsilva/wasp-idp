@@ -1,12 +1,12 @@
 # The history of a workload
 
-Version `0.4.0` of `hello-api` asks for a resource of type `redis`, which no binding policy resolves (written by `kubectl`, past the Score gate of the build). Deploy it:
+A deploy can fail after the build passed: here, a version whose Score asks for a resource of type `redis`, which no binding policy resolves. The build refuses `redis` ([What a build refuses](../builds/refused.md)), so this one version is staged: `0.1.0-redis.b5f9569` is the `Version` of `feat/greetings` copied by `kubectl` with `db` of type `redis`. Deploy it:
 
 ```bash
 platform workload deploy \
   --component hello-api \
   --environment demo \
-  --version 0.4.0 \
+  --version 0.1.0-redis.b5f9569 \
   --wait
 
 platform workload history \
@@ -15,10 +15,10 @@ platform workload history \
 ```
 
 ``` { .text .output title="output" }
-✗ hello-api@demo revision 2: ResourcesNotSupported: dns: no provisioner for redis in demo
-WORKLOAD        REVISION  ACTION  VERSION  STATUS                 BY                     CREATED
-hello-api@demo  1         deploy  0.3.0    Succeeded              dev@example.com        2026-10-11T21:28:36Z
-hello-api@demo  2         deploy  0.4.0    ResourcesNotSupported  dev@example.com        2026-10-11T21:28:54Z
+✗ hello-api@demo revision 2: ResourcesNotSupported: db: no provisioner for redis in demo
+WORKLOAD        REVISION  ACTION  VERSION                  STATUS                 BY               CREATED
+hello-api@demo  1         deploy  0.1.0-greetings.b5f9569  Succeeded              dev@example.com  2026-10-12T19:02:42Z
+hello-api@demo  2         deploy  0.1.0-redis.b5f9569      ResourcesNotSupported  dev@example.com  2026-10-12T19:03:44Z
 ```
 
 - A revision that fails changes nothing in the vcluster: `hello-api@demo` still runs revision 1, and `workload get` shows revision 2 on a `newest` line.

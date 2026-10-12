@@ -18,8 +18,8 @@ platform workload list \
   x-sandbox=pr-42 → hello-api-pr-42
   otherwise → hello-api
 WORKLOAD              COMPONENT  VERSION                  STATUS     REPLICAS  REVISION  TRAFFIC          URL
-hello-api@demo        hello-api  0.3.0                    Available  2/2       1         default          http://hello-api.apps:80
-hello-api-pr-42@demo  hello-api  0.4.0-greetings.4444444  Available  1/1       1         x-sandbox=pr-42  http://hello-api-pr-42.apps:80
+hello-api@demo        hello-api  0.1.0-greetings.b5f9569  Available  2/2       6         default          http://hello-api.demo.localhost:7080/
+hello-api-pr-42@demo  hello-api  0.1.0-farewell.910ace9   Available  1/1       1         x-sandbox=pr-42  http://hello-api-pr-42.demo.localhost:7080/
 ```
 
 A call to `http://hello-api` with `x-sandbox: pr-42` reaches the pull request; any other call reaches the stable version. The route takes effect in about a second. Only calls from pods in the namespace `apps` go through the mesh, and the header only travels further down a chain of calls if each service passes it on.

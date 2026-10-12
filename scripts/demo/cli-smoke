@@ -1545,7 +1545,13 @@ echo "${output}"
 expect_output "url           ${public_url}" "${output}"
 expect_output "internal url  http://${public_component}.apps:80" "${output}"
 expect_output "resource      route (route, provision): Ready" "${output}"
-answer="$(curl --silent --fail --max-time 10 "${public_url}")"
+# --wait ends when the pods are ready; the Gateway's Envoy may get the Service's endpoints a moment later
+# (istiod push), so the first answer can still be an error under load.
+for attempt in $(seq 1 15); do
+  answer="$(curl --silent --fail --max-time 10 "${public_url}" || true)"
+  [[ -n "${answer}" ]] && break
+  sleep 2
+done
 expect_output "\"message\": \"${public_component}\"" "${answer}"
 output="$(platform workload remove \
   --component "${public_component}" \
