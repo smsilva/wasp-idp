@@ -127,7 +127,8 @@ def test_crumbs_overlay_and_up():
   box, box_b = steps[7], steps[10]
   assert box["crumbs"] == [("Platform", "full"), ("Plane", "map")]
   assert box_b["crumbs"] == [("Platform", "full"), ("Plane", "map"), ("Box", "box"), ("A", "box-a")]
-  assert box["overlay"] == [("A", "box-a")] and "overlay" not in steps[8]
+  # The overlay is the root's whole subtree: (label, slide, children).
+  assert box["overlay"] == [("A", "box-a", [("B", "box-b", [])])] and "overlay" not in steps[8]
   assert box["up"] == ("map", True) and box_b["up"] == ("box-a", False)
 
 
@@ -169,7 +170,16 @@ def test_breadcrumb_and_overlay(tmp_path):
   assert "<a data-back>↩ back</a>" in box_b
   assert "<a data-go-slide='full'>Platform</a> › <a data-go-slide='map'>Plane</a> › <a data-go-slide='box'>Box</a> › <a data-go-slide='box-a'>A</a>" in box_b
   root = stage(page, 7)
-  assert "<div class='overlay'><div class='ov-title'>Box</div><a data-go-slide='box-a'>A</a></div>" in root
+  assert ("<div class='overlay'><div class='ov-title'>Box</div><div class='ov-item'><a data-go-slide='box-a'>A</a>"
+          "<div class='ov-sub'><a data-go-slide='box-b'>B</a></div></div></div>") in root
+
+
+def test_overlay_groups_grandchildren():
+  # A child with children of its own shows them after it: "Business view: System · Domain".
+  item = ("Two views", "levels", [("Business", "biz", [("System", "sys", []), ("Domain", "dom", [])]), ("Engineering", "eng", [])])
+  html = ro.overlay_item(item)
+  assert ("<div class='ov-sub'><span class='ov-group'><a data-go-slide='biz'>Business</a>: <a data-go-slide='sys'>System</a> · "
+          "<a data-go-slide='dom'>Domain</a></span> · <a data-go-slide='eng'>Engineering</a></div>") in html
 
 
 def test_agenda_range_skips_details(tmp_path):

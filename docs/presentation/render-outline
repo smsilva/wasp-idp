@@ -106,10 +106,14 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .section.crumbs { z-index: 2; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
-.stage .overlay { position: absolute; right: 5cqw; top: 12cqw; width: 30cqw; box-sizing: border-box; background: rgba(17, 24, 39, 0.96); border: 1px solid #4a9ef4; border-radius: 1cqw; padding: 2cqw 2.4cqw; display: flex; flex-direction: column; gap: 1cqw; }
-.stage .overlay .ov-title { font-size: 2.2cqw; font-weight: 700; color: #fff; margin-bottom: 0.6cqw; }
+.stage .overlay { position: absolute; right: 5cqw; top: 10.5cqw; width: 40cqw; box-sizing: border-box; background: rgba(17, 24, 39, 0.96); border: 1px solid #4a9ef4; border-radius: 1cqw; padding: 1.8cqw 2.4cqw; display: flex; flex-direction: column; gap: 0.8cqw; }
+.stage .overlay .ov-title { font-size: 2.2cqw; font-weight: 700; color: #fff; margin-bottom: 0.4cqw; }
 .stage .overlay a { font-size: 1.6cqw; color: #c0d2e4; cursor: pointer; }
-.stage .overlay a::before { content: '→ '; color: #4a9ef4; }
+.stage .overlay .ov-item > a::before { content: '→ '; color: #4a9ef4; }
+.stage .overlay .ov-sub { margin: 0.2cqw 0 0 2.2cqw; font-size: 1.15cqw; color: #6b7a8d; line-height: 1.5; }
+.stage .overlay .ov-sub a { font-size: 1.15cqw; color: #9fb3c8; }
+.stage .overlay .ov-group > a:first-child { color: #c0d2e4; }
+.stage .overlay a:hover { color: #fff; }
 .stage .code .ln { padding: 0 1.4cqw; }
 .stage .code .no { width: 2.6cqw; margin-right: 1.4cqw; }
 .stage .code .bar { font-size: 1cqw; padding: 0.5cqw 1.4cqw; }
@@ -709,12 +713,13 @@ def build_steps(outline):
       continue
     act, chain, root = acts[slide["act"]], ancestors(slides, slide), detail_root(slides, slide)
     crumbs = [("Platform", home)] + [(label(parent), parent["name"]) for parent in reversed(chain)]
-    children = [(label(child), child["name"]) for child in outline["slides"] if child.get("parent") == slide["name"]]
+    # The overlay of a root: its whole subtree, (label, slide name, children).
+    tree = lambda name: [(label(child), child["name"], tree(child["name"])) for child in outline["slides"] if child.get("parent") == name]
     own = slide_steps(outline, slide, act, (act["title"], label(slide)))
     for step in own:
       step.update({"detail": root["name"], "crumbs": crumbs, "up": (slide["parent"], slide is root)})
       if slide is root:
-        step["overlay"] = children
+        step["overlay"] = tree(slide["name"])
     if slide is root:
       own[0]["entry"] = True
     steps.extend(own)
@@ -790,6 +795,16 @@ def render_agenda(outline, current=None, links=None):
           f"<div class='list'>{''.join(rows)}</div></div>")
 
 
+def overlay_item(item):
+  """One topic of a root's overlay: the link, then its children on a smaller line (a child with children: "Child: a · b")."""
+  esc = html.escape
+  link = lambda text, name: f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>"
+  text, name, children = item
+  subs = [f"<span class='ov-group'>{link(t, n)}: {' · '.join(link(gt, gn) for gt, gn, _ in g)}</span>" if g else link(t, n)
+          for t, n, g in children]
+  return f"<div class='ov-item'>{link(text, name)}" + (f"<div class='ov-sub'>{' · '.join(subs)}</div>" if subs else "") + "</div>"
+
+
 def render_stage(step, base, outline=None):
   esc = html.escape
   if step.get("agenda") is not None:
@@ -835,7 +850,7 @@ def render_stage(step, base, outline=None):
     overlay = ""
     if step.get("overlay"):
       overlay = (f"<div class='overlay'><div class='ov-title'>{esc(step['section'][1])}</div>"
-                 + "".join(f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>" for text, name in step["overlay"]) + "</div>")
+                 + "".join(overlay_item(item) for item in step["overlay"]) + "</div>")
     return f"{section}<div class='inner diagram-inner'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}"
   if step.get("code"):
     source = (base / step["code"]["file"]).read_text().splitlines()
