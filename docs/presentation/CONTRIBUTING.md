@@ -109,4 +109,5 @@ parts:                     # o índice (tecla I) no formato de agenda
 ```
 
 - **Toda parte cobre atos contíguos**, e todo ato fora de `parts` é só a abertura. O `render-outline` falha se um `acts` ou `go` não existir.
+- **Breadcrumb dos slides de detalhe:** cada nível tem a cor da sua camada no diagrama da raiz. Platform usa o âmbar dos planes transversais (`obs-plane`); o plane e a caixinha usam o fundo, o texto e a borda deles. O `render-outline` lê essas cores do SVG, então mudar a paleta no `build.py` muda o breadcrumb junto.
 - **Diagrama que cresce ao longo do deck** (a landscape): um SVG só, gerado por script (`diagrams/landscape/build.py`), com uma parte por `<g data-part>`. Cada volta ao diagrama é um slide com `show` (o que já foi visto) e `reveal` (o que entra agora). Nunca editar o SVG à mão.

@@ -109,10 +109,14 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .crumbs .act-name { display: flex; align-items: center; }
 .stage .crumbs .act-name a { color: #4a9ef4; cursor: pointer; }
 .stage .crumbs .trail { display: inline-flex; }
-.stage .crumbs .trail a { color: #9fb3c8; background: hsl(218 30% calc(11% + var(--i) * 2.2%)); padding: 0.15cqw 0.9cqw 0.15cqw 1.2cqw; margin-right: 0.05cqw; clip-path: polygon(0 0, calc(100% - 0.55cqw) 0, 100% 50%, calc(100% - 0.55cqw) 100%, 0 100%, 0.55cqw 50%); }
+.stage .crumbs .trail a { font-size: inherit; line-height: 1.6; padding: 0.15cqw 0.9cqw 0.15cqw 1.2cqw; margin-right: 0.05cqw; clip-path: polygon(0 0, calc(100% - 0.55cqw) 0, 100% 50%, calc(100% - 0.55cqw) 100%, 0 100%, 0.55cqw 50%); }
 .stage .crumbs .trail a:first-child { padding-left: 0.7cqw; clip-path: polygon(0 0, calc(100% - 0.55cqw) 0, 100% 50%, calc(100% - 0.55cqw) 100%, 0 100%); }
-.stage .crumbs .trail a.last { background: #1e3a5f; color: #fff; }
-.stage .crumbs .trail a:hover { color: #fff; }
+.stage .crumbs .trail a.c-home { background: color-mix(in srgb, var(--home-text, #e5c07b) 22%, var(--home-fill, #111827)); color: var(--home-text, #e5c07b); }
+.stage .crumbs .trail a.c-plane { background: var(--plane-fill, #111827); color: var(--plane-text, #fff); font-weight: 600; }
+.stage .crumbs .trail a.c-box { background: var(--box-fill, #0a0e1a); color: var(--box-text, #9fb3c8); box-shadow: inset 0 0 0 1px var(--box-stroke, #1f2937); }
+.stage .crumbs .trail a.c-topic { background: hsl(218 calc(22% + (var(--i) - 3) * 2%) calc(15% + (var(--i) - 3) * 3.2%)); color: #9fb3c8; }
+.stage .crumbs .trail a.last { background: #4a9ef4; color: #0a0e1a; font-weight: 600; box-shadow: none; }
+.stage .crumbs .trail a:hover { filter: brightness(1.35); }
 .stage .crumbs .act-name a[data-back] { margin-right: 1.4cqw; }
 .stage .overlay { position: absolute; right: 5cqw; top: 9cqw; max-height: calc(100% - 15.5cqw); overflow: hidden; width: 58cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 1.6cqw 2.2cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
 .stage .overlay .ov-title { font-size: 1.1cqw; letter-spacing: 0.3cqw; text-transform: uppercase; font-weight: 700; color: #6b7a8d; margin-bottom: 1cqw; }
@@ -830,6 +834,34 @@ def overlay_tree(items, depth=0):
   return rows
 
 
+def crumb_roles(svg, box):
+  """Breadcrumb colors read from the diagram, so the trail follows it when its palette changes.
+
+  Each role is (fill, text, stroke): `home` from the amber cross-cutting plane (`obs-plane`), `plane` from the
+  box's own plane (`dev.1` → `dev-plane`), `box` from the capability box. A part missing from the SVG is skipped.
+  """
+  def colors(part):
+    group = re.search(rf'<g data-part="{re.escape(part)}"[^>]*>(.*?)</g>', svg, re.S)
+    if not group:
+      return None
+    rect, text = re.search(r"<rect[^>]*>", group[1]), re.search(r"<text[^>]*>", group[1])
+    attr = lambda tag, name: (re.search(rf'{name}="([^"]+)"', tag[0]) or [None, None])[1] if tag else None
+    return attr(rect, "fill"), attr(text, "fill"), attr(rect, "stroke")
+  roles = {}
+  if (obs := colors("obs-plane")):
+    roles["home"] = (obs[0], obs[2], obs[2])
+  if (plane := colors(box.split(".")[0] + "-plane")):
+    roles["plane"] = plane
+  if (own := colors(box)):
+    roles["box"] = own
+  return roles
+
+
+def crumb_style(roles):
+  return "".join(f"--{role}-{key}:{value};" for role, values in roles.items()
+                 for key, value in zip(("fill", "text", "stroke"), values) if value)
+
+
 def render_stage(step, base, outline=None):
   esc = html.escape
   if step.get("agenda") is not None:
@@ -846,13 +878,20 @@ def render_stage(step, base, outline=None):
   # Detail slides (`parent`): a breadcrumb of links replaces the act name, with "↩ back" before it.
   if step.get("crumbs"):
     # Powerline segments, one step of tone per level (`--i`); the last is the slide's parent.
+    # Each level takes the color of its layer in the diagram: Platform, the plane, the box, then topics.
     last = len(step["crumbs"]) - 1
+    # `c-` prefix: `.topic` and `.home` already style the slide header and the deck hint.
+    role = lambda n: "c-" + (("home", "plane", "box")[n] if n < 3 else "topic")
     trail = "<span class='trail'>" + "".join(
-      f"<a{' class=' + chr(39) + 'last' + chr(39) if n == last else ''} data-go-slide='{esc(name)}' style='--i:{n}'>{esc(text)}</a>"
+      f"<a class='{role(n)}{' last' if n == last else ''}' data-go-slide='{esc(name)}' style='--i:{n}'>{esc(text)}</a>"
       for n, (text, name) in enumerate(step["crumbs"])) + "</span>"
+    root = next((slide for slide in (outline or {}).get("slides", []) if slide["name"] == step["detail"]), {})
+    colors = ""
+    if root.get("diagram") and root.get("focus"):
+      colors = crumb_style(crumb_roles((base / root["diagram"]).read_text(), root["focus"][0]))
     # A text slide shows its own heading as its first item: keep the topic line for the others.
     topic = "" if step["slide"].get("heading") and step.get("diagram") is None and not step.get("code") else step["section"][1]
-    section = (f"<div class='section has-topic crumbs'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
+    section = (f"<div class='section has-topic crumbs' style='{colors}'><div class='act-name'><a data-back>↩ back</a>{trail}</div>"
                + (f"<div class='topic'>{esc(topic)}</div>" if topic else "") + "</div>")
   if step.get("diagram") is not None:
     # The `heading` takes the topic line: the topic was already announced by its divider.
