@@ -199,6 +199,16 @@ def test_get_shows_the_resource_classes_of_the_newest_revision(api):
   assert "  resource      db (postgres, bind, class restored): Ready" in lines
 
 
+def test_a_route_shows_the_public_url_first(api):
+  api["instance"] = api["instances"] = None
+  public = {**INSTANCE, "publicUrl": "http://reviews.demo.localhost:7080/"}
+  api["instance"], api["instances"] = public, [public]
+  assert run("list", "--environment", "demo").output.splitlines()[1].split()[-1] == "http://reviews.demo.localhost:7080/"
+  lines = run("get", "--component", "reviews", "--environment", "demo").output.splitlines()
+  assert "  url           http://reviews.demo.localhost:7080/" in lines
+  assert "  internal url  http://reviews.apps:80" in lines
+
+
 EXTRA = {**INSTANCE, "name": "reviews-pr-42@demo", "instance": "reviews-pr-42", "url": "http://reviews-pr-42.apps:80"}
 
 

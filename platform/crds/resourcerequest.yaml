@@ -81,6 +81,10 @@ spec:
                   description: Input of the provisioner, copied from the policy item that resolved it.
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                scoreParams:
+                  description: The params of the resource in the Score; ${resources.<name>.<key>} in them resolves against the outputs of the other resources of the instance. The policy params win over them.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
             status:
               type: object
               properties:

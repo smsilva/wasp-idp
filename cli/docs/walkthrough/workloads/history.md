@@ -1,6 +1,6 @@
 # The history of a workload
 
-Version `0.4.0` of `hello-api` keeps the resources of the template in its Score: `db`, `dns` and `route`. Only `postgres` has a provider so far. Deploy it:
+Version `0.4.0` of `hello-api` asks for a resource of type `redis`, which no binding policy resolves (written by `kubectl`, past the Score gate of the build). Deploy it:
 
 ```bash
 platform workload deploy \
@@ -15,7 +15,7 @@ platform workload history \
 ```
 
 ``` { .text .output title="output" }
-✗ hello-api@demo revision 2: ResourcesNotSupported: dns: no provisioner for dns in demo
+✗ hello-api@demo revision 2: ResourcesNotSupported: dns: no provisioner for redis in demo
 WORKLOAD        REVISION  ACTION  VERSION  STATUS                 BY                     CREATED
 hello-api@demo  1         deploy  0.3.0    Succeeded              dev@example.com        2026-10-11T21:28:36Z
 hello-api@demo  2         deploy  0.4.0    ResourcesNotSupported  dev@example.com        2026-10-11T21:28:54Z
@@ -32,7 +32,7 @@ What a deploy refuses:
 | no access to the environment | `403` |
 | a version or branch with no version in the index | `404` |
 | a version indexed before the index kept the spec | `409` `SpecNotIndexed` |
-| a resource type with no provisioner in the environment (`dns`, `route`) | revision `ResourcesNotSupported` |
+| a resource type with no provisioner in the environment (`redis`) | revision `ResourcesNotSupported` |
 | a resource whose mode would change ([A database for a workload](resources.md)) | revision `ResourceModeChanged` |
 | a provisioner that failed | revision `ResourcesFailed` |
 | a Score field outside phase 1 (anything but `containers` with image, command, args, variables, resources and `httpGet` probes, and `service.ports`) | revision `UnsupportedSpec` |

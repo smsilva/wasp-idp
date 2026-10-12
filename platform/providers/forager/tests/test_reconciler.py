@@ -223,3 +223,99 @@ def test_delete_with_the_environment_gone_has_no_vcluster():
   # The provisioner still undoes what lives outside the vcluster (compose), without one.
   assert provisioner.deleted == ["demo.reviews.db"] and provisioner.vclusters == [None]
   assert store.patches == [("demo.reviews.db", {"metadata": {"finalizers": []}})]
+
+
+class Recording:
+  """A provisioner that records the params it got and returns outputs from them."""
+
+  def __init__(self, outputs=None, score_params=("host", "path", "port")):
+    self.calls, self.outputs, self.score_params = [], outputs or {}, score_params
+
+  def ensure(self, request, params, vcluster, secrets):
+    self.calls.append((request["metadata"]["name"], params))
+    return "Ready", "ok", dict(self.outputs), None
+
+  def delete(self, request, vcluster, secrets):
+    pass
+
+
+ROUTE = {"type": "route", "params": {"host": "${resources.dns.host}", "path": "/", "port": 80}}
+DEFAULT_ROUTING = policy("platform-default", [{"type": "postgres", "mode": "provision"}, {"type": "dns", "mode": "provision"}, {"type": "route", "mode": "provision"}])
+
+
+def routing_reconciler(store):
+  dns, route = Recording({"host": "reviews.demo.localhost"}), Recording({"url": "http://reviews.demo.localhost:7080/"})
+  return Reconciler(store, FakeVclusters(), FakeSecrets(), provisioners={"dns/provision": dns, "route/provision": route}, now=lambda: NOW), dns, route
+
+
+def test_score_params_go_to_the_request():
+  store = FakeStore(resources={"dns": {"type": "dns"}, "route": ROUTE})
+  routing_reconciler(store)[0].reconcile([revision()], [], [DEFAULT_ROUTING])
+  assert store.created["demo.reviews.route"]["spec"]["scoreParams"] == {"host": "${resources.dns.host}", "path": "/", "port": 80}
+  assert "scoreParams" not in store.created["demo.reviews.dns"]["spec"]
+
+
+def test_a_reference_waits_for_the_resource_it_points_at():
+  # dns sorts before route: in the same pass it is Ready first, and the route gets its host.
+  store = FakeStore(resources={"dns": {"type": "dns"}, "route": ROUTE})
+  reconciler, dns, route = routing_reconciler(store)
+  reconciler.reconcile([revision()], [], [DEFAULT_ROUTING])
+  assert route.calls == [("demo.reviews.route", {"host": "reviews.demo.localhost", "path": "/", "port": 80})]
+
+
+def test_a_reference_to_a_resource_not_ready_keeps_provisioning():
+  store = FakeStore(resources={"dns": {"type": "dns"}, "route": ROUTE})
+  reconciler, dns, route = routing_reconciler(store)
+  waiting = {
+    "metadata": {"name": "demo.reviews.route", "finalizers": [FINALIZER]},
+    "spec": {"environment": "demo", "instance": "reviews", "component": "reviews", "resource": "route", "type": "route", "mode": "provision", "provisioner": "route/provision", "scoreParams": ROUTE["params"]},
+    "status": {"revision": 1, "conditions": [{"type": "Ready", "status": "Unknown", "reason": "Provisioning", "message": "provisioning"}]},
+  }
+  assert reconciler.reconcile([], [waiting], [DEFAULT_ROUTING]) is True
+  assert route.calls == []
+  ready = conditions(store, "demo.reviews.route")["Ready"]
+  assert (ready["status"], ready["message"]) == ("Unknown", "waiting for dns")
+
+
+def test_a_reference_to_an_unknown_output_fails():
+  store = FakeStore(resources={"dns": {"type": "dns"}, "route": {"type": "route", "params": {"host": "${resources.dns.address}"}}})
+  reconciler, dns, route = routing_reconciler(store)
+  reconciler.reconcile([revision()], [], [DEFAULT_ROUTING])
+  ready = conditions(store, "demo.reviews.route")["Ready"]
+  assert (ready["status"], ready["reason"], ready["message"]) == ("False", "Failed", "dns has no output address")
+
+
+def test_the_policy_params_win_over_the_score():
+  store = FakeStore(resources={"db": {"type": "postgres", "params": {"instance": "mine"}}})
+  provisioner = Recording(score_params=("instance",))
+  bound = policy("demo", [{"type": "postgres", "mode": "provision", "params": {"instance": "shared-pg"}}], environment="demo")
+  Reconciler(store, FakeVclusters(), FakeSecrets(), provisioners={"postgres/provision": provisioner}, now=lambda: NOW).reconcile([revision()], [], [bound])
+  assert provisioner.calls == [("demo.reviews.db", {"instance": "shared-pg"})]
+
+
+def test_a_provisioner_reads_only_the_score_params_it_lists():
+  # A bind whose policy item leaves port out (5432 by default): the Score must not pick another.
+  store = FakeStore(resources={"db": {"type": "postgres", "params": {"port": 6543, "host": "evil"}}})
+  provisioner = Recording(score_params=())
+  bound = policy("demo", [{"type": "postgres", "mode": "provision", "params": {"host": "db.example"}}], environment="demo")
+  Reconciler(store, FakeVclusters(), FakeSecrets(), provisioners={"postgres/provision": provisioner}, now=lambda: NOW).reconcile([revision()], [], [bound])
+  assert provisioner.calls == [("demo.reviews.db", {"host": "db.example"})]
+
+
+def test_new_score_params_provision_the_request_again():
+  store = FakeStore(resources={"dns": {"type": "dns"}, "route": {**ROUTE, "params": {**ROUTE["params"], "path": "/v2"}}})
+  reconciler, dns, route = routing_reconciler(store)
+  ready_route = {
+    "metadata": {"name": "demo.reviews.route", "finalizers": [FINALIZER]},
+    "spec": {"environment": "demo", "instance": "reviews", "component": "reviews", "resource": "route", "type": "route", "mode": "provision", "provisioner": "route/provision", "scoreParams": ROUTE["params"]},
+    "status": {"revision": 1, "outputs": {"url": "http://reviews.demo.localhost:7080/"}, "conditions": [{"type": "Resolved", "status": "True", "reason": "Resolved", "message": "route: route/provision", "revision": 1}, {"type": "Ready", "status": "True", "reason": "Ready", "message": "ok"}]},
+  }
+  ready_dns = {
+    "metadata": {"name": "demo.reviews.dns", "finalizers": [FINALIZER]},
+    "spec": {"environment": "demo", "instance": "reviews", "component": "reviews", "resource": "dns", "type": "dns", "mode": "provision", "provisioner": "dns/provision"},
+    "status": {"revision": 1, "outputs": {"host": "reviews.demo.localhost"}, "conditions": [{"type": "Resolved", "status": "True", "reason": "Resolved", "message": "dns: dns/provision", "revision": 1}, {"type": "Ready", "status": "True", "reason": "Ready", "message": "ok"}]},
+  }
+  reconciler.reconcile([revision(1, ready=("True", "Succeeded")), revision(2)], [ready_dns, ready_route], [DEFAULT_ROUTING])
+  assert ("demo.reviews.route", {"spec": {"scoreParams": {"host": "${resources.dns.host}", "path": "/v2", "port": 80}}}) in store.patches
+  assert route.calls == [("demo.reviews.route", {"host": "reviews.demo.localhost", "path": "/v2", "port": 80})]
+  assert dns.calls == []

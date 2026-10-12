@@ -6,6 +6,7 @@ import time
 
 from .postgres import provisioners
 from .reconciler import Reconciler
+from .routing import Dns, Route
 from .store import SERVER, BindSources, Secrets, SharedInstances, Store, Vclusters
 
 log = logging.getLogger("forager")
@@ -44,7 +45,8 @@ def main(argv: list[str] | None = None) -> None:
   signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = Store(args.namespace, args.context)
-  reconciler = Reconciler(store, Vclusters(args.vcluster_server), Secrets(args.secrets_namespace), provisioners(SharedInstances(args.secrets_namespace), BindSources(args.secrets_namespace)))
+  routing = {"dns/provision": Dns(store.get_environment), "route/provision": Route(store.get_environment)}
+  reconciler = Reconciler(store, Vclusters(args.vcluster_server), Secrets(args.secrets_namespace), provisioners(SharedInstances(args.secrets_namespace), BindSources(args.secrets_namespace)) | routing)
   log.info("resolving resources of workload revisions in %s", args.namespace)
   run(store, reconciler, args.resync_seconds, args.poll_seconds)
 

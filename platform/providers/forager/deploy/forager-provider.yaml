@@ -82,7 +82,7 @@ subjects:
     namespace: platform-system
 ---
 # The platform default layer: every environment provisions a dedicated postgres unless its own
-# policy says otherwise.
+# policy says otherwise, and reaches an instance from outside through its entry point (dns, route, ADR 0036).
 apiVersion: platform.wasp.silvios.me/v1alpha1
 kind: BindingPolicy
 metadata:
@@ -91,6 +91,10 @@ metadata:
 spec:
   provisioners:
     - type: postgres
+      mode: provision
+    - type: dns
+      mode: provision
+    - type: route
       mode: provision
 ---
 apiVersion: apps/v1

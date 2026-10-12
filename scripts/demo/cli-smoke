@@ -34,7 +34,8 @@ refused; --clear), a chain of two calls (productpage -> reviews) routed by --bag
 instance of reviews, which a --header route does not reach past the first call (#340), the plan
 of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), a postgres
 provisioned by the Forager (deploy until Ready, an app that connects to it with psql, the derived catalog Resource,
-released on remove), and a cloud account (ADR 0029): refused with a clear message without an
+released on remove), an instance reached from outside through dns and route (its public URL
+answers, and 404 after remove, #358), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -70,6 +71,7 @@ clone_component="smoke-clone-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
 workload_component="smoke-workload-${RANDOM}"
 route_component="smoke-route-${RANDOM}"
+public_component="smoke-public-${RANDOM}"
 chain_suffix="${RANDOM}"
 productpage_component="smoke-productpage-${chain_suffix}"
 reviews_component="smoke-reviews-${chain_suffix}"
@@ -153,8 +155,8 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" --ignore-not-found > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component})" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" "${public_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component},${public_component})" > /dev/null 2>&1 || true
   # The database restored by hand for bind (#306): a run stopped mid-step leaves it, and the next one
   # fails on "role restored already exists".
   kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
@@ -565,7 +567,7 @@ expect_failure "no version built from branch 'main' in the index" \
     --branch main
 step "workload deploy|list|get|history|rollback|remove: a version from the index in an environment (#292)"
 # A public image by digest the vcluster can pull, and a Score without resources; the next version is
-# the python-service Score, whose dns and route have no provider yet: ResourcesNotSupported.
+# the python-service Score with a resource type no policy resolves (redis): ResourcesNotSupported.
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
 apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
 kind: Version
@@ -617,7 +619,7 @@ spec:
   branch: main
   createdAt: "2026-10-11T13:00:00Z"
   appSpec:
-$(sed 's/^/    /' "${workload_directory}/app-spec.yaml")
+$(sed --expression 's/^    type: dns$/    type: redis/' --expression 's/^/    /' "${workload_directory}/app-spec.yaml")
 MANIFEST
 # The test user owns the environment but is not in team-platform, the owner team of the component.
 platform login --test-user
@@ -1287,9 +1289,109 @@ fi
 shared_psql "drop database restored with (force)"
 shared_psql "drop role restored"
 kubectl --context k3d-platform-local --namespace platform-resources delete secret restored-db
+
+step "workload deploy with dns and route: the instance reached from outside (#358)"
+# The platform default resolves dns and route as provision: a host under the environment's entry point
+# (ADR 0036) and an HTTPRoute on its Gateway. The route takes the host from the dns output.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${public_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: wasp-foundry/${public_component}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${public_component}.0.1.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${public_component}
+spec:
+  component: ${public_component}
+  version: "0.1.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '6%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-12T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${public_component}
+    resources:
+      dns:
+        type: dns
+      route:
+        type: route
+        params:
+          host: \${resources.dns.host}
+          path: /
+          port: 80
+    containers:
+      app:
+        image: .
+        variables:
+          PODINFO_UI_MESSAGE: \${metadata.name}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9898
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+MANIFEST
+public_url="http://${public_component}.${workload_environment}.localhost:7080/"
+output="$(platform workload deploy \
+  --component "${public_component}" \
+  --environment "${workload_environment}" \
+  --version 0.1.0 \
+  --wait)"
+echo "${output}"
+expect_output "revision 1: 0.1.0 running" "${output}"
+output="$(platform workload list --environment "${workload_environment}")"
+echo "${output}"
+expect_output "${public_url}" "${output}"
+output="$(platform workload get --component "${public_component}" --environment "${workload_environment}")"
+echo "${output}"
+expect_output "url           ${public_url}" "${output}"
+expect_output "internal url  http://${public_component}.apps:80" "${output}"
+expect_output "resource      route (route, provision): Ready" "${output}"
+answer="$(curl --silent --fail --max-time 10 "${public_url}")"
+expect_output "\"message\": \"${public_component}\"" "${answer}"
+output="$(platform workload remove \
+  --component "${public_component}" \
+  --environment "${workload_environment}" \
+  --wait)"
+expect_output "revision 2: removed from ${workload_environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${workload_environment}.${public_component}.route" \
+  --for delete \
+  --timeout 60s
+# The Forager released the route: the HTTPRoute is gone, and the Gateway answers 404 for the host once
+# istiod pushed the change (until then, 500: the route points at the Service remove already deleted).
+for attempt in $(seq 1 15); do
+  status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 "${public_url}")"
+  [[ "${status}" == "404" ]] && break
+  sleep 2
+done
+if [[ "${status}" != "404" ]]; then
+  echo "expected 404 at ${public_url} after remove, got ${status}" >&2
+  exit 1
+fi
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${public_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${public_component}-dns" "${public_component}-route"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${public_component}"
 platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
-kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${workload_component}-db" "${workload_component}-dns" "${workload_component}-route"
+kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${workload_component}-db" "${workload_component}-dns" "${workload_component}-redis" "${workload_component}-route" --ignore-not-found
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
 
 step "scm connection remove"

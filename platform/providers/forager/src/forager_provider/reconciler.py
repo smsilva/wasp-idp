@@ -5,8 +5,15 @@ resolved against the BindingPolicies and gets a ResourceRequest <environment>.<i
 created or reused, with status.revision set to that revision. Only when every resource of the
 revision resolved are they provisioned: a revision that will fail never brings up a database nobody
 uses. The workload provider waits for them and is the only writer of the revision status.
+
+The params of a resource in the Score go to spec.scoreParams, and ${resources.<name>.<key>} in them
+resolves against the outputs of the other resources of the same instance when it is provisioned: the
+route waits for the host of the dns (#358). A provisioner reads only the keys it lists in score_params
+(none by default), and the params of the policy item win over them: a Score never points a bind or a
+compose elsewhere.
 """
 import logging
+import re
 from datetime import datetime, timezone
 
 from .policy import resolve
@@ -17,6 +24,7 @@ CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
 FINALIZER = f"{GROUP}/forager"
 OPEN = "Unknown"
+REFERENCE = re.compile(r"\$\{resources\.([a-z0-9-]+)\.([A-Za-z0-9_]+)\}")
 
 log = logging.getLogger("forager")
 
@@ -48,6 +56,31 @@ def environment_ready(environment: dict | None) -> bool:
 def requested_class(revision: dict, name: str, resource: dict) -> str | None:
   override = (((revision["spec"].get("overrides") or {}).get("resources") or {}).get(name) or {}).get("class")
   return override or resource.get("class")
+
+
+def score_params(resource: dict) -> dict:
+  return {key: value for key, value in (resource.get("params") or {}).items() if isinstance(value, (str, int, float, bool))}
+
+
+class Waiting(Exception):
+  pass
+
+
+def resolve_params(params: dict, outputs_of) -> dict:
+  """${resources.<name>.<key>} replaced by the output of that resource; outputs_of(name) is None while
+  it is not Ready. A reference to an unknown key is an error, not a wait."""
+  def value(text):
+    if not isinstance(text, str):
+      return text
+    def replace(match):
+      outputs = outputs_of(match.group(1))
+      if outputs is None:
+        raise Waiting(f"waiting for {match.group(1)}")
+      if match.group(2) not in outputs:
+        raise InvalidName(f"{match.group(1)} has no output {match.group(2)}")
+      return str(outputs[match.group(2)])
+    return REFERENCE.sub(replace, text)
+  return {key: value(item) for key, item in params.items()}
 
 
 def _same(old: dict | None, new: dict) -> bool:
@@ -82,7 +115,7 @@ class Reconciler:
         if request["metadata"].get("deletionTimestamp"):
           pending |= self._finalize(request)
         elif (condition_of(request, "Ready") or {}).get("reason") == "Provisioning":
-          pending |= self._provision(request)
+          pending |= self._provision(request, by_name)
       except Exception:
         log.exception("request %s failed", request["metadata"]["name"])
         pending = True
@@ -128,11 +161,18 @@ class Reconciler:
     complete = all(plan[-1][0] == "True" for plan in plans)
     for request_name, name, kind, klass, resource_id, item, resolved in plans:
       request = by_name.get(request_name)
+      wanted_params = score_params(app_spec["resources"][name])
       if request is None:
-        request = self._create(revision, environment, request_name, name, kind, klass, resource_id, item)
+        request = self._create(revision, environment, request_name, name, kind, klass, resource_id, item, wanted_params)
         by_name[request_name] = request
         if not resource_id:
           self._derive(spec["component"], name, kind)
+      elif (request["spec"].get("scoreParams") or {}) != wanted_params:
+        # A new version changed the params (a route on another path): provisioned again.
+        self.store.patch_request(request_name, {"spec": {"scoreParams": wanted_params or None}})
+        request["spec"]["scoreParams"] = wanted_params
+        if (condition_of(request, "Ready") or {}).get("status") == "True":
+          request.setdefault("status", {})["conditions"] = [c for c in request["status"].get("conditions", []) if c.get("type") != "Ready"]
       elif item and not request["spec"].get("mode"):
         # Resolved late: the class is the one this revision asks for (None removes it, merge patch).
         fields = {"mode": item["mode"], "provisioner": f"{kind}/{item['mode']}", "params": item.get("params") or {}, "class": klass}
@@ -140,9 +180,11 @@ class Reconciler:
         request["spec"].update(fields)
       self._status(request, number, resolved, complete)
 
-  def _create(self, revision: dict, environment: dict, request_name: str, name: str, kind: str, klass: str | None, resource_id: str | None, item: dict | None) -> dict:
+  def _create(self, revision: dict, environment: dict, request_name: str, name: str, kind: str, klass: str | None, resource_id: str | None, item: dict | None, params: dict) -> dict:
     spec = revision["spec"]
     body_spec = {"environment": spec["environment"], "instance": spec["instance"], "component": spec["component"], "resource": name, "type": kind}
+    if params:
+      body_spec["scoreParams"] = params
     if klass:
       body_spec["class"] = klass
     if resource_id:
@@ -192,14 +234,28 @@ class Reconciler:
     self.store.patch_request_status(request["metadata"]["name"], patch)
     request["status"] = {**current, **patch}
 
-  def _provision(self, request: dict) -> bool:
+  def _outputs_of(self, request: dict, by_name: dict[str, dict]):
+    spec = request["spec"]
+    def outputs_of(resource: str) -> dict | None:
+      other = by_name.get(f"{spec['environment']}.{spec['instance']}.{resource}")
+      if other is None or (condition_of(other, "Ready") or {}).get("status") != "True":
+        return None
+      return (other.get("status") or {}).get("outputs") or {}
+    return outputs_of
+
+  def _provision(self, request: dict, by_name: dict[str, dict] | None = None) -> bool:
     spec = request["spec"]
     environment = self.store.get_environment(spec["environment"])
     if not environment_ready(environment):
       return True
     provisioner = self.provisioners[spec["provisioner"]]
     try:
-      state, message, outputs, secret_ref = provisioner.ensure(request, spec.get("params") or {}, self.vclusters.of(environment), self.secrets)
+      allowed = getattr(provisioner, "score_params", ())
+      from_score = {key: value for key, value in (spec.get("scoreParams") or {}).items() if key in allowed}
+      params = {**resolve_params(from_score, self._outputs_of(request, by_name or {})), **(spec.get("params") or {})}
+      state, message, outputs, secret_ref = provisioner.ensure(request, params, self.vclusters.of(environment), self.secrets)
+    except Waiting as error:
+      state, message, outputs, secret_ref = "Provisioning", str(error), (request.get("status") or {}).get("outputs") or {}, (request.get("status") or {}).get("secretRef")
     except InvalidName as error:
       state, message, outputs, secret_ref = "Failed", str(error), {}, None
     ready = {"Ready": ("True", "Ready"), "Failed": ("False", "Failed")}.get(state, (OPEN, "Provisioning"))

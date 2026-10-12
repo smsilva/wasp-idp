@@ -291,3 +291,21 @@ def test_resources_ready_fill_the_deployment_and_the_instance():
   env = vcluster.objects[1]["spec"]["template"]["spec"]["containers"][0]["env"]
   assert env == [{"name": "DB_HOST", "value": "reviews-db.apps"}, {"name": "DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "reviews-db", "key": "password"}}}]
   assert store.instance_status["demo.reviews"][-1]["resources"] == [{"name": "db", "type": "postgres", "mode": "provision", "status": "Ready"}]
+
+
+def test_a_route_gives_the_instance_its_public_url():
+  store, vcluster = FakeStore(app_spec=score(resources={"dns": {"type": "dns"}, "route": {"type": "route", "params": {"host": "${resources.dns.host}", "port": 80}}})), FakeVcluster(deployment())
+  for name, kind, outputs in (("dns", "dns", {"host": "reviews.demo.localhost"}), ("route", "route", {"host": "reviews.demo.localhost", "path": "/", "url": "http://reviews.demo.localhost:7080/"})):
+    item = request()
+    item["metadata"]["name"], item["spec"]["type"], item["status"]["outputs"], item["status"]["secretRef"] = f"demo.reviews.{name}", kind, outputs, None
+    store.requests[f"demo.reviews.{name}"] = item
+  reconciler(store, vcluster).reconcile([revision()], [])
+  status = store.instance_status["demo.reviews"][-1]
+  assert (status["url"], status["publicUrl"]) == ("http://reviews.apps:80", "http://reviews.demo.localhost:7080/")
+
+
+def test_without_route_no_public_url():
+  store, vcluster = with_db(), FakeVcluster(deployment())
+  store.requests["demo.reviews.db"] = request()
+  reconciler(store, vcluster).reconcile([revision()], [])
+  assert store.instance_status["demo.reviews"][-1]["publicUrl"] is None
