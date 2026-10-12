@@ -1,6 +1,6 @@
 # IDP presentation
 
-Apresentação detalhada sobre Internal Developer Platform: o problema, os 5 planes montados parte a parte, a Platform API e seus clientes, a jornada da ideia ao `curl`, o que muda quando o usuário é um agente, e onde esta plataforma está hoje.
+Apresentação detalhada sobre Internal Developer Platform: o problema, os 5 planes montados parte a parte, a Platform API e seus clientes, a jornada da ideia ao `curl`, e o que muda quando o usuário é um agente.
 
 É um deck único. Versões para outro público saem de um filtro sobre a classificação `audiences` dos slides, não de cópias.
 
