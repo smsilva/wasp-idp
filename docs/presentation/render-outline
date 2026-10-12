@@ -889,8 +889,10 @@ def render_stage(step, base, outline=None):
     if step.get("overlay"):
       overlay = ("<div class='overlay'>"
                  + f"<div class='ov-tree'>{overlay_tree(step['overlay'])}</div></div>")
-    # With an overlay, the diagram moves left (over the empty clients column) so the focused box stays visible.
-    inner = "inner diagram-inner with-overlay" if overlay else "inner diagram-inner"
+    # With an overlay, the diagram moves left (over the empty clients column) so the focused box stays visible;
+    # with the clients drawn, the move would hide them, and the diagram stays put.
+    clients = any(part.startswith("clients") and shown != "hidden" for part, shown in step["diagram"].items())
+    inner = "inner diagram-inner with-overlay" if overlay and not clients else "inner diagram-inner"
     return f"{section}<div class='{inner}'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}{trail}"
   if step.get("code"):
     source = (base / step["code"]["file"]).read_text().splitlines()

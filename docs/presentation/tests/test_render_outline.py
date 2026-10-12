@@ -210,6 +210,16 @@ def test_trail_in_the_footer(tmp_path):
           "<a data-go-slide='box'>Box</a> / <a data-go-slide='box-a'>A</a> / <span class='here'>B</span></div>") in stage(page, 10)
 
 
+def test_root_with_clients_does_not_shift(tmp_path):
+  # The overlay shifts the diagram over the clients column: a root that draws the clients keeps it in place.
+  data = outline()
+  slide(data, "box")["dim"] = ["plane", "p.2", "clients.1"]
+  (tmp_path / "d.svg").write_text(SVG)
+  page = ro.render_html(data, tmp_path)
+  assert "inner diagram-inner'" in stage(page, 7) and "with-overlay" not in stage(page, 7)
+  assert "with-overlay" in stage(deck(tmp_path), 7)
+
+
 def test_trail_sits_above_the_slide():
   # `.inner` covers the whole stage (inset: 0): without a z-index it takes the trail's clicks.
   assert ".stage .trail { position: absolute; z-index: 2;" in ro.CSS
