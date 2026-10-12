@@ -175,3 +175,10 @@ def test_breadcrumb_and_overlay(tmp_path):
 def test_agenda_range_skips_details(tmp_path):
   page = deck(tmp_path)
   assert "data-go='1' data-last='4'" in page
+
+
+def test_divider_steps_are_marked(tmp_path):
+  # A link (box, breadcrumb) to `full` skips its topic divider and lands on the diagram.
+  page = deck(tmp_path)
+  assert "data-step='5' data-slide='full' data-divider>" in stage(page, 5)
+  assert "data-divider" not in stage(page, 6)
