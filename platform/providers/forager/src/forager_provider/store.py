@@ -6,6 +6,8 @@ import hashlib
 import yaml
 from kubernetes import client, config, dynamic, watch
 
+from .shared import SharedPostgres
+
 GROUP = "platform.wasp.silvios.me"
 CATALOG_GROUP = f"catalog.{GROUP}"
 VERSION = "v1alpha1"
@@ -167,3 +169,16 @@ class Vclusters:
     vcluster = Vcluster(config.new_client_from_config_dict(kubeconfig))
     self.cache[name] = (key, vcluster)
     return vcluster
+
+
+class SharedInstances:
+  """The shared instances compose provisions into (#305): Service <name> and its admin password in
+  Secret <name>-admin, both in the namespace of the generated credentials, written by `platform init`."""
+
+  def __init__(self, namespace: str):
+    self.namespace = namespace
+    self.api = client.CoreV1Api()
+
+  def of(self, instance: str) -> SharedPostgres:
+    secret = self.api.read_namespaced_secret(f"{instance}-admin", self.namespace)
+    return SharedPostgres(f"{instance}.{self.namespace}", base64.b64decode(secret.data["password"]).decode())

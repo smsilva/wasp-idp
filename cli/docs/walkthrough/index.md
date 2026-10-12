@@ -108,6 +108,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [21.5 Roll back and remove](workloads/21-5-rollback.md)
 - [21.6 The plan of an environment](workloads/21-6-apply.md)
 - [21.7 A database for a workload](workloads/21-7-resources.md)
+- [21.8 A database in the shared instance](workloads/21-8-compose.md)
 
 - [22. Remove the GitHub connection](scm-connection/22-remove.md)
 - [23. Clean up and sign out](23-cleanup.md)

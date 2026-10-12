@@ -31,12 +31,22 @@ def host_service(port: int) -> str:
   }, sort_keys=False)
 
 
+# The shared instances the Forager composes into (#305), replicated into namespace resources of every
+# vcluster: a pod reaches shared-pg.resources, the host Service. Only the vclusters installed after
+# this change have it (the release is installed once).
+SHARED_SERVICES = ("shared-pg",)
+SHARED_NAMESPACE = "platform-resources"
+
+
 def values(port: int) -> dict:
   """Control plane reachable from the host: the chart's Service stays ClusterIP on 443 for the pods,
   a second Service (LoadBalancer) publishes the host port, and the certificate is valid for 127.0.0.1."""
   return {
     "controlPlane": {
       "proxy": {"extraSANs": ["127.0.0.1", "localhost"]},
+    },
+    "networking": {
+      "replicateServices": {"fromHost": [{"from": f"{SHARED_NAMESPACE}/{name}", "to": f"resources/{name}"} for name in SHARED_SERVICES]},
     },
     "experimental": {"deploy": {"host": {"manifests": host_service(port)}}},
     "exportKubeConfig": {"server": f"https://127.0.0.1:{port}"},

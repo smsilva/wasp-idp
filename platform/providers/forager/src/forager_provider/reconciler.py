@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 
 from .policy import resolve
-from .postgres import PROVISIONERS, InvalidName
+from .postgres import InvalidName
 
 GROUP = "platform.wasp.silvios.me"
 CATALOG_GROUP = f"catalog.{GROUP}"
@@ -55,7 +55,7 @@ def _same(old: dict | None, new: dict) -> bool:
 
 
 class Reconciler:
-  def __init__(self, store, vclusters, secrets, provisioners=PROVISIONERS, now=utcnow):
+  def __init__(self, store, vclusters, secrets, provisioners: dict, now=utcnow):
     self.store = store
     self.vclusters = vclusters
     self.secrets = secrets
@@ -215,9 +215,11 @@ class Reconciler:
     spec = request["spec"]
     environment = self.store.get_environment(spec["environment"])
     provisioner = self.provisioners.get(spec.get("provisioner") or "")
-    # With the environment going away, the vcluster goes with it: only the control plane is left.
-    if provisioner is not None and environment_ready(environment):
-      provisioner.delete(request, self.vclusters.of(environment), self.secrets)
+    # With the environment going away, the vcluster goes with it: the provisioner undoes only what
+    # lives outside (a database in a shared instance) and the control plane.
+    vcluster = self.vclusters.of(environment) if environment_ready(environment) else None
+    if provisioner is not None:
+      provisioner.delete(request, vcluster, self.secrets)
     else:
       self.secrets.delete(request["metadata"]["name"])
     self.store.patch_request(request["metadata"]["name"], {"metadata": {"finalizers": [f for f in finalizers if f != FINALIZER]}})

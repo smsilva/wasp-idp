@@ -220,3 +220,55 @@ def delete(name: str, output: OutputOption = Format.table):
     print_json(result)
   else:
     success(f"{name} deleting")
+
+
+policy_app = typer.Typer(help="The binding policy of an environment: which mode makes each resource there.", no_args_is_help=True)
+app.add_typer(policy_app, name="policy")
+
+
+def print_policy(policy: dict) -> None:
+  """Both layers, in the order the Forager resolves them: the first row that matches wins."""
+  layers = [("environment", item) for item in policy["provisioners"]] + [("default", item) for item in policy["default"]]
+  rows = [
+    [layer, item["type"], item.get("class") or "—", item.get("id") or "—", item["mode"], ", ".join(f"{key}={value}" for key, value in sorted((item.get("params") or {}).items())) or "—"]
+    for layer, item in layers
+  ]
+  print_table(["LAYER", "TYPE", "CLASS", "ID", "MODE", "PARAMS"], rows)
+
+
+@policy_app.command("get")
+def policy_get(name: str, output: OutputOption = Format.table):
+  """Show the policy of an environment, followed by the platform default."""
+  try:
+    policy = _client().get_binding_policy(name)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(policy)
+  else:
+    print_policy(policy)
+
+
+@policy_app.command("set")
+def policy_set(
+  name: str,
+  file: Annotated[Path, typer.Option("--file", help="YAML with a provisioners list (type, class, id, mode, params); '-' reads stdin.")],
+  output: OutputOption = Format.table,
+):
+  """Replace the policy of an environment (platform-admins). An empty list removes it."""
+  try:
+    document = yaml.safe_load(sys.stdin.read() if str(file) == "-" else file.read_text())
+  except (OSError, yaml.YAMLError) as error:
+    fail(f"{file}: {error}")
+  provisioners = (document or {}).get("provisioners") if isinstance(document, dict) else None
+  if not isinstance(provisioners, list):
+    fail(f"{file}: expected a 'provisioners' list")
+  try:
+    policy = _client().set_binding_policy(name, provisioners)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(policy)
+    return
+  success(f"{name}: policy set" if policy["provisioners"] else f"{name}: policy removed, the platform default applies")
+  print_policy(policy)

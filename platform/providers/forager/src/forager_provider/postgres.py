@@ -2,13 +2,20 @@
 
 - ensure(request, params, vcluster, secrets) -> (state, message, outputs, secret_ref), where state is
   Provisioning, Ready or Failed; called on every pass until Ready, so it is idempotent;
-- delete(request, vcluster, secrets): undo what ensure made.
+- delete(request, vcluster, secrets): undo what ensure made. vcluster is None when the environment
+  is going away: what lived in it goes with it, what lives outside (compose) is still undone.
 
 provision: a dedicated Postgres in namespace resources of the vcluster, apart from the workloads of
 namespace apps. Its name is <instance>-<resource>-<hash of the ResourceRequest>: two requests never
 share objects ("a" + "b-db" and "a-b" + "db" differ), and an object owned by another request is
 refused, never taken over. The password is generated once and kept in the control plane (secrets),
 the source of the Secret written in namespace apps, where the workload's secretKeyRef reads it. No volume: the data goes with the pod (ephemeral environments, aws/docs/known-broken.md).
+
+compose: a role and a database of their own in a shared instance (params.instance, shared-pg), made
+through the driver with every name as an identifier. The role carries the ResourceRequest as its
+comment, created in the same transaction, and the database is ours only when that role owns it: a
+database or role of anyone else is refused, never taken over. The pods reach the instance through the
+Service the vcluster replicates from the host into namespace resources (local_vcluster, #305).
 """
 import hashlib
 import re
@@ -109,9 +116,57 @@ class Provision:
   def delete(self, request: dict, vcluster, secrets) -> None:
     name, owner = object_name(request), request["metadata"]["name"]
     for api_version, kind, namespace in (("v1", "Service", NAMESPACE), ("apps/v1", "StatefulSet", NAMESPACE), ("v1", "Secret", NAMESPACE), ("v1", "Secret", SECRET_NAMESPACE)):
-      if _owned(vcluster.get(api_version, kind, namespace, name), owner):
+      if vcluster is not None and _owned(vcluster.get(api_version, kind, namespace, name), owner):
         vcluster.delete(api_version, kind, namespace, name)
     secrets.delete(request["metadata"]["name"])
 
 
-PROVISIONERS = {"postgres/provision": Provision()}
+def shared_instance(params: dict) -> str:
+  instance = (params or {}).get("instance") or ""
+  if not DNS_LABEL.fullmatch(instance):
+    raise InvalidName(f"{instance!r} is not a shared instance (params.instance)")
+  return instance
+
+
+class Compose:
+  def __init__(self, instances):
+    self.instances = instances  # instance name -> its admin connection (store.SharedInstances)
+
+  def ensure(self, request: dict, params: dict, vcluster, secrets) -> tuple[str, str, dict, dict]:
+    instance, name, owner = shared_instance(params), object_name(request), request["metadata"]["name"]
+    if not _owned(vcluster.get("v1", "Secret", SECRET_NAMESPACE, name), owner):
+      raise InvalidName(f"Secret {SECRET_NAMESPACE}/{name} already exists and belongs to something else")
+    server = self.instances.of(instance)
+    if server.claimed_by(name) not in (None, owner):
+      raise InvalidName(f"database or role {name} in {instance} already exists and belongs to something else")
+    password = password_of(request, secrets)
+    server.ensure(name, password, owner)
+    labels = {"app.kubernetes.io/name": "postgres", "app.kubernetes.io/instance": name, "app.kubernetes.io/managed-by": MANAGER}
+    # resources: where the vcluster replicates the shared instance's Service.
+    for obj in (
+      {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE}},
+      {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": SECRET_NAMESPACE}},
+      {"apiVersion": "v1", "kind": "Secret", "metadata": {"name": name, "namespace": SECRET_NAMESPACE, "labels": labels, "annotations": {OWNER: owner}}, "type": "Opaque", "stringData": {"password": password}},
+    ):
+      vcluster.apply(obj, MANAGER)
+    outputs = {"host": f"{instance}.{NAMESPACE}", "port": PORT, "name": name, "database": name, "username": name}
+    return "Ready", f"database {name} ready in {instance}", outputs, {"name": name, "keys": ["password"]}
+
+  def delete(self, request: dict, vcluster, secrets) -> None:
+    name, owner = object_name(request), request["metadata"]["name"]
+    try:
+      instance = shared_instance(request["spec"].get("params"))
+    except InvalidName:
+      instance = None  # ensure never got past it: nothing was made in an instance
+    if instance is not None:
+      server = self.instances.of(instance)
+      if server.claimed_by(name) == owner:
+        server.drop(name)
+    if vcluster is not None and _owned(vcluster.get("v1", "Secret", SECRET_NAMESPACE, name), owner):
+      vcluster.delete("v1", "Secret", SECRET_NAMESPACE, name)
+    secrets.delete(owner)
+
+
+def provisioners(instances) -> dict:
+  return {"postgres/provision": Provision(), "postgres/compose": Compose(instances)}
+

@@ -746,6 +746,75 @@ kubectl --context k3d-platform-local --namespace platform-system wait \
   "resourcerequests.platform.wasp.silvios.me/${workload_environment}.${workload_component}.db" \
   --for delete \
   --timeout 60s
+
+step "environment policy set|get: postgres in mode compose, in the shared instance (#305)"
+# The policy of the environment comes before the platform default: the same 0.5.0 now gets a role
+# and a database in shared-pg (platform-resources), reached through the Service the vcluster
+# replicates into its namespace resources. remove drops them.
+expect_failure "compose needs params.instance" \
+  platform environment policy set "${workload_environment}" --file - <<< "provisioners: [{type: postgres, mode: compose}]"
+output="$(platform environment policy set "${workload_environment}" --file - <<POLICY
+provisioners:
+  - type: postgres
+    mode: compose
+    params:
+      instance: shared-pg
+POLICY
+)"
+echo "${output}"
+expect_output "${workload_environment}: policy set" "${output}"
+output="$(platform environment policy get "${workload_environment}")"
+echo "${output}"
+expect_output "environment  postgres  —      —   compose    instance=shared-pg" "${output}"
+expect_output "default      postgres  —      —   provision  —" "${output}"
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --version 0.5.0 \
+  --wait)"
+echo "${output}"
+expect_output "revision 10: 0.5.0 running" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${workload_environment}")"
+echo "${output}"
+expect_output "resource      db (postgres, compose): Ready" "${output}"
+connected="false"
+for attempt in $(seq 1 30); do
+  if kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" 2>/dev/null | grep --quiet "${workload_component}-db-"; then
+    connected="true"
+    break
+  fi
+  sleep 2
+done
+if [[ "${connected}" != "true" ]]; then
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" | tail -5 >&2
+  echo "the app never connected to its database in shared-pg" >&2
+  exit 1
+fi
+shared_databases() {
+  kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
+    psql \
+      --username postgres \
+      --tuples-only \
+      --no-align \
+      --command "select count(*) from pg_database where datname like '${workload_component}-db-%'"
+}
+if [[ "$(shared_databases)" != "1" ]]; then
+  echo "no database of ${workload_component} in shared-pg" >&2
+  exit 1
+fi
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --wait)"
+expect_output "revision 11: removed from ${workload_environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${workload_environment}.${workload_component}.db" \
+  --for delete \
+  --timeout 60s
+if [[ "$(shared_databases)" != "0" ]]; then
+  echo "remove left the database of ${workload_component} in shared-pg" >&2
+  exit 1
+fi
 platform environment delete "${workload_environment}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
 kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${workload_component}-db" "${workload_component}-dns" "${workload_component}-route"
