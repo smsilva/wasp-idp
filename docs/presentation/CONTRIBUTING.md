@@ -64,7 +64,7 @@ O `render-outline` imprime o caminho do HTML. Se houver erro de encadeamento (`d
 | `message` | sim | A única ideia do slide, numa frase |
 | `screen` | um dos três | Keywords que aparecem na tela (2–4 palavras cada) |
 | `code` | um dos três | `{file, lines?, focus?}`: quadro de código estilo IDE; `focus` realça linhas e esmaece o resto |
-| `diagram` | um dos três | SVG com partes `<g data-part="…">`. `show`: partes em cor plena (o esqueleto); `dim`: conteúdo já explicado, esmaecido; `reveal`: uma parte nova por passo. Partes anteriores do mesmo `reveal` esmaecem, salvo `accumulate: true` (o desenho cresce); `start: empty` abre com um passo antes do primeiro `reveal`; `empty` lista partes que só aparecem nesse passo (o `$` do terminal vazio). Parte `dev.2` herda o estado de `dev` quando não é citada |
+| `diagram` | um dos três | SVG com partes `<g data-part="…">`. `show`: partes em cor plena (o esqueleto); `dim`: conteúdo já explicado, esmaecido; `reveal`: uma parte nova por passo. Partes anteriores do mesmo `reveal` esmaecem, salvo `accumulate: true` (o desenho cresce) ou `accumulate: commands` (terminal: o comando atual e a sua saída acesos, os anteriores esmaecidos); `start: empty` abre com um passo antes do primeiro `reveal`; `empty` lista partes que só aparecem nesse passo (o `$` do terminal vazio). Parte `dev.2` herda o estado de `dev` quando não é citada |
 | `heading` | não | Assunto do slide: sozinho no primeiro passo, depois no alto, esmaecido. Em `diagram`, ocupa a linha do tópico no cabeçalho |
 | `topic` | não | Agrupa slides seguidos do mesmo assunto; a mudança de `topic` gera um passo de transição, salvo `divider: false` no slide |
 | `source` | não | Rodapé "Source: …" do slide |

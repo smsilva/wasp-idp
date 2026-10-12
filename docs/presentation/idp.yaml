@@ -1860,7 +1860,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **este é o momento 0**, feito uma vez pelo time de plataforma, antes de qualquer dev aparecer. As próximas seções respondem de onde vêm o time, a org, o registry, a conta de nuvem e o `greeter` que a jornada usa.
 
@@ -1877,7 +1877,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **todo component tem um time dono**, e o time existe antes do component. Uma plataforma recém-criada não tem time nenhum: o `list` só imprime o cabeçalho.
 
@@ -1894,7 +1894,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **o dev só cria component, faz build e deploy se for membro do time dono.** Sem esse passo, a jornada começa com `403`.
 
@@ -1911,7 +1911,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **a plataforma passa a criar repos na org** com uma credencial própria, não com o token de uma pessoa.
 
@@ -1928,7 +1928,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **o registry é outro conceito**: a connection diz onde o código mora, o registry diz onde as imagens moram. O `verify` da seção anterior sugere cadastrar o GHCR da org como registry padrão.
 
@@ -1947,7 +1947,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **a nuvem é uma escolha da plataforma**, feita uma vez.
 
@@ -1966,7 +1966,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **a plataforma começa do catálogo que a empresa já tem**: domains, systems, resources e times entram sem recadastro.
 
@@ -1985,7 +1985,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **o caminho pavimentado também é entidade do catálogo**, escolhido pela plataforma.
 
@@ -2005,7 +2005,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **o primeiro passo não é código, é registrar a ideia** — com dono, sistema e repo criados pelo golden path.
 
@@ -2022,7 +2022,7 @@ slides:
     diagram: "diagrams/journey/plan-2.svg"
     show: [strip]
     reveal: [cmd.1, cmd.1-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       Continuação: O que queremos dizer: **o primeiro passo não é código, é registrar a ideia** — com dono, sistema e repo criados pelo golden path.
 
@@ -2041,7 +2041,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.3, cmd.4, cmd.4-editor]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **o agente trabalha com o contexto que a plataforma deu** — o PRD, o `AGENTS.md`, a spec e a entrada do catálogo.
 
@@ -2060,7 +2060,7 @@ slides:
     diagram: "diagrams/journey/code-2.svg"
     show: [strip]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       Continuação: O que queremos dizer: **o agente trabalha com o contexto que a plataforma deu** — o PRD, o `AGENTS.md`, a spec e a entrada do catálogo.
 
@@ -2081,7 +2081,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **qualquer branch pode virar artefato versionado** — a versão carrega a branch e o commit.
 
@@ -2102,7 +2102,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **ambiente é self-service** — listar o que existe e criar um novo sem ticket.
 
@@ -2121,7 +2121,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **deploy é ligar uma versão a um ambiente** — e a resposta é uma URL.
 
@@ -2144,7 +2144,7 @@ slides:
     start: "empty"
     empty: [prompt]
     reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
-    accumulate: true
+    accumulate: commands
     notes: |-
       O que queremos dizer: **da ideia ao produto rodando, sem abrir ticket** — o `curl` é a prova.
 
