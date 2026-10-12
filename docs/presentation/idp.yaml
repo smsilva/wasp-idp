@@ -935,6 +935,7 @@ slides:
   - name: golden-paths
     act: developer-control
     parent: detail-golden-paths
+    label: "The easy way is the right way"
     topic: "Golden Paths"
     message: "O golden path junta catálogo e declaração: cria o repo já com os dois arquivos, pelo caminho pavimentado."
     heading: "Golden paths"
