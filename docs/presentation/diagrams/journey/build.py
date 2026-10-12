@@ -198,6 +198,7 @@ SETUP_SESSIONS = [
   # Real output also suggests the next command (→ register its GHCR …): it overflows the terminal.
   ("platform scm connection verify wasp-foundry --wait",
    ["✓ wasp-foundry ready (wasp-foundry, all repositories)"]),
+  PAGE,
   # Real output goes on with ", pushed by the CI of wasp-foundry repos".
   (["platform registry add ghcr-wasp-foundry",
     "--scm-connection wasp-foundry",
@@ -295,7 +296,7 @@ def command_line(x, y, text):
           f'xml:space="preserve" {MONO}>{spans}</text>')
 
 # Working directory in the terminal title: the repo is cloned in Code, so Plan runs from home.
-CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", "setup-2": "~", "setup-3": "~", "setup-4": "~"}  # per page: `code-2` runs after the `cd`
+CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", "setup-2": "~", "setup-3": "~", "setup-4": "~", "setup-5": "~"}  # per page: `code-2` runs after the `cd`
 
 def session(key, commands, name):
   parts = {}
