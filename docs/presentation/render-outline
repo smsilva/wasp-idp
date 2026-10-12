@@ -101,6 +101,28 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .diagram svg { max-width: 100%; max-height: 100%; width: auto; height: 100%; display: block; }
 .stage .diagram .part-hidden { visibility: hidden; }
 .stage .diagram .part-dim { opacity: 0.32; }
+.stage .trail { position: absolute; z-index: 2; right: 7cqw; bottom: 2.4cqw; max-width: 50cqw; text-align: right; font-size: 0.95cqw; color: #3f4756; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage .trail a { color: #4b5668; cursor: pointer; }
+.stage .trail a:hover { color: #9fb3c8; }
+.stage .trail a[data-back] { color: #4a9ef4; opacity: 0.7; margin-right: 0.8cqw; }
+.stage .trail .here { color: #6b7a8d; }
+.stage .inner.diagram-inner.with-overlay .diagram { transform: translateX(-17cqw); }
+.stage .diagram .part-link { cursor: pointer; }
+.stage .diagram .part-link:hover > rect:first-of-type { stroke: #4a9ef4; }
+.stage .overlay { position: absolute; right: 5cqw; top: 9cqw; max-height: calc(100% - 15.5cqw); overflow: hidden; width: 58cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 1.6cqw 2.2cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
+.stage .overlay .ov-tree { columns: 2; column-gap: 3.2cqw; }
+.stage .overlay .ov-topic { break-inside: avoid; }
+.stage .overlay .ov-r { font-size: 1.2cqw; line-height: 1.5; color: #9fb3c8; border-left: 1px solid #1f2937; margin-left: 0.4cqw; break-inside: avoid; }
+.stage .overlay .ov-d0 { border: 0; margin: 0.5cqw 0 0; font-size: 1.55cqw; font-weight: 700; break-after: avoid; }
+.stage .overlay .ov-d0:first-child { margin-top: 0; }
+.stage .overlay .ov-d0 a { color: #fff; }
+.stage .overlay .ov-d1 { padding-left: 1.3cqw; }
+.stage .overlay .ov-d2 { padding-left: 2.6cqw; }
+.stage .overlay .ov-d2 a:first-child, .stage .overlay .ov-d3 a:first-child { color: #6b7a8d; }
+.stage .overlay .ov-d3 { padding-left: 3.9cqw; }
+.stage .overlay a { cursor: pointer; color: inherit; }
+.stage .overlay .ov-ex { white-space: nowrap; margin-left: 0.5cqw; font-size: 0.75em; font-weight: 400; color: #e5c07b; opacity: 0.75; }
+.stage .overlay a:hover, .stage .overlay .ov-d2 a:hover, .stage .overlay .ov-ex:hover { color: #4a9ef4; opacity: 1; }
 .stage .code .ln { padding: 0 1.4cqw; }
 .stage .code .no { width: 2.6cqw; margin-right: 1.4cqw; }
 .stage .code .bar { font-size: 1cqw; padding: 0.5cqw 1.4cqw; }
@@ -227,11 +249,18 @@ const deck = document.getElementById('deck');
 const stages = deck.querySelectorAll('.stage');
 let current = 0;
 let syncing = false;
+// Detail steps (`parent`) come after the main track: → never walks into them, a link opens them.
+const firstDetail = Array.from(stages).findIndex((stage) => stage.dataset.detail !== undefined);
+const lastMain = (firstDetail < 0 ? stages.length : firstDetail) - 1;
+// Where the link into a detail came from: set only from a main-track step, cleared on any main-track step.
+const ORIGIN_KEY = 'idp-outline-origin';
 // Presenter view: a second window of this same page, kept in sync step by step.
 const channel = new BroadcastChannel('idp-outline-' + location.pathname);
 channel.onmessage = (event) => {
   syncing = true;
-  if (!deck.classList.contains('on')) present(event.data); else show(event.data);
+  const { step, origin } = event.data;
+  if (origin === null) sessionStorage.removeItem(ORIGIN_KEY); else sessionStorage.setItem(ORIGIN_KEY, origin);
+  if (!deck.classList.contains('on')) present(step); else show(step);
   syncing = false;
 };
 const NOTES_KEY = 'idp-outline-notes';
@@ -253,14 +282,50 @@ document.fonts.ready.then(() => { if (deck.classList.contains('on')) fitAligned(
 window.addEventListener('resize', () => { if (deck.classList.contains('on')) fitAligned(stages[current]); });
 function show(index) {
   current = Math.max(0, Math.min(stages.length - 1, index));
+  if (stages[current].dataset.detail === undefined) sessionStorage.removeItem(ORIGIN_KEY);
   stages.forEach((stage, i) => stage.classList.toggle('current', i === current));
   fitAligned(stages[current]);
   deck.querySelector('.counter').textContent = (current + 1) + ' / ' + stages.length;
   deck.querySelector('.notes-panel').innerHTML = deck.querySelector(`template[data-notes='${current}']`).innerHTML;
-  if (!syncing) channel.postMessage(current);
+  if (!syncing) channel.postMessage({ step: current, origin: sessionStorage.getItem(ORIGIN_KEY) });
   history.replaceState(null, '', '#present-' + (current + 1));
 }
 function present(index) { deck.classList.add('on'); show(index); }
+function goSlide(name) {
+  const target = deck.querySelector(`.stage[data-slide='${name}']`);
+  if (!target) return;
+  if (stages[current].dataset.detail === undefined) sessionStorage.setItem(ORIGIN_KEY, String(current));
+  // A main-track diagram opens complete (its last step); a detail slide opens past its topic divider.
+  const step = Number(target.dataset.step);
+  if (target.dataset.detail === undefined && target.dataset.lastStep !== undefined
+      && stages[Number(target.dataset.lastStep)].querySelector('.diagram')) show(Number(target.dataset.lastStep));
+  else show(target.dataset.divider !== undefined ? step + 1 : step);
+}
+// Back: to the step the link came from; with none (direct link, index), to the parent slide.
+function back() {
+  const origin = sessionStorage.getItem(ORIGIN_KEY);
+  show(origin !== null ? Number(origin) : Number(stages[current].dataset.up));
+}
+// Leaving a subtree (→ on its last step, ← on its root): to the origin, else out to the main track.
+function leave() {
+  const origin = sessionStorage.getItem(ORIGIN_KEY);
+  show(origin !== null ? Number(origin) : Number(stages[current].dataset.out));
+}
+function next() {
+  if (stages[current].dataset.exit !== undefined) leave();
+  else if (current !== lastMain) show(current + 1);
+}
+function previous() {
+  if (stages[current].dataset.entry !== undefined) leave(); else show(current - 1);
+}
+// Clicks navigate only on links (box, breadcrumb, overlay, back): elsewhere a click keeps the text selection.
+deck.addEventListener('click', (event) => {
+  if (!deck.classList.contains('on')) return;
+  const link = event.target.closest('[data-go-slide], [data-back]');
+  if (!link) return;
+  event.stopPropagation();
+  if (link.dataset.back !== undefined) back(); else goSlide(link.dataset.goSlide);
+});
 function stop() {
   deck.classList.remove('on');
   document.documentElement.classList.remove('presenting');
@@ -275,10 +340,10 @@ document.querySelectorAll('[data-step]').forEach((element) => {
 // On touch screens there is no keyboard: a tap on the right third advances, on the left third goes back.
 deck.addEventListener('pointerup', (event) => {
   if (event.pointerType !== 'touch' || !deck.classList.contains('on') || deck.classList.contains('index-open')) return;
-  if (event.target.closest('a, .notes-panel')) return;
+  if (event.target.closest('a, .notes-panel, [data-go-slide]')) return;
   const x = event.clientX / window.innerWidth;
-  if (x > 2 / 3) show(current + 1);
-  else if (x < 1 / 3) show(current - 1);
+  if (x > 2 / 3) next();
+  else if (x < 1 / 3) previous();
 });
 // Slide index inside presentation mode.
 const items = Array.from(deck.querySelectorAll('.index-item'));
@@ -337,10 +402,11 @@ document.addEventListener('keydown', (event) => {
     return;
   }
   if (['i', 'I', '['].includes(event.key)) { openIndex(); return; }
-  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(event.key)) { event.preventDefault(); show(current + 1); }
-  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(event.key)) { event.preventDefault(); show(current - 1); }
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(event.key)) { event.preventDefault(); next(); }
+  else if (event.key === 'Backspace' && stages[current].dataset.detail !== undefined) { event.preventDefault(); back(); }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(event.key)) { event.preventDefault(); previous(); }
   else if (event.key === 'Home') show(0);
-  else if (event.key === 'End') show(stages.length - 1);
+  else if (event.key === 'End') show(lastMain);
   else if (event.key === 'Escape') stop();
   else if (event.key === 'n' || event.key === 'N') {
     const on = deck.classList.toggle('with-notes');
@@ -461,6 +527,27 @@ def sources(text, topics_dir, base):
   return f"<ul class='sources'>{''.join(items)}</ul>" if items else ""
 
 
+def label(slide):
+  """A detail slide's name in breadcrumbs and overlays: `label`, else `heading`."""
+  return slide.get("label") or slide.get("heading")
+
+
+def ancestors(slides, slide):
+  """Parents of a detail slide, nearest first, ending at its main-track slide."""
+  chain = []
+  while slide.get("parent"):
+    slide = slides[slide["parent"]]
+    chain.append(slide)
+  return chain
+
+
+def detail_root(slides, slide):
+  """The detail slide right under the main track that `slide` hangs from (itself for a root)."""
+  while slides[slide["parent"]].get("parent"):
+    slide = slides[slide["parent"]]
+  return slide
+
+
 def validate(outline):
   errors = []
   audiences = set(outline.get("audiences", {}))
@@ -481,9 +568,43 @@ def validate(outline):
         errors.append(f"{name}: dependsOn '{dependency}', which comes later")
     seen.add(name)
   for slide in outline["slides"]:
-    parts = set(slide.get("show", [])) | set(slide.get("dim", [])) | set(slide.get("reveal", []))
+    parts = set(slide.get("show", [])) | set(slide.get("dim", [])) | set(slide.get("reveal", [])) | set(slide.get("focus", []))
     if parts and not slide.get("diagram"):
-      errors.append(f"{slide['name']}: show/dim/reveal without diagram")
+      errors.append(f"{slide['name']}: show/dim/reveal/focus without diagram")
+  # `parent`: detail slides, off the main track and opened by a link (`links`, overlay, breadcrumb).
+  by_name = {slide["name"]: slide for slide in outline["slides"]}
+  details = [slide for slide in outline["slides"] if slide.get("parent")]
+  tree_ok = True
+  for slide in details:
+    name = slide["name"]
+    if slide["parent"] not in by_name:
+      errors.append(f"{name}: parent unknown slide '{slide['parent']}'")
+      tree_ok = False
+      continue
+    seen, current = set(), slide
+    while current is not None and current.get("parent"):
+      if current["name"] in seen:
+        errors.append(f"{name}: parent cycle")
+        tree_ok = False
+        break
+      seen.add(current["name"])
+      current = by_name.get(current["parent"])
+    if not label(slide):
+      errors.append(f"{name}: detail slide without label or heading")
+    if not by_name[slide["parent"]].get("parent") and not slide.get("diagram"):
+      errors.append(f"{name}: a detail root needs a diagram")
+  if details and outline["deck"].get("home") not in by_name:
+    errors.append(f"deck.home: unknown slide '{outline['deck'].get('home')}'")
+  for slide in outline["slides"]:
+    for part, target in (slide.get("links") or {}).items():
+      if target not in by_name:
+        errors.append(f"{slide['name']}: link {part} goes to unknown slide '{target}'")
+  # → walks a subtree in YAML order and leaves it at its last step: its slides must be consecutive.
+  if tree_ok:
+    roots = [detail_root(by_name, slide)["name"] for slide in details]
+    for n in range(1, len(roots)):
+      if roots[n] != roots[n - 1] and roots[n] in roots[:n]:
+        errors.append(f"{details[n]['name']}: detail slides of '{roots[n]}' are not consecutive")
   # `parts`: every act and every item target (`go`, an act or a slide) must exist.
   slide_names = {slide["name"] for slide in outline["slides"]}
   for part in outline.get("parts") or []:
@@ -495,6 +616,65 @@ def validate(outline):
         errors.append(f"part '{part['title']}': item '{item['label']}' goes to unknown '{item['go']}'")
   return errors
 
+
+def slide_steps(outline, slide, act, section):
+  """The steps of one slide (see build_steps)."""
+  steps = []
+  # `diagram`: an SVG whose <g data-part> groups are revealed one per step (`reveal`),
+  # over parts already introduced: `show` at full color (the skeleton), `dim` dimmed
+  # (the previous content). Earlier parts of the same `reveal` dim as the next one enters,
+  # unless `accumulate: true` (they stay at full color: the drawing grows); `accumulate: commands` below.
+  if slide.get("diagram"):
+    reveal = slide.get("reveal") or []
+    shown = {**{part: "dim" for part in slide.get("dim", [])}, **{part: "on" for part in slide.get("show", [])}}
+    # `start: empty`: a first step with nothing revealed yet; `empty` parts show only on it (an empty prompt).
+    # `focus`: parts with a highlighted border on every step; `spotlight: true` adds the part revealed in the step.
+    # `links`: parts that open a slide when clicked (detail slides, `parent`).
+    focus = set(slide.get("focus", []))
+    spot = lambda part: focus | ({part} if slide.get("spotlight") else set())
+    extra = {"focus": focus, "links": slide.get("links") or {}}
+    if not reveal or slide.get("start") == "empty":
+      steps.append({"slide": slide, "act": act, "section": section, "items": [], **extra,
+                    "diagram": {**shown, **{part: "on" for part in slide.get("empty", [])}}})
+    # `accumulate: commands`: a terminal; a command and its output (`cmd.N`, `cmd.N-out`, `cmd.N-editor`)
+    # stay lit together, and the commands before it dim.
+    group = lambda part: part.split("-")[0]
+    def kept(done, part):
+      if slide.get("accumulate") == "commands":
+        return "on" if group(done) == group(part) else "dim"
+      return "on" if slide.get("accumulate") else "dim"
+    for n, part in enumerate(reveal):
+      steps.append({"slide": slide, "act": act, "section": section, "items": [], **extra, "focus": spot(part),
+                    "diagram": {**shown, **{done: kept(done, part) for done in reveal[:n]}, part: "on"}})
+    return steps
+  screen = slide.get("screen") or []
+  if slide.get("code") or not screen:
+    steps.append({"slide": slide, "act": act, "section": section, "items": [], "code": slide.get("code")})
+  elif slide.get("animations") == "none":
+    # `deck.audience`: who the deck is for, discreet, on the first slide only.
+    audience = outline["deck"].get("audience") if slide is outline["slides"][0] else None
+    # A detail slide without a `heading` opens with its `label` ("System example"): its header names the box only.
+    title = [(slide["label"], "dim heading")] if slide.get("parent") and slide.get("label") and not slide.get("heading") else []
+    steps.append({"slide": slide, "act": act, "section": section, "items": title + [(item, "active") for item in screen]
+                  + ([(slide["subtitle"], "active subtitle")] if slide.get("subtitle") else [])
+                  + ([(audience, "active audience")] if audience else [])})
+  else:
+    # Optional `heading`: shown alone first, then stays on top, dimmed, while the items are revealed.
+    heading = slide.get("heading")
+    if heading:
+      steps.append({"slide": slide, "act": act, "section": section,
+                    "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
+    for shown in range(1, len(screen) + 1):
+      # An item with sub-items ("- " lines in its value) reveals them one per step.
+      # `subitems: together` on the slide shows them all in one step.
+      progressive = slide.get("subitems") != "together"
+      for subs in range(screen[shown - 1].count("\n- ") + 1 if progressive else 1):
+        active = "active" + (f" subs-{subs}" if progressive and "\n- " in screen[shown - 1] else "")
+        items = ([(heading, "dim heading")] if heading else []) + (
+                 [(item, "dim") for item in screen[:shown - 1]] + [(screen[shown - 1], active)]
+                 + [(item, "hidden") for item in screen[shown:]])
+        steps.append({"slide": slide, "act": act, "section": section, "items": items})
+  return steps
 
 def build_steps(outline):
   """Expand acts and slides into presentation steps (one per reveal, as duplicate slides).
@@ -508,7 +688,11 @@ def build_steps(outline):
   steps, current_act, previous_section = [], None, None
   parts = outline.get("parts") or []
   part_start = {part["acts"][0]: n for n, part in enumerate(parts)}
+  slides = {slide["name"]: slide for slide in outline["slides"]}
   for slide in outline["slides"]:
+    # `parent`: a detail slide, off the main track; its steps come after it (below).
+    if slide.get("parent"):
+      continue
     act = acts[slide["act"]]
     if slide["act"] != current_act:
       current_act = slide["act"]
@@ -531,53 +715,28 @@ def build_steps(outline):
       shown = (section[0], slide["divider"]) if isinstance(slide.get("divider"), str) else section
       steps.append({"slide": slide, "act": act, "section": shown, "items": [], "divider": True})
     previous_section = section
-    # `diagram`: an SVG whose <g data-part> groups are revealed one per step (`reveal`),
-    # over parts already introduced: `show` at full color (the skeleton), `dim` dimmed
-    # (the previous content). Earlier parts of the same `reveal` dim as the next one enters,
-    # unless `accumulate: true` (they stay at full color: the drawing grows); `accumulate: commands` below.
-    if slide.get("diagram"):
-      reveal = slide.get("reveal") or []
-      shown = {**{part: "dim" for part in slide.get("dim", [])}, **{part: "on" for part in slide.get("show", [])}}
-      # `start: empty`: a first step with nothing revealed yet; `empty` parts show only on it (an empty prompt).
-      if not reveal or slide.get("start") == "empty":
-        steps.append({"slide": slide, "act": act, "section": section, "items": [],
-                      "diagram": {**shown, **{part: "on" for part in slide.get("empty", [])}}})
-      # `accumulate: commands`: a terminal; a command and its output (`cmd.N`, `cmd.N-out`, `cmd.N-editor`)
-      # stay lit together, and the commands before it dim.
-      group = lambda part: part.split("-")[0]
-      def kept(done, part):
-        if slide.get("accumulate") == "commands":
-          return "on" if group(done) == group(part) else "dim"
-        return "on" if slide.get("accumulate") else "dim"
-      for n, part in enumerate(reveal):
-        steps.append({"slide": slide, "act": act, "section": section, "items": [],
-                      "diagram": {**shown, **{done: kept(done, part) for done in reveal[:n]}, part: "on"}})
+    steps.extend(slide_steps(outline, slide, act, section))
+  # Detail slides: after the main track, in YAML order, with no divider or agenda. A link opens them;
+  # → walks their root's subtree and, on its last step, returns to where the link came from.
+  home = outline["deck"].get("home")
+  for slide in outline["slides"]:
+    if not slide.get("parent"):
       continue
-    screen = slide.get("screen") or []
-    if slide.get("code") or not screen:
-      steps.append({"slide": slide, "act": act, "section": section, "items": [], "code": slide.get("code")})
-    elif slide.get("animations") == "none":
-      # `deck.audience`: who the deck is for, discreet, on the first slide only.
-      audience = outline["deck"].get("audience") if slide is outline["slides"][0] else None
-      steps.append({"slide": slide, "act": act, "section": section, "items": [(item, "active") for item in screen]
-                    + ([(slide["subtitle"], "active subtitle")] if slide.get("subtitle") else [])
-                    + ([(audience, "active audience")] if audience else [])})
-    else:
-      # Optional `heading`: shown alone first, then stays on top, dimmed, while the items are revealed.
-      heading = slide.get("heading")
-      if heading:
-        steps.append({"slide": slide, "act": act, "section": section,
-                      "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
-      for shown in range(1, len(screen) + 1):
-        # An item with sub-items ("- " lines in its value) reveals them one per step.
-        # `subitems: together` on the slide shows them all in one step.
-        progressive = slide.get("subitems") != "together"
-        for subs in range(screen[shown - 1].count("\n- ") + 1 if progressive else 1):
-          active = "active" + (f" subs-{subs}" if progressive and "\n- " in screen[shown - 1] else "")
-          items = ([(heading, "dim heading")] if heading else []) + (
-                   [(item, "dim") for item in screen[:shown - 1]] + [(screen[shown - 1], active)]
-                   + [(item, "hidden") for item in screen[shown:]])
-          steps.append({"slide": slide, "act": act, "section": section, "items": items})
+    act, chain, root = acts[slide["act"]], ancestors(slides, slide), detail_root(slides, slide)
+    crumbs = [("Platform", home)] + [(label(parent), parent["name"]) for parent in reversed(chain)]
+    # The overlay of a root: its whole subtree, (label, slide name, children).
+    tree = lambda name: [(label(child), child["name"], tree(child["name"])) for child in outline["slides"] if child.get("parent") == name]
+    own = slide_steps(outline, slide, act, (act["title"], label(slide)))
+    for step in own:
+      step.update({"detail": root["name"], "crumbs": crumbs, "up": (slide["parent"], slide is root)})
+      if slide is root:
+        step["overlay"] = tree(slide["name"])
+    if slide is root:
+      own[0]["entry"] = True
+    steps.extend(own)
+  for n, step in enumerate(steps):
+    if step.get("detail") and (n + 1 == len(steps) or steps[n + 1].get("detail") != step["detail"]):
+      step["exit"] = True
   return steps
 
 
@@ -647,6 +806,26 @@ def render_agenda(outline, current=None, links=None):
           f"<div class='list'>{''.join(rows)}</div></div>")
 
 
+def overlay_tree(items, depth=0):
+  """A root's overlay: an indented tree, one row per slide, every row a link.
+
+  A child labelled "<parent> example" is a small "▸ ex" link on its parent's row, not a row of its own.
+  """
+  esc = html.escape
+  example = lambda text: text.lower().endswith(" example")
+  rows = ""
+  for text, name, children in items:
+    # A top-level topic and its subtree stay in one column.
+    if depth == 0:
+      rows += "<div class='ov-topic'>"
+    marks = "".join(f"<a class='ov-ex' data-go-slide='{esc(n)}' title='{esc(t)}'>▸&nbsp;example</a>" for t, n, _ in children if example(t))
+    rows += f"<div class='ov-r ov-d{depth}'><a data-go-slide='{esc(name)}'>{esc(text)}</a>{marks}</div>"
+    rows += overlay_tree([child for child in children if not example(child[0])], depth + 1)
+    if depth == 0:
+      rows += "</div>"
+  return rows
+
+
 def render_stage(step, base, outline=None):
   esc = html.escape
   if step.get("agenda") is not None:
@@ -660,19 +839,44 @@ def render_stage(step, base, outline=None):
     section = f"<div class='section has-topic'><div class='act-name'>{esc(section[0])}</div><div class='topic'>{esc(section[1])}</div></div>"
   else:
     section = f"<div class='section'>{esc(section)}</div>" if section else ""
+  # Detail slides (`parent`): a breadcrumb of links replaces the act name, with "↩ back" before it.
+  # Detail slides (`parent`): the main track's header (the plane, then the box), and the whole path
+  # as a faint trail in the footer, every level a link.
+  trail = ""
+  if step.get("crumbs"):
+    box = step["crumbs"][2][0] if len(step["crumbs"]) > 2 else step["section"][1]
+    section = f"<div class='section has-topic'><div class='act-name'>{esc(step['crumbs'][1][0])}</div><div class='topic'>{esc(box)}</div></div>"
+    trail = ("<div class='trail'><a data-back>↩</a>" + " / ".join(f"<a data-go-slide='{esc(name)}'>{esc(text)}</a>" for text, name in step["crumbs"])
+             + f" / <span class='here'>{esc(step['section'][1])}</span></div>")
   if step.get("diagram") is not None:
     # The `heading` takes the topic line: the topic was already announced by its divider.
     heading = step["slide"].get("heading")
-    if heading:
+    if heading and not step.get("crumbs"):
       act_name = step["section"][0] if has_topic else step["section"]
       section = f"<div class='section has-topic'><div class='act-name'>{esc(act_name)}</div><div class='topic'>{esc(heading)}</div></div>"
     svg = (base / step["slide"]["diagram"]).read_text()
     # `dev.2` takes its own state, else its group's (`dev`).
     state = lambda part: step["diagram"].get(part) or step["diagram"].get(part.split(".")[0], "hidden")
-    svg = re.sub(r'<g data-part="([\w.-]+)">', lambda m: f'<g data-part="{m[1]}" class="part-{state(m[1])}">', svg)
+    focus, links = step.get("focus") or set(), step.get("links") or {}
+    # `focus`: the focused parts keep their colors and every other lit part dims, so the eye goes to the focus.
+    # A group (`dev`) whose child is in focus (`dev.2`) keeps its own state.
+    lit = lambda part: "dim" if focus and state(part) == "on" and part not in focus and not any(f.startswith(part + ".") for f in focus) else state(part)
+    def group(match):
+      part = match[1]
+      classes = f"part-{lit(part)}" + (" part-focus" if part in focus else "") + (" part-link" if part in links else "")
+      link = f' data-go-slide="{esc(links[part])}"' if part in links else ""
+      return f'<g data-part="{part}" class="{classes}"{link}>'
+    svg = re.sub(r'<g data-part="([\w.-]+)">', group, svg)
     source = step["slide"].get("source")
     source_html = f"<div class='source'>Source: {esc(source)}</div>" if source else ""
-    return f"{section}<div class='inner diagram-inner'><div class='diagram'>{svg}</div></div><div class='footer'></div>{source_html}"
+    # A detail root lists its children over the dimmed diagram.
+    overlay = ""
+    if step.get("overlay"):
+      overlay = ("<div class='overlay'>"
+                 + f"<div class='ov-tree'>{overlay_tree(step['overlay'])}</div></div>")
+    # With an overlay, the diagram moves left (over the empty clients column) so the focused box stays visible.
+    inner = "inner diagram-inner with-overlay" if overlay else "inner diagram-inner"
+    return f"{section}<div class='{inner}'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}{trail}"
   if step.get("code"):
     source = (base / step["code"]["file"]).read_text().splitlines()
     shown = sorted(line_set(step["code"].get("lines"), set(range(1, len(source) + 1))))
@@ -698,7 +902,7 @@ def render_stage(step, base, outline=None):
   source = step["slide"].get("source") if step["slide"] else None
   source_html = f"<div class='source'>Source: {esc(source)}</div>" if source else ""
   inner_class = "inner with-topic" if has_topic else "inner"
-  return f"{section}<div class='{inner_class}'>{body}</div><div class='footer'></div>{source_html}"
+  return f"{section}<div class='{inner_class}'>{body}</div><div class='footer'></div>{source_html}{trail}"
 
 
 def render_html(outline, base):
@@ -755,7 +959,24 @@ def render_html(outline, base):
   stages = [render_stage(step, base, outline) for step in steps]
   # data-slide on a slide's first step lets #present-<slide name> link to it while step numbers shift.
   first_of = lambda i: steps[i]["slide"] is not None and (i == 0 or steps[i - 1]["slide"] is not steps[i]["slide"])
-  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}'" if first_of(i) else "") + f">{stage}</div>"
+  first_step, last_step = {}, {}
+  slides_by_name = {slide["name"]: slide for slide in slides}
+  for i, step in enumerate(steps):
+    if step["slide"] is not None:
+      first_step.setdefault(step["slide"]["name"], i)
+      last_step[step["slide"]["name"]] = i
+  # Detail steps: the JS walks them by these attributes (back target, subtree entry and exit).
+  def detail_attrs(i):
+    step = steps[i]
+    if not step.get("detail"):
+      return ""
+    parent, is_root = step["up"]
+    up = last_step[parent] if is_root else first_step[parent]
+    # `data-out`: where the subtree leaves to with no origin, the last step of the root's main-track parent.
+    out = last_step[slides_by_name[step["detail"]]["parent"]]
+    return (f" data-detail='{esc(step['detail'])}' data-up='{up}' data-out='{out}'"
+            + (" data-entry" if step.get("entry") else "") + (" data-exit" if step.get("exit") else ""))
+  deck_html = "".join(f"<div class='stage' data-step='{i}'" + (f" data-slide='{esc(steps[i]['slide']['name'])}' data-last-step='{last_step[steps[i]['slide']['name']]}'" if first_of(i) else "") + detail_attrs(i) + (" data-divider" if steps[i].get("divider") else "") + f">{stage}</div>"
                       for i, stage in enumerate(stages))
   note_blocks = []
   for step in steps:
@@ -786,7 +1007,7 @@ def render_html(outline, base):
       return first(lambda step: step["slide"] is not None and step["slide"]["name"] == name)
     part_ranges = []
     for part in outline["parts"]:
-      own = [i for i, step in enumerate(steps) if step["act"]["name"] in part["acts"] and step.get("agenda") is None]
+      own = [i for i, step in enumerate(steps) if step["act"]["name"] in part["acts"] and step.get("agenda") is None and not step.get("detail")]
       part_ranges.append((own[0], own[-1]))
     links = {"part": part_ranges, "items": [[target(item["go"]) for item in part["items"]] for part in outline["parts"]]}
     index = [f"<div class='index agenda-index'><div class='index-hint'>{home_link + " · " if home_link else ""}↑ ↓ escolher · Enter ir · I ou Esc fechar</div><div class='agenda-stage'>{render_agenda(outline, None, links)}</div></div>"]
@@ -828,7 +1049,7 @@ def render_html(outline, base):
   return f"""<!doctype html>
 <html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{' — '.join(esc(x) for x in (deck['title'], deck.get('iteration')) if x)}</title>
 <style>{CSS}</style><script>if (/^#present-[\\w-]+$/.test(location.hash)) document.documentElement.classList.add('presenting');</script></head>
-<body><div id='deck'>{deck_html}<div class='notes-panel'></div><div class='hint'>{home_link}<span class='keys'>{" · " if home_link else ""}← → avançar · I índice · N notas · L posição das notas · S janela do apresentador · F tela cheia · Esc sair</span></div><div class='counter'></div></div><button id='toggle-nav' type='button'>«</button><nav>{''.join(nav)}</nav><main>{''.join(body)}</main>
+<body><div id='deck'>{deck_html}<div class='notes-panel'></div><div class='hint'>{home_link}<span class='keys'>{" · " if home_link else ""}← → avançar · Backspace voltar do detalhe · I índice · N notas · L posição das notas · S janela do apresentador · F tela cheia · Esc sair</span></div><div class='counter'></div></div><button id='toggle-nav' type='button'>«</button><nav>{''.join(nav)}</nav><main>{''.join(body)}</main>
 <script>{SCRIPT}</script></body></html>
 """
 

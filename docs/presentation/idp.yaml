@@ -7,6 +7,8 @@ deck:
   audience: "For leadership, engineering and platform teams"
   # Deck longo: a agenda só aparece no índice, não volta entre as partes.
   agendaSteps: false
+  # Breadcrumb root of detail slides (`parent`): "Platform" opens it.
+  home: landscape-full
 
 # Classificação de relevância por público: base do filtro que gera versões por público.
 audiences:
@@ -82,9 +84,9 @@ parts:
     message: "Where does the developer come in?"
     acts: [developer-control]
     items:
-      - {label: "Software Catalog", go: developer-control}
-      - {label: "App Declaration", go: landscape-dev-2}
-      - {label: "Golden Paths", go: landscape-dev-3}
+      - {label: "Software Catalog", go: detail-catalog}
+      - {label: "App Declaration", go: detail-app-declaration}
+      - {label: "Golden Paths", go: detail-golden-paths}
   - title: "Integration & Delivery Plane"
     message: "How does intent become running software?"
     acts: [integration-delivery]
@@ -392,17 +394,37 @@ slides:
       Os planes vêm da arquitetura de referência do platformengineering.org; **a ordem da jornada é nossa**. Nenhuma ferramenta na tela de propósito: as categorias valem para qualquer escolha de stack.
 
   # ── Developer Control Plane ─────────────────────────
-  - name: landscape-dev-1
+  - name: landscape-dev
     act: developer-control
-    topic: "Software Catalog"
-    message: "O catálogo diz o que existe e quem é dono."
-    heading: "Software Catalog"
+    topic: "Capabilities"
+    label: "Developer Control Plane"
+    message: "O Developer Control Plane tem três peças: catálogo, declaração da app e golden paths."
+    heading: "Three capabilities"
     divider: "Developer Control Plane"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
+    focus: [dev-plane]
     start: "empty"
-    reveal: [dev.1]
+    reveal: [dev.1, dev.2, dev.3]
     accumulate: true
+    spotlight: true
+    links: {dev.1: detail-catalog, dev.2: detail-app-declaration, dev.3: detail-golden-paths}
+    source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
+    notes: |-
+      O que queremos dizer: **o developer entra por aqui** — o catálogo diz quem a app é, a declaração diz do que ela precisa, e o golden path cria os dois de uma vez.
+
+      Cada caixa abre o seu detalhe com um clique; ↩ back (ou Backspace) volta para cá, e → no fim do detalhe também.
+
+  - name: detail-catalog
+    act: developer-control
+    topic: "Software Catalog"
+    parent: landscape-dev
+    message: "O catálogo diz o que existe e quem é dono."
+    heading: "Software Catalog"
+    diagram: "diagrams/landscape/landscape.svg"
+    dim: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.2, dev.3]
+    show: [dev.1]
+    focus: [dev.1]
     source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
     notes: |-
       O que queremos dizer: **o primeiro item do Developer Control é o catálogo** — o mapa do que existe e de quem responde por cada coisa.
@@ -411,6 +433,7 @@ slides:
 
   - name: catalog-ownership
     act: developer-control
+    parent: detail-catalog
     topic: "Software Catalog"
     message: "O catálogo diz o que existe e quem é dono."
     heading: "The catalog answers"
@@ -432,6 +455,8 @@ slides:
 
   - name: catalog-levels
     act: developer-control
+    parent: detail-catalog
+    label: "Two views"
     topic: "Software Catalog"
     message: "O catálogo enxerga o software de dois jeitos: pelo negócio e pela engenharia."
     heading: "The catalog has two views"
@@ -449,6 +474,7 @@ slides:
 
   - name: catalog-business-view
     act: developer-control
+    parent: catalog-levels
     topic: "Software Catalog"
     message: "A visão de negócio agrupa o software por área e por capacidade."
     heading: "Business view"
@@ -465,6 +491,7 @@ slides:
 
   - name: catalog-engineering-view
     act: developer-control
+    parent: catalog-levels
     topic: "Software Catalog"
     message: "A visão de engenharia mostra o que se constrói, como as peças conversam e do que dependem."
     heading: "Engineering view"
@@ -488,26 +515,40 @@ slides:
 
   - name: entity-component
     act: developer-control
+    parent: catalog-engineering-view
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "Component é uma peça de software que alguém mantém e entrega."
     heading: "Component"
-    screen: ["**What:** software you build and deploy", "**Example:**\nThe `shuffle-api` _shuffles_ the play queue"]
+    screen: ["**What:** software you build and deploy"]
     notes: |-
       O que queremos dizer: **Component é o software que um time mantém e entrega** — serviço, site, biblioteca, pipeline de dados.
-
-      **Exemplo:** `shuffle-api`, o serviço que embaralha a fila de reprodução. Vem do **catálogo de demonstração do Backstage**, que modela um Spotify (onde o Backstage nasceu).
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-engineering-view]
 
+  - name: entity-component-example
+    act: developer-control
+    parent: entity-component
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Component example"
+    message: "O shuffle-api, do catálogo de demonstração, é um Component."
+    animations: none
+    screen: ["The `shuffle-api` _shuffles_ the play queue"]
+    notes: |-
+      `shuffle-api`, o serviço que embaralha a fila de reprodução. Vem do **catálogo de demonstração do Backstage**, que modela um Spotify (onde o Backstage nasceu).
+
+    dependsOn: [entity-component]
+
   - name: entity-api
     act: developer-control
+    parent: catalog-engineering-view
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "API é o contrato entre Components."
     heading: "API"
-    screen: ["**What:** the contract between components", "**Example:**\n`www-artist` site _consumes_ `artist-lookup` service"]
+    screen: ["**What:** the contract between components"]
     notes: |-
       O que queremos dizer: **API é o contrato**; quem consome depende dele, não da implementação.
 
@@ -516,40 +557,63 @@ slides:
 
       É uma **fronteira legível por máquina** (OpenAPI, AsyncAPI, gRPC, GraphQL).
 
-      **Exemplo:** o site `www-artist` (`type: website`) consome o que o microsserviço `artist-lookup` (`type: service`, em Java) expõe. O tipo vem do campo `spec.type` de cada Component no catálogo de demonstração.
-
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-component]
 
+  - name: entity-api-example
+    act: developer-control
+    parent: entity-api
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "API example"
+    message: "O site www-artist consome a API do artist-lookup."
+    animations: none
+    screen: ["`www-artist` site _consumes_ `artist-lookup` service"]
+    notes: |-
+      O site `www-artist` (`type: website`) consome o que o microsserviço `artist-lookup` (`type: service`, em Java) expõe. O tipo vem do campo `spec.type` de cada Component no catálogo de demonstração.
+
+    dependsOn: [entity-api]
+
   - name: entity-resource
     act: developer-control
+    parent: catalog-engineering-view
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "Resource é a infraestrutura de que o Component precisa para rodar."
     heading: "Resource"
-    screen: ["**What:** infrastructure needed at runtime", "**Example:**\nThe `artists-db` database _used by_ `artist-lookup`"]
+    screen: ["**What:** infrastructure needed at runtime"]
     notes: |-
       O que queremos dizer: **Resource é a infraestrutura de que o Component precisa para rodar** — banco, fila, bucket.
-
-      **Exemplo:** o microsserviço `artist-lookup` (`type: service`) depende de `artists-db` (`type: database`), que guarda os dados dos artistas.
 
       **Gancho para o Resource Plane:** aqui o Resource é descrito **pelo papel** (database); lá vira um serviço concreto.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-api]
 
+  - name: entity-resource-example
+    act: developer-control
+    parent: entity-resource
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Resource example"
+    message: "O artist-lookup depende do banco artists-db."
+    animations: none
+    screen: ["The `artists-db` database _used by_ `artist-lookup`"]
+    notes: |-
+      O microsserviço `artist-lookup` (`type: service`) depende de `artists-db` (`type: database`), que guarda os dados dos artistas.
+
+    dependsOn: [entity-resource]
+
   - name: entity-system
     act: developer-control
+    parent: catalog-business-view
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "System junta Components, APIs e Resources que entregam uma capacidade — e esconde o resto."
     heading: "System"
-    subitems: together
-    screen: ["**What:** components that deliver a capability", "**Example:**\nThe `artist-engagement-portal` system _groups_:\n- `www-artist` site\n- `artist-lookup` service\n- `artists-db` database"]
+    screen: ["**What:** components that deliver a capability"]
     notes: |-
       O que queremos dizer: **System junta as peças que entregam uma capacidade** e esconde o que há dentro.
-
-      **Exemplo:** o System `artist-engagement-portal` reúne o site `www-artist`, o microsserviço `artist-lookup` e o banco `artists-db` — as três peças dos slides anteriores. Um System junta **Components e Resources**.
 
       Quem está fora enxerga **só as APIs públicas** do System; o que há dentro pode mudar sem avisar ninguém.
 
@@ -558,28 +622,55 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-resource]
 
+  - name: entity-system-example
+    act: developer-control
+    parent: entity-system
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "System example"
+    message: "O System artist-engagement-portal junta as três peças anteriores."
+    animations: none
+    screen: ["The `artist-engagement-portal` system _groups_:", "`www-artist` site", "`artist-lookup` service", "`artists-db` database"]
+    notes: |-
+      O System `artist-engagement-portal` reúne o site `www-artist`, o microsserviço `artist-lookup` e o banco `artists-db` — as três peças dos slides anteriores. Um System junta **Components e Resources**.
+
+    dependsOn: [entity-system]
+
   - name: entity-domain
     act: developer-control
+    parent: catalog-business-view
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "Domain agrupa Systems da mesma área de negócio."
     heading: "Domain"
-    subitems: together
-    screen: ["**What:** systems of one business area", "**Example:**\nThe `audio` domain _contains_:\n- `artists` subdomain\n- `playback` subdomain"]
+    screen: ["**What:** systems of one business area"]
     notes: |-
       O que queremos dizer: **Domain agrupa Systems da mesma área de negócio.**
 
       Domain = **bounded context**: mesma terminologia, mesmas métricas, mesmo propósito.
-
-      **Exemplo:** `audio` tem dois subdomínios (`subdomainOf`): `artists` e `playback`.
 
       Domain é **como a liderança conversa sobre o produto**.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [entity-system]
 
+  - name: entity-domain-example
+    act: developer-control
+    parent: entity-domain
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Domain example"
+    message: "O Domain audio tem dois subdomínios."
+    animations: none
+    screen: ["The `audio` domain _contains_:", "`artists` subdomain", "`playback` subdomain"]
+    notes: |-
+      `audio` tem dois subdomínios (`subdomainOf`): `artists` e `playback`.
+
+    dependsOn: [entity-domain]
+
   - name: spotify-tree
     act: developer-control
+    parent: detail-catalog
     topic: "Software Catalog"
     message: "Juntando: do negócio ao banco de dados, uma árvore só."
     align: true
@@ -599,6 +690,7 @@ slides:
 
   - name: catalog-tree
     act: developer-control
+    parent: detail-catalog
     topic: "Software Catalog"
     message: "No exemplo deste repo: o Domain communication com os Systems greeter e notifier."
     heading: "Our catalog"
@@ -614,6 +706,8 @@ slides:
 
   - name: declare-name
     act: developer-control
+    parent: detail-catalog
+    label: "catalog-info.yaml"
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "No catálogo, a app é um arquivo curto junto do código — começando pelo nome e pelo que ela faz."
@@ -626,6 +720,8 @@ slides:
 
   - name: declare-system
     act: developer-control
+    parent: declare-name
+    label: "System"
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "A que sistema pertence e de que tipo é."
@@ -640,6 +736,8 @@ slides:
 
   - name: declare-ownership
     act: developer-control
+    parent: declare-name
+    label: "Ownership"
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "De quem é e em que ponto da jornada está."
@@ -654,6 +752,7 @@ slides:
 
   - name: ip-lifecycle
     act: developer-control
+    parent: declare-name
     topic: "Software Catalog"
     message: "O lifecycle marca a jornada de um Internal Product: de ideia a produto compartilhado, até a descontinuação."
     heading: "Lifecycle of an Internal Product"
@@ -675,6 +774,8 @@ slides:
 
   - name: declare-apis
     act: developer-control
+    parent: declare-name
+    label: "APIs"
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "O contrato que a app oferece."
@@ -689,6 +790,8 @@ slides:
 
   - name: declare-dependencies
     act: developer-control
+    parent: declare-name
+    label: "Dependencies"
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "Do que depende para rodar — descrito pelo papel."
@@ -705,6 +808,7 @@ slides:
 
   - name: declare-discovery
     act: developer-control
+    parent: declare-name
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "O portal encontra o arquivo e mantém o catálogo em dia sozinho."
@@ -725,35 +829,61 @@ slides:
 
   - name: no-versions
     act: developer-control
+    parent: detail-catalog
     topic: "Software Catalog"
     message: "O catálogo não representa versões: guarda o conceito humano de uma coisa — dado estável, curado pelo dono."
     heading: "What the catalog stores"
-    screen: ["**Not:** versions", "**Only:** the human concept", "**Example:**\n`playback-order` _is_ 1 component, N versions running"]
+    screen: ["**Not:** versions", "**Only:** the human concept"]
     notes: |-
       O que queremos dizer: **o catálogo é o modelo mental humano da plataforma**, não o estado vivo dela.
-
-      Recomendação explícita da documentação do Backstage (FAQ do catálogo). `playback-order`, o serviço de ordem de reprodução do catálogo de demonstração, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [declare-discovery]
 
+  - name: no-versions-example
+    act: developer-control
+    parent: no-versions
+    topic: "Software Catalog"
+    label: "What the catalog stores example"
+    message: "playback-order é um Component, com várias versões rodando."
+    animations: none
+    screen: ["`playback-order` _is_ 1 component, N versions running"]
+    notes: |-
+      Recomendação explícita da documentação do Backstage (FAQ do catálogo). `playback-order`, o serviço de ordem de reprodução do catálogo de demonstração, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
+
+    dependsOn: [no-versions]
+
   - name: major-breaking
     act: developer-control
+    parent: no-versions
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "A exceção é a quebra de contrato: uma major breaking vira uma entidade nova."
     heading: "The exception: breaking change"
-    screen: ["**Rule:** a major breaking _is_ a new entity", "**Example:**\n`customerinfo` → `customerinfo2`"]
+    screen: ["**Rule:** a major breaking _is_ a new entity"]
     notes: |-
       O que queremos dizer: **quebrou o contrato, mudou o conceito** — e os consumidores precisam migrar de forma explícita.
-
-      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [no-versions]
 
+  - name: major-breaking-example
+    act: developer-control
+    parent: major-breaking
+    topic: "Software Catalog"
+    audiences: [engineering, platform]
+    label: "Breaking change example"
+    message: "A FAQ do Backstage: customerinfo vira customerinfo2."
+    animations: none
+    screen: ["`customerinfo` → `customerinfo2`"]
+    notes: |-
+      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
+
+    dependsOn: [major-breaking]
+
   - name: plugins
     act: developer-control
+    parent: no-versions
     topic: "Software Catalog"
     message: "Versões e ambientes vivem em outros sistemas e voltam ao portal por plugins."
     heading: "Where versions live"
@@ -766,17 +896,16 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [no-versions]
 
-  - name: landscape-dev-2
+  - name: detail-app-declaration
     act: developer-control
     topic: "App Declaration"
+    parent: landscape-dev
     message: "A app declara do que precisa para rodar — sem dizer onde nem como."
     heading: "App Declaration"
-    divider: false
     diagram: "diagrams/landscape/landscape.svg"
-    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.1]
-    start: "empty"
-    reveal: [dev.2]
-    accumulate: true
+    dim: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.1, dev.3]
+    show: [dev.2]
+    focus: [dev.2]
     source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
     notes: |-
       O que queremos dizer: **o catálogo diz quem a app é; a declaração diz do que ela precisa** — container, porta, banco, rota.
@@ -785,6 +914,8 @@ slides:
 
   - name: spec-db
     act: developer-control
+    parent: detail-app-declaration
+    label: "Resources"
     topic: "App Declaration"
     audiences: [engineering, platform]
     message: "A app declara do que precisa para rodar — começando por um banco postgres: o tipo, não o produto."
@@ -803,6 +934,8 @@ slides:
 
   - name: spec-variables
     act: developer-control
+    parent: detail-app-declaration
+    label: "Variables"
     topic: "App Declaration"
     audiences: [engineering, platform]
     message: "O container recebe o banco por referência, não por valor."
@@ -817,6 +950,8 @@ slides:
 
   - name: spec-route
     act: developer-control
+    parent: detail-app-declaration
+    label: "Route"
     topic: "App Declaration"
     audiences: [engineering, platform]
     message: "Nome e rota: como a app é alcançada de fora."
@@ -831,6 +966,8 @@ slides:
 
   - name: spec-service
     act: developer-control
+    parent: detail-app-declaration
+    label: "Service"
     topic: "App Declaration"
     audiences: [engineering, platform]
     message: "A porta que o serviço expõe."
@@ -845,6 +982,7 @@ slides:
 
   - name: score-what-not
     act: developer-control
+    parent: detail-app-declaration
     topic: "App Declaration"
     message: "Nenhuma linha diz onde, em qual nuvem, nem com qual ferramenta."
     heading: "What the spec leaves out"
@@ -859,17 +997,16 @@ slides:
       Fonte: references/score.md, references/platform-illusion.md.
     dependsOn: [spec-service]
 
-  - name: landscape-dev-3
+  - name: detail-golden-paths
     act: developer-control
     topic: "Golden Paths"
+    parent: landscape-dev
     message: "O golden path cria o repo, a declaração e a spec de uma vez."
     heading: "Golden Paths"
-    divider: false
     diagram: "diagrams/landscape/landscape.svg"
-    show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.1, dev.2]
-    start: "empty"
-    reveal: [dev.3]
-    accumulate: true
+    dim: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev.1, dev.2]
+    show: [dev.3]
+    focus: [dev.3]
     source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
     notes: |-
       O que queremos dizer: **ninguém escreve esses arquivos do zero** — o golden path cria o repo já com o descritor do catálogo e a declaração da app, seguindo o jeito certo.
@@ -878,6 +1015,8 @@ slides:
 
   - name: golden-paths
     act: developer-control
+    parent: detail-golden-paths
+    label: "The easy way is the right way"
     topic: "Golden Paths"
     message: "O golden path junta catálogo e declaração: cria o repo já com os dois arquivos, pelo caminho pavimentado."
     heading: "Golden paths"
@@ -2162,6 +2301,7 @@ slides:
     heading: "Putting it together"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane, dev, ind, res, obs, sec, api, clients]
+    links: {dev.1: detail-catalog, dev.2: detail-app-declaration, dev.3: detail-golden-paths}
     source: "platformengineering.org/platform-tooling · planes as parallel layers; the journey order is ours"
     notes: |-
       O que queremos dizer: **um pedido entra por qualquer cliente, passa pela API e atravessa os planes**.

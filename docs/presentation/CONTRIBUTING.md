@@ -45,6 +45,12 @@ google-chrome "file://${PWD}/idp.html"
 
 O `render-outline` imprime o caminho do HTML. Se houver erro de encadeamento (`dependsOn` apontando para um slide inexistente ou posterior), ele lista os erros e sai com código 1.
 
+Os testes do `render-outline` (validação, passos, HTML):
+
+```bash
+uv run --with pytest --with pyyaml pytest tests
+```
+
 ## 4. Fluxo de contribuição
 
 1. Leia [`references/PROMPT.md`](references/PROMPT.md): pedido, decisões tomadas, perguntas em aberto e a tabela de tópicos.
@@ -70,6 +76,11 @@ O `render-outline` imprime o caminho do HTML. Se houver erro de encadeamento (`d
 | `source` | não | Rodapé "Source: …" do slide |
 | `notes` | sim | O que o apresentador fala e não aparece na tela |
 | `dependsOn` | não | Slides que precisam ter sido vistos antes (o encadeamento do raciocínio) |
+| `focus` | não | Partes do `diagram` com a borda destacada em todos os passos |
+| `spotlight` | não | `true`: a parte revelada no passo também ganha a borda |
+| `links` | não | `{<parte>: <slide>}`: a parte do `diagram` abre o slide com um clique (no modo apresentação) |
+| `parent` | não | Slide de detalhe: sai da trilha principal e vai para um apêndice, aberto por link (`links`, janela de tópicos, breadcrumb). A raiz (pai na trilha principal) precisa de `diagram` e lista os filhos numa janela. → percorre a subárvore e, no último passo, volta à origem; ← no primeiro passo da raiz, Backspace e "↩ back" voltam a qualquer momento. Os slides de uma subárvore ficam seguidos no YAML |
+| `label` | não | Nome do slide no breadcrumb e na janela de tópicos; sem ele, `heading`. Slide de detalhe precisa de um dos dois |
 | `audiences` | não | Públicos para os quais o slide é mais relevante (`executive`, `engineering`, `platform`). Base do filtro que gera versões por público |
 
 ## Formato do deck
@@ -85,6 +96,7 @@ deck:
   meta: [<rótulo>, …]      # canto direito da agenda
   agendaSteps: false       # true repete a agenda antes de cada parte; false em deck longo
   audience: For …          # público, discreto no primeiro slide (pequeno, cinza, maiúsculas)
+  home: <slide>            # com slides de detalhe (`parent`): o "Platform" do breadcrumb abre este slide
 acts:
 - {name: opening, title: Opening}
 - {name: <ato>, title: …, opening: false}   # o cabeçalho e a transição de tópico já dizem o ato
@@ -97,4 +109,5 @@ parts:                     # o índice (tecla I) no formato de agenda
 ```
 
 - **Toda parte cobre atos contíguos**, e todo ato fora de `parts` é só a abertura. O `render-outline` falha se um `acts` ou `go` não existir.
+- **Slides de detalhe:** o cabeçalho é o mesmo da trilha principal (o plane pequeno, a caixinha como título). O caminho inteiro fica numa linha esmaecida no rodapé, com cada nível clicável e um ↩ para voltar à origem. Um slide de detalhe sem `heading` abre com o seu `label` ("System example").
 - **Diagrama que cresce ao longo do deck** (a landscape): um SVG só, gerado por script (`diagrams/landscape/build.py`), com uma parte por `<g data-part>`. Cada volta ao diagrama é um slide com `show` (o que já foi visto) e `reveal` (o que entra agora). Nunca editar o SVG à mão.
