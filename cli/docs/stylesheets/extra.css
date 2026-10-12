@@ -322,6 +322,13 @@
   margin-top: 0;
 }
 
+/* A long command would put its horizontal scrollbar between the command and the output: wrap it instead.
+   Wrapping is visual only, so the copy button still copies the line as written. */
+.md-typeset .highlight.language-bash:has(+ .highlight.output) pre > code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .md-typeset .highlight.language-bash + .highlight.output > .filename,
 .md-typeset .highlight.language-bash + .highlight.output .md-clipboard,
 .md-typeset .highlight.language-bash + .highlight.output .md-code__nav {
