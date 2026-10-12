@@ -35,6 +35,7 @@ platform workload get \
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 8: 0.5.0 running · 1/1 replicas available
+  resource      db (postgres, provision): Ready
 hello-api@demo (Available)
   component     hello-api
   version       0.5.0

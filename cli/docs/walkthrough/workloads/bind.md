@@ -48,16 +48,10 @@ platform workload deploy \
   --version 0.5.0 \
   --resource-class db=restored \
   --wait
-
-platform workload get \
-  --component hello-api \
-  --environment demo
 ```
 
 ``` { .text .output title="output" }
 ✓ hello-api@demo revision 12: 0.5.0 running · 1/1 replicas available
-hello-api@demo (Available)
-  ...
   resource      db (postgres, bind, class restored): Ready
 ```
 

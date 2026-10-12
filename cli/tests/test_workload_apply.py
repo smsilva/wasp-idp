@@ -56,7 +56,10 @@ def api(monkeypatch):
       return httpx.Response(state["error"][0], json={"error": {"code": "x", "message": state["error"][1]}})
     if request.method == "POST":
       return httpx.Response(200, json=result(applied=not json.loads(request.content)["dryRun"]))
-    return httpx.Response(200, json={"items": state["history"][request.url.params["instance"]]})
+    if "instance" in request.url.params:
+      return httpx.Response(200, json={"items": state["history"][request.url.params["instance"]]})
+    name = request.url.path.rsplit("/", 1)[-1]
+    return httpx.Response(200, json={"instance": name, "url": f"http://{name}.apps:80", "resources": [{"name": "db", "type": "postgres", "mode": "compose", "status": "Ready"}] if name == "reviews" else []})
 
   transport = httpx.MockTransport(handler)
   original = client_module.PlatformClient.__init__
@@ -106,10 +109,13 @@ def test_apply_writes_and_points_to_list(api, plan):
 def test_wait_follows_every_revision(api, plan):
   outcome = run("--file", str(plan), "--wait")
   assert outcome.exit_code == 0, outcome.output
-  assert [request.url.params.get("instance") for request in api["requests"][1:]] == ["productpage", "reviews"]
-  assert outcome.output.splitlines()[-2:] == [
+  assert [request.url.params.get("instance") for request in api["requests"][1:3]] == ["productpage", "reviews"]
+  assert outcome.output.splitlines()[-5:] == [
     "✓ productpage@demo revision 1: 1.4.0 running · 1/1 replicas available",
+    "  url           http://productpage.apps:80",
     "✓ reviews@demo revision 3: 2.1.0-rc.1 running · 2/2 replicas available",
+    "  url           http://reviews.apps:80",
+    "  resource      db (postgres, compose): Ready",
   ]
 
 

@@ -44,6 +44,7 @@ WORKLOAD        ACTION  FROM  TO        REVISION
 hello-api@demo  add     —     0.3.0 ×2  6
 demo: 1 to add, 0 to change, 0 to remove
 ✓ hello-api@demo revision 6: 0.3.0 running · 2/2 replicas available
+  url           http://hello-api.apps:80
 WORKLOAD        ACTION     FROM      TO        REVISION
 hello-api@demo  unchanged  0.3.0 ×2  0.3.0 ×2  —
 demo: 0 to add, 0 to change, 0 to remove
