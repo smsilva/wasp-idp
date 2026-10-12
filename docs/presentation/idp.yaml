@@ -1903,9 +1903,9 @@ slides:
 
       **`cloud account`:** a plataforma gera o `ExternalId` e imprime a trust policy; aplicá-la na role prova que quem cadastrou administra a conta. O `ExternalId` nunca vem do cliente. **Ligar uma conta a um Environment vem depois.**
 
-      **`template list`:** o golden path padrão de cada tipo. Quando o dev pede um `service`, é o `python-service` que responde. A lista real também tem as colunas `REF` e `SOURCE`, recortadas aqui.
+      **`template list`:** os golden paths que a plataforma oferece, um por stack (Go, Node.js, Python), e qual é o padrão de cada tipo. Quando o dev pede um `service` sem dizer o template, é o `python-service` que responde; quem prefere outra stack passa `--template`. A lista real também tem as colunas `REF` e `SOURCE`, recortadas aqui.
 
-      **Real hoje:** os três comandos (#193, ADR 0029; #201).
+      **Real hoje:** os três comandos (#193, ADR 0029; #201). **Ilustrativo:** `go-service` e `nodejs-service`; hoje só o `python-service` existe.
 
   - name: journey-setup-4
     act: journey

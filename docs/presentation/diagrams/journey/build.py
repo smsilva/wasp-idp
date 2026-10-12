@@ -205,8 +205,11 @@ SETUP_SESSIONS = [
   ("platform cloud account verify nonprod-aws --wait",
    ["✓ nonprod-aws ready (account 123456789012)"]),
   # Real output also has REF (a 40-char sha) and SOURCE (a URL) columns.
+  # Only python-service exists today: nodejs-service and go-service are illustrative (one stack per audience).
   ("platform catalog template list",
    ["NAME            TYPE     DEFAULT",
+    "go-service      service  —",
+    "nodejs-service  service  —",
     "python-service  service  yes"]),
   PAGE,
   # Cropped from the 22 rows of `idp/catalog/`, realigned to the rows that stay.
