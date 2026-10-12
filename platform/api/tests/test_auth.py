@@ -94,13 +94,6 @@ def test_every_v1_route_requires_a_token(app):
     assert response.status_code == 401, f"{method} {path}"
 
 
-def test_capabilities(app, tokens):
-  items = {item["name"]: item["status"] for item in call(app, "/v1/capabilities", tokens.issue()).json()["items"]}
-  assert items["identity"] == "Active"
-  assert items["build"] == "NoProviderForCapability"
-  assert items["catalog"] == "Active"
-
-
 def test_validation_error_shape(app, tokens):
   response = TestClient(app).post("/v1/environments", json={"name": "Bad", "profile": "ephemeral"}, headers={"Authorization": f"Bearer {tokens.issue()}"})
   assert response.status_code == 422

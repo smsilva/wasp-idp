@@ -23,6 +23,8 @@ API_URL = f"http://127.0.0.1:{APP_PORT}"
 IMAGE = "platform-api"
 AUTH_NAMESPACE = "platform-auth"
 KEYCLOAK_PORT = "8180"
+# Read by the Platform API for `platform status` (platform_api.capabilities, ADR 0039).
+IDENTITY_PROVIDERS_ANNOTATION = "platform.wasp.silvios.me/identity-providers"
 # Must match KC_HOSTNAME in platform/keycloak/deploy/keycloak.yaml: it is the `iss` of every token.
 KEYCLOAK_URL = f"http://localhost:{KEYCLOAK_PORT}"
 ISSUER = f"{KEYCLOAK_URL}/realms/platform"
@@ -226,6 +228,9 @@ def install_keycloak(root: Path, admin_email: str | None, log) -> dict:
     logs = _kubectl("logs", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--tail", "30")
     raise BootstrapError(f"realm import did not complete:\n{logs}") from error
   wait_issuer(ISSUER)
+  # What `platform status` shows for identity (ADR 0039): the API reads Deployments, never this Secret.
+  # On the Deployment, not its template: changing it restarts nothing.
+  _kubectl("annotate", "deployment", "keycloak", "--namespace", AUTH_NAMESPACE, "--overwrite", f"{IDENTITY_PROVIDERS_ANNOTATION}={'google' if google else ''}")
 
   log("applying the admin permissions of the Platform API …")
   try:

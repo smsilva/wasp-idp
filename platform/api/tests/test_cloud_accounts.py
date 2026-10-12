@@ -61,11 +61,6 @@ def add(client, as_, name="nonprod-aws", role=ROLE, who="owner", **extra):
   return client.post("/v1/cloud/accounts", json={"name": name, "vendor": "aws", "roleArn": role, **extra}, headers=as_(who))
 
 
-def capability(client, as_):
-  items = client.get("/v1/capabilities", headers=as_("owner")).json()["items"]
-  return next(item["status"] for item in items if item["name"] == "cloud-account")
-
-
 def test_add_returns_the_trust_policy(client, as_, state):
   response = add(client, as_, regions=["us-east-1", "sa-east-1"])
   assert response.status_code == 202
@@ -104,13 +99,10 @@ def test_without_base_credential(state, journal_path, tokens, as_):
   response = add(client, as_)
   assert response.status_code == 409
   assert "--aws-profile" in response.json()["error"]["message"]
-  assert capability(client, as_) == "NoProviderForCapability"
   bare = TestClient(create_app(state, Journal(journal_path), tokens.verifier()))
   assert add(bare, as_).status_code == 409
 
 
-def test_capability_active_with_base_credential(client, as_):
-  assert capability(client, as_) == "Active"
 
 
 @pytest.mark.parametrize("field,value", [

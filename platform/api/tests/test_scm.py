@@ -310,6 +310,3 @@ def test_non_admins_get_403(client, admin, user, method, path):
   assert client.request(method, path, json=body).status_code == 401
 
 
-def test_capability(client, user):
-  items = {item["name"]: item["status"] for item in client.get("/v1/capabilities", headers=user).json()["items"]}
-  assert items["scm"] == "Active"

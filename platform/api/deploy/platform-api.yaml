@@ -79,6 +79,10 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, update, patch, delete]
+  # `platform status` (ADR 0039): the Deployments that declare a capability, their image and readiness.
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -89,6 +93,31 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: platform-api
+subjects:
+  - kind: ServiceAccount
+    name: platform-api
+    namespace: platform-system
+---
+# Keycloak implements identity from its own namespace (created by `platform init` before the API).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: platform-api-status
+  namespace: platform-auth
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: platform-api-status
+  namespace: platform-auth
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: platform-api-status
 subjects:
   - kind: ServiceAccount
     name: platform-api
@@ -110,6 +139,10 @@ kind: Deployment
 metadata:
   name: platform-api
   namespace: platform-system
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: platform-api
+    platform.wasp.silvios.me/capabilities: catalog
 spec:
   replicas: 1
   strategy:

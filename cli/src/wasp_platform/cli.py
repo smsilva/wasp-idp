@@ -1,6 +1,6 @@
 import typer
 
-from .commands import build, catalog, cloud, environment, registry, scm, team, workload
+from .commands import build, catalog, cloud, environment, registry, scm, status, team, workload
 from .commands.auth import login, logout, whoami
 from .commands.init import init
 
@@ -9,6 +9,7 @@ app.command("init")(init)
 app.command("login")(login)
 app.command("logout")(logout)
 app.command("whoami")(whoami)
+app.command("status")(status.status)
 app.add_typer(environment.app, name="environment")
 app.add_typer(catalog.app, name="catalog")
 app.add_typer(build.app, name="build")

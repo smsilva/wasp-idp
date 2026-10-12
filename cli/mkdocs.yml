@@ -19,6 +19,7 @@ nav:
           - Without login, the API refuses: walkthrough/login/refused.md
           - Sign in: walkthrough/login/sign-in.md
           - Who am I: walkthrough/login/whoami.md
+          - What the platform can do: walkthrough/login/status.md
       - Environments:
           - Create an environment: walkthrough/environments/create.md
           - The provider inside: walkthrough/environments/provider.md
@@ -92,6 +93,7 @@ nav:
       - Install the CLI: reference/install.md
       - Control plane: reference/init.md
       - Sign-in: reference/login.md
+      - Status: reference/status.md
       - Environments: reference/environments.md
       - Catalog: reference/catalog.md
       - Templates: reference/templates.md

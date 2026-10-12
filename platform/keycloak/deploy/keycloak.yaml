@@ -22,6 +22,10 @@ kind: Deployment
 metadata:
   name: keycloak
   namespace: platform-auth
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: keycloak
+    platform.wasp.silvios.me/capabilities: identity
 spec:
   replicas: 1
   strategy:

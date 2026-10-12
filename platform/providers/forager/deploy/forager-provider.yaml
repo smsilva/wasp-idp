@@ -103,6 +103,10 @@ kind: Deployment
 metadata:
   name: forager-provider
   namespace: platform-system
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: forager
+    platform.wasp.silvios.me/capabilities: resources
 spec:
   replicas: 1
   strategy:

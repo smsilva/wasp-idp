@@ -27,6 +27,10 @@ kind: Deployment
 metadata:
   name: local-vcluster-provider
   namespace: platform-system
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: local_vcluster
+    platform.wasp.silvios.me/capabilities: environment
 spec:
   replicas: 1
   strategy:

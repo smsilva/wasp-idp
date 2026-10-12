@@ -6,7 +6,7 @@ show_usage() {
 Usage: ${0##*/} [--skip-init]
 
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
-init, login as the test user, the refusals a non-admin gets, an environment
+init, login as the test user, platform status as each role, the refusals a non-admin gets, an environment
 created (its gateway answering at *.<name>.localhost:7080) and deleted, then
 login as the test admin, the catalog import of idp/catalog/, a team with two
 test users, checked in the token, an environment shared with that team (the
@@ -188,6 +188,18 @@ platform login --test-user
 output="$(platform whoami)"
 expect_output "platform-smoke@platform.local (platform-users)" "${output}"
 
+step "platform status as a regular user: each capability and its status, nothing more (#269)"
+# Exits 1 while scm has no ready connection: the step checks the lines, not the exit code.
+output="$(platform status 2>&1 || true)"
+echo "${output}"
+expect_output "CAPABILITY     STATUS" "${output}"
+for capability in identity catalog environment resources workload; do
+  if ! grep --quiet --extended-regexp "^${capability} +Active\$" <<< "${output}"; then
+    echo "expected '${capability}  Active' with no other column" >&2
+    exit 1
+  fi
+done
+
 step "a non-admin cannot create a domain"
 expect_failure "403" \
   platform catalog domain create smoke-forbidden \
@@ -241,6 +253,29 @@ step "login as the test admin (platform-admins)"
 platform login --test-admin
 output="$(platform whoami)"
 expect_output "platform-smoke-admin@platform.local (platform-admins, platform-users)" "${output}"
+
+step "platform status as an admin: providers, detail, and one capability in full (#269, ADR 0039)"
+output="$(platform status 2>&1 || true)"
+echo "${output}"
+expect_output "PROVIDERS" "${output}"
+for line in "catalog +Active +platform-api" "environment +Active +local_vcluster" "resources +Active +forager" "workload +Active +workload" "scm +[A-Za-z]+ +scm_github"; do
+  if ! grep --quiet --extended-regexp "^${line}" <<< "${output}"; then
+    echo "expected a line matching '${line}'" >&2
+    exit 1
+  fi
+done
+output="$(platform status environment)"
+echo "${output}"
+expect_output "environment  Active" "${output}"
+expect_output "local_vcluster" "${output}"
+output="$(platform status scm 2>&1 || true)"
+echo "${output}"
+expect_output "depends on    identity, catalog" "${output}"
+if ! grep --quiet --extended-regexp "^  github +scm_github +[0-9a-f]{12} +1/1 +Active" <<< "${output}"; then
+  echo "expected the github driver of scm, Active" >&2
+  exit 1
+fi
+expect_failure "capability 'nope' not found" platform status nope
 
 step "catalog import idp/catalog/"
 platform catalog import idp/catalog/ --yes

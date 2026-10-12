@@ -33,6 +33,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [Without login, the API refuses](login/refused.md)
 - [Sign in](login/sign-in.md)
 - [Who am I](login/whoami.md)
+- [What the platform can do](login/status.md)
 
 **Environments**
 

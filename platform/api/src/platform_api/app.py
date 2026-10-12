@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import binding_policies, builds, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, registries, scm, templates, teams as team_routes, workload_specs, workloads
+from . import binding_policies, builds, capabilities, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, registries, scm, templates, teams as team_routes, workload_specs, workloads
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -48,19 +48,6 @@ class EnvironmentRequest(BaseModel):
     return value
 
 
-# Capabilities and whether a provider serves them, in the vocabulary of the CRD conditions (ADR 0022).
-CAPABILITIES = {
-  "identity": "Active",
-  "environment": "Active",
-  "catalog": "Active",
-  "scm": "Active",
-  "build": "NoProviderForCapability",
-  "registry": "Active",
-  "workload": "Active",
-  # Active once the aws_account controller publishes the base identity (ADR 0029).
-  cloud_accounts.CAPABILITY: "NoProviderForCapability",
-}
-
 ERROR_CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 422: "invalid_request", 503: "unavailable"}
 
 
@@ -74,7 +61,7 @@ def _error(status: int, message, headers=None, plan: dict | None = None) -> JSON
 def create_app(
   state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None,
   base_identity=None, secrets=None, github: httpx.Client | None = None, public_url: str = "http://127.0.0.1:9090",
-  scm_states: scm.States | None = None,
+  scm_states: scm.States | None = None, deployments=None,
 ) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.2.0")
   app.state.verifier = verifier
@@ -104,13 +91,6 @@ def create_app(
   @app.get("/v1/me")
   def me(principal: Principal = Depends(current_principal)):
     return {"sub": principal.sub, "email": principal.email, "groups": sorted([*principal.groups, *principal.teams]), "teams": sorted(principal.teams)}
-
-  @app.get("/v1/capabilities")
-  def capabilities(principal: Principal = Depends(current_principal)):
-    current = dict(CAPABILITIES)
-    if base_identity and base_identity.arn():
-      current[cloud_accounts.CAPABILITY] = "Active"
-    return {"items": [{"name": name, "status": status} for name, status in current.items()]}
 
   @app.post("/v1/environments", status_code=202)
   def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
@@ -272,6 +252,7 @@ def create_app(
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
   app.include_router(cloud_accounts.router(state, journal, base_identity))
+  app.include_router(capabilities.router(state, deployments, base_identity))
   github = github or httpx.Client(base_url=scm.GITHUB_API, timeout=15)
   app.include_router(scm.router(state, journal, secrets, github, public_url, scm_states or scm.States()))
   return app
@@ -296,5 +277,5 @@ def build() -> FastAPI:
   public_url = os.environ.get("PLATFORM_PUBLIC_URL", "http://127.0.0.1:9090")
   return create_app(
     state, Journal(journal_path), verifier, allowed_hosts, teams, credentials, base_identity,
-    secrets=KubeSecretStore(namespace), public_url=public_url,
+    secrets=KubeSecretStore(namespace), public_url=public_url, deployments=capabilities.KubeDeployments(),
   )
