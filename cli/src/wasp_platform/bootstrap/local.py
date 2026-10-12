@@ -50,6 +50,9 @@ SCM_PROVIDER_IMAGE = "scm-github-provider"
 # Workload Instances (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment.
 WORKLOAD_PROVIDER_IMAGE = "workload-provider"
 FORAGER_PROVIDER_IMAGE = "forager-provider"
+# The shared instance of postgres in mode compose and its admin password (#305).
+SHARED_PG_NAMESPACE = "platform-resources"
+SHARED_PG_SECRET = "shared-pg-admin"
 # Factory templates (ADR 0024): read from this public repo, so no credential is needed.
 SEED_REPO = "https://github.com/smsilva/wasp-idp"
 SEED_FOLDER = Path("platform") / "templates"
@@ -365,6 +368,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   log("deploying the Forager (resources of each workload) …")
   _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, forager_image)
   _kubectl("rollout", "status", f"deployment/{FORAGER_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
+  install_shared_pg(forager_dir, log)
 
   cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)
@@ -375,6 +379,16 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
     "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
   })
   return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": image, "config": str(path), **identity, **cloud}
+
+
+def install_shared_pg(forager_dir: Path, log) -> None:
+  """The shared Postgres compose writes into (#305), in the namespace of the Forager's credentials.
+  The admin password is generated once and kept across runs: a new one would lock the Forager out."""
+  log("deploying shared-pg (postgres in mode compose) …")
+  password = _secret_value(SHARED_PG_NAMESPACE, SHARED_PG_SECRET, "password") or secrets.token_urlsafe(24)
+  _apply_secret(SHARED_PG_NAMESPACE, SHARED_PG_SECRET, {"password": password})
+  _kubectl("apply", "--filename", str(forager_dir / "deploy" / "shared-pg.yaml"))
+  _kubectl("rollout", "status", "statefulset/shared-pg", "--namespace", SHARED_PG_NAMESPACE, "--timeout", "180s")
 
 
 def seed_templates(root: Path, ref: str, existing: list[dict]) -> list[dict]:

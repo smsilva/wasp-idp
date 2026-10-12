@@ -46,7 +46,7 @@ class FakeStore:
 
 class FakeProvisioner:
   def __init__(self, state="Provisioning"):
-    self.state, self.ensured, self.deleted = state, [], []
+    self.state, self.ensured, self.deleted, self.vclusters = state, [], [], []
 
   def ensure(self, request, params, vcluster, secrets):
     self.ensured.append((request["metadata"]["name"], params))
@@ -54,6 +54,7 @@ class FakeProvisioner:
 
   def delete(self, request, vcluster, secrets):
     self.deleted.append(request["metadata"]["name"])
+    self.vclusters.append(vcluster)
 
 
 class FakeVclusters:
@@ -192,12 +193,13 @@ def test_delete_undoes_and_releases():
   assert store.patches == [("demo.reviews.db", {"metadata": {"finalizers": []}})]
 
 
-def test_delete_with_the_environment_gone_only_releases():
+def test_delete_with_the_environment_gone_has_no_vcluster():
   store, provisioner, secrets = FakeStore(), FakeProvisioner(), FakeSecrets()
   store.environment["metadata"]["deletionTimestamp"] = "2026-10-11T12:00:00Z"
   secrets.put("demo.reviews.db", "secret")
   request = existing()
   request["metadata"]["deletionTimestamp"] = "2026-10-11T12:00:00Z"
   reconciler(store, provisioner, secrets).reconcile([], [request], [DEFAULT])
-  assert provisioner.deleted == [] and secrets.values == {}
+  # The provisioner still undoes what lives outside the vcluster (compose), without one.
+  assert provisioner.deleted == ["demo.reviews.db"] and provisioner.vclusters == [None]
   assert store.patches == [("demo.reviews.db", {"metadata": {"finalizers": []}})]

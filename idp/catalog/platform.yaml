@@ -42,3 +42,15 @@ spec:
   type: kubernetes-cluster
   owner: group:default/team-platform
   system: platform
+---
+# The shared Postgres of the platform (#305): postgres in mode compose makes a role and a database
+# per workload in it. Deployed by `platform init` (platform/providers/forager/deploy/shared-pg.yaml).
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: shared-pg
+  description: Shared Postgres in platform-local (namespace platform-resources), where postgres in mode compose creates one database per workload
+spec:
+  type: postgres
+  owner: group:default/team-platform
+  system: platform

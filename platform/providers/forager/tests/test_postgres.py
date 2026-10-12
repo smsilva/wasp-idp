@@ -1,6 +1,6 @@
 import pytest
 
-from forager_provider.postgres import OWNER, InvalidName, Provision, object_name
+from forager_provider.postgres import OWNER, Compose, InvalidName, Provision, object_name
 
 NAME = object_name({"metadata": {"name": "demo.reviews.db"}, "spec": {"instance": "reviews", "resource": "db"}})
 
@@ -102,3 +102,109 @@ def test_delete_undoes_only_what_it_owns():
   Provision().delete(request(), vcluster, secrets)
   assert vcluster.deleted == [("Service", "resources", NAME), ("StatefulSet", "resources", NAME), ("Secret", "resources", NAME)]
   assert secrets.values == {}
+
+
+def test_delete_with_the_environment_gone_only_forgets_the_password():
+  secrets = FakeSecrets()
+  secrets.put("demo.reviews.db", "secret")
+  Provision().delete(request(), None, secrets)
+  assert secrets.values == {}
+
+
+class FakeServer:
+  def __init__(self, claimed_by=None):
+    self.claim, self.ensured, self.dropped = claimed_by, [], []
+
+  def claimed_by(self, name):
+    return self.claim
+
+  def ensure(self, name, password, owner):
+    self.ensured.append((name, password, owner))
+    self.claim = owner
+
+  def drop(self, name):
+    self.dropped.append(name)
+    self.claim = None
+
+
+class FakeInstances:
+  def __init__(self, server):
+    self.server, self.asked = server, []
+
+  def of(self, instance):
+    self.asked.append(instance)
+    return self.server
+
+
+def composed(params=None):
+  obj = request()
+  obj["spec"]["params"] = {"instance": "shared-pg"} if params is None else params
+  return obj
+
+
+def test_compose_makes_a_database_in_the_shared_instance():
+  server, secrets, vcluster = FakeServer(), FakeSecrets(), FakeVcluster()
+  instances = FakeInstances(server)
+  state, message, outputs, secret_ref = Compose(instances).ensure(composed(), {"instance": "shared-pg"}, vcluster, secrets)
+  assert (state, message) == ("Ready", f"database {NAME} ready in shared-pg")
+  assert instances.asked == ["shared-pg"]
+  password = secrets.values["demo.reviews.db"]
+  assert server.ensured == [(NAME, password, "demo.reviews.db")]
+  assert outputs == {"host": "shared-pg.resources", "port": 5432, "name": NAME, "database": NAME, "username": NAME}
+  assert secret_ref == {"name": NAME, "keys": ["password"]}
+  secret = vcluster.applied[-1]
+  assert (secret["kind"], secret["metadata"]["namespace"], secret["stringData"]) == ("Secret", "apps", {"password": password})
+  assert secret["metadata"]["annotations"] == {OWNER: "demo.reviews.db"}
+  # Again: the same password, nothing new.
+  Compose(instances).ensure(composed(), {"instance": "shared-pg"}, vcluster, secrets)
+  assert server.ensured[-1] == (NAME, password, "demo.reviews.db")
+
+
+@pytest.mark.parametrize("params", [{}, {"instance": "shared_pg"}, {"instance": "a; DROP DATABASE x"}])
+def test_compose_needs_a_valid_shared_instance(params):
+  instances = FakeInstances(FakeServer())
+  with pytest.raises(InvalidName, match="shared instance"):
+    Compose(instances).ensure(composed(params), params, FakeVcluster(), FakeSecrets())
+  assert instances.asked == []
+
+
+@pytest.mark.parametrize("claim", ["", "other.reviews.db"])
+def test_compose_never_takes_a_database_of_someone_else(claim):
+  server, vcluster = FakeServer(claimed_by=claim), FakeVcluster()
+  with pytest.raises(InvalidName, match="belongs to something else"):
+    Compose(FakeInstances(server)).ensure(composed(), {"instance": "shared-pg"}, vcluster, FakeSecrets())
+  assert server.ensured == [] and vcluster.applied == []
+
+
+def test_compose_never_takes_a_secret_of_someone_else():
+  server, vcluster = FakeServer(), FakeVcluster(existing={("Secret", "apps"): {"metadata": {"name": NAME}}})
+  with pytest.raises(InvalidName, match=f"Secret apps/{NAME}"):
+    Compose(FakeInstances(server)).ensure(composed(), {"instance": "shared-pg"}, vcluster, FakeSecrets())
+  assert server.ensured == []
+
+
+def test_compose_delete_drops_what_it_owns():
+  server, secrets = FakeServer(claimed_by="demo.reviews.db"), FakeSecrets()
+  secrets.put("demo.reviews.db", "secret")
+  vcluster = FakeVcluster(existing={("Secret", "apps"): {"metadata": {"annotations": {OWNER: "demo.reviews.db"}}}})
+  Compose(FakeInstances(server)).delete(composed(), vcluster, secrets)
+  assert server.dropped == [NAME]
+  assert vcluster.deleted == [("Secret", "apps", NAME)]
+  assert secrets.values == {}
+
+
+def test_compose_delete_outlives_the_environment_and_spares_others():
+  # The vcluster is gone, the shared instance is not: the database is still dropped.
+  server = FakeServer(claimed_by="demo.reviews.db")
+  Compose(FakeInstances(server)).delete(composed(), None, FakeSecrets())
+  assert server.dropped == [NAME]
+  other = FakeServer(claimed_by="other.reviews.db")
+  Compose(FakeInstances(other)).delete(composed(), None, FakeSecrets())
+  assert other.dropped == []
+
+
+def test_compose_delete_without_a_valid_instance_only_releases():
+  instances, secrets = FakeInstances(FakeServer()), FakeSecrets()
+  secrets.put("demo.reviews.db", "secret")
+  Compose(instances).delete(composed({}), None, secrets)
+  assert instances.asked == [] and secrets.values == {}

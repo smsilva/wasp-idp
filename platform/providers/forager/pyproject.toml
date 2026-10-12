@@ -5,6 +5,7 @@ description = "Forager: resolves the resources of each WorkloadRevision into Res
 requires-python = ">=3.12"
 dependencies = [
   "kubernetes>=31.0",
+  "psycopg[binary]>=3.2",
   "pyyaml>=6",
 ]
 

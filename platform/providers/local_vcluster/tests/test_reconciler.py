@@ -144,3 +144,8 @@ def test_values_expose_the_api_on_the_host_port(port):
   assert service["spec"]["selector"] == {"app": "vcluster", "release": "vcluster"}
   assert rendered["exportKubeConfig"]["server"] == f"https://127.0.0.1:{port}"
   assert "127.0.0.1" in rendered["controlPlane"]["proxy"]["extraSANs"]
+
+
+def test_values_replicate_the_shared_instances_into_namespace_resources():
+  # The pods of an environment reach shared-pg.resources, the host Service compose writes into (#305).
+  assert values(7100)["networking"]["replicateServices"] == {"fromHost": [{"from": "platform-resources/shared-pg", "to": "resources/shared-pg"}]}

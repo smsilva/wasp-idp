@@ -10,6 +10,8 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | `platform environment get <name> --admin` | writes the vcluster admin kubeconfig (`platform-admins` only) |
 | `platform environment share\|unshare <name> --team <team>` | see [Teams](teams.md#sharing-environments) |
 | `platform environment credential <name>` | a 10-minute token as an `ExecCredential`; called by kubectl through the kubeconfig |
+| `platform environment policy get <name>` | the binding policy of the environment, then the platform default (LAYER, TYPE, CLASS, ID, MODE, PARAMS) |
+| `platform environment policy set <name> --file <file\|->` | replaces the policy with the `provisioners` list of the file; an empty list removes it (`platform-admins` only) |
 | `platform environment delete <name>` | removes the environment and the vcluster |
 
 `--expires` takes `30m`, `12h`, `3d` or `1w`; the provider deletes the environment when the deadline passes (checked every 10 s).
@@ -41,3 +43,27 @@ Each environment gets one port from `127.0.0.1:7100`–`7119`. The pods run in t
 |---|---|
 | create, list, get | any user (list and get only what they can use) |
 | delete, share, unshare | the owner or `platform-admins` |
+| policy get | whoever uses the environment |
+| policy set | `platform-admins` |
+
+## Binding policy
+
+Which mode makes each resource of a workload in the environment (#305). The Forager reads the policy of the environment before the platform default (`platform-default`, `postgres` → `provision`); the first item that matches `type`, `class` and `id` wins.
+
+```yaml
+provisioners:
+  - type: postgres        # required
+    class: restored       # optional: matches only a resource that asks for this class
+    id: orders-db         # optional: matches only the resource with this id in the Score
+    mode: compose         # provision | compose | bind
+    params:
+      instance: shared-pg # compose: the shared instance, required
+```
+
+| Mode | `postgres` |
+|---|---|
+| `provision` | a Postgres of its own in the vcluster, namespace `resources` |
+| `compose` | a role and a database in the shared instance `params.instance` (`shared-pg`) |
+| `bind` | not yet (#306) |
+
+A resource keeps the mode it was created with: a policy that changes it ends the next deploy as `ResourceModeChanged`, until `workload remove`. Walkthrough: [21.8](../walkthrough/workloads/21-8-compose.md).

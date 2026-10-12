@@ -38,7 +38,7 @@ Um recurso retirado do Score continua com o seu `ResourceRequest` até o `worklo
   - `secretRef`: `{name, keys}`, um Secret no namespace `apps` do vcluster;
   - condition `Resolved`: `True`, ou `False` com `NoProviderForCapability` ou `ResourceModeChanged`;
   - condition `Ready`: `Provisioning`, `Ready` ou `Failed`.
-- **Finalizer:** `platform.wasp.silvios.me/forager`. No delete, o provisioner desfaz o que criou (provision: StatefulSet, Service e Secret no vcluster; compose: o database). Com o `Environment` sendo apagado, o vcluster vai junto e o finalizer só é removido.
+- **Finalizer:** `platform.wasp.silvios.me/forager`. No delete, o provisioner desfaz o que criou (provision: StatefulSet, Service e Secret no vcluster; compose: o database). Com o `Environment` sendo apagado, o vcluster vai junto: o provisioner recebe `vcluster=None` e desfaz só o que vive fora dele (o database do `compose`) e o control plane.
 
 ### `BindingPolicy` (`platform.wasp.silvios.me/v1alpha1`)
 
@@ -71,7 +71,7 @@ O Crossplane entra depois como backend de um provisioner (o primeiro tipo AWS: u
 | Provisioner | Sub-issue | O que faz |
 |---|---|---|
 | `postgres/provision` | #304 | Cria no namespace `resources` do vcluster, separado dos workloads de `apps`, um StatefulSet `postgres:17-alpine` e um Service. O nome é `<instance>-<resource>-<hash>`, e o hash vem do nome do `ResourceRequest`. A senha gerada vai para um Secret com o mesmo nome em `apps`, que é onde o `secretKeyRef` do workload lê, e também para um Secret do control plane (`resource.<rr>`), de onde o do vcluster é reescrito. Os outputs são `host` `<nome>.resources`, `port` 5432 e `database`/`name`/`username` `app`. Fica `Ready` com o StatefulSet pronto. |
-| `postgres/compose` | #305 | Cria um role e um database na `shared-pg` e faz o `DROP` no delete. |
+| `postgres/compose` | #305 | Cria na instância `params.instance` (`shared-pg`, no namespace `platform-resources` do `platform-local`, instalada pelo `platform init`) um role e um database com o nome `<instance>-<resource>-<hash>`, só por `sql.Identifier`/`sql.Literal`. O role leva o nome do `ResourceRequest` como comentário, na mesma transação que o cria, e o database é dele só quando esse role é o dono: um role ou database de outro é recusado (`Failed`). `REVOKE ALL ... FROM PUBLIC` deixa só o próprio role conectar. A senha segue o caminho do `provision` (control plane → Secret em `apps`). Os outputs são `host` `shared-pg.resources` (o Service do host que cada vcluster replica, `networking.replicateServices.fromHost`), `port` 5432 e `database`/`name`/`username` com o nome do objeto. Fica `Ready` logo. No delete, `DROP DATABASE ... WITH (FORCE)` e `DROP ROLE`, também com o ambiente sendo apagado, porque a instância sobrevive ao vcluster. |
 | `postgres/bind` | #306 | Só devolve valores e copia para o vcluster um Secret existente. |
 
 Nomes que entram em manifest ou SQL (`instance`, `resource`) são validados com `re.fullmatch` antes de qualquer uso (ADR 0031). Sem o hash, nomes diferentes poderiam se encontrar: `a` + `b-db` e `a-b` + `db` dariam `a-b-db`. Além disso, cada objeto leva a anotação `platform.wasp.silvios.me/resource-request`. Um objeto que já existe com outro dono é recusado (`Failed`), nunca tomado, e o delete só apaga o que é do próprio pedido.
@@ -103,7 +103,7 @@ A criação é idempotente, e o Forager nunca apaga o `Resource`: ele é a ident
 
 - **`GET /v1/environments/{env}/workloads/{instance}`** passa a devolver `resources` com `name`, `type`, `mode` e `status`, lidos de `WorkloadInstance.status.resources`.
 - **`platform workload get`** mostra uma linha por recurso.
-- **Política de ambiente:** a rota e a CLI entram na #305. Na #304, a política vem só do padrão da plataforma.
+- **Política de ambiente (#305):** `GET`/`PUT /v1/environments/{env}/binding-policy` grava a `BindingPolicy` `env-<env>`, com ownerReference no `Environment`. Escrita só por `platform-admins` (decide onde os dados moram), com journal; leitura por quem usa o ambiente, junto com o padrão. Lista vazia apaga a política. A API recusa `compose` sem `params.instance`. CLI: `platform environment policy set <env> --file` e `policy get <env>`.
 
 ## cli-smoke
 

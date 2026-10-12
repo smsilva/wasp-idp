@@ -107,6 +107,12 @@ rastreável, referencia a issue do GitHub em vez de duplicar a narrativa aqui.
     o StatefulSet que o Forager cria no vcluster não tem PVC, como a recipe do spike. Os dados somem
     quando o pod reinicia; serve a ambientes efêmeros. Um volume (ou o RDS por Crossplane) entra com
     o primeiro provisioner AWS.
+35. **`shared-pg` sem volume e ambientes antigos sem a rota até ela** — *intentional* no
+    `platform-local` (#305): a instância compartilhada do modo `compose` também não tem PVC, então um
+    restart do pod perde todos os databases (os `ResourceRequest` continuam `Ready`; `workload
+    remove` e um deploy novo os recriam). E o `local_vcluster` só instala o release uma vez: um
+    vcluster criado antes da #305 não tem o Service `shared-pg` replicado em `resources`, e o app
+    não resolve `shared-pg.resources`. Recriar o ambiente resolve.
 
 Lições genéricas já corrigidas (não são mais "quebradas", mas a regra vale para qualquer camada
 futura) vivem em [`lessons-learned/`](lessons-learned/) — `terraform-layers.md` e

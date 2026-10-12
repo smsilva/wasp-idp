@@ -56,6 +56,10 @@ rules:
   - apiGroups: [platform.wasp.silvios.me]
     resources: [workloadinstances]
     verbs: [get, list, watch]
+  # The environment layer of the binding policy (#305); the platform default is read only.
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [bindingpolicies]
+    verbs: [get, list, create, update, delete]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [scmconnections]
     verbs: [get, list, watch, create, update, delete]
