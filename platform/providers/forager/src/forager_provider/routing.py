@@ -98,6 +98,9 @@ class Dns:
 
 
 class Route:
+  # The only params a Score sets: the policy decides everything else of every provisioner.
+  score_params = ("host", "path", "port")
+
   def __init__(self, environments):
     self.environments = environments
 

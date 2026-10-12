@@ -8,8 +8,9 @@ uses. The workload provider waits for them and is the only writer of the revisio
 
 The params of a resource in the Score go to spec.scoreParams, and ${resources.<name>.<key>} in them
 resolves against the outputs of the other resources of the same instance when it is provisioned: the
-route waits for the host of the dns (#358). The params of the policy item win over them: a Score never
-points a bind elsewhere.
+route waits for the host of the dns (#358). A provisioner reads only the keys it lists in score_params
+(none by default), and the params of the policy item win over them: a Score never points a bind or a
+compose elsewhere.
 """
 import logging
 import re
@@ -249,7 +250,9 @@ class Reconciler:
       return True
     provisioner = self.provisioners[spec["provisioner"]]
     try:
-      params = {**resolve_params(spec.get("scoreParams") or {}, self._outputs_of(request, by_name or {})), **(spec.get("params") or {})}
+      allowed = getattr(provisioner, "score_params", ())
+      from_score = {key: value for key, value in (spec.get("scoreParams") or {}).items() if key in allowed}
+      params = {**resolve_params(from_score, self._outputs_of(request, by_name or {})), **(spec.get("params") or {})}
       state, message, outputs, secret_ref = provisioner.ensure(request, params, self.vclusters.of(environment), self.secrets)
     except Waiting as error:
       state, message, outputs, secret_ref = "Provisioning", str(error), (request.get("status") or {}).get("outputs") or {}, (request.get("status") or {}).get("secretRef")

@@ -228,8 +228,8 @@ def test_delete_with_the_environment_gone_has_no_vcluster():
 class Recording:
   """A provisioner that records the params it got and returns outputs from them."""
 
-  def __init__(self, outputs=None):
-    self.calls, self.outputs = [], outputs or {}
+  def __init__(self, outputs=None, score_params=("host", "path", "port")):
+    self.calls, self.outputs, self.score_params = [], outputs or {}, score_params
 
   def ensure(self, request, params, vcluster, secrets):
     self.calls.append((request["metadata"]["name"], params))
@@ -287,10 +287,19 @@ def test_a_reference_to_an_unknown_output_fails():
 
 def test_the_policy_params_win_over_the_score():
   store = FakeStore(resources={"db": {"type": "postgres", "params": {"instance": "mine"}}})
-  provisioner = Recording()
+  provisioner = Recording(score_params=("instance",))
   bound = policy("demo", [{"type": "postgres", "mode": "provision", "params": {"instance": "shared-pg"}}], environment="demo")
   Reconciler(store, FakeVclusters(), FakeSecrets(), provisioners={"postgres/provision": provisioner}, now=lambda: NOW).reconcile([revision()], [], [bound])
   assert provisioner.calls == [("demo.reviews.db", {"instance": "shared-pg"})]
+
+
+def test_a_provisioner_reads_only_the_score_params_it_lists():
+  # A bind whose policy item leaves port out (5432 by default): the Score must not pick another.
+  store = FakeStore(resources={"db": {"type": "postgres", "params": {"port": 6543, "host": "evil"}}})
+  provisioner = Recording(score_params=())
+  bound = policy("demo", [{"type": "postgres", "mode": "provision", "params": {"host": "db.example"}}], environment="demo")
+  Reconciler(store, FakeVclusters(), FakeSecrets(), provisioners={"postgres/provision": provisioner}, now=lambda: NOW).reconcile([revision()], [], [bound])
+  assert provisioner.calls == [("demo.reviews.db", {"host": "db.example"})]
 
 
 def test_new_score_params_provision_the_request_again():

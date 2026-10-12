@@ -190,7 +190,7 @@ The same flow reaches an instance from outside its environment (ADR 0036). Every
 
 - `dns/provision` makes nothing: its output `host` is `<instance>.<environment>.localhost`, a name the entry point already routes.
 - `route/provision` writes an `HTTPRoute` in `apps`, with `parentRef` on that `Gateway`, the `host` and `path` of its params and the Service of the instance as backend. Its outputs are `host`, `path` and `url`, which the workload provider copies to the instance as `publicUrl`.
-- The params of a resource come from the Score (`spec.scoreParams` of the `ResourceRequest`), and `${resources.dns.host}` in them is replaced with the output of the `dns` of the same instance: the `route` stays `Provisioning` until the `dns` is `Ready`. The params of the policy item win over the Score's.
+- The params of a resource come from the Score (`spec.scoreParams` of the `ResourceRequest`), and `${resources.dns.host}` in them is replaced with the output of the `dns` of the same instance: the `route` stays `Provisioning` until the `dns` is `Ready`. A provisioner reads only the keys of the Score it lists (`route`: `host`, `path`, `port`; `postgres`: none), and the params of the policy item win over them.
 - `workload remove` deletes the `HTTPRoute`: the host answers `404` from the `Gateway` again.
 
 ## Who writes what
