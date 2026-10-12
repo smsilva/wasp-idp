@@ -1946,14 +1946,16 @@ slides:
     show: [terminal]
     start: "empty"
     empty: [prompt]
-    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
     accumulate: true
     notes: |-
       O que queremos dizer: **a nuvem é uma escolha da plataforma**, feita uma vez.
 
       A plataforma gera o `ExternalId` e imprime a trust policy; aplicá-la na role prova que quem cadastrou administra a conta. O `ExternalId` nunca vem do cliente. **Ligar uma conta a um Environment vem depois.**
 
-      **Real hoje:** os dois comandos (#193, ADR 0029).
+      **`list`:** a conta aparece `ready`, com a hora da última validação; um admin vê todas, com o dono, e os outros só as próprias.
+
+      **Real hoje:** os três comandos (#193, ADR 0029).
 
   - name: journey-setup-5
     act: journey-platform

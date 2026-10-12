@@ -221,6 +221,9 @@ SETUP_SESSIONS = [
     "# apply the printed trust policy (sts:ExternalId) to the role"]),
   ("platform cloud account verify nonprod-aws --wait",
    ["✓ nonprod-aws ready (account 123456789012)"]),
+  ("platform cloud account list",
+   ["NAME         VENDOR  ACCOUNT       STATUS  VALIDATED             OWNER",
+    "+nonprod-aws  aws     123456789012  ready   2026-10-12T19:30:00Z  admin@example.com"]),
   PAGE,
   # Cropped from the rows of `idp/catalog/`, realigned to the rows that stay. The two Component rows are
   # illustrative: the apps' repos hold them, and discovery (#205) indexes them; the reason drops its "(#205)".
