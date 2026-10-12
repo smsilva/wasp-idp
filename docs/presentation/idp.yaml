@@ -1878,14 +1878,16 @@ slides:
     show: [terminal]
     start: "empty"
     empty: [prompt]
-    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out]
+    reveal: [cmd.1, cmd.1-out, cmd.2, cmd.2-out, cmd.3, cmd.3-out]
     accumulate: true
     notes: |-
-      O que queremos dizer: **a plataforma passa a criar repos na org** com uma credencial própria, não com o token de uma pessoa.
+      O que queremos dizer: **a plataforma passa a criar repos na org** com uma credencial própria, não com o token de uma pessoa, **e sabe para onde vão as imagens**.
 
       O GitHub App nasce pelo **manifest flow**: o `add` abre o navegador na Platform API, o GitHub devolve a chave privada **direto para a plataforma**, e ela nunca passa pela CLI. Depois é instalar o App na org e verificar.
 
-      **Real hoje:** os dois comandos, com a saída da CLI (#199, ADR 0025).
+      **O registry da org:** o `verify` sugere cadastrar o GHCR da org como registry padrão. A connection só preenche o endereço (`ghcr.io/wasp-foundry`): quem faz o push é o CI de cada repo, com o `GITHUB_TOKEN` do run, e a plataforma não guarda credencial de registry. O GHCR não aceita o token do GitHub App, por isso o pull de um pacote privado é outra conversa (#367, #368).
+
+      **Real hoje:** os três comandos, com a saída da CLI recortada (#199, ADR 0025; #365, ADR 0037).
 
   - name: journey-setup-3
     act: journey
@@ -2027,7 +2029,9 @@ slides:
 
       **A spec é validada no build** — gate determinístico e obrigatório: spec inválida não vira versão, e o erro volta com o motivo. O mesmo validador pode rodar localmente para errar mais cedo, mas é opcional; a garantia é a da CI. No deploy a plataforma valida de novo ao aplicar (`unknown field`, como no slide do gate determinístico).
 
-      **A versão:** o primeiro build de um repo sem tag sai `0.1.0-<branch>.<sha7>` (o Commitizen começa em `0.1.0`). **Real hoje:** `build create` e `build list`, com a saída da CLI.
+      **A versão:** o primeiro build de um repo sem tag sai `0.1.0-<branch>.<sha7>` (o Commitizen começa em `0.1.0`).
+
+      **O registry é escolhido no build**, não no component: sem `--registry`, vale o padrão que o time de plataforma cadastrou no momento 0. A versão grava em qual registry está, e o deploy lê dali. **Real hoje:** `build create` e `build list`, com a saída da CLI (#365).
 
   - name: journey-env
     act: journey

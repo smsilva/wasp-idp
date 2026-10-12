@@ -129,12 +129,13 @@ SESSIONS = {
       "--component greeting-api",
       "--branch feat/greetings",
       "--wait"],
+     # Real output also has the address after the registry, (ghcr.io/wasp-foundry/greeting-api): it overflows the terminal.
      ["building from feat/greetings @ 1a2b3c4 …",
       "✓ app-spec.yaml valid · db (postgres), dns, route",
-      "✓ image greeting-api:0.1.0-greetings.1a2b3c4 pushed to the registry"]),
+      "✓ image greeting-api:0.1.0-greetings.1a2b3c4 pushed to ghcr-wasp-foundry"]),
     ("platform build list --component greeting-api",
-     ["VERSION                  BRANCH          CREATED",
-      "+0.1.0-greetings.1a2b3c4  feat/greetings  2026-10-12T14:02:11Z"]),
+     ["VERSION                  BRANCH          REGISTRY           CREATED",
+      "+0.1.0-greetings.1a2b3c4  feat/greetings  ghcr-wasp-foundry  2026-10-12T14:02:11Z"]),
   ],
   "env": [
     # Real output also has OWNER and SHARED columns.
@@ -194,8 +195,14 @@ SETUP_SESSIONS = [
    ["→ opening the browser to create the GitHub App \"wasp-foundry-platform\" …",
     "✓ app created (id 5274859) · private key stored by the platform",
     "→ install it on the org: github.com/apps/wasp-foundry-platform/installations/new"]),
+  # Real output also suggests the next command (→ register its GHCR …): it overflows the terminal.
   ("platform scm connection verify wasp-foundry --wait",
    ["✓ wasp-foundry ready (wasp-foundry, all repositories)"]),
+  # Real output goes on with ", pushed by the CI of wasp-foundry repos".
+  (["platform registry add ghcr-wasp-foundry",
+    "--scm-connection wasp-foundry",
+    "--default"],
+   ["✓ registry ghcr-wasp-foundry added (default) · ghcr.io/wasp-foundry"]),
   PAGE,
   (["platform cloud account add nonprod-aws",
     "--role-arn arn:aws:iam::123456789012:role/platform"],
