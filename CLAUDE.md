@@ -29,6 +29,8 @@
 
 - **`gh pr edit` / `gh issue edit` fail on this repo** with `GraphQL: Projects (classic) is being deprecated ... (repository.pullRequest.projectCards)`. The command exits non-zero and changes nothing — easy to read as "edited" if the output is not checked. Use the REST API instead: `gh api --method PATCH repos/smsilva/wasp-idp/pulls/<n> --input <file.json>` with `{"title": ..., "body": ...}`. `gh issue create`, `gh issue comment` and `gh issue close` are unaffected.
 
+- **`gh issue view --comments` fails the same way**, and `gh issue view --json` has no `parent`/`subIssues` field: read comments with `--json comments` and the hierarchy with GraphQL (`issue(number:n){parent{number} subIssues(first:20){nodes{number state}}}`).
+
 - **Closing keywords must be English** (`Closes #n`, `Fixes #n`). "Fecha #n" in a PR body does not close the issue on merge — close it by hand and move it to `Done` on the board.
 
 - **Stacked PRs:** merging the base PR does not retarget the child (the base branch is not auto-deleted). Rebase the child with `git rebase --onto origin/main <base-commit>`, force-push, and switch its base to `main` via REST `{"base": "main"}`. GitHub may keep reporting `mergeable_state: dirty` after the retarget even with no real conflict; amending the commit (`--amend --no-edit --date=now`) and force-pushing forces a recompute.
