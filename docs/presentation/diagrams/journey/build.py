@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Journey slides: one SVG per moment of the delivery line, a CLI session revealed command by command.
 
-Commands are illustrative: the `platform` CLI does not exist with these verbs.
+Commands and outputs follow the real `platform` CLI (`cli/docs/walkthrough/`), cropped to fit the terminal;
+the steps that depend on an open issue show the target shape, and the slide notes say which.
 Parts: `strip` (the line, current moment lit), `cmd.N` (a command) and `cmd.N-out` / `cmd.N-editor` (what it shows, one step later).
 """
 import pathlib
@@ -24,7 +25,7 @@ MOMENTS = [
   ("code", "Code", "App Declaration"),
   ("build", "Build", "CI · Registry"),
   ("env", "Environment", "Resource"),
-  ("release", "Release", "Delivery"),
+  ("deploy", "Deploy", "Delivery"),
   ("run", "Run", "Observability"),
 ]
 
@@ -50,7 +51,7 @@ def yaml_spans(line):
     out += f'<tspan fill="{color}" font-weight="{700 if color == PH else 500}">{esc(chunk)}</tspan>'
   return out
 
-def editor(file, split=None, x0=360, y0=324, x1=1462, y1=846):
+def editor(file, split=None, x0=200, y0=324, x1=1462, y1=846):
   """Editor window: title bar with the file name, line numbers, two columns.
 
   The right column starts at the top-level key `split`, else at the blank line nearest the middle.
@@ -84,28 +85,30 @@ PAGE = None
 # Commands with more than one option are a list, one argument per line (the bash-scripts convention).
 SESSIONS = {
   "plan": [
-    ("platform app list --system greeter",
-     ["NAME             OWNER       LIFECYCLE",
-      "greeting-web     team-alpha  production",
-      "greeting-worker  team-alpha  experimental"]),
-    (["platform app create greeting-api",
-      "--template api",
-      "--owner team-alpha",
-      "--system greeter"],
-     ["✓ golden path “api”: repo wasp-foundry/greeting-api created",
+    # Real output has a TEMPLATE column (`python-service@<sha40>`): left out, it overflows the terminal.
+    ("platform catalog component list --system greeter",
+     ["NAME             SYSTEM   OWNER       LIFECYCLE",
+      "greeting-web     greeter  team-alpha  production",
+      "greeting-worker  greeter  team-alpha  experimental"]),
+    # `--wait` also prints the six creation steps (Validated … Registered) before this summary.
+    (["platform catalog component create greeting-api",
+      "--system greeter",
+      "--prd docs/idea.md",
+      "--wait"],
+     ["✓ golden path “python-service” (default for service): repo wasp-foundry/greeting-api created",
       "✓ registered in the catalog (lifecycle: experimental)",
       "✓ docs/prd.md and AGENTS.md added to the repo",
       "✓ app-spec.yaml generated: container, postgres, route /"]),
     PAGE,
-    ("platform app list --system greeter",
-     ["NAME             OWNER       LIFECYCLE",
-      "+greeting-api     team-alpha  experimental",
-      "greeting-web     team-alpha  production",
-      "greeting-worker  team-alpha  experimental"]),
+    ("platform catalog component list --system greeter",
+     ["NAME             SYSTEM   OWNER       LIFECYCLE",
+      "+greeting-api     greeter  team-alpha  experimental",
+      "greeting-web     greeter  team-alpha  production",
+      "greeting-worker  greeter  team-alpha  experimental"]),
   ],
   "code": [
     # The platform resolves the repo from the catalog; the git command it runs shows as a comment.
-    ("platform app clone greeting-api",
+    ("platform catalog component clone greeting-api",
      ["# git clone git@github.com:wasp-foundry/greeting-api.git"]),
     ("cd greeting-api", []),
     ("git switch --create feat/greetings", []),
@@ -114,47 +117,58 @@ SESSIONS = {
     PAGE,
     ("agent \"implement GET /greetings as described in docs/prd.md\"",
      ["# reads docs/prd.md, AGENTS.md, app-spec.yaml and the catalog entry",
-      "✓ greetings read from DB_HOST / DB_USER / DB_PASSWORD",
+      "✓ greetings read from DATABASE_HOST / _NAME / _USER / _PASSWORD",
+      "✓ psycopg added to requirements.txt",
       "✓ 4 files changed · tests pass"]),
     ("git push --set-upstream origin feat/greetings", ["✓ pushed feat/greetings"]),
   ],
   "build": [
     (["platform build create",
-      "--app greeting-api",
-      "--branch feat/greetings"],
+      "--component greeting-api",
+      "--branch feat/greetings",
+      "--wait"],
      ["building from feat/greetings @ 1a2b3c4 …",
       "✓ app-spec.yaml valid · db (postgres), dns, route",
-      "✓ image greeting-api:0.3.0-greetings.1a2b3c4 pushed to the registry"]),
-    ("platform build list --app greeting-api",
-     ["VERSION                    BRANCH          CREATED",
-      "+0.3.0-greetings.1a2b3c4    feat/greetings  1 min ago",
-      "0.2.1                      main            2 days ago"]),
+      "✓ image greeting-api:0.1.0-greetings.1a2b3c4 pushed to the registry"]),
+    ("platform build list --component greeting-api",
+     ["VERSION                  BRANCH          CREATED",
+      "+0.1.0-greetings.1a2b3c4  feat/greetings  2026-10-12T14:02:11Z"]),
   ],
   "env": [
+    # Real output also has OWNER and SHARED columns.
     ("platform environment list",
-     ["NAME     PROFILE     STATUS  EXPIRES",
-      "dev      shared      ready   —",
-      "staging  shared      ready   —"]),
+     ["NAME     PROFILE  STATUS  EXPIRES",
+      "dev      shared   ready   —",
+      "staging  shared   ready   —"]),
     # The dev picks the kind of environment; the profile (platform-owned) decides where it runs.
     (["platform environment create greetings-test",
       "--profile ephemeral",
-      "--expires 3d"],
+      "--expires 3d",
+      "--wait"],
      ["provisioning greetings-test (profile: ephemeral) …",
       "✓ greetings-test ready"]),
   ],
-  "release": [
-    (["platform release create",
-      "--app greeting-api",
-      "--version 0.3.0-greetings.1a2b3c4",
-      "--env greetings-test"],
-     ["✓ postgres: compose → shared-pg/greetings_test (from app-spec.yaml)",
-      "✓ deployed · 2/2 replicas healthy",
-      "URL: https://greeting-api.greetings-test.platform.example.com"]),
+  "deploy": [
+    (["platform workload deploy",
+      "--component greeting-api",
+      "--environment greetings-test",
+      "--branch feat/greetings",
+      "--wait"],
+     ["✓ greeting-api@greetings-test revision 1: 0.1.0-greetings.1a2b3c4 running · 1/1 replicas available"]),
+    # Real output also has component, image, replicas, revision and message.
+    (["platform workload get",
+      "--component greeting-api",
+      "--environment greetings-test"],
+     ["greeting-api@greetings-test (Available)",
+      "  url           https://greeting-api.greetings-test.platform.example.com",
+      "  resource      db (postgres, compose): Ready"]),
   ],
   "run": [
     ("curl https://greeting-api.greetings-test.platform.example.com/greetings",
-     ['{"greetings": [{"id": 1, "message": "hello"}], "version": "0.3.0-greetings.1a2b3c4"}']),
-    ("platform app status greeting-api --env greetings-test",
+     ['{"greetings": [{"id": 1, "message": "hello"}], "version": "0.1.0-greetings.1a2b3c4"}']),
+    (["platform workload signals",
+      "--component greeting-api",
+      "--environment greetings-test"],
      ["latency p95 42 ms · traffic 3 req/s · errors 0% · saturation 12%"]),
   ],
 }
