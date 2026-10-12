@@ -3,7 +3,8 @@
 
 Commands and outputs follow the real `platform` CLI (`cli/docs/walkthrough/`), cropped to fit the terminal;
 the steps that depend on an open issue show the target shape, and the slide notes say which.
-Parts: `strip` (the line, current moment lit), `cmd.N` (a command) and `cmd.N-out` / `cmd.N-editor` (what it shows, one step later).
+Parts: `strip` (the line, current moment lit, with the terminal), `cmd.N` (a command) and `cmd.N-out` / `cmd.N-editor`
+(what it shows, one step later). The setup sessions (moment 0, the platform team) have `terminal` instead of `strip`.
 """
 import pathlib
 
@@ -173,6 +174,55 @@ SESSIONS = {
   ],
 }
 
+# Moment 0: what the platform team does once, before any dev arrives. No strip: the line is the dev's journey.
+# Outputs are the real CLI's, cropped: `init` also prints its progress lines, `scm connection add` a "then run" hint.
+SETUP_SESSIONS = [
+  (["platform init",
+    "--target local",
+    "--admin admin@example.com"],
+   ["✓ Platform API at http://127.0.0.1:9090 · config in ~/.config/platform/config.yaml",
+    "✓ Keycloak issuer http://localhost:8180/realms/platform"]),
+  ("platform login",
+   ["Opening the browser to sign in …",
+    "✓ Logged in as admin@example.com (platform-admins, platform-users)"]),
+  ("platform team member add team-alpha dev@example.com",
+   ["✓ dev@example.com added to team-alpha"]),
+  PAGE,
+  (["platform scm connection add wasp-foundry",
+    "--vendor github",
+    "--org wasp-foundry",
+    "--default"],
+   ["→ opening the browser to create the GitHub App \"wasp-foundry-platform\" …",
+    "✓ app created (id 5274859) · private key stored by the platform",
+    "→ install it on the org: github.com/apps/wasp-foundry-platform/installations/new"]),
+  ("platform scm connection verify wasp-foundry --wait",
+   ["✓ wasp-foundry ready (wasp-foundry, all repositories)"]),
+  PAGE,
+  (["platform cloud account add nonprod-aws",
+    "--role-arn arn:aws:iam::123456789012:role/platform"],
+   ["✓ cloud account nonprod-aws added (pending)",
+    "# apply the printed trust policy (sts:ExternalId) to the role"]),
+  ("platform cloud account verify nonprod-aws --wait",
+   ["✓ nonprod-aws ready (account 123456789012)"]),
+  # Real output also has REF (a 40-char sha) and SOURCE (a URL) columns.
+  ("platform catalog template list",
+   ["NAME            TYPE     DEFAULT",
+    "python-service  service  yes"]),
+  PAGE,
+  # Cropped from the 22 rows of `idp/catalog/`, realigned to the rows that stay.
+  ("platform catalog import idp/catalog/",
+   ["KIND      NAME           ACTION  DETAIL",
+    "Group     team-beta      create",
+    "Domain    communication  create",
+    "Domain    messaging      create  parent communication",
+    "System    greeter        create  domain messaging",
+    "Resource  greeting-db    create  system greeter",
+    "…",
+    "19 to create, 0 to update, 1 unchanged, 2 skipped.",
+    "Apply? [y/N]: y",
+    "✓ 19 created, 0 updated"]),
+]
+
 X0, X1 = 120, 1480
 
 def strip(current):
@@ -235,7 +285,7 @@ def command_line(x, y, text):
           f'xml:space="preserve" {MONO}>{spans}</text>')
 
 # Working directory in the terminal title: the repo is cloned in Code, so Plan runs from home.
-CWD = {"plan": "~", "plan-2": "~", "code": "~"}  # per page: `code-2` runs after the `cd`
+CWD = {"plan": "~", "plan-2": "~", "code": "~", "setup": "~", "setup-2": "~", "setup-3": "~", "setup-4": "~"}  # per page: `code-2` runs after the `cd`
 
 def session(key, commands, name):
   parts = {}
@@ -245,7 +295,10 @@ def session(key, commands, name):
   frame += f'<path d="M{x},{y + 16} a16,16 0 0 1 16,-16 h{X1 - X0 - 32} a16,16 0 0 1 16,16 v26 h-{X1 - X0} z" fill="{PANEL}"/>'
   frame += "".join(f'<circle cx="{x + 28 + i * 24}" cy="{y + 21}" r="7" fill="{c}"/>' for i, c in enumerate(("#ff5f57", "#febc2e", "#28c840")))
   frame += T((X0 + X1) / 2, y + 21, CWD.get(name, "~/greeting-api"), 16, 700, SOFT, "middle", MONO)
-  parts["strip"] = strip(key) + frame
+  if key == "setup":
+    parts["terminal"] = frame
+  else:
+    parts["strip"] = strip(key) + frame
   # Empty prompt: a `$` and a cursor where the first command will be typed (hidden once it appears).
   # Drawn after `strip`, or the terminal background covers it.
   cy = y + 84
@@ -302,8 +355,8 @@ def pages(commands):
 
 for old in OUT.glob("*.svg"):
   old.unlink()
-for key, _, _ in MOMENTS:
-  for number, commands in enumerate(pages(SESSIONS[key]), start=1):
+for key, sessions in [("setup", SETUP_SESSIONS)] + [(key, SESSIONS[key]) for key, _, _ in MOMENTS]:
+  for number, commands in enumerate(pages(sessions), start=1):
     name = key if number == 1 else f"{key}-{number}"
     parts = session(key, commands, name)
     body = "".join(f'<g data-part="{k}">{v}</g>' for k, v in parts.items())
