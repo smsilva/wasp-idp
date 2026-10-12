@@ -25,7 +25,10 @@ success, runningIn in catalog component get, remove; refused outside the owner t
 outside the index, a rollback to a failed revision, and ResourcesNotSupported for a resource type without provider; a pod
 in the vcluster reaches the Service of the instance by DNS), a second instance of the same component
 (deploy --instance, list with COMPONENT, get --component refused as ambiguous, the Service of the
-component without the pods of the second instance, remove --instance), the plan
+component without the pods of the second instance, remove --instance), a route (workload route
+--header to the second instance: a client with the sidecar reaches it with the header and the first
+one without; TRAFFIC in list; refused to another component's instance, remove of a routed instance
+refused; --clear), the plan
 of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), a postgres
 provisioned by the Forager (deploy until Ready, an app that connects to it with psql, the derived catalog Resource,
 released on remove), and a cloud account (ADR 0029): refused with a clear message without an
@@ -62,6 +65,7 @@ component="smoke-component-${RANDOM}"
 taken_component="smoke-taken-${RANDOM}"
 build_component="smoke-build-${RANDOM}"
 workload_component="smoke-workload-${RANDOM}"
+route_component="smoke-route-${RANDOM}"
 workload_directory="$(mktemp --directory)"
 workload_environment="smoke-workload-${RANDOM}"
 # ghcr.io/stefanprodan/podinfo:6.7.1, public: the vcluster pulls it without credentials.
@@ -141,8 +145,8 @@ cleanup() {
   platform team delete "${team}" > /dev/null 2>&1 || true
   platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
   platform scm connection remove "${connection}" > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${workload_component}" --ignore-not-found > /dev/null 2>&1 || true
-  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${workload_component}" "${route_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component})" > /dev/null 2>&1 || true
   rm --recursive --force "${smoke_config}" "${render_directory}" "${workload_directory}"
 }
 trap cleanup EXIT
@@ -672,6 +676,123 @@ if [[ "$(grep --count . <<< "${endpoints}")" != "2" ]] || grep --quiet -- "^${wo
 fi
 output="$(platform catalog component get "${workload_component}")"
 expect_output "${workload_extra}@${workload_environment} (0.3.0, Available)" "${output}"
+
+step "workload route: a header sends calls to the second instance through the mesh (#344)"
+# Another component in the environment, the target of a refused route.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${route_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${route_component}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${route_component}.0.3.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${route_component}
+spec:
+  component: ${route_component}
+  version: "0.3.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '3%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${route_component}
+    containers:
+      app:
+        image: .
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+MANIFEST
+platform workload deploy \
+  --component "${route_component}" \
+  --environment "${workload_environment}" \
+  --version 0.3.0 \
+  --wait
+expect_failure "runs component '${route_component}'" \
+  platform workload route \
+    --component "${workload_component}" \
+    --environment "${workload_environment}" \
+    --header x-sandbox=pr-1 \
+    --to "${route_component}"
+output="$(platform workload route \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --header x-sandbox=pr-1 \
+  --to "${workload_extra}")"
+echo "${output}"
+expect_output "x-sandbox=pr-1 → ${workload_extra}" "${output}"
+output="$(platform workload list --environment "${workload_environment}")"
+echo "${output}"
+expect_output "x-sandbox=pr-1" "${output}"
+expect_output "default" "${output}"
+# A client in apps, with the sidecar: a pod with a sidecar never ends, so it sleeps and curl runs by exec.
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps run route-check \
+  --image curlimages/curl:8.11.1 \
+  --command -- sleep 3600
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/route-check \
+  --for condition=Ready \
+  --timeout 120s
+containers="$(kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps get pod route-check --output jsonpath='{.spec.containers[*].name} {.spec.initContainers[*].name}')"
+expect_output "istio-proxy" "${containers}"
+hostname_of() {
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps exec route-check -- \
+    curl --silent --max-time 5 "$@" "http://${workload_component}" \
+    | sed --quiet 's/.*"hostname": *"\([^"]*\)".*/\1/p'
+}
+# The route takes effect in about a second; the mesh may take a few more to accept it.
+for attempt in $(seq 30); do
+  routed="$(hostname_of --header 'x-sandbox: pr-1' || true)"
+  [[ "${routed}" == "${workload_extra}-"* ]] && break
+  sleep 2
+done
+echo "with the header: ${routed}"
+if [[ "${routed}" != "${workload_extra}-"* ]]; then
+  echo "expected a pod of ${workload_extra} with x-sandbox: pr-1, got '${routed}'" >&2
+  exit 1
+fi
+for attempt in $(seq 5); do
+  default="$(hostname_of)"
+  if [[ "${default}" != "${workload_component}-"* || "${default}" == "${workload_extra}-"* ]]; then
+    echo "expected a pod of ${workload_component} without the header, got '${default}'" >&2
+    exit 1
+  fi
+done
+echo "without the header: ${default}"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod route-check --wait=false
+expect_failure "the route of '${workload_component}' sends traffic to it" \
+  platform workload remove \
+    --instance "${workload_extra}" \
+    --environment "${workload_environment}"
+expect_failure "main instance of the route" \
+  platform workload remove \
+    --component "${workload_component}" \
+    --environment "${workload_environment}"
+output="$(platform workload route \
+  --component "${workload_component}" \
+  --environment "${workload_environment}" \
+  --clear)"
+echo "${output}"
+expect_output "every request goes to ${workload_component}" "${output}"
+platform workload remove \
+  --component "${route_component}" \
+  --environment "${workload_environment}" \
+  --wait
 output="$(platform workload remove \
   --instance "${workload_extra}" \
   --environment "${workload_environment}" \
