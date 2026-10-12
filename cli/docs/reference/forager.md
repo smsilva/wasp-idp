@@ -197,4 +197,4 @@ Each object has a single writer of its `status`, so the Forager and the workload
 | database and Secrets | the **provisioner** of the mode, inside the Forager | the app, through `secretKeyRef` |
 | Deployment in the vcluster | workload provider | the vcluster |
 
-Walkthrough: [21.7 A database for a workload](../walkthrough/workloads/21-7-resources.md) and [21.8 A database in the shared instance](../walkthrough/workloads/21-8-compose.md).
+Walkthrough: [A database for a workload](../walkthrough/workloads/resources.md) and [A database in the shared instance](../walkthrough/workloads/compose.md).

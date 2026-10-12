@@ -10,76 +10,76 @@ nav:
   - Walkthrough:
       - walkthrough/index.md
       - Setup:
-          - 0. From scratch: walkthrough/setup/00-from-scratch.md
-          - 1. Prerequisites: walkthrough/setup/01-prerequisites.md
-          - 2. Install the CLI: walkthrough/setup/02-install.md
-          - 3. Google credentials: walkthrough/setup/03-google-credentials.md
-          - 4. Start the control plane: walkthrough/setup/04-control-plane.md
+          - From scratch: walkthrough/setup/from-scratch.md
+          - Prerequisites: walkthrough/setup/prerequisites.md
+          - Install the CLI: walkthrough/setup/install.md
+          - Google credentials: walkthrough/setup/google-credentials.md
+          - Start the control plane: walkthrough/setup/control-plane.md
       - Login:
-          - 5. Without login, the API refuses: walkthrough/login/05-refused.md
-          - 6. Sign in: walkthrough/login/06-sign-in.md
-          - 7. Who am I: walkthrough/login/07-whoami.md
+          - Without login, the API refuses: walkthrough/login/refused.md
+          - Sign in: walkthrough/login/sign-in.md
+          - Who am I: walkthrough/login/whoami.md
       - Environments:
-          - 8. Create an environment: walkthrough/environments/08-create.md
-          - 9. The provider inside: walkthrough/environments/09-provider.md
-          - 10.1 Write the kubeconfig: walkthrough/environments/10-1-kubeconfig.md
-          - 10.2 Use the cluster: walkthrough/environments/10-2-cluster.md
-          - 10.3 Admin kubeconfig: walkthrough/environments/10-3-admin.md
-          - 11. A second environment, in parallel: walkthrough/environments/11-second.md
-          - 12. Audit trail: walkthrough/environments/12-audit-trail.md
+          - Create an environment: walkthrough/environments/create.md
+          - The provider inside: walkthrough/environments/provider.md
+          - Write the kubeconfig: walkthrough/environments/kubeconfig.md
+          - Use the cluster: walkthrough/environments/cluster.md
+          - Admin kubeconfig: walkthrough/environments/admin.md
+          - A second environment, in parallel: walkthrough/environments/second.md
+          - Audit trail: walkthrough/environments/audit-trail.md
       - Catalog:
-          - 13.1 Create the team and the hierarchy: walkthrough/catalog/13-1-hierarchy.md
-          - 13.2 Query: walkthrough/catalog/13-2-query.md
-          - 13.3 A domain with dependents stays: walkthrough/catalog/13-3-dependents.md
-          - 13.4 Underneath, they are CRDs: walkthrough/catalog/13-4-crds.md
-          - 13.5 Clean up, in reverse order: walkthrough/catalog/13-5-cleanup.md
-          - 14.1 Import from Backstage: walkthrough/catalog/14-1-plan.md
-          - 14.2 Run it again: walkthrough/catalog/14-2-rerun.md
-          - 14.3 Broken reference: walkthrough/catalog/14-3-broken-reference.md
+          - Create the team and the hierarchy: walkthrough/catalog/hierarchy.md
+          - Query: walkthrough/catalog/query.md
+          - A domain with dependents stays: walkthrough/catalog/dependents.md
+          - Underneath, they are CRDs: walkthrough/catalog/crds.md
+          - Clean up, in reverse order: walkthrough/catalog/cleanup.md
+          - Import from Backstage: walkthrough/catalog/plan.md
+          - Run it again: walkthrough/catalog/rerun.md
+          - Broken reference: walkthrough/catalog/broken-reference.md
       - Teams:
-          - 15.1 Join the team: walkthrough/teams/15-1-join.md
-          - 15.2 Renew the token: walkthrough/teams/15-2-token.md
-          - 15.3 Share an environment: walkthrough/teams/15-3-share.md
-          - 15.4 Unshare: walkthrough/teams/15-4-unshare.md
-          - 15.5 A team in use is not deleted: walkthrough/teams/15-5-in-use.md
+          - Join the team: walkthrough/teams/join.md
+          - Renew the token: walkthrough/teams/token.md
+          - Share an environment: walkthrough/teams/share.md
+          - Unshare: walkthrough/teams/unshare.md
+          - A team in use is not deleted: walkthrough/teams/in-use.md
       - Component templates:
-          - 16.1 List and get: walkthrough/templates/16-1-list.md
-          - 16.2 Render: walkthrough/templates/16-2-render.md
-          - 16.3 Another template as the default: walkthrough/templates/16-3-new-default.md
-          - 16.4 The default does not leave alone: walkthrough/templates/16-4-default-stays.md
-          - 16.5 Another takes over, then it leaves: walkthrough/templates/16-5-handover.md
-          - 16.6 Backstage template: walkthrough/templates/16-6-backstage-import.md
+          - List and get: walkthrough/templates/list.md
+          - Render: walkthrough/templates/render.md
+          - Another template as the default: walkthrough/templates/new-default.md
+          - The default does not leave alone: walkthrough/templates/default-stays.md
+          - Another takes over, then it leaves: walkthrough/templates/handover.md
+          - Backstage template: walkthrough/templates/backstage-import.md
       - Cloud accounts:
-          - 17.1 Base credential: walkthrough/cloud-accounts/17-1-base-credential.md
-          - 17.2 Register the account: walkthrough/cloud-accounts/17-2-register.md
-          - 17.3 Apply the trust policy: walkthrough/cloud-accounts/17-3-trust-policy.md
-          - 17.4 Verify: walkthrough/cloud-accounts/17-4-verify.md
-          - 17.5 ExternalId and removal: walkthrough/cloud-accounts/17-5-remove.md
+          - Base credential: walkthrough/cloud-accounts/base-credential.md
+          - Register the account: walkthrough/cloud-accounts/register.md
+          - Apply the trust policy: walkthrough/cloud-accounts/trust-policy.md
+          - Verify: walkthrough/cloud-accounts/verify.md
+          - ExternalId and removal: walkthrough/cloud-accounts/remove.md
       - GitHub connection:
-          - 18.1 Create the App: walkthrough/scm-connection/18-1-create-app.md
-          - 18.2 Install on the org: walkthrough/scm-connection/18-2-install.md
-          - 18.3 Verify: walkthrough/scm-connection/18-3-verify.md
-          - 18.4 The key stays off this machine: walkthrough/scm-connection/18-4-private-key.md
+          - Create the App: walkthrough/scm-connection/create-app.md
+          - Install on the org: walkthrough/scm-connection/install.md
+          - Verify: walkthrough/scm-connection/verify.md
+          - The key stays off this machine: walkthrough/scm-connection/private-key.md
       - Components:
-          - 19.1 Create a component: walkthrough/components/19-1-create.md
-          - 19.2 The component in the catalog: walkthrough/components/19-2-list.md
-          - 19.3 What is refused before GitHub: walkthrough/components/19-3-refused.md
+          - Create a component: walkthrough/components/create.md
+          - The component in the catalog: walkthrough/components/list.md
+          - What is refused before GitHub: walkthrough/components/refused.md
       - Builds:
-          - 20.1 Build a branch: walkthrough/builds/20-1-create.md
-          - 20.2 The versions of a component: walkthrough/builds/20-2-list.md
-          - 20.3 What a build refuses: walkthrough/builds/20-3-refused.md
+          - Build a branch: walkthrough/builds/create.md
+          - The versions of a component: walkthrough/builds/list.md
+          - What a build refuses: walkthrough/builds/refused.md
       - Workloads:
-          - 21.1 Validate a spec before the build: walkthrough/workloads/21-1-validate.md
-          - 21.2 The spec of a version: walkthrough/workloads/21-2-spec.md
-          - 21.3 Deploy a version to an environment: walkthrough/workloads/21-3-deploy.md
-          - 21.4 The history of a workload: walkthrough/workloads/21-4-history.md
-          - 21.5 Roll back and remove: walkthrough/workloads/21-5-rollback.md
-          - 21.6 The plan of an environment: walkthrough/workloads/21-6-apply.md
-          - 21.7 A database for a workload: walkthrough/workloads/21-7-resources.md
-          - 21.8 A database in the shared instance: walkthrough/workloads/21-8-compose.md
-          - 21.9 A database that already exists: walkthrough/workloads/21-9-bind.md
-      - 22. Remove the GitHub connection: walkthrough/scm-connection/22-remove.md
-      - 23. Clean up and sign out: walkthrough/23-cleanup.md
+          - Validate a spec before the build: walkthrough/workloads/validate.md
+          - The spec of a version: walkthrough/workloads/spec.md
+          - Deploy a version to an environment: walkthrough/workloads/deploy.md
+          - The history of a workload: walkthrough/workloads/history.md
+          - Roll back and remove: walkthrough/workloads/rollback.md
+          - The plan of an environment: walkthrough/workloads/apply.md
+          - A database for a workload: walkthrough/workloads/resources.md
+          - A database in the shared instance: walkthrough/workloads/compose.md
+          - A database that already exists: walkthrough/workloads/bind.md
+      - Remove the GitHub connection: walkthrough/scm-connection/remove.md
+      - Clean up and sign out: walkthrough/cleanup.md
       - Without a browser: walkthrough/cli-smoke.md
   - Reference:
       - reference/index.md

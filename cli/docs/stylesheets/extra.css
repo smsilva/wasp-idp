@@ -126,6 +126,11 @@
   color: var(--wasp-out-label);
   font-size: .64rem;
   font-weight: 700;
+}
+
+/* Labels like "output" are uppercased; a file name keeps its case. */
+.md-typeset .output > .filename,
+.md-typeset .plan > .filename {
   letter-spacing: .08em;
   text-transform: uppercase;
 }

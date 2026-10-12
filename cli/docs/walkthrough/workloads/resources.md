@@ -19,7 +19,7 @@ containers:
       PGPASSWORD: ${resources.db.password}
 ```
 
-With a version `0.5.0` of `hello-api` with that Score, whose app is the `psql` client of the public image `postgres:17-alpine` (written by `kubectl` as in step 21.2):
+With a version `0.5.0` of `hello-api` with that Score, whose app is the `psql` client of the public image `postgres:17-alpine` (written by `kubectl` as in [The spec of a version](spec.md)):
 
 ```bash
 platform workload deploy \

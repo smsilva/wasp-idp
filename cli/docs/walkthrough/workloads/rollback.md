@@ -54,4 +54,4 @@ hello-api@demo  4         rollback  0.3.0    Succeeded              dev@example.
 hello-api@demo  5         remove    —        Succeeded              dev@example.com  2026-10-11T22:05:22Z
 ```
 
-The Deployment and the Service leave the vcluster and `workload list` no longer shows `hello-api@demo`; the revisions stay until the environment is deleted (step 23).
+The Deployment and the Service leave the vcluster and `workload list` no longer shows `hello-api@demo`; the revisions stay until the environment is deleted ([Clean up](../cleanup.md)).
