@@ -8,7 +8,8 @@ Usage: ${0##*/} [--skip-init]
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
 init, login as the test user, platform status as each role, the same user seen by an agent
 through platform-mcp (whoami over stdio), the refusals a non-admin gets, an environment
-created (its gateway answering at *.<name>.localhost:7080, a hostNetwork or privileged pod refused in the
+created (its gateway answering at *.<name>.localhost:7080, read by an agent over MCP
+without its kubeconfig, a hostNetwork or privileged pod refused in the
 vcluster and on the host) and deleted, then
 login as the test admin, the catalog import of idp/catalog/, a team with two
 test users, checked in the token, an environment shared with that team (the
@@ -254,6 +255,22 @@ if [[ "${server,,}" != "server: istio-envoy" ]]; then
   echo "expected the Gateway of ${environment} (server: istio-envoy) at http://smoke.${environment}.localhost:7080/, got: ${headers:-no answer}" >&2
   exit 1
 fi
+
+step "an agent over MCP lists and reads the environment, never its kubeconfig, and must set expires (#224)"
+mcp_call=(uv run --project platform/mcp python platform/mcp/scripts/mcp-call --toolsets environments)
+output="$("${mcp_call[@]}" environments_list)"
+expect_output "\"name\": \"${environment}\"" "${output}"
+output="$("${mcp_call[@]}" environments_get --arguments "{\"name\": \"${environment}\"}")"
+echo "${output}"
+expect_output '"status": "ready"' "${output}"
+if grep --quiet "kubeconfig" <<< "${output}"; then
+  echo "environments_get handed a kubeconfig to the agent" >&2
+  exit 1
+fi
+expect_failure "an agent must set expires" \
+  "${mcp_call[@]}" environments_create \
+    --allow-writes \
+    --arguments '{"name": "smoke-mcp", "profile": "ephemeral", "expires": ""}'
 
 step "a pod cannot reach the host: baseline in the vcluster and on the host (#414, ADR 0041)"
 owner_kubeconfig="${smoke_config}/platform/environments/${environment}.kubeconfig"
