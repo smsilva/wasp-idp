@@ -22,8 +22,8 @@ observability  Active                   prometheus      —
   details and the fix: platform status <capability>
 ```
 
-- `scm` runs (its provider is up) but has no connection yet: [GitHub connection](../scm-connection/github/create-app.md) adds one, and the registry of its org right after. `build` runs through the connection and pushes to the registry, so it waits on both.
-- `cloud-account` is not installed: `init` installs its provider with `--aws-profile`, in [Base credential](../cloud-accounts/base-credential.md). A capability that is not installed does not make the exit code `1`; one installed and not `Active` does.
+- `scm` runs (its provider is up) but has no connection yet: [SCM connection](../scm-connection/github/create-app.md) adds one, and [Registry](../registry/ghcr/register.md) the GHCR of its org right after. `build` runs through the connection and pushes to the registry, so it waits on both.
+- `cloud-account` is not installed: `init` installs its provider with `--aws-profile`, in [Base credential](../cloud-accounts/aws/base-credential.md). A capability that is not installed does not make the exit code `1`; one installed and not `Active` does.
 
 One capability in full, with the command that fixes it:
 
@@ -46,3 +46,5 @@ scm  NotConfigured
 - A regular user sees only `CAPABILITY` and `STATUS`, and `ask a platform-admin to configure it` under one that is not `Active`.
 
 The statuses and what each capability needs are in the [reference](../../reference/status.md).
+
+The next steps configure each one; [The platform is ready](../ready.md) runs `platform status` again at the end.

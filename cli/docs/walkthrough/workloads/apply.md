@@ -24,7 +24,7 @@ dry run: nothing applied
 ```
 
 - The environment comes from the file; each key under `workloads` is an instance, named after its component unless `component:` names another one (an extra instance, see [Another instance of the same component](instances.md)).
-- Each workload takes `version` or `branch` (the newest version built from it, pinned in the revision) and optionally `replicas` (1 by default) and `resourceClasses` (resource to class, as `deploy --resource-class`, see [A database that already exists](bind.md)).
+- Each workload takes `version` or `branch` (the newest version built from it, pinned in the revision) and optionally `replicas` (1 by default) and `resourceClasses` (resource to class, as `deploy --resource-class`, see [A database that already exists](resources/bind.md)).
 - The API diffs the plan against the newest revision of each workload: `add` when it does not run, `change` when the version, the replicas or the resource classes differ or the newest revision failed, `unchanged` otherwise.
 
 Apply it and wait for the rollouts:

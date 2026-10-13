@@ -9,90 +9,98 @@ nav:
   - Home: index.md
   - Walkthrough:
       - walkthrough/index.md
-      - Setup:
-          - From scratch: walkthrough/setup/from-scratch.md
-          - Prerequisites: walkthrough/setup/prerequisites.md
-          - Install the CLI: walkthrough/setup/install.md
-          - Google credentials: walkthrough/setup/google-credentials.md
-          - Start the control plane: walkthrough/setup/control-plane.md
+      - Bootstrap:
+          - From scratch: walkthrough/bootstrap/from-scratch.md
+          - Prerequisites: walkthrough/bootstrap/prerequisites.md
+          - Install the CLI: walkthrough/bootstrap/install.md
+          - Google credentials: walkthrough/bootstrap/google-credentials.md
+          - Start the control plane: walkthrough/bootstrap/control-plane.md
       - Login:
           - Without login, the API refuses: walkthrough/login/refused.md
           - Sign in: walkthrough/login/sign-in.md
           - Who am I: walkthrough/login/whoami.md
           - What the platform can do: walkthrough/login/status.md
-      - Environments:
-          - Create an environment: walkthrough/environments/create.md
-          - The provider inside: walkthrough/environments/provider.md
-          - Write the kubeconfig: walkthrough/environments/kubeconfig.md
-          - Use the cluster: walkthrough/environments/cluster.md
-          - Admin kubeconfig: walkthrough/environments/admin.md
-          - A second environment, in parallel: walkthrough/environments/second.md
-          - Audit trail: walkthrough/environments/audit-trail.md
-      - Catalog:
-          - Create the team and the hierarchy: walkthrough/catalog/hierarchy.md
-          - Query: walkthrough/catalog/query.md
-          - A domain with dependents stays: walkthrough/catalog/dependents.md
-          - Underneath, they are CRDs: walkthrough/catalog/crds.md
-          - Clean up, in reverse order: walkthrough/catalog/cleanup.md
-          - Import from Backstage: walkthrough/catalog/plan.md
-          - Run it again: walkthrough/catalog/rerun.md
-          - Broken reference: walkthrough/catalog/broken-reference.md
-      - Teams:
-          - Join the team: walkthrough/teams/join.md
-          - Renew the token: walkthrough/teams/token.md
-          - Share an environment: walkthrough/teams/share.md
-          - Unshare: walkthrough/teams/unshare.md
-          - A team in use is not deleted: walkthrough/teams/in-use.md
-      - Component templates:
-          - List and get: walkthrough/templates/list.md
-          - Render: walkthrough/templates/render.md
-          - Another template as the default: walkthrough/templates/new-default.md
-          - The default does not leave alone: walkthrough/templates/default-stays.md
-          - Another takes over, then it leaves: walkthrough/templates/handover.md
-          - Backstage template: walkthrough/templates/backstage-import.md
-      - Cloud accounts:
-          - Base credential: walkthrough/cloud-accounts/base-credential.md
-          - Register the account: walkthrough/cloud-accounts/register.md
-          - Apply the trust policy: walkthrough/cloud-accounts/trust-policy.md
-          - Verify: walkthrough/cloud-accounts/verify.md
-          - ExternalId and removal: walkthrough/cloud-accounts/remove.md
-      - SCM connection:
-          - GitHub:
-              - Create the App: walkthrough/scm-connection/github/create-app.md
-              - Install on the org: walkthrough/scm-connection/github/install.md
-              - Verify: walkthrough/scm-connection/github/verify.md
-              - The key stays off this machine: walkthrough/scm-connection/github/private-key.md
-      - Registry:
-          - GHCR:
-              - Register the GHCR of the GitHub org: walkthrough/registry/ghcr/register.md
-              - The registry is ready: walkthrough/registry/ghcr/ready.md
-      - Components:
-          - Create a component: walkthrough/components/create.md
-          - The component in the catalog: walkthrough/components/list.md
-          - Clone the component: walkthrough/components/clone.md
-          - What is refused before GitHub: walkthrough/components/refused.md
-      - Builds:
-          - Build a branch: walkthrough/builds/create.md
-          - The versions of a component: walkthrough/builds/list.md
-          - What a build refuses: walkthrough/builds/refused.md
-      - Workloads:
-          - Validate a spec before the build: walkthrough/workloads/validate.md
-          - The spec of a version: walkthrough/workloads/spec.md
-          - Deploy a version to an environment: walkthrough/workloads/deploy.md
-          - The history of a workload: walkthrough/workloads/history.md
-          - Roll back and remove: walkthrough/workloads/rollback.md
-          - The plan of an environment: walkthrough/workloads/apply.md
-          - A database for a workload: walkthrough/workloads/resources.md
-          - A database in the shared instance: walkthrough/workloads/compose.md
-          - A database that already exists: walkthrough/workloads/bind.md
-          - Reach an instance from outside: walkthrough/workloads/public.md
-          - The golden signals of an instance: walkthrough/workloads/signals.md
-          - Another instance of the same component: walkthrough/workloads/instances.md
-          - Route traffic to an instance: walkthrough/workloads/route.md
-          - Route a chain of calls: walkthrough/workloads/baggage.md
-      - Connect an AI agent: walkthrough/agents/connect.md
-      - Remove the GitHub connection: walkthrough/scm-connection/github/remove.md
-      - Clean up and sign out: walkthrough/cleanup.md
+      - Configuration:
+          - SCM connection:
+              - GitHub:
+                  - Create the App: walkthrough/scm-connection/github/create-app.md
+                  - Install on the org: walkthrough/scm-connection/github/install.md
+                  - Verify: walkthrough/scm-connection/github/verify.md
+                  - The key stays off this machine: walkthrough/scm-connection/github/private-key.md
+          - Registry:
+              - GHCR:
+                  - Register the org: walkthrough/registry/ghcr/register.md
+                  - The registry is ready: walkthrough/registry/ghcr/ready.md
+          - Cloud accounts:
+              - AWS:
+                  - Base credential: walkthrough/cloud-accounts/aws/base-credential.md
+                  - Register the account: walkthrough/cloud-accounts/aws/register.md
+                  - Apply the trust policy: walkthrough/cloud-accounts/aws/trust-policy.md
+                  - Verify: walkthrough/cloud-accounts/aws/verify.md
+                  - ExternalId and removal: walkthrough/cloud-accounts/aws/remove.md
+          - Teams:
+              - Create the team and join it: walkthrough/teams/create.md
+              - Renew the token: walkthrough/teams/token.md
+          - Catalog:
+              - Create the hierarchy: walkthrough/catalog/hierarchy.md
+              - Query: walkthrough/catalog/query.md
+              - A domain with dependents stays: walkthrough/catalog/dependents.md
+              - Underneath, they are CRDs: walkthrough/catalog/crds.md
+              - Clean up, in reverse order: walkthrough/catalog/cleanup.md
+              - Import from Backstage: walkthrough/catalog/plan.md
+              - Run it again: walkthrough/catalog/rerun.md
+              - Broken reference: walkthrough/catalog/broken-reference.md
+              - A team in use is not deleted: walkthrough/catalog/team-in-use.md
+          - Component templates:
+              - List and get: walkthrough/templates/list.md
+              - Render: walkthrough/templates/render.md
+              - Another template as the default: walkthrough/templates/new-default.md
+              - The default does not leave alone: walkthrough/templates/default-stays.md
+              - Another takes over, then it leaves: walkthrough/templates/handover.md
+              - Backstage template: walkthrough/templates/backstage-import.md
+          - The platform is ready: walkthrough/ready.md
+      - Developer journey:
+          - Components:
+              - Create a component: walkthrough/components/create.md
+              - The component in the catalog: walkthrough/components/list.md
+              - Clone the component: walkthrough/components/clone.md
+              - What is refused before GitHub: walkthrough/components/refused.md
+          - Builds:
+              - Validate a spec before the build: walkthrough/builds/validate.md
+              - Build a branch: walkthrough/builds/create.md
+              - The versions of a component: walkthrough/builds/list.md
+              - What a build refuses: walkthrough/builds/refused.md
+          - Environments:
+              - Create an environment: walkthrough/environments/create.md
+              - The provider inside: walkthrough/environments/provider.md
+              - Write the kubeconfig: walkthrough/environments/kubeconfig.md
+              - Use the cluster: walkthrough/environments/cluster.md
+              - Admin kubeconfig: walkthrough/environments/admin.md
+              - A second environment, in parallel: walkthrough/environments/second.md
+              - Audit trail: walkthrough/environments/audit-trail.md
+              - Share an environment: walkthrough/environments/share.md
+              - Unshare: walkthrough/environments/unshare.md
+          - Workloads:
+              - The spec of a version: walkthrough/workloads/spec.md
+              - Deploy a version to an environment: walkthrough/workloads/deploy.md
+              - The history of a workload: walkthrough/workloads/history.md
+              - Roll back and remove: walkthrough/workloads/rollback.md
+              - The plan of an environment: walkthrough/workloads/apply.md
+              - Resources:
+                  - A database for a workload: walkthrough/workloads/resources/provision.md
+                  - A database in the shared instance: walkthrough/workloads/resources/compose.md
+                  - A database that already exists: walkthrough/workloads/resources/bind.md
+              - Reach an instance from outside: walkthrough/workloads/public.md
+              - The golden signals of an instance: walkthrough/workloads/signals.md
+              - Another instance of the same component: walkthrough/workloads/instances.md
+              - Route traffic to an instance: walkthrough/workloads/route.md
+              - Route a chain of calls: walkthrough/workloads/baggage.md
+          - Connect an AI agent: walkthrough/agents/connect.md
+      - Clean up:
+          - Delete the environments: walkthrough/cleanup/environments.md
+          - Remove the SCM connection: walkthrough/cleanup/scm-connection.md
+          - What stays: walkthrough/cleanup/what-stays.md
+          - Sign out: walkthrough/cleanup/sign-out.md
       - Without a browser: walkthrough/cli-smoke.md
   - Reference:
       - reference/index.md

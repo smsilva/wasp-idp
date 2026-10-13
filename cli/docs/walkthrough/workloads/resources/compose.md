@@ -35,7 +35,7 @@ default      postgres  —      —   provision  —
 
 `platform environment policy get demo` shows the same table: the policy of the environment, then the one of its profile (none for `shared`) and the platform default, in the order the Forager reads them. The first row that matches the resource wins.
 
-The same version `0.5.0` of [A database for a workload](resources.md), deployed after a `workload remove`:
+The same version `0.5.0` of [A database for a workload](provision.md), deployed after a `workload remove`:
 
 ```bash
 platform workload deploy \

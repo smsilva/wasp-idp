@@ -1,17 +1,17 @@
 # A second environment
 
 ```bash
-platform environment create demo \
-  --profile shared \
+platform environment create greetings-test \
+  --profile ephemeral \
   --expires 1h \
   --wait
 
-platform environment get demo
+platform environment get greetings-test
 
 platform environment list --output json
 ```
 
-`demo` is `shared`: an environment whose data stays, so its databases are made the way the platform default says ([A database for a workload](../workloads/resources.md)). An `ephemeral` one gets them in the shared instance ([A database in the shared instance](../workloads/compose.md)).
+`greetings-test` is `ephemeral`: a short-lived environment, so its databases go to the shared instance ([A database in the shared instance](../workloads/resources/compose.md)) instead of a Postgres of their own.
 
 !!! note
-    Each environment gets the **next free port** in the `7100`–`7119` range (`demo` gets `7101`).
+    Each environment gets the **next free port** in the `7100`–`7119` range (`greetings-test` gets `7101`).

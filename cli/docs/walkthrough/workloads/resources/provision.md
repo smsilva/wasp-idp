@@ -19,7 +19,7 @@ containers:
       PGPASSWORD: ${resources.db.password}
 ```
 
-With a version `0.5.0` of `hello-api` with that Score, whose app is the `psql` client of the public image `postgres:17-alpine` (written by `kubectl` as in [The spec of a version](spec.md)):
+With a version `0.5.0` of `hello-api` with that Score, whose app is the `psql` client of the public image `postgres:17-alpine` (written by `kubectl` as in [The spec of a version](../spec.md)):
 
 ```bash
 platform workload deploy \
@@ -68,4 +68,4 @@ kubectl --kubeconfig ~/.config/platform/environments/demo.kubeconfig \
 - The Score has no `id` for `db`, so the catalog gets the Resource `hello-api-db`, owned by the component's team: `platform catalog resource get hello-api-db`.
 
 !!! note
-    The Forager keeps one `ResourceRequest` per resource and environment in `platform-system` (`demo.hello-api.db`), with the mode in `spec` and the outputs in `status`. The platform default policy is the `BindingPolicy` `platform-default`. `kubectl --context k3d-platform-local --namespace platform-system get resourcerequests,bindingpolicies`. The whole flow, drawn: [The Forager](../../reference/forager.md).
+    The Forager keeps one `ResourceRequest` per resource and environment in `platform-system` (`demo.hello-api.db`), with the mode in `spec` and the outputs in `status`. The platform default policy is the `BindingPolicy` `platform-default`. `kubectl --context k3d-platform-local --namespace platform-system get resourcerequests,bindingpolicies`. The whole flow, drawn: [The Forager](../../../reference/forager.md).

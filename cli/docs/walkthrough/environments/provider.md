@@ -10,17 +10,17 @@ kubectl --context k3d-platform-local get namespaces | grep env-
 ```
 
 ``` { .text .output title="output" }
-INFO creating vcluster env-greetings-test on port 7100
-INFO installing the mesh in env-greetings-test (istio 1.30.5, gateway api v1.5.1)
-INFO creating the gateway of env-greetings-test (*.greetings-test.localhost)
-INFO environment greetings-test ready
-env-greetings-test   Active   40s
+INFO creating vcluster env-demo on port 7100
+INFO installing the mesh in env-demo (istio 1.30.5, gateway api v1.5.1)
+INFO creating the gateway of env-demo (*.demo.localhost)
+INFO environment demo ready
+env-demo   Active   40s
 ```
 
-Once the vcluster API is up, the provider installs the mesh in it: the Gateway API CRDs, `istio/base` and `istiod` (ADR 0035). Then it creates the environment's entry point (ADR 0036): a `Gateway` named `platform` in the vcluster, and an `Ingress` in `env-greetings-test` that sends `*.greetings-test.localhost` from the shared Traefik (`127.0.0.1:7080`) to it. The environment is `ready` only with `istiod` running and the `Gateway` programmed. Workloads go to namespace `apps`, which has sidecar injection.
+Once the vcluster API is up, the provider installs the mesh in it: the Gateway API CRDs, `istio/base` and `istiod` (ADR 0035). Then it creates the environment's entry point (ADR 0036): a `Gateway` named `platform` in the vcluster, and an `Ingress` in `env-demo` that sends `*.demo.localhost` from the shared Traefik (`127.0.0.1:7080`) to it. The environment is `ready` only with `istiod` running and the `Gateway` programmed. Workloads go to namespace `apps`, which has sidecar injection.
 
 ```bash
-curl --include http://anything.greetings-test.localhost:7080/
+curl --include http://anything.demo.localhost:7080/
 ```
 
 ``` { .text .output title="output" }

@@ -1,6 +1,6 @@
 # Create a component
 
-With the connection `ready` ([Verify](../scm-connection/github/verify.md)), and the system recreated after the [catalog cleanup](../catalog/cleanup.md), `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays. The idea of this component:
+With the platform configured ([The platform is ready](../ready.md)), a developer starts here. The system `greeter` came with the [Backstage import](../catalog/plan.md). `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays. The idea of this component:
 
 ``` { .markdown title="/tmp/idea.md" }
 # Problem
@@ -8,7 +8,7 @@ With the connection `ready` ([Verify](../scm-connection/github/verify.md)), and 
 People want to be greeted by name.
 ```
 
-Save it, create the domain and the system, and then the component:
+Save it and create the component:
 
 ```bash
 cat > /tmp/idea.md <<'IDEA'
@@ -16,13 +16,6 @@ cat > /tmp/idea.md <<'IDEA'
 
 People want to be greeted by name.
 IDEA
-
-platform catalog domain create communication \
-  --owner team-alpha
-
-platform catalog system create greeter \
-  --domain communication \
-  --owner team-alpha
 
 platform catalog component create hello-api \
   --system greeter \
@@ -43,7 +36,7 @@ platform catalog component create hello-api \
 ✓ app-spec.yaml generated: container, postgres, route /
 ```
 
-- The owner is your team when you have only one (`team-alpha`, [joined earlier](../teams/join.md)); otherwise pass `--owner`.
+- The owner is your team when you have only one (`team-alpha`, [joined earlier](../teams/create.md)); otherwise pass `--owner`.
 - `--template` picks another template, `--type` the default of another type, `--param key=value` fills the template's extra parameters.
 - The visibility comes from the connection (`public` unless it says otherwise); `--visibility private` overrides it. `main` is protected: it changes only by pull request, with no approval required. On a GitHub Free org, branch protection only exists on public repos: a private repo is still created, and `--wait` ends with a `⚠ main of … is not protected` warning ([reference](../../reference/catalog.md#components)).
 - Without `--wait`, the command returns at once and `platform catalog component get hello-api` shows the steps.
