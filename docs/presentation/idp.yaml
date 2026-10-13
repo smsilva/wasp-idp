@@ -403,8 +403,8 @@ slides:
     topic: "Capabilities"
     label: "Developer Control Plane"
     message: "O Developer Control Plane tem três peças: catálogo, declaração da app e golden paths."
-    heading: "Three capabilities"
-    divider: "Developer Control Plane"
+    divider: false
+    heading: "Developer Control Plane"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
     focus: [dev-plane]
@@ -1095,8 +1095,8 @@ slides:
     topic: "Building blocks"
     label: "Integration & Delivery Plane"
     message: "O Integration & Delivery Plane leva o código até o ambiente: versão, build, registry, orquestração, IaC e entrega."
-    heading: "Six building blocks"
-    divider: "Integration & Delivery Plane"
+    divider: false
+    heading: "Integration & Delivery Plane"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
     dim: [dev]
@@ -1414,7 +1414,8 @@ slides:
     topic: "Cloud resources"
     label: "Resource Plane"
     message: "No Resource Plane a app roda: compute, dados, rede e serviços."
-    heading: "Where it runs"
+    divider: false
+    heading: "Resource Plane"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
     dim: [dev, ind]
@@ -1467,8 +1468,8 @@ slides:
     topic: "Runtime health"
     label: "Observability"
     message: "Observability atravessa os três planes: monitoramento, custo e incidentes."
-    heading: "Seeing what runs"
-    divider: "Observability"
+    divider: false
+    heading: "Observability"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
     dim: [dev, ind, res]
@@ -1685,8 +1686,8 @@ slides:
     topic: "Guardrails"
     label: "Security"
     message: "Security também atravessa tudo: código, segredos, identidade, política e rede."
-    heading: "Guarding every plane"
-    divider: "Security"
+    divider: false
+    heading: "Security"
     diagram: "diagrams/landscape/landscape.svg"
     show: [dev-plane, ind-plane, res-plane, obs-plane, sec-plane]
     dim: [dev, ind, res, obs]
