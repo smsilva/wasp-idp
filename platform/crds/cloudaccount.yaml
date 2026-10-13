@@ -55,6 +55,11 @@ spec:
                       type: array
                       items:
                         type: string
+                sharedWith:
+                  description: Teams whose members may use the account (ADR 0026); empty means private to the owner.
+                  type: array
+                  items:
+                    type: string
             status:
               type: object
               properties:

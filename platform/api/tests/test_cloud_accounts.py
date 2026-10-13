@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 from platform_api.app import create_app
 from platform_api.cloud_accounts import CLOUD_ACCOUNTS, VERIFY_ANNOTATION
 from platform_api.journal import Journal
-from fakes import FakeState
+from platform_api.teams import users_of
+from fakes import FakeState, FakeTeams
 from tokens import TokenFactory
 
 ROLE = "arn:aws:iam::123456789012:role/platform"
@@ -44,13 +45,14 @@ def base():
 
 @pytest.fixture
 def client(state, journal_path, tokens, base):
-  return TestClient(create_app(state, Journal(journal_path), tokens.verifier(), base_identity=base))
+  return TestClient(create_app(state, Journal(journal_path), tokens.verifier(), base_identity=base, teams=FakeTeams("team-alpha", "team-beta")))
 
 
 @pytest.fixture
 def as_(tokens):
   people = {
-    "owner": dict(sub="owner-1", email="owner@example.com", group_paths=["/platform-users"]),
+    "owner": dict(sub="owner-1", email="owner@example.com", group_paths=["/platform-users", "/teams/team-alpha"]),
+    "member": dict(sub="member-1", email="member@example.com", group_paths=["/platform-users", "/teams/team-alpha"]),
     "other": dict(sub="other-1", email="other@example.com", group_paths=["/platform-users"]),
     "admin": dict(sub="admin-1", email="admin@example.com", group_paths=["/platform-admins", "/platform-users"]),
   }
@@ -198,3 +200,73 @@ def test_concurrent_create_of_the_same_role_steps_back(client, as_, state):
   response = add(client, as_)
   assert response.status_code == 409
   assert sorted(state.stores[CLOUD_ACCOUNTS]) == ["racer"]
+
+
+def share(client, as_, team="team-alpha", who="owner", name="nonprod-aws"):
+  return client.put(f"/v1/cloud/accounts/{name}/shares/{team}", headers=as_(who))
+
+
+def test_a_team_member_sees_a_shared_account_without_the_trust_policy(client, as_):
+  add(client, as_)
+  assert client.get("/v1/cloud/accounts/nonprod-aws", headers=as_("member")).status_code == 403
+  response = share(client, as_)
+  assert response.status_code == 200
+  assert response.json()["sharedWith"] == ["team-alpha"]
+  assert "trustPolicy" in response.json()
+  items = client.get("/v1/cloud/accounts", headers=as_("member")).json()["items"]
+  assert [(item["name"], item["sharedWith"]) for item in items] == [("nonprod-aws", ["team-alpha"])]
+  account = client.get("/v1/cloud/accounts/nonprod-aws", headers=as_("member")).json()
+  assert account["owner"] == "owner@example.com"
+  assert "trustPolicy" not in account
+  assert "externalId" not in json.dumps(account)
+  assert "trustPolicy" in client.get("/v1/cloud/accounts/nonprod-aws", headers=as_("owner")).json()
+  assert client.get("/v1/cloud/accounts", headers=as_("other")).json()["items"] == []
+
+
+def test_a_team_member_neither_verifies_removes_nor_shares(client, as_, state):
+  add(client, as_)
+  share(client, as_)
+  assert client.post("/v1/cloud/accounts/nonprod-aws/verify", headers=as_("member")).status_code == 403
+  assert client.delete("/v1/cloud/accounts/nonprod-aws", headers=as_("member")).status_code == 403
+  assert share(client, as_, team="team-beta", who="member").status_code == 403
+  assert client.delete("/v1/cloud/accounts/nonprod-aws/shares/team-alpha", headers=as_("member")).status_code == 403
+  assert "nonprod-aws" in state.stores[CLOUD_ACCOUNTS]
+
+
+def test_the_owner_shares_only_with_their_own_teams(client, as_):
+  add(client, as_)
+  response = share(client, as_, team="team-beta")
+  assert response.status_code == 403
+  assert "team-beta" in response.json()["error"]["message"]
+  assert share(client, as_, team="team-beta", who="admin").status_code == 200
+  assert share(client, as_, team="team-missing", who="admin").status_code == 422
+  assert share(client, as_, team="Not_A_Team", who="admin").status_code == 422
+
+
+def test_sharing_twice_is_a_no_op(client, as_):
+  add(client, as_)
+  share(client, as_)
+  assert share(client, as_).json()["sharedWith"] == ["team-alpha"]
+
+
+def test_unshare_takes_access_away(client, as_, state, journal_path):
+  add(client, as_)
+  share(client, as_)
+  response = client.delete("/v1/cloud/accounts/nonprod-aws/shares/team-alpha", headers=as_("owner"))
+  assert response.status_code == 200
+  assert response.json()["sharedWith"] == []
+  assert "sharedWith" not in state.stores[CLOUD_ACCOUNTS]["nonprod-aws"]["spec"]
+  assert client.get("/v1/cloud/accounts/nonprod-aws", headers=as_("member")).status_code == 403
+  assert client.delete("/v1/cloud/accounts/nonprod-aws/shares/team-alpha", headers=as_("owner")).status_code == 404
+  records = [json.loads(line) for line in journal_path.read_text().splitlines()]
+  assert [(r["action"], r["spec"]) for r in records if r.get("action") in ("share", "unshare")] == [("share", {"team": "team-alpha"}), ("unshare", {"team": "team-alpha"})]
+
+
+def test_share_of_an_unknown_account(client, as_):
+  assert share(client, as_, name="missing").status_code == 404
+
+
+def test_a_team_sharing_an_account_is_in_use(client, as_, state):
+  add(client, as_)
+  share(client, as_)
+  assert users_of(state, "team-alpha") == ["cloudaccount/nonprod-aws"]

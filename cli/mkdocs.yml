@@ -51,6 +51,7 @@ nav:
                   - Register the account: walkthrough/cloud-accounts/aws/register.md
                   - Apply the trust policy: walkthrough/cloud-accounts/aws/trust-policy.md
                   - Verify: walkthrough/cloud-accounts/aws/verify.md
+                  - Share the account: walkthrough/cloud-accounts/aws/share.md
                   - ExternalId and removal: walkthrough/cloud-accounts/aws/remove.md
           - Teams:
               - Create the team and join it: walkthrough/teams/create.md

@@ -29,7 +29,7 @@ class FakeApi:
     if not parts and request.method == "POST":
       body = json.loads(request.content)
       account = {"name": body["name"], "vendor": body["vendor"], "roleArn": body["roleArn"], "regions": body["regions"], "accountId": "123456789012",
-                 "status": "pending", "message": None, "lastValidated": None, "verifyPending": False, "owner": "dev@example.com"}
+                 "status": "pending", "message": None, "lastValidated": None, "verifyPending": False, "owner": "dev@example.com", "sharedWith": []}
       self.accounts[body["name"]] = account
       return httpx.Response(202, json={**account, "trustPolicy": POLICY})
     if not parts:
@@ -37,6 +37,15 @@ class FakeApi:
     account = self.accounts.get(parts[0])
     if account is None:
       return httpx.Response(404, json={"error": {"code": "not_found", "message": f"cloud account '{parts[0]}' not found"}})
+    if parts[1:2] == ["shares"]:
+      team = parts[2]
+      if request.method == "PUT":
+        account["sharedWith"] = sorted({*account["sharedWith"], team})
+      elif team not in account["sharedWith"]:
+        return httpx.Response(404, json={"error": {"code": "not_found", "message": f"cloud account '{parts[0]}' is not shared with '{team}'"}})
+      else:
+        account["sharedWith"] = [item for item in account["sharedWith"] if item != team]
+      return httpx.Response(200, json=account)
     if request.method == "DELETE":
       del self.accounts[parts[0]]
       return httpx.Response(202, json={"name": parts[0], "status": "deleting"})
@@ -77,13 +86,26 @@ def test_add_prints_the_trust_policy(api):
   assert "platform cloud account verify nonprod --wait" in result.output
 
 
-def test_list_shows_owner_only_to_admins(api):
+def test_list_shows_owner_and_shared_teams(api):
   run("add", "nonprod", "--role-arn", ROLE)
-  assert run("list").output.split()[:5] == ["NAME", "VENDOR", "ACCOUNT", "STATUS", "VALIDATED"]
-  assert "OWNER" not in run("list").output
-  api.groups = ["platform-admins"]
+  run("share", "nonprod", "--team", "team-alpha")
   output = run("list").output
-  assert "OWNER" in output and "dev@example.com" in output
+  assert output.split()[:7] == ["NAME", "VENDOR", "ACCOUNT", "STATUS", "VALIDATED", "OWNER", "SHARED"]
+  assert "dev@example.com" in output and "team-alpha" in output
+
+
+def test_share_and_unshare(api):
+  run("add", "nonprod", "--role-arn", ROLE)
+  result = run("share", "nonprod", "--team", "team-alpha")
+  assert result.exit_code == 0, result.output
+  assert "✓ nonprod shared with team-alpha" in result.output
+  assert (api.requests[-1].method, api.requests[-1].url.path) == ("PUT", "/v1/cloud/accounts/nonprod/shares/team-alpha")
+  assert "shared     team-alpha" in run("get", "nonprod").output
+  result = run("unshare", "nonprod", "--team", "team-alpha")
+  assert "✓ nonprod no longer shared with team-alpha" in result.output
+  result = run("unshare", "nonprod", "--team", "team-alpha")
+  assert result.exit_code == 1
+  assert "is not shared with 'team-alpha'" in result.output
 
 
 def test_get_includes_the_trust_policy(api):

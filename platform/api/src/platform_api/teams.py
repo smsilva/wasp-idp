@@ -163,13 +163,16 @@ def known_teams(teams) -> set[str]:
 
 
 def users_of(state, name: str) -> list[str]:
-  """What refers to the team by name: environments shared with it and catalog entities it owns."""
-  # Imported here: catalog imports this module for known_teams.
+  """What refers to the team by name: environments and cloud accounts shared with it, and catalog
+  entities it owns."""
+  # Imported here: catalog and cloud_accounts import this module.
   from .catalog import KINDS
+  from .cloud_accounts import CLOUD_ACCOUNTS
   from .templates import KIND as TEMPLATE
   from .components import COMPONENTS
 
   found = [f"environment/{obj['metadata']['name']}" for obj in state.list(ENVIRONMENTS) if name in ((obj.get("spec") or {}).get("sharedWith") or [])]
+  found += [f"cloudaccount/{obj['metadata']['name']}" for obj in state.list(CLOUD_ACCOUNTS) if name in ((obj.get("spec") or {}).get("sharedWith") or [])]
   for kind in [*KINDS.values(), TEMPLATE]:
     found += [f"{kind.singular}/{obj['metadata']['name']}" for obj in state.list(kind.plural) if (obj.get("spec") or {}).get("owner") == name]
   found += [f"component/{obj['metadata']['name']}" for obj in state.list(COMPONENTS) if (obj.get("spec") or {}).get("owner") == name]

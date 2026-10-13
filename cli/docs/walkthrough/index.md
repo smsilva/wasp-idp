@@ -71,6 +71,7 @@ Each step shows the command and, right below it, the expected **output**.
   - [Register the account](cloud-accounts/aws/register.md)
   - [Apply the trust policy](cloud-accounts/aws/trust-policy.md)
   - [Verify](cloud-accounts/aws/verify.md)
+  - [Share the account](cloud-accounts/aws/share.md)
   - [ExternalId and removal](cloud-accounts/aws/remove.md)
 
 **Teams**

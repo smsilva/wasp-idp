@@ -205,6 +205,12 @@ class PlatformClient:
   def remove_cloud_account(self, name: str) -> dict:
     return self._request("DELETE", f"/v1/cloud/accounts/{name}")
 
+  def share_cloud_account(self, name: str, team: str) -> dict:
+    return self._request("PUT", f"/v1/cloud/accounts/{name}/shares/{team}")
+
+  def unshare_cloud_account(self, name: str, team: str) -> dict:
+    return self._request("DELETE", f"/v1/cloud/accounts/{name}/shares/{team}")
+
   def add_registry(self, body: dict) -> dict:
     return self._request("POST", "/v1/registries", json=body)
 

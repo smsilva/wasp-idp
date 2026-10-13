@@ -5,9 +5,11 @@ A cloud account is an AWS account where the platform can create things (ADR 0029
 | Command | What it does |
 |---|---|
 | `platform cloud account add <name> --role-arn <arn> [--region <region>]...` | registers the account and prints the trust policy to apply to the role |
-| `platform cloud account list` | NAME, VENDOR, ACCOUNT, STATUS, VALIDATED (and OWNER for admins) |
-| `platform cloud account get <name>` | status and the trust policy |
+| `platform cloud account list` | NAME, VENDOR, ACCOUNT, STATUS, VALIDATED, OWNER, SHARED: yours, the ones shared with your teams, and every one for `platform-admins` |
+| `platform cloud account get <name>` | status, owner, shared teams and, for the owner and `platform-admins`, the trust policy |
 | `platform cloud account verify <name> [--wait]` | asks the provider for a new verification |
+| `platform cloud account share <name> --team <team>` | lets the team's members use the account |
+| `platform cloud account unshare <name> --team <team>` | takes that access away |
 | `platform cloud account remove <name>` | removes the registration; the role stays in the AWS account |
 
 ## Trust policy
@@ -39,5 +41,7 @@ The provider assumes the role twice: with the ExternalId it must work, without i
 ## Rules
 
 - Each account belongs to whoever registered it: other users neither see nor remove it (`403`); `platform-admins` see all of them.
+- **Sharing** follows the rules of environments (ADR 0026): the owner shares with teams they belong to (`403` for another team), `platform-admins` with any team that exists (`422` otherwise). Members of a shared team see the account in `list` and `get`, never the trust policy, and cannot verify, share, unshare or remove it. Unshare from a team the account is not shared with answers `404`.
+- A team that an account is shared with is in use: deleting the team answers `409` with `cloudaccount/<name>`.
 - The same role is not registered twice (`409`), compared by account and role name, case-insensitive and without the path.
 - Without a base credential, `init` does not install the provider: `add`, `verify` and `remove` answer `503: capability 'cloud-account' has no provider installed: see platform status cloud-account` ([NoProviderForCapability](status.md#noproviderforcapability)). With the provider up and no base identity, `add` answers `409` asking for `init --aws-profile`.
