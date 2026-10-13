@@ -2,7 +2,7 @@
 
 After the installation, GitHub returns to the "App installed" page, which **already requests the verification**:
 
-![Platform API "App installed" page, which already requested the verification](../images/scm-04-app-installed.png){ .screenshot loading=lazy width="500" }
+![Platform API "App installed" page, which already requested the verification](../../images/scm-04-app-installed.png){ .screenshot loading=lazy width="500" }
 
 ```bash
 platform scm connection verify wasp-foundry \

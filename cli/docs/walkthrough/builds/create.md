@@ -1,6 +1,6 @@
 # Build a branch
 
-A branch becomes a version without waiting for the merge. The platform does not build: it dispatches the repo's `.github/workflows/platform-build.yaml` on GitHub Actions with the image to push (in the [registry of the org](../scm-connection/registry.md)), follows the run, checks `app-spec.yaml` at the built commit and registers the version. The CI decides the version from the Conventional Commits since the last `v<version>` tag (Commitizen), and holds no platform credential.
+A branch becomes a version without waiting for the merge. The platform does not build: it dispatches the repo's `.github/workflows/platform-build.yaml` on GitHub Actions with the image to push (in the [GHCR of the GitHub org](../registry/ghcr/register.md)), follows the run, checks `app-spec.yaml` at the built commit and registers the version. The CI decides the version from the Conventional Commits since the last `v<version>` tag (Commitizen), and holds no platform credential.
 
 `hello-api` came from the `python-service` template when [creating the component](../components/create.md), which brings the workflow. Push a branch with a `feat:` commit, then build it:
 

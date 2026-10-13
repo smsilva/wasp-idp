@@ -27,7 +27,7 @@ wasp-foundry                connection · the default
 
     On GitHub, whoever confirms must be an **org owner**. Name and permissions already come from the manifest: just confirm at **Create GitHub App for wasp-foundry**.
 
-    ![GitHub screen to create the wasp-foundry-platform App from the manifest](../images/scm-01-create-app.png){ .screenshot loading=lazy width="540" }
+    ![GitHub screen to create the wasp-foundry-platform App from the manifest](../../images/scm-01-create-app.png){ .screenshot loading=lazy width="540" }
 
     !!! tip
         `--no-browser` only prints the URL, to open on another machine. It is **single-use** and valid for **10 minutes**; running `add` again issues another.

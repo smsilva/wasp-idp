@@ -38,4 +38,4 @@ The registry controller checks `https://<host>/v2/` every 5 minutes.
 
 ## Underneath
 
-An `OCIRegistry` in `platform-system` (`kubectl --context k3d-platform-local --namespace platform-system get ociregistries`), written by the Platform API: at most one has `spec.default`. `platform init` creates none: registering the GHCR of the org is the admin's step after the [SCM connection](../walkthrough/scm-connection/registry.md).
+An `OCIRegistry` in `platform-system` (`kubectl --context k3d-platform-local --namespace platform-system get ociregistries`), written by the Platform API: at most one has `spec.default`. `platform init` creates none: the admin [registers the GHCR of the GitHub org](../walkthrough/registry/ghcr/register.md) after the SCM connection.
