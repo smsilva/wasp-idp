@@ -119,6 +119,7 @@ spec:
 ---
 # Prometheus answers without authentication, and the pods of every environment run on the host network
 # (vcluster syncs them): only the Platform API, which checks can_use, may query it.
+# A hostNetwork pod still passes (traffic from the node IP): #414 refuses those in every vcluster.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
