@@ -108,6 +108,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [Create a component](components/create.md)
 - [The component in the catalog](components/list.md)
 - [Clone the component](components/clone.md)
+- [Clone over HTTPS](components/clone-https.md)
 - [What is refused before GitHub](components/refused.md)
 
 **Builds**

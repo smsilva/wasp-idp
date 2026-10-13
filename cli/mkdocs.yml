@@ -78,6 +78,7 @@ nav:
               - Create a component: walkthrough/components/create.md
               - The component in the catalog: walkthrough/components/list.md
               - Clone the component: walkthrough/components/clone.md
+              - Clone over HTTPS: walkthrough/components/clone-https.md
               - What is refused before GitHub: walkthrough/components/refused.md
           - Builds:
               - Validate a spec before the build: walkthrough/builds/validate.md
