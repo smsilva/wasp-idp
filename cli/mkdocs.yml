@@ -26,6 +26,7 @@ nav:
           - SCM connection:
               - GitHub:
                   - Connect the platform to GitHub: walkthrough/scm-connection/github/create-app.md
+                  - Reuse an existing App: walkthrough/scm-connection/github/existing-app.md
                   - Install the App on the org: walkthrough/scm-connection/github/install.md
                   - Verify: walkthrough/scm-connection/github/verify.md
                   - The App key stays off this machine: walkthrough/scm-connection/github/private-key.md

@@ -43,6 +43,7 @@ Each step shows the command and, right below it, the expected **output**.
 
 - GitHub
   - [Connect the platform to GitHub](scm-connection/github/create-app.md)
+  - [Reuse an existing App](scm-connection/github/existing-app.md)
   - [Install the App on the org](scm-connection/github/install.md)
   - [Verify](scm-connection/github/verify.md)
   - [The App key stays off this machine](scm-connection/github/private-key.md)
