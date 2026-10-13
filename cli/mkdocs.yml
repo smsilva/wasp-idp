@@ -81,8 +81,10 @@ nav:
               - Clone over HTTPS: walkthrough/components/clone-https.md
               - What is refused before GitHub: walkthrough/components/refused.md
           - Builds:
+              - Push a branch: walkthrough/builds/branch.md
               - Validate a spec before the build: walkthrough/builds/validate.md
               - Build a branch: walkthrough/builds/create.md
+              - The version and the image: walkthrough/builds/version.md
               - The versions of a component: walkthrough/builds/list.md
               - What a build refuses: walkthrough/builds/refused.md
           - Environments:

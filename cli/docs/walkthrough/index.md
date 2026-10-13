@@ -113,8 +113,10 @@ Each step shows the command and, right below it, the expected **output**.
 
 **Builds**
 
+- [Push a branch](builds/branch.md)
 - [Validate a spec before the build](builds/validate.md)
 - [Build a branch](builds/create.md)
+- [The version and the image](builds/version.md)
 - [The versions of a component](builds/list.md)
 - [What a build refuses](builds/refused.md)
 
