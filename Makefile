@@ -1,9 +1,10 @@
 # Shortcuts for working on this repo. `make` with no target lists them.
 
 UV_BIN := $(shell uv tool dir --bin 2>/dev/null)
+DOCS_PORT ?= 8000
 
 .DEFAULT_GOAL := help
-.PHONY: help cli cli-uninstall mcp mcp-uninstall
+.PHONY: help cli cli-uninstall mcp mcp-uninstall docs
 
 help: ## List the targets
 	@grep --extended-regexp '^[a-z-]+:.*## ' $(MAKEFILE_LIST) \
@@ -28,3 +29,9 @@ mcp: ## Put `platform-mcp` (the MCP server, ADR 0027) on the PATH, editable from
 
 mcp-uninstall: ## Remove `platform-mcp` from the PATH
 	uv tool uninstall wasp-platform-mcp
+
+docs: ## Serve the CLI guide (cli/docs) with live reload and open it in the browser; builds to a temp dir
+	uvx --with mkdocs-material mkdocs serve \
+	  --config-file "$(CURDIR)/cli/mkdocs.yml" \
+	  --dev-addr 127.0.0.1:$(DOCS_PORT) \
+	  --open
