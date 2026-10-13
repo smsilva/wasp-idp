@@ -11,10 +11,12 @@ import yaml
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
 app = typer.Typer(help="Environments where releases run.", no_args_is_help=True)
 
+Name = Annotated[str, typer.Argument(help="Environment name (platform environment list).")]
+ProfileName = Annotated[str, typer.Argument(help="Profile name: ephemeral or shared.")]
 FAILED = {"ProvisioningFailed"}
 EXEC_API_VERSION = "client.authentication.k8s.io/v1"
 
@@ -45,9 +47,9 @@ def remaining(expires_at: str | None, now: datetime | None = None) -> str:
   return " ".join(part for part in parts if part) or "<1m"
 
 
-@app.command("create")
+@app.command("create", epilog=examples("platform environment create demo --profile ephemeral", "platform environment create demo --profile ephemeral --expires 3d --wait --share-with team-a"))
 def create(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Name for the new environment, such as demo.")],
   profile: Annotated[Profile, typer.Option(help="Kind of environment; the platform decides where it runs.")],
   expires: Annotated[str | None, typer.Option(help="Lifetime such as 30m, 12h, 3d or 1w.")] = None,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the environment is ready.")] = False,
@@ -121,7 +123,7 @@ def save_kubeconfig(environment: dict, suffix: str = "") -> dict:
   return environment
 
 
-@app.command("list")
+@app.command("list", epilog=examples("platform environment list", "platform environment list --all --output json"))
 def list_(
   all: Annotated[bool, typer.Option("--all", help="Every environment, not only yours and your teams'.")] = False,
   output: OutputOption = Format.table,
@@ -144,8 +146,8 @@ def list_(
 Team = Annotated[str, typer.Option("--team", help="Team name, such as team-alpha.")]
 
 
-@app.command("share")
-def share(name: str, team: Team, output: OutputOption = Format.table):
+@app.command("share", epilog=examples("platform environment share demo --team team-a"))
+def share(name: Name, team: Team, output: OutputOption = Format.table):
   """Share an environment with a team you belong to (owner or platform-admins)."""
   try:
     environment = _client().share_environment(name, team)
@@ -157,8 +159,8 @@ def share(name: str, team: Team, output: OutputOption = Format.table):
     success(f"{name} shared with {team}")
 
 
-@app.command("unshare")
-def unshare(name: str, team: Team, output: OutputOption = Format.table):
+@app.command("unshare", epilog=examples("platform environment unshare demo --team team-a"))
+def unshare(name: Name, team: Team, output: OutputOption = Format.table):
   """Stop sharing an environment with a team (owner or platform-admins)."""
   try:
     environment = _client().unshare_environment(name, team)
@@ -170,9 +172,9 @@ def unshare(name: str, team: Team, output: OutputOption = Format.table):
     success(f"{name} no longer shared with {team}")
 
 
-@app.command("get")
+@app.command("get", epilog=examples("platform environment get demo", "platform environment get demo --admin"))
 def get(
-  name: str,
+  name: Name,
   admin: Annotated[bool, typer.Option("--admin", help="Write the vcluster admin kubeconfig instead (platform-admins only).")] = False,
   output: OutputOption = Format.table,
 ):
@@ -198,8 +200,8 @@ def get(
     typer.echo(f"  workloads at {environment['ingress']}")
 
 
-@app.command("credential")
-def credential(name: str):
+@app.command("credential", epilog=examples("platform environment credential demo"))
+def credential(name: Name):
   """Print a short-lived token for the environment, as a kubectl ExecCredential.
 
   The kubeconfig that `get` writes runs this command: kubectl calls it, never a person.
@@ -211,8 +213,8 @@ def credential(name: str):
   print_json({"apiVersion": EXEC_API_VERSION, "kind": "ExecCredential", "status": issued})
 
 
-@app.command("delete")
-def delete(name: str, output: OutputOption = Format.table):
+@app.command("delete", epilog=examples("platform environment delete demo"))
+def delete(name: Name, output: OutputOption = Format.table):
   """Delete an environment."""
   try:
     result = _client().delete_environment(name)
@@ -256,8 +258,8 @@ def read_provisioners(file: Path) -> list[dict]:
 PolicyFile = Annotated[Path, typer.Option("--file", help="YAML with a provisioners list (type, class, id, mode, params); '-' reads stdin.")]
 
 
-@policy_app.command("get")
-def policy_get(name: str, output: OutputOption = Format.table):
+@policy_app.command("get", epilog=examples("platform environment policy get demo", "platform environment policy get demo --output json"))
+def policy_get(name: Name, output: OutputOption = Format.table):
   """Show the policy of an environment, then the one of its profile and the platform default."""
   try:
     policy = _client().get_binding_policy(name)
@@ -269,8 +271,8 @@ def policy_get(name: str, output: OutputOption = Format.table):
     print_policy(policy)
 
 
-@policy_app.command("set")
-def policy_set(name: str, file: PolicyFile, output: OutputOption = Format.table):
+@policy_app.command("set", epilog=examples("platform environment policy set demo --file policy.yaml", "platform environment policy set demo --file policy.yaml --output json"))
+def policy_set(name: Name, file: PolicyFile, output: OutputOption = Format.table):
   """Replace the policy of an environment (platform-admins). An empty list removes it."""
   provisioners = read_provisioners(file)
   try:
@@ -290,8 +292,8 @@ profile_policy_app = typer.Typer(help="The binding policy of a profile: the laye
 profile_app.add_typer(profile_policy_app, name="policy")
 
 
-@profile_policy_app.command("get")
-def profile_policy_get(profile: str, output: OutputOption = Format.table):
+@profile_policy_app.command("get", epilog=examples("platform environment profile policy get ephemeral"))
+def profile_policy_get(profile: ProfileName, output: OutputOption = Format.table):
   """Show the policy of a profile, then the platform default."""
   try:
     policy = _client().get_profile_policy(profile)
@@ -303,8 +305,8 @@ def profile_policy_get(profile: str, output: OutputOption = Format.table):
     print_policy(policy)
 
 
-@profile_policy_app.command("set")
-def profile_policy_set(profile: str, file: PolicyFile, output: OutputOption = Format.table):
+@profile_policy_app.command("set", epilog=examples("platform environment profile policy set ephemeral --file policy.yaml"))
+def profile_policy_set(profile: ProfileName, file: PolicyFile, output: OutputOption = Format.table):
   """Replace the policy of a profile for all its environments (platform-admins). An empty list removes it."""
   provisioners = read_provisioners(file)
   try:

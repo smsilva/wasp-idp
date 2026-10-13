@@ -9,7 +9,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
 app = typer.Typer(help="Builds: a branch of a component becomes a version in the registry.", no_args_is_help=True)
 
@@ -77,7 +77,10 @@ def _wait(client: PlatformClient, build: dict, timeout: int, quiet: bool) -> dic
     build = client.get_build(build["name"])
 
 
-@app.command("create")
+@app.command("create", epilog=examples(
+  "platform build create --component hello-api --branch feat/greetings --wait",
+  "platform build create --component hello-api --branch main --version 1.0.0 --registry ghcr-wasp-foundry",
+))
 def create(
   component: Annotated[str, typer.Option(help="Component to build, from the index.")],
   branch: Annotated[str, typer.Option(help="Branch of the component's repo.")],
@@ -106,7 +109,10 @@ def create(
     typer.echo(f"follow it with: platform build get {build['name']}")
 
 
-@app.command("list")
+@app.command("list", epilog=examples(
+  "platform build list --component hello-api",
+  "platform build list --component hello-api --output json",
+))
 def list_(
   component: Annotated[str, typer.Option(help="Component whose versions to list.")],
   output: OutputOption = Format.table,
@@ -119,14 +125,43 @@ def list_(
   if output == Format.json:
     print_json(items)
     return
-  print_table(["VERSION", "BRANCH", "REGISTRY", "CREATED"], [[item["version"], item.get("branch") or "—", item.get("registry") or "—", item.get("createdAt") or "—"] for item in items])
+  print_table(
+    ["NAME", "VERSION", "BRANCH", "REGISTRY", "CREATED"],
+    [[item["name"], item["version"], item.get("branch") or "—", item.get("registry") or "—", item.get("createdAt") or "—"] for item in items],
+  )
 
 
-@app.command("get")
-def get(name: str, output: OutputOption = Format.table):
+def _build_of(client: PlatformClient, name: str) -> dict:
+  """A build by its name or by the name of its version (the NAME of build list, #408)."""
+  try:
+    return client.get_build(name)
+  except ApiError as error:
+    if error.status != 404:
+      raise
+    version = next((item for item in client.list_versions() if item["name"] == name), None)
+    if version is None:
+      raise
+  if not version.get("build"):
+    raise ApiError(f"version {name} was registered without a build")
+  try:
+    return client.get_build(version["build"])
+  except ApiError as error:
+    if error.status != 404:
+      raise
+    raise ApiError(f"version {name}: its build {version['build']} is gone (builds are kept for 24 h after they end)")
+
+
+@app.command("get", epilog=examples(
+  "platform build get hello-api-6cf484",
+  "platform build get hello-api.0.1.0-greetings.b5f9569",
+))
+def get(
+  name: Annotated[str, typer.Argument(help="A build (from build create) or a version (the NAME column of build list).")],
+  output: OutputOption = Format.table,
+):
   """Show a build and its steps (kept for 24 h after it ends)."""
   try:
-    build = _client().get_build(name)
+    build = _build_of(_client(), name)
   except ApiError as error:
     fail(str(error))
   if output == Format.json:

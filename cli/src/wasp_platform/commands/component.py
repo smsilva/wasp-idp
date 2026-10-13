@@ -14,7 +14,7 @@ import typer
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 from .template import _params
 
 app = typer.Typer(help="Components: repos created through the golden path, and the index.", no_args_is_help=True)
@@ -108,9 +108,12 @@ def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> 
     creation = client.component_creation(creation["name"])
 
 
-@app.command("create")
+@app.command("create", epilog=examples(
+  "platform catalog component create hello-api --system messaging --type service --wait",
+  "platform catalog component create hello-api --system messaging --owner team-a --template python-service --param port=8080",
+))
 def create(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Name of the new component, also the repo name.")],
   system: Annotated[str, typer.Option(help="System the component belongs to.")],
   owner: Annotated[str | None, typer.Option(help="Owner team; defaults to your team when you have only one.")] = None,
   type_: Annotated[str | None, typer.Option("--type", help="service, website or library: picks the default template of the type.")] = None,
@@ -152,7 +155,10 @@ def create(
     typer.echo(f"follow it with: platform catalog component get {name}")
 
 
-@app.command("list")
+@app.command("list", epilog=examples(
+  "platform catalog component list",
+  "platform catalog component list --system messaging --owner team-a",
+))
 def list_(
   system: Annotated[str | None, typer.Option(help="Only this system.")] = None,
   owner: Annotated[str | None, typer.Option(help="Only this owner team.")] = None,
@@ -170,8 +176,11 @@ def list_(
   print_table(["NAME", "SYSTEM", "OWNER", "LIFECYCLE", "TEMPLATE"], rows)
 
 
-@app.command("get")
-def get(name: str, output: OutputOption = Format.table):
+@app.command("get", epilog=examples(
+  "platform catalog component get hello-api",
+  "platform catalog component get hello-api --output json",
+))
+def get(name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")], output: OutputOption = Format.table):
   """Show a component; while its creation runs, show the creation steps instead."""
   client = _client()
   try:
@@ -199,9 +208,12 @@ def get(name: str, output: OutputOption = Format.table):
   typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")
 
 
-@app.command("clone")
+@app.command("clone", epilog=examples(
+  "platform catalog component clone hello-api",
+  "platform catalog component clone hello-api --https --directory ~/src/hello-api",
+))
 def clone(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")],
   directory: Annotated[str | None, typer.Option(help="Where to clone; defaults to the repo name.")] = None,
   https: Annotated[bool, typer.Option("--https", help="Clone over HTTPS instead of SSH; wins over git_protocol in the config.")] = False,
 ):

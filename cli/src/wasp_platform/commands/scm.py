@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
 app = typer.Typer(help="Connections with code platforms (platform-admins only).", no_args_is_help=True)
 connection_app = typer.Typer(help="Connections with code platforms, such as a GitHub org.", no_args_is_help=True)
@@ -24,6 +24,8 @@ NEEDS_ACTION = {"NotAllRepositories", "MissingPermissions", "InvalidCredentials"
 
 class Vendor(str, Enum):
   github = "github"
+
+ConnectionName = Annotated[str, typer.Argument(help="SCM connection name (platform scm connection list).")]
 
 
 def _client() -> PlatformClient:
@@ -55,9 +57,9 @@ def _poll(client: PlatformClient, name: str, done, timeout: int, quiet: bool) ->
     time.sleep(2)
 
 
-@connection_app.command("add")
+@connection_app.command("add", epilog=examples("platform scm connection add wasp-foundry --org wasp-foundry --wait", "platform scm connection add wasp-foundry --org wasp-foundry --no-browser --default"))
 def add(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Name for the new connection, such as wasp-foundry.")],
   org: Annotated[str, typer.Option(help="GitHub organization login.")],
   vendor: Annotated[Vendor, typer.Option(help="Code platform.")] = Vendor.github,
   default: Annotated[bool, typer.Option("--default", help="Use this connection when none is named.")] = False,
@@ -148,7 +150,7 @@ def _suggest_registry(connection: dict, client: PlatformClient | None) -> None:
     typer.echo(f"→ register its GHCR, where builds of {org} repos push: platform registry add ghcr-{org} --scm-connection {connection['name']}{default}")
 
 
-@connection_app.command("list")
+@connection_app.command("list", epilog=examples("platform scm connection list", "platform scm connection list --output json"))
 def list_(output: OutputOption = Format.table):
   """List connections."""
   items = _call(_client().list_scm_connections)
@@ -162,8 +164,8 @@ def list_(output: OutputOption = Format.table):
   print_table(["NAME", "VENDOR", "ORG", "STATUS", "DEFAULT", "VALIDATED"], rows)
 
 
-@connection_app.command("get")
-def get(name: str, output: OutputOption = Format.table):
+@connection_app.command("get", epilog=examples("platform scm connection get wasp-foundry"))
+def get(name: ConnectionName, output: OutputOption = Format.table):
   """Show a connection; never its credential."""
   connection = _call(_client().get_scm_connection, name)
   if output == Format.json:
@@ -188,9 +190,9 @@ def get(name: str, output: OutputOption = Format.table):
       typer.echo(f"  {label + ':':<14}{value}")
 
 
-@connection_app.command("verify")
+@connection_app.command("verify", epilog=examples("platform scm connection verify wasp-foundry", "platform scm connection verify wasp-foundry --wait --timeout 600"))
 def verify(
-  name: str,
+  name: ConnectionName,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the connection is ready.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
   output: OutputOption = Format.table,
@@ -208,8 +210,8 @@ def verify(
     typer.echo(f"verification of {name} requested: platform scm connection get {name}")
 
 
-@connection_app.command("default")
-def make_default(name: str, output: OutputOption = Format.table):
+@connection_app.command("default", epilog=examples("platform scm connection default wasp-foundry"))
+def make_default(name: ConnectionName, output: OutputOption = Format.table):
   """Make this the connection used when none is named."""
   connection = _call(_client().make_default_scm_connection, name)
   if output == Format.json:
@@ -218,8 +220,8 @@ def make_default(name: str, output: OutputOption = Format.table):
     success(f"{name} is the default connection")
 
 
-@connection_app.command("remove")
-def remove(name: str, output: OutputOption = Format.table):
+@connection_app.command("remove", epilog=examples("platform scm connection remove wasp-foundry"))
+def remove(name: ConnectionName, output: OutputOption = Format.table):
   """Remove a connection and its credential; the App stays on GitHub."""
   result = _call(_client().delete_scm_connection, name)
   if output == Format.json:

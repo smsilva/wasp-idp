@@ -10,13 +10,15 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
 app = typer.Typer(help="OCI registries: where builds push images (and, later, Helm charts and other OCI artifacts).", no_args_is_help=True)
 
 
 class Vendor(str, Enum):
   ghcr = "ghcr"
+
+RegistryName = Annotated[str, typer.Argument(help="Registry name (platform registry list).")]
 
 
 def _call(function, *args):
@@ -37,9 +39,9 @@ def _print(registry: dict) -> None:
     typer.echo(f"  {field.ljust(9)} {value or '—'}")
 
 
-@app.command("add")
+@app.command("add", epilog=examples("platform registry add ghcr-wasp-foundry --scm-connection wasp-foundry --default", "platform registry add ghcr-wasp-foundry --vendor ghcr --namespace wasp-foundry"))
 def add(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Name for the new registry, such as ghcr-wasp-foundry.")],
   scm_connection: Annotated[str | None, typer.Option("--scm-connection", help="A github SCM connection: the GHCR of its org (vendor ghcr, ghcr.io/<org>).")] = None,
   vendor: Annotated[Vendor | None, typer.Option(help="Registry vendor, without --scm-connection.")] = None,
   namespace: Annotated[str | None, typer.Option(help="The org (GHCR) images go under, without --scm-connection.")] = None,
@@ -56,7 +58,7 @@ def add(
   success(f"registry {name} added{' (default)' if registry['default'] else ''} · {registry['address']}, pushed by the CI of {registry['namespace']} repos")
 
 
-@app.command("list")
+@app.command("list", epilog=examples("platform registry list", "platform registry list --output json"))
 def list_(output: OutputOption = Format.table):
   """List the registries: NAME, VENDOR, ADDRESS, DEFAULT, STATUS."""
   items = _call(lambda client: client.list_registries())
@@ -66,8 +68,8 @@ def list_(output: OutputOption = Format.table):
   print_table(["NAME", "VENDOR", "ADDRESS", "DEFAULT", "STATUS"], [[item["name"], item["vendor"], item["address"], "yes" if item["default"] else "—", item["status"]] for item in items])
 
 
-@app.command("get")
-def get(name: str, output: OutputOption = Format.table):
+@app.command("get", epilog=examples("platform registry get ghcr-wasp-foundry"))
+def get(name: RegistryName, output: OutputOption = Format.table):
   """Show a registry and whether the platform reaches it."""
   registry = _call(lambda client: client.get_registry(name))
   if output == Format.json:
@@ -76,8 +78,8 @@ def get(name: str, output: OutputOption = Format.table):
   _print(registry)
 
 
-@app.command("set-default")
-def set_default(name: str, output: OutputOption = Format.table):
+@app.command("set-default", epilog=examples("platform registry set-default ghcr-wasp-foundry"))
+def set_default(name: RegistryName, output: OutputOption = Format.table):
   """Make a registry the default (platform-admins only)."""
   registry = _call(lambda client: client.set_default_registry(name))
   if output == Format.json:
@@ -86,8 +88,8 @@ def set_default(name: str, output: OutputOption = Format.table):
   success(f"{name} is the default registry ({registry['address']})")
 
 
-@app.command("remove")
-def remove(name: str):
+@app.command("remove", epilog=examples("platform registry remove ghcr-wasp-foundry"))
+def remove(name: RegistryName):
   """Remove a registry no version of the index is in (platform-admins only)."""
   _call(lambda client: client.remove_registry(name))
   success(f"registry {name} removed")
