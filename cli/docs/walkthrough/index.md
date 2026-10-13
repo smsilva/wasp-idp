@@ -113,6 +113,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [A database that already exists](workloads/bind.md)
 - [Another instance of the same component](workloads/instances.md)
 
+- [Connect an AI agent](agents/connect.md)
 - [Remove the GitHub connection](scm-connection/remove.md)
 - [Clean up and sign out](cleanup.md)
 

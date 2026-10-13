@@ -20,8 +20,6 @@ nav:
           - Sign in: walkthrough/login/sign-in.md
           - Who am I: walkthrough/login/whoami.md
           - What the platform can do: walkthrough/login/status.md
-      - AI agents:
-          - Connect an AI agent: walkthrough/agents/connect.md
       - Environments:
           - Create an environment: walkthrough/environments/create.md
           - The provider inside: walkthrough/environments/provider.md
@@ -88,6 +86,7 @@ nav:
           - Another instance of the same component: walkthrough/workloads/instances.md
           - Route traffic to an instance: walkthrough/workloads/route.md
           - Route a chain of calls: walkthrough/workloads/baggage.md
+      - Connect an AI agent: walkthrough/agents/connect.md
       - Remove the GitHub connection: walkthrough/scm-connection/remove.md
       - Clean up and sign out: walkthrough/cleanup.md
       - Without a browser: walkthrough/cli-smoke.md
