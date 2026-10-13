@@ -47,7 +47,7 @@ def remaining(expires_at: str | None, now: datetime | None = None) -> str:
   return " ".join(part for part in parts if part) or "<1m"
 
 
-@app.command("create", epilog=examples("platform environment create demo --profile ephemeral", "platform environment create demo --profile ephemeral --expires 3d --wait --share-with team-a"))
+@app.command("create", epilog=examples("platform environment create demo --profile ephemeral", "platform environment create demo --profile ephemeral --expires 3d --wait --share-with team-a", "platform environment create demo --profile ephemeral --cloud-account nonprod-aws"))
 def create(
   name: Annotated[str, typer.Argument(help="Name for the new environment, such as demo.")],
   profile: Annotated[Profile, typer.Option(help="Kind of environment; the platform decides where it runs.")],
@@ -55,14 +55,16 @@ def create(
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the environment is ready.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 600,
   share_with: Annotated[list[str] | None, typer.Option("--share-with", help="Team whose members also use it; repeat for more teams.")] = None,
+  cloud_account: Annotated[str | None, typer.Option("--cloud-account", help="Cloud account to provision it in, ready and yours or shared with your teams; without it, a local vcluster. Fixed after creation.")] = None,
   output: OutputOption = Format.table,
 ):
   """Create an environment, private unless shared with teams."""
   client = _client()
   try:
-    environment = client.create_environment(name, profile.value, expires, share_with)
+    environment = client.create_environment(name, profile.value, expires, share_with, cloud_account)
     if output == Format.table:
-      typer.echo(f"provisioning {name} (profile: {profile.value}) …")
+      where = f", cloud account: {cloud_account}" if cloud_account else ""
+      typer.echo(f"provisioning {name} (profile: {profile.value}{where}) …")
     if wait:
       environment = _wait_ready(client, environment, timeout, quiet=output == Format.json)
   except ApiError as error:
@@ -137,10 +139,10 @@ def list_(
     print_json(items)
     return
   rows = [
-    [item["name"], item["profile"], item["status"], remaining(item.get("expiresAt")), item.get("owner") or "—", ", ".join(item.get("sharedWith") or []) or "—"]
+    [item["name"], item["profile"], item.get("cloudAccount") or "—", item["status"], remaining(item.get("expiresAt")), item.get("owner") or "—", ", ".join(item.get("sharedWith") or []) or "—"]
     for item in items
   ]
-  print_table(["NAME", "PROFILE", "STATUS", "EXPIRES", "OWNER", "SHARED"], rows)
+  print_table(["NAME", "PROFILE", "ACCOUNT", "STATUS", "EXPIRES", "OWNER", "SHARED"], rows)
 
 
 Team = Annotated[str, typer.Option("--team", help="Team name, such as team-alpha.")]
@@ -194,6 +196,8 @@ def get(
   typer.echo(f"{environment['name']}: {environment['status']}")
   if environment.get("message"):
     typer.echo(f"  {environment['message']}")
+  if environment.get("cloudAccount"):
+    typer.echo(f"  in cloud account {environment['cloudAccount']}")
   if environment["status"] == "ready" and environment.get("kubeconfig"):
     typer.echo(f"  kubectl --kubeconfig {environment['kubeconfig']} get nodes")
   if environment.get("ingress"):

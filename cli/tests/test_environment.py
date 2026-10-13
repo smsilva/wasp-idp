@@ -40,7 +40,7 @@ def api(monkeypatch):
       body = json.loads(request.content)
       item = {
         "name": body["name"], "profile": body["profile"], "expiresAt": None, "status": "NoProviderForCapability",
-        "owner": "dev@example.com", "sharedWith": sorted(body.get("sharedWith", [])),
+        "owner": "dev@example.com", "sharedWith": sorted(body.get("sharedWith", [])), "cloudAccount": body.get("cloudAccount"),
       }
       environments[body["name"]] = item
       return httpx.Response(202, json=item)
@@ -98,8 +98,8 @@ def test_create_wait_until_ready(api):
 def test_list_table_and_json(api):
   runner.invoke(app, ["environment", "create", "dev", "--profile", "shared"])
   table = runner.invoke(app, ["environment", "list"]).output.splitlines()
-  assert table[0].split() == ["NAME", "PROFILE", "STATUS", "EXPIRES", "OWNER", "SHARED"]
-  assert table[1].split() == ["dev", "shared", "NoProviderForCapability", "—", "dev@example.com", "—"]
+  assert table[0].split() == ["NAME", "PROFILE", "ACCOUNT", "STATUS", "EXPIRES", "OWNER", "SHARED"]
+  assert table[1].split() == ["dev", "shared", "—", "NoProviderForCapability", "—", "dev@example.com", "—"]
   as_json = json.loads(runner.invoke(app, ["environment", "list", "--output", "json"]).output)
   assert as_json[0]["name"] == "dev"
 
@@ -109,6 +109,15 @@ def test_create_shared_with_teams(api):
   assert result.exit_code == 0, result.output
   assert api["dev"]["sharedWith"] == ["team-alpha", "team-beta"]
   assert runner.invoke(app, ["environment", "list"]).output.splitlines()[1].split()[-2:] == ["team-alpha,", "team-beta"]
+
+
+def test_create_in_a_cloud_account(api):
+  result = runner.invoke(app, ["environment", "create", "cloud-dev", "--profile", "ephemeral", "--cloud-account", "nonprod-aws"])
+  assert result.exit_code == 0, result.output
+  assert "provisioning cloud-dev (profile: ephemeral, cloud account: nonprod-aws)" in result.output
+  assert api["cloud-dev"]["cloudAccount"] == "nonprod-aws"
+  assert runner.invoke(app, ["environment", "list"]).output.splitlines()[1].split()[:3] == ["cloud-dev", "ephemeral", "nonprod-aws"]
+  assert "in cloud account nonprod-aws" in runner.invoke(app, ["environment", "get", "cloud-dev"]).output
 
 
 def test_share_and_unshare(api):

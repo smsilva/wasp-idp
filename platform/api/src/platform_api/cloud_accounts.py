@@ -16,7 +16,7 @@ from .auth import Principal, current_principal
 from .durations import format_time
 from .environments import ADMIN_GROUP, OWNER_ANNOTATION, OWNER_NAME_ANNOTATION, can_use, is_owner_or_admin, shared_with
 from .journal import Journal
-from .state import GROUP, VERSION, AlreadyExists, Conflict, NotFound
+from .state import ENVIRONMENTS, GROUP, VERSION, AlreadyExists, Conflict, NotFound
 from .teams import LABEL as TEAM
 
 CLOUD_ACCOUNTS = "cloudaccounts"
@@ -169,6 +169,23 @@ def view(obj: dict, base_arn: str | None = None) -> dict:
   return result
 
 
+def check_usable(state, name: str, principal: Principal) -> None:
+  """An environment goes into an account that is ready and that the caller may use (#435). Checked on
+  create only: an unshare takes away new environments, never the ones already there."""
+  try:
+    obj = state.get(CLOUD_ACCOUNTS, name)
+  except NotFound:
+    raise HTTPException(422, f"cloud account '{name}' not found")
+  if not can_use(obj, principal):
+    raise HTTPException(403, f"cloud account '{name}' is not yours nor shared with your teams")
+  if view(obj)["status"] != "ready":
+    raise HTTPException(422, f"cloud account '{name}' is not ready: 'platform cloud account verify {name} --wait' first")
+
+
+def environments_in(state, name: str) -> list[str]:
+  return sorted(obj["metadata"]["name"] for obj in state.list(ENVIRONMENTS) if (obj.get("spec") or {}).get("cloudAccount") == name)
+
+
 def router(state, journal: Journal, base_identity, check_share) -> APIRouter:
   """check_share is the environments' rule for adding a team (ADR 0026), shared from app.py."""
   routes = APIRouter(prefix="/v1/cloud/accounts")
@@ -283,6 +300,8 @@ def router(state, journal: Journal, base_identity, check_share) -> APIRouter:
   @routes.delete("/{name}", status_code=202)
   def delete(name: str, principal: Principal = Depends(current_principal)):
     obj = owned(name, principal)
+    if users := environments_in(state, name):
+      raise HTTPException(409, f"cloud account '{name}' is in use by environments: {', '.join(users)}")
     entry = journal.record("delete", "CloudAccount", name, None, principal.actor)
     try:
       state.delete(CLOUD_ACCOUNTS, name, uid=obj["metadata"].get("uid"))

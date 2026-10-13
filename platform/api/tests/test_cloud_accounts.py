@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from platform_api.app import create_app
 from platform_api.cloud_accounts import CLOUD_ACCOUNTS, VERIFY_ANNOTATION
 from platform_api.journal import Journal
+from platform_api.state import ENVIRONMENTS
 from platform_api.teams import users_of
 from fakes import FakeState, FakeTeams
 from tokens import TokenFactory
@@ -270,3 +271,94 @@ def test_a_team_sharing_an_account_is_in_use(client, as_, state):
   add(client, as_)
   share(client, as_)
   assert users_of(state, "team-alpha") == ["cloudaccount/nonprod-aws"]
+
+
+# An environment in a cloud account (#435).
+
+def ready(state, name="nonprod-aws"):
+  state.stores[CLOUD_ACCOUNTS][name]["status"] = {"conditions": [{"type": "Ready", "status": "True", "reason": "TrustEstablished"}]}
+
+
+def create_environment(client, as_, name="cloud-env", account="nonprod-aws", who="owner"):
+  return client.post("/v1/environments", json={"name": name, "profile": "ephemeral", "cloudAccount": account}, headers=as_(who))
+
+
+def test_an_environment_in_a_ready_account(client, as_, state, journal_path):
+  add(client, as_)
+  ready(state)
+  response = create_environment(client, as_)
+  assert response.status_code == 202
+  assert response.json()["cloudAccount"] == "nonprod-aws"
+  assert response.json()["status"] == "NoProviderForCapability"
+  assert state.stores[ENVIRONMENTS]["cloud-env"]["spec"]["cloudAccount"] == "nonprod-aws"
+  records = [json.loads(line) for line in journal_path.read_text().splitlines()]
+  assert [r["spec"]["cloudAccount"] for r in records if r.get("kind") == "Environment"] == ["nonprod-aws"]
+  items = client.get("/v1/environments", headers=as_("owner")).json()["items"]
+  assert [(item["name"], item["cloudAccount"]) for item in items] == [("cloud-env", "nonprod-aws")]
+
+
+def test_an_environment_without_account_shows_none(client, as_):
+  response = client.post("/v1/environments", json={"name": "local-env", "profile": "ephemeral"}, headers=as_("owner"))
+  assert response.status_code == 202
+  assert response.json()["cloudAccount"] is None
+
+
+def test_the_account_must_exist_and_be_ready(client, as_, state):
+  response = create_environment(client, as_, account="missing")
+  assert response.status_code == 422
+  assert "cloud account 'missing' not found" in response.json()["error"]["message"]
+  add(client, as_)
+  response = create_environment(client, as_)
+  assert response.status_code == 422
+  assert "is not ready" in response.json()["error"]["message"]
+  assert create_environment(client, as_, account="Not_An_Account").status_code == 422
+  assert ENVIRONMENTS not in state.stores or state.stores[ENVIRONMENTS] == {}
+
+
+def test_only_who_uses_the_account_creates_in_it(client, as_, state):
+  add(client, as_)
+  ready(state)
+  response = create_environment(client, as_, who="member")
+  assert response.status_code == 403
+  assert "cloud account 'nonprod-aws'" in response.json()["error"]["message"]
+  share(client, as_)
+  assert create_environment(client, as_, who="member").status_code == 202
+  assert create_environment(client, as_, name="by-admin", who="admin").status_code == 202
+  assert create_environment(client, as_, name="by-other", who="other").status_code == 403
+
+
+def test_unshare_keeps_the_environments_already_created(client, as_, state):
+  add(client, as_)
+  ready(state)
+  share(client, as_)
+  create_environment(client, as_, who="member")
+  client.delete("/v1/cloud/accounts/nonprod-aws/shares/team-alpha", headers=as_("owner"))
+  assert "cloud-env" in state.stores[ENVIRONMENTS]
+  assert client.get("/v1/environments/cloud-env", headers=as_("member")).status_code == 200
+
+
+def test_an_account_in_use_is_not_removed(client, as_, state):
+  add(client, as_)
+  ready(state)
+  create_environment(client, as_)
+  response = client.delete("/v1/cloud/accounts/nonprod-aws", headers=as_("owner"))
+  assert response.status_code == 409
+  assert "cloud-env" in response.json()["error"]["message"]
+  assert "nonprod-aws" in state.stores[CLOUD_ACCOUNTS]
+  del state.stores[ENVIRONMENTS]["cloud-env"]
+  assert client.delete("/v1/cloud/accounts/nonprod-aws", headers=as_("owner")).status_code == 202
+
+
+def test_an_environment_in_an_account_has_no_vcluster(client, as_, state):
+  add(client, as_)
+  ready(state)
+  create_environment(client, as_, who="admin")
+  # Even with a kubeconfig in the status, the routes of a vcluster never answer for it.
+  state.stores[ENVIRONMENTS]["cloud-env"]["status"]["kubeconfigData"] = "apiVersion: v1"
+  for response in (
+    client.post("/v1/environments/cloud-env/credentials", headers=as_("admin")),
+    client.get("/v1/environments/cloud-env/admin-kubeconfig", headers=as_("admin")),
+  ):
+    assert response.status_code == 409
+    assert "has no vcluster" in response.json()["error"]["message"]
+  assert "kubeconfigData" not in client.get("/v1/environments/cloud-env", headers=as_("admin")).json()

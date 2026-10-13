@@ -47,7 +47,8 @@ answers, and 404 after remove, #358), its golden signals from Prometheus after a
 (workload signals, #411), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
-role. Stops at the first failure with a non-zero exit code.
+role, an environment is refused in it while it is not ready and in an account that does not
+exist (#435). Stops at the first failure with a non-zero exit code.
 
 It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
 your own login in ~/.config/platform/credentials is never touched.
@@ -1712,6 +1713,11 @@ if output="$(platform cloud account add "${cloud_account}" --role-arn "${cloud_r
     platform cloud account add "${cloud_account}-again" \
       --role-arn "${cloud_role}"
   platform login --test-user
+  # An environment goes only into a ready account (#435).
+  expect_failure "cloud account '${cloud_account}' is not ready" \
+    platform environment create "${environment}-cloud" \
+      --profile ephemeral \
+      --cloud-account "${cloud_account}"
   platform cloud account remove "${cloud_account}"
 else
   # init ran without --aws-profile: the capability has no provider, and its writes answer 503 (#377).
@@ -1721,6 +1727,12 @@ else
     platform cloud account share "${cloud_account}" \
       --team smoke-not-a-member
 fi
+
+step "environment create --cloud-account: refused for an account that does not exist (#435)"
+expect_failure "422" \
+  platform environment create "${environment}-cloud" \
+    --profile ephemeral \
+    --cloud-account smoke-missing-account
 
 step "logout"
 platform logout

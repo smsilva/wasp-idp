@@ -1,11 +1,11 @@
 # Environments
 
-An environment is a vcluster created by the `local_vcluster` provider inside `platform-local`.
+An environment is a vcluster created by the `local_vcluster` provider inside `platform-local`, or, with `--cloud-account`, an environment provisioned in a [cloud account](cloud-accounts.md) (see [In a cloud account](#in-a-cloud-account)).
 
 | Command | What it does |
 |---|---|
-| `platform environment create <name> --profile ephemeral\|shared [--expires <duration>] [--share-with <team>]... [--wait]` | requests an environment, private unless shared; `--wait` waits for `ready` and writes the kubeconfig |
-| `platform environment list [--all]` | NAME, PROFILE, STATUS, EXPIRES, OWNER, SHARED: yours and your teams'; `--all` (the default for `platform-admins`) shows every environment, without kubeconfig |
+| `platform environment create <name> --profile ephemeral\|shared [--expires <duration>] [--share-with <team>]... [--cloud-account <account>] [--wait]` | requests an environment, private unless shared; `--wait` waits for `ready` and writes the kubeconfig |
+| `platform environment list [--all]` | NAME, PROFILE, ACCOUNT, STATUS, EXPIRES, OWNER, SHARED: yours and your teams'; `--all` (the default for `platform-admins`) shows every environment, without kubeconfig |
 | `platform environment get <name>` | status, message and where its workloads are reached (`http://*.<name>.localhost:7080`); writes your kubeconfig when ready |
 | `platform environment get <name> --admin` | writes the vcluster admin kubeconfig (`platform-admins` only) |
 | `platform environment share\|unshare <name> --team <team>` | see [Teams](teams.md#sharing-environments) |
@@ -17,6 +17,16 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | `platform environment delete <name>` | removes the environment and the vcluster |
 
 `--expires` takes `30m`, `12h`, `3d` or `1w`; the provider deletes the environment when the deadline passes (checked every 10 s).
+
+## In a cloud account
+
+`--cloud-account <account>` provisions the environment in that account instead of a local vcluster (#435).
+
+- On create, the account must exist and be `ready` (`422` otherwise), and you must be able to use it: owner, `platform-admins`, or a member of a team it is shared with (`403` otherwise). This is checked only at creation: an unshare never takes down environments already there.
+- The account is immutable: the CRD refuses changing, adding or removing `spec.cloudAccount`.
+- The `local_vcluster` provider ignores the environment, which stays `NoProviderForCapability` until the cloud provider (ADR 0032, #436) is installed. Expiry is not enforced until then either.
+- It has no vcluster: `get` writes no kubeconfig, and `get --admin`, `credential` and the workload writes (`deploy`, `apply`, `remove`, `route set|delete`) answer `409`.
+- `platform cloud account remove <account>` answers `409` while an environment references it.
 
 ## Status
 

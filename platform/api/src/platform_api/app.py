@@ -24,6 +24,14 @@ class EnvironmentRequest(BaseModel):
   profile: environments.Profile
   expires: str | None = None
   sharedWith: list[str] = []
+  cloudAccount: str | None = None
+
+  @field_validator("cloudAccount")
+  @classmethod
+  def check_account(cls, value: str | None) -> str | None:
+    if value is not None and not cloud_accounts.NAME.fullmatch(value):
+      raise ValueError(f"'{value}' is not a cloud account name")
+    return value
 
   @field_validator("sharedWith")
   @classmethod
@@ -104,7 +112,9 @@ def create_app(
   def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
     deadline = expires_at(request.expires) if request.expires else None
     check_share(request.sharedWith, principal)
-    body = environments.manifest(request.name, request.profile, deadline, principal.sub, principal.email, request.sharedWith)
+    if request.cloudAccount:
+      cloud_accounts.check_usable(state, request.cloudAccount, principal)
+    body = environments.manifest(request.name, request.profile, deadline, principal.sub, principal.email, request.sharedWith, request.cloudAccount)
     entry = journal.record("create", "Environment", request.name, body["spec"], principal.actor)
     try:
       created = state.create(ENVIRONMENTS, body)
@@ -134,7 +144,8 @@ def create_app(
     except NotFound:
       raise HTTPException(404, f"environment '{name}' not found")
     # The personal kubeconfig holds no credential: kubectl asks /credentials for one (ADR 0028).
-    return environments.view(obj, kubeconfig=personal.personal_kubeconfig(obj) if environments.can_use(obj, principal) else None)
+    with_kubeconfig = environments.can_use(obj, principal) and not environments.no_vcluster(obj)
+    return environments.view(obj, kubeconfig=personal.personal_kubeconfig(obj) if with_kubeconfig else None)
 
   def usable(name: str, principal: Principal) -> dict:
     try:
@@ -143,6 +154,8 @@ def create_app(
       raise HTTPException(404, f"environment '{name}' not found")
     if not environments.can_use(obj, principal):
       raise HTTPException(403, f"environment '{name}' is not yours nor shared with your teams")
+    if reason := environments.no_vcluster(obj):
+      raise HTTPException(409, reason)
     if not (obj.get("status") or {}).get("kubeconfigData"):
       raise HTTPException(409, f"environment '{name}' is not ready yet")
     return obj

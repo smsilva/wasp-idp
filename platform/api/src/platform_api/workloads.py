@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .auth import Principal, current_principal
 from .builds import COMPONENTS, VERSION_PATTERN, VERSIONS
 from .catalog import LABEL
-from .environments import ADMIN_GROUP, can_use
+from .environments import ADMIN_GROUP, can_use, no_vcluster
 from .journal import Journal
 from .state import ENVIRONMENTS, GROUP, VERSION, AlreadyExists, Conflict, NotFound
 
@@ -304,6 +304,13 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(403, f"environment '{environment}' is not yours nor shared with your teams")
     return obj
 
+  def writable(environment: str, principal: Principal) -> dict:
+    """usable, and with a vcluster to write workloads to: an environment in a cloud account has none (#435)."""
+    obj = usable(environment, principal)
+    if reason := no_vcluster(obj):
+      raise HTTPException(409, reason)
+    return obj
+
   def revisions_of(environment: str, instance: str | None = None, component: str | None = None) -> list[dict]:
     items = [
       obj for obj in state.list(REVISIONS)
@@ -383,7 +390,7 @@ def router(state, journal: Journal) -> APIRouter:
       raise HTTPException(422, f"'{instance}' is not an instance name")
     if asked is not None and not LABEL.fullmatch(asked):
       raise HTTPException(422, f"'{asked}' is not a component name")
-    env = usable(environment, principal)
+    env = writable(environment, principal)
     component = component_of(environment, instance, asked)
     check_owner(component, principal, act)
     return env, component
@@ -450,7 +457,7 @@ def router(state, journal: Journal) -> APIRouter:
   def plan_of(environment: str, request: "ApplyRequest", principal: Principal) -> tuple[dict, list[dict]]:
     """The environment and one item per instance of the plan, and with prune per instance left out.
     Raises before anything is written when one cannot be applied."""
-    env = usable(environment, principal)
+    env = writable(environment, principal)
     newest = live(environment)
     items = []
     for instance, entry in sorted(request.workloads.items()):
@@ -565,7 +572,7 @@ def router(state, journal: Journal) -> APIRouter:
   def route_target(environment: str, component: str, principal: Principal, act: str) -> dict:
     if not LABEL.fullmatch(component):
       raise HTTPException(422, f"'{component}' is not a component name")
-    env = usable(environment, principal)
+    env = writable(environment, principal)
     check_owner(component, principal, act)
     return env
 

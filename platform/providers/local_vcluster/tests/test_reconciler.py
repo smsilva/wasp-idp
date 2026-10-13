@@ -213,6 +213,16 @@ def test_helm_failure_becomes_condition():
   assert store.statuses["greetings-test"][-1]["conditions"][0]["reason"] == "ProvisioningFailed"
 
 
+def test_environment_in_a_cloud_account_is_not_ours():
+  # The cloud provider claims it (#436): no vcluster, no finalizer, no status, not even when expired or deleted.
+  for obj in (environment(), environment(expires="2026-10-10T11:59:00Z"), environment(deleting=True)):
+    obj["spec"]["cloudAccount"] = "nonprod-aws"
+    store, helm, _, reconciler = build()
+    reconciler.reconcile(obj)
+    assert not helm.releases
+    assert (store.finalizers, store.statuses, store.deleted, store.namespaces_deleted) == ({}, {}, [], [])
+
+
 def test_delete_uninstalls_and_removes_namespace_and_finalizer():
   helm = FakeHelm()
   helm.releases[(RELEASE, "env-gone")] = 7100

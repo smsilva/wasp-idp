@@ -21,6 +21,9 @@ spec:
         - name: Profile
           type: string
           jsonPath: .spec.profile
+        - name: Account
+          type: string
+          jsonPath: .spec.cloudAccount
         - name: Ready
           type: string
           jsonPath: .status.conditions[?(@.type=="Ready")].status
@@ -38,6 +41,10 @@ spec:
             spec:
               type: object
               required: [profile]
+              # On spec, not on the field: a rule on the field runs only when both sides have it, so adding or removing it would pass.
+              x-kubernetes-validations:
+                - rule: has(self.cloudAccount) == has(oldSelf.cloudAccount) && (!has(self.cloudAccount) || self.cloudAccount == oldSelf.cloudAccount)
+                  message: cloudAccount is immutable
               properties:
                 profile:
                   type: string
@@ -45,6 +52,9 @@ spec:
                 expiresAt:
                   type: string
                   format: date-time
+                cloudAccount:
+                  description: CloudAccount the environment is provisioned in (#435); absent means a local vcluster. Immutable.
+                  type: string
                 sharedWith:
                   description: Teams whose members use the environment (ADR 0026); empty means private to the owner.
                   type: array

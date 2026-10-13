@@ -82,6 +82,9 @@ class Reconciler:
     return port
 
   def _reconcile(self, obj: dict) -> None:
+    if obj.get("spec", {}).get("cloudAccount"):
+      # Provisioned in a cloud account by another provider (#436): it waits as NoProviderForCapability until then.
+      return
     metadata = obj["metadata"]
     name = metadata["name"]
     namespace = namespace_name(name)

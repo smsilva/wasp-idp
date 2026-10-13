@@ -15,8 +15,10 @@ Profile = Literal["ephemeral", "shared"]
 PROFILES = get_args(Profile)
 
 
-def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_name: str | None = None, shared_with: list[str] | None = None) -> dict:
+def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_name: str | None = None, shared_with: list[str] | None = None, cloud_account: str | None = None) -> dict:
   spec = {"profile": profile}
+  if cloud_account:
+    spec["cloudAccount"] = cloud_account
   if expires_at:
     spec["expiresAt"] = expires_at
   if shared_with:
@@ -56,6 +58,19 @@ def shared_with(obj: dict) -> list[str]:
   return list((obj.get("spec") or {}).get("sharedWith") or [])
 
 
+def cloud_account(obj: dict) -> str | None:
+  """The CloudAccount the environment is provisioned in (#435); None for a local vcluster."""
+  return (obj.get("spec") or {}).get("cloudAccount")
+
+
+def no_vcluster(obj: dict) -> str | None:
+  """Why the routes of a vcluster (credentials, kubeconfigs, workloads) do not apply, or None when they do."""
+  account = cloud_account(obj)
+  if account:
+    return f"environment '{obj['metadata']['name']}' runs in cloud account '{account}' and has no vcluster"
+  return None
+
+
 def can_use(obj: dict, principal) -> bool:
   """Owner, admins, and members of a team the environment is shared with (ADR 0026): they get the kubeconfig."""
   return is_owner_or_admin(obj, principal) or bool(set(principal.teams) & set(shared_with(obj)))
@@ -90,6 +105,7 @@ def view(obj: dict, kubeconfig: str | None = None) -> dict:
   result = {
     "name": metadata.get("name"),
     "profile": spec.get("profile"),
+    "cloudAccount": spec.get("cloudAccount"),
     "expiresAt": spec.get("expiresAt"),
     "status": state,
     "message": ready.get("message") if ready else None,
