@@ -35,6 +35,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [Sign in](login/sign-in.md)
 - [Who am I](login/whoami.md)
 - [What the platform can do](login/status.md)
+- [One capability in full](login/capability.md)
 
 ### Configuration
 

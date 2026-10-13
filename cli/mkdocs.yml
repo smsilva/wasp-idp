@@ -21,6 +21,7 @@ nav:
           - Sign in: walkthrough/login/sign-in.md
           - Who am I: walkthrough/login/whoami.md
           - What the platform can do: walkthrough/login/status.md
+          - One capability in full: walkthrough/login/capability.md
       - Configuration:
           - SCM connection:
               - GitHub:
