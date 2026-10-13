@@ -1,0 +1,32 @@
+[project]
+name = "wasp-platform-mcp"
+version = "0.1.0"
+description = "platform-mcp: MCP server of the wasp-idp Platform API, a thin adapter over the CLI client (ADR 0027)"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.9",
+  "wasp-platform",
+]
+
+[project.scripts]
+platform-mcp = "wasp_platform_mcp.server:main"
+
+# The tools call the Platform API through the CLI client and its login (ADR 0027, phase 1).
+[tool.uv.sources]
+wasp-platform = { path = "../../cli", editable = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "anyio>=4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wasp_platform_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
