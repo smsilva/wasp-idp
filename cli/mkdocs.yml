@@ -25,10 +25,10 @@ nav:
       - Configuration:
           - SCM connection:
               - GitHub:
-                  - Create the App: walkthrough/scm-connection/github/create-app.md
-                  - Install on the org: walkthrough/scm-connection/github/install.md
+                  - Create the GitHub App: walkthrough/scm-connection/github/create-app.md
+                  - Install the App on the org: walkthrough/scm-connection/github/install.md
                   - Verify: walkthrough/scm-connection/github/verify.md
-                  - The key stays off this machine: walkthrough/scm-connection/github/private-key.md
+                  - The App key stays off this machine: walkthrough/scm-connection/github/private-key.md
           - Registry:
               - GHCR:
                   - Register the org: walkthrough/registry/ghcr/register.md

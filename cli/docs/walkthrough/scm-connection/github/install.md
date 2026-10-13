@@ -1,4 +1,4 @@
-# Install on the org
+# Install the GitHub App on the org
 
 GitHub returns to the platform, which leads to the installation:
 

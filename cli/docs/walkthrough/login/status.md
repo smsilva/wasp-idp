@@ -22,7 +22,7 @@ observability  Active                   prometheus      —
   details and the fix: platform status <capability>
 ```
 
-- `scm` runs (its provider is up) but has no connection yet: [SCM connection](../scm-connection/github/create-app.md) adds one, and [Registry](../registry/ghcr/register.md) the GHCR of its org right after. `build` runs through the connection and pushes to the registry, so it waits on both.
+- `scm` runs (its provider is up) but has no connection yet: [Create the GitHub App](../scm-connection/github/create-app.md) adds one, and [Registry](../registry/ghcr/register.md) the GHCR of its org right after. `build` runs through the connection and pushes to the registry, so it waits on both.
 - `cloud-account` is not installed: `init` installs its provider with `--aws-profile`, in [Base credential](../cloud-accounts/aws/base-credential.md). A capability that is not installed does not make the exit code `1`; one installed and not `Active` does.
 
 The next page opens one capability in full, with the command that fixes it.

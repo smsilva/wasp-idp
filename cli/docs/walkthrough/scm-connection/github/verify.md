@@ -1,4 +1,4 @@
-# Verify
+# Verify the GitHub connection
 
 After the installation, GitHub returns to the "App installed" page, which **already requests the verification**:
 

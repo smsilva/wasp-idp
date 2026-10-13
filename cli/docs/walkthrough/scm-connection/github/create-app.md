@@ -1,4 +1,4 @@
-# Create the App
+# Create the GitHub App of the SCM connection
 
 The connection tells the platform **which org to create repos in** and **with which credential** (ADR 0025). Only `platform-admins` manage it.
 
