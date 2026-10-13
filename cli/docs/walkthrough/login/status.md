@@ -17,7 +17,8 @@ build          NotConfigured            scm_github      needs scm; needs registr
 cloud-account  NoProviderForCapability  —               not installed
 resources      Active                   forager         —
 workload       Active                   workload        —
-✗ 3 of 8 installed capabilities not Active: scm, registry, build
+observability  Active                   prometheus      —
+✗ 3 of 9 installed capabilities not Active: scm, registry, build
   details and the fix: platform status <capability>
 ```
 

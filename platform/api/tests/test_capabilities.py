@@ -32,6 +32,7 @@ def installed():
     deployment("aws_account", "cloud-account", vendor="aws"),
     deployment("forager", "resources"),
     deployment("workload", "workload"),
+    deployment("prometheus", "observability"),
   ]
 
 
@@ -123,7 +124,7 @@ def ready_scm(setup):
 
 def test_the_subsystems_in_the_order_of_adr_0034(setup, admin):
   items = setup["client"]().get("/v1/capabilities", headers=admin).json()["items"]
-  assert [item["name"] for item in items] == ["identity", "catalog", "environment", "scm", "registry", "build", "cloud-account", "resources", "workload"]
+  assert [item["name"] for item in items] == ["identity", "catalog", "environment", "scm", "registry", "build", "cloud-account", "resources", "workload", "observability"]
 
 
 def test_all_active(setup, admin):
@@ -134,6 +135,7 @@ def test_all_active(setup, admin):
   assert items["cloud-account"]["drivers"][0]["baseIdentity"] == BASE
   assert items["identity"]["drivers"][0]["version"] == "26.5.5"
   assert items["workload"]["dependsOn"] == ["environment", "build", "resources", "registry"]
+  assert items["observability"]["dependsOn"] == ["environment"]
   assert items["registry"]["detail"] == "ghcr-wasp-foundry (default)"
 
 
@@ -226,7 +228,7 @@ def test_one_capability(setup, admin):
 def test_an_unknown_capability_is_404(setup, admin):
   response = setup["client"]().get("/v1/capabilities/nope", headers=admin)
   assert response.status_code == 404
-  assert response.json()["error"]["message"] == "capability 'nope' not found (capabilities: identity, catalog, environment, scm, registry, build, cloud-account, resources, workload)"
+  assert response.json()["error"]["message"] == "capability 'nope' not found (capabilities: identity, catalog, environment, scm, registry, build, cloud-account, resources, workload, observability)"
 
 
 def test_without_a_deployment_reader_nothing_is_installed(tmp_path, tokens, admin):

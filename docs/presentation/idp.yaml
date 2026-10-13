@@ -2417,7 +2417,7 @@ slides:
 
       **O status é da Workload Instance** (uma versão rodando num ambiente), não do component: o catálogo descreve o que a app é, e mostra as instâncias só como `running in` no `catalog component get`.
 
-      **Real hoje:** o `curl` pela URL externa (#357, #358; no local, `http://greeting-api.greetings-test.localhost:7080/greetings`). **Ilustrativo:** os golden signals (`workload signals`) dependem da #326; hoje nada na plataforma coleta métricas.
+      **Real hoje:** o `curl` pela URL externa (#357, #358; no local, `http://greeting-api.greetings-test.localhost:7080/greetings`) e os golden signals (`workload signals`, #411): um Prometheus no `platform-local` coleta o sidecar Istio de cada pod e o cAdvisor, e a API lê os quatro sinais na hora (ADR 0040). A app não tem instrumentação nenhuma; a saturação usa o limite que o `app-spec.yaml` do template declara.
 
   # ── Desenho final ───────────────────────────────────
   - name: landscape-full

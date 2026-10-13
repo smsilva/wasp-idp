@@ -393,6 +393,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   _deploy(registry_dir / "deploy" / "registry-provider.yaml", REGISTRY_PROVIDER_IMAGE, registry_image)
   _kubectl("rollout", "status", f"deployment/{REGISTRY_PROVIDER_IMAGE}", "--namespace", NAMESPACE, "--timeout", "180s")
   install_profile_policies(forager_dir, log)
+  install_observability(root / "platform" / "observability", log)
 
   cloud = install_aws_account(root, aws_profile, log)
   install_templates(root, log)
@@ -416,6 +417,16 @@ def install_ingress(provider_dir: Path, log) -> None:
       raise BootstrapError(f"Traefik not installed in {INGRESS_NAMESPACE} after 300s: kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-platform-ingress")
     time.sleep(3)
   _kubectl("rollout", "status", "deployment", "--selector", "app.kubernetes.io/name=traefik", "--namespace", INGRESS_NAMESPACE, "--timeout", "180s")
+
+
+def install_observability(observability_dir: Path, log) -> None:
+  """The Prometheus of the observability subsystem (ADR 0040): an upstream image, nothing to build.
+  The hash of the manifest goes on the pod template, so a changed scrape config rolls the pod."""
+  log("deploying Prometheus (golden signals of each workload) …")
+  manifest = (observability_dir / "deploy" / "prometheus.yaml").read_text()
+  checksum = hashlib.sha256(manifest.encode()).hexdigest()[:12]
+  _kubectl("apply", "--filename", "-", input=manifest.replace("config-hash: dev", f"config-hash: {checksum}"))
+  _kubectl("rollout", "status", "deployment/prometheus", "--namespace", NAMESPACE, "--timeout", "180s")
 
 
 def install_profile_policies(forager_dir: Path, log) -> None:

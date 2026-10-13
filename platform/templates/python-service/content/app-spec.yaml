@@ -24,6 +24,11 @@ containers:
       DATABASE_NAME: ${resources.db.name}
       DATABASE_USER: ${resources.db.username}
       DATABASE_PASSWORD: ${resources.db.password}
+    # The denominator of saturation in platform workload signals (ADR 0040).
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
 
 service:
   ports:

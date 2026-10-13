@@ -150,6 +150,9 @@ class PlatformClient:
   def get_workload(self, environment: str, instance: str) -> dict:
     return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}")
 
+  def workload_signals(self, environment: str, instance: str, window: str) -> dict:
+    return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}/signals", params={"window": window})
+
   def get_workload_route(self, environment: str, component: str) -> dict | None:
     """The route of a component, or None when it has none."""
     try:
