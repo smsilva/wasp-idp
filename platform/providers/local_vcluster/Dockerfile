@@ -22,6 +22,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
+# The pod policy of every vcluster (ADR 0041), the same file platform init applies on the host.
+COPY --chmod=644 deploy/pod-security.yaml /manifests/pod-security.yaml
 ENV PATH="/app/.venv/bin:${PATH}" HOME=/tmp ISTIO_VERSION=${ISTIO_VERSION} GATEWAY_API_VERSION=${GATEWAY_API_VERSION}
 USER 65532
 ENTRYPOINT ["local-vcluster-provider"]

@@ -39,6 +39,22 @@ With the personal kubeconfig, the CLI must be installed and signed in where kube
 
 Each environment gets one port from `127.0.0.1:7100`–`7119`. The pods run in the outer cluster, in the namespace `env-<name>`.
 
+## What a pod may not do
+
+`cluster-admin` in the vcluster does not reach the host: every pod follows the Pod Security Standard `baseline` (ADR 0041). A pod is refused at apply when it asks for:
+
+- `hostNetwork`, `hostPID` or `hostIPC`;
+- a `privileged` container, or `windowsOptions.hostProcess`;
+- a `hostPath` volume or a `hostPort`;
+- a capability outside the `baseline` set, `NET_ADMIN` and `NET_RAW` (the `istio-init` container of the mesh needs those two);
+- `procMount` other than `Default`, seccomp or AppArmor `Unconfined`, SELinux `user`/`role`, or a sysctl outside the safe list.
+
+```text
+pods "web" is forbidden: ValidatingAdmissionPolicy 'platform-environment-pod-security' with binding 'platform-environment-pod-security' denied request: hostNetwork, hostPID and hostIPC are not allowed in an environment
+```
+
+The same policy runs on the host for the pods the vcluster syncs, so deleting it inside the vcluster changes nothing: the pod then stays `Pending`, and `kubectl describe pod` shows the refusal in its sync events.
+
 ## Entry point
 
 Every environment is reached from outside at `http://*.<name>.localhost:7080` (ADR 0036). `*.localhost` resolves to the loopback without DNS. Port `7080` is a Traefik shared by every environment, installed by `platform init`: it sends each `*.<name>.localhost` to the `Gateway` `platform` (Istio, namespace `istio-ingress`) of that environment's vcluster. A route of a workload attaches to that `Gateway`; a host of another environment never reaches it.

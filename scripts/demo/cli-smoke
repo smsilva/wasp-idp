@@ -7,7 +7,8 @@ Usage: ${0##*/} [--skip-init]
 
 Runs the CLI walkthrough end to end without a browser (#179), on the local target:
 init, login as the test user, platform status as each role, the refusals a non-admin gets, an environment
-created (its gateway answering at *.<name>.localhost:7080) and deleted, then
+created (its gateway answering at *.<name>.localhost:7080, a hostNetwork or privileged pod refused in the
+vcluster and on the host) and deleted, then
 login as the test admin, the catalog import of idp/catalog/, a team with two
 test users, checked in the token, an environment shared with that team (the
 teammate gets a personal kubeconfig whose token the Platform API issues (ADR
@@ -246,6 +247,22 @@ if [[ "${server,,}" != "server: istio-envoy" ]]; then
   echo "expected the Gateway of ${environment} (server: istio-envoy) at http://smoke.${environment}.localhost:7080/, got: ${headers:-no answer}" >&2
   exit 1
 fi
+
+step "a pod cannot reach the host: baseline in the vcluster and on the host (#414, ADR 0041)"
+owner_kubeconfig="${smoke_config}/platform/environments/${environment}.kubeconfig"
+expect_failure "hostNetwork, hostPID and hostIPC are not allowed in an environment" \
+  kubectl --kubeconfig "${owner_kubeconfig}" run smoke-host-network \
+    --image busybox \
+    --overrides '{"spec":{"hostNetwork":true}}' \
+    --dry-run=server
+# The guard is the host: the owner is cluster-admin in the vcluster and can delete the copy there. A pod
+# as the vcluster syncs it (its label) into env-<name> is refused too.
+expect_failure "privileged containers are not allowed in an environment" \
+  kubectl --context k3d-platform-local --namespace "env-${environment}" run smoke-privileged \
+    --image busybox \
+    --labels vcluster.loft.sh/managed-by=vcluster \
+    --privileged \
+    --dry-run=server
 
 step "environment delete"
 platform environment delete "${environment}"

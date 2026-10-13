@@ -77,6 +77,9 @@ spec:
                     port:
                       description: Host port of the shared entry point.
                       type: integer
+                podSecurity:
+                  description: Version of the pod policy installed in the environment (ADR 0041); absent while it is being installed.
+                  type: string
                 conditions:
                   type: array
                   items:
