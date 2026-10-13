@@ -14,9 +14,10 @@ from pydantic import BaseModel, field_validator
 
 from .auth import Principal, current_principal
 from .durations import format_time
-from .environments import ADMIN_GROUP, OWNER_ANNOTATION, OWNER_NAME_ANNOTATION, is_owner_or_admin
+from .environments import ADMIN_GROUP, OWNER_ANNOTATION, OWNER_NAME_ANNOTATION, can_use, is_owner_or_admin, shared_with
 from .journal import Journal
 from .state import GROUP, VERSION, AlreadyExists, Conflict, NotFound
+from .teams import LABEL as TEAM
 
 CLOUD_ACCOUNTS = "cloudaccounts"
 CAPABILITY = "cloud-account"
@@ -130,7 +131,8 @@ def manifest(request: AccountRequest, external_id: str, owner: str, owner_name: 
 
 
 def view(obj: dict, base_arn: str | None = None) -> dict:
-  """The API view; with base_arn (single reads), also the trust policy to apply to the role."""
+  """The API view; with base_arn (single reads by the owner or an admin), also the trust policy to
+  apply to the role. A team member the account is shared with never gets it: it carries the ExternalId."""
   metadata = obj.get("metadata", {})
   annotations = metadata.get("annotations") or {}
   spec = obj.get("spec") or {}
@@ -159,6 +161,7 @@ def view(obj: dict, base_arn: str | None = None) -> dict:
     # True until the controller answers the last `verify`: `verify --wait` polls on it.
     "verifyPending": bool(requested) and requested != status.get("observedVerifyRequest"),
     "owner": annotations.get(OWNER_NAME_ANNOTATION),
+    "sharedWith": shared_with(obj),
     "createdAt": metadata.get("creationTimestamp"),
   }
   if base_arn and aws.get("externalId"):
@@ -166,17 +169,21 @@ def view(obj: dict, base_arn: str | None = None) -> dict:
   return result
 
 
-def router(state, journal: Journal, base_identity) -> APIRouter:
+def router(state, journal: Journal, base_identity, check_share=None) -> APIRouter:
+  """check_share is the environments' rule for adding a team (ADR 0026), shared from app.py."""
   routes = APIRouter(prefix="/v1/cloud/accounts")
 
   def base_arn() -> str | None:
     return base_identity.arn() if base_identity else None
 
-  def owned(name: str, principal: Principal) -> dict:
+  def fetch(name: str) -> dict:
     try:
-      obj = state.get(CLOUD_ACCOUNTS, name)
+      return state.get(CLOUD_ACCOUNTS, name)
     except NotFound:
       raise HTTPException(404, f"cloud account '{name}' not found")
+
+  def owned(name: str, principal: Principal) -> dict:
+    obj = fetch(name)
     if not is_owner_or_admin(obj, principal):
       raise HTTPException(403, f"cloud account '{name}' is not yours")
     return obj
@@ -211,11 +218,54 @@ def router(state, journal: Journal, base_identity) -> APIRouter:
   def list_accounts(principal: Principal = Depends(current_principal)):
     everything = ADMIN_GROUP in principal.groups
     items = sorted(state.list(CLOUD_ACCOUNTS), key=lambda obj: obj["metadata"]["name"])
-    return {"items": [view(obj) for obj in items if everything or is_owner_or_admin(obj, principal)]}
+    return {"items": [view(obj) for obj in items if everything or can_use(obj, principal)]}
 
   @routes.get("/{name}")
   def get(name: str, principal: Principal = Depends(current_principal)):
-    return view(owned(name, principal), base_arn())
+    obj = fetch(name)
+    if not can_use(obj, principal):
+      raise HTTPException(403, f"cloud account '{name}' is not yours")
+    return view(obj, base_arn() if is_owner_or_admin(obj, principal) else None)
+
+  def change_share(name: str, team: str, principal: Principal, add: bool) -> dict:
+    obj = fetch(name)
+    if not is_owner_or_admin(obj, principal):
+      raise HTTPException(403, f"cloud account '{name}' can only be shared by its owner or {ADMIN_GROUP}")
+    current = shared_with(obj)
+    if add:
+      if check_share:
+        check_share([team], principal)
+      if team in current:
+        return view(obj, base_arn())
+      updated = sorted({*current, team})
+    else:
+      # No membership check: taking access away is always allowed to the owner, even for a deleted team.
+      if team not in current:
+        raise HTTPException(404, f"cloud account '{name}' is not shared with '{team}'")
+      updated = [item for item in current if item != team]
+    spec = {key: value for key, value in obj["spec"].items() if key != "sharedWith"}
+    if updated:
+      spec["sharedWith"] = updated
+    obj["spec"] = spec
+    entry = journal.record("share" if add else "unshare", "CloudAccount", name, {"team": team}, principal.actor)
+    try:
+      replaced = state.replace(CLOUD_ACCOUNTS, obj)
+    except NotFound:
+      raise HTTPException(404, f"cloud account '{name}' not found")
+    except Conflict:
+      raise HTTPException(409, f"cloud account '{name}' changed while sharing: try again")
+    journal.mark_applied(entry)
+    return view(replaced, base_arn())
+
+  @routes.put("/{name}/shares/{team}")
+  def share(name: str, team: str, principal: Principal = Depends(current_principal)):
+    if not TEAM.fullmatch(team):
+      raise HTTPException(422, f"'{team}' is not a team name")
+    return change_share(name, team, principal, add=True)
+
+  @routes.delete("/{name}/shares/{team}")
+  def unshare(name: str, team: str, principal: Principal = Depends(current_principal)):
+    return change_share(name, team, principal, add=False)
 
   @routes.post("/{name}/verify", status_code=202)
   def verify(name: str, principal: Principal = Depends(current_principal)):

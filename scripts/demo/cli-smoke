@@ -1691,12 +1691,16 @@ step "scm connection remove"
 platform scm connection remove "${connection}"
 expect_failure "404" platform scm connection get "${connection}"
 
-step "cloud account: trust policy, TrustNotEstablished, private to its owner (#193)"
+step "cloud account: trust policy, TrustNotEstablished, private to its owner, shared only with its teams (#193, #434)"
 platform login --test-user
 if output="$(platform cloud account add "${cloud_account}" --role-arn "${cloud_role}" 2>&1)"; then
   echo "${output}"
   expect_output '"sts:ExternalId"' "${output}"
   output="$(expect_failure "TrustNotEstablished" platform cloud account verify "${cloud_account}" --wait)"
+  # Shared only with the owner's own teams (#434); the test user is in none by now.
+  expect_failure "you can only share with teams you are a member of" \
+    platform cloud account share "${cloud_account}" \
+      --team smoke-not-a-member
   platform login --test-member
   output="$(platform cloud account list)"
   if grep --quiet --fixed-strings -- "${cloud_account}" <<< "${output}"; then
@@ -1713,6 +1717,9 @@ else
   # init ran without --aws-profile: the capability has no provider, and its writes answer 503 (#377).
   expect_output "capability 'cloud-account' has no provider installed: see platform status cloud-account" "${output}"
   echo "${output}"
+  expect_failure "capability 'cloud-account' has no provider installed" \
+    platform cloud account share "${cloud_account}" \
+      --team smoke-not-a-member
 fi
 
 step "logout"

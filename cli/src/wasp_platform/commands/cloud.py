@@ -18,9 +18,8 @@ app = typer.Typer(help="Cloud resources the platform provisions into.", no_args_
 account_app = typer.Typer(help="Cloud accounts: AWS accounts the platform assumes a role in.", no_args_is_help=True)
 app.add_typer(account_app, name="account")
 
-ADMIN_GROUP = "platform-admins"
-
 AccountName = Annotated[str, typer.Argument(help="Cloud account name (platform cloud account list).")]
+Team = Annotated[str, typer.Option("--team", help="Team name, such as team-alpha.")]
 
 
 class Vendor(str, Enum):
@@ -44,7 +43,7 @@ def _call(function, *args):
 def _print_trust_policy(account: dict) -> None:
   policy = account.get("trustPolicy")
   if not policy:
-    typer.echo("no trust policy: the platform has no AWS base credential right now")
+    typer.echo("no trust policy: only the owner and platform-admins see it, while the platform has an AWS base credential")
     return
   typer.echo(f"Trust policy of {account['roleArn']}:")
   typer.echo(json.dumps(policy, indent=2))
@@ -60,6 +59,8 @@ def _print_account(account: dict) -> None:
   if account.get("callerArn"):
     typer.echo(f"  caller     {account['callerArn']}")
   typer.echo(f"  validated  {account.get('lastValidated') or '—'}")
+  typer.echo(f"  owner      {account.get('owner') or '—'}")
+  typer.echo(f"  shared     {', '.join(account.get('sharedWith') or []) or '—'}")
 
 
 @account_app.command("add", epilog=examples("platform cloud account add sandbox --role-arn arn:aws:iam::123456789012:role/platform", "platform cloud account add sandbox --role-arn arn:aws:iam::123456789012:role/platform --region us-east-1 --region sa-east-1"))
@@ -82,16 +83,14 @@ def add(
 
 @account_app.command("list", epilog=examples("platform cloud account list", "platform cloud account list --output json"))
 def list_(output: OutputOption = Format.table):
-  """List your cloud accounts (platform-admins see every one)."""
-  client = _client()
-  items = _call(client.list_cloud_accounts)
+  """List your cloud accounts and the ones shared with your teams (platform-admins see every one)."""
+  items = _call(_client().list_cloud_accounts)
   if output == Format.json:
     print_json(items)
     return
-  admin = ADMIN_GROUP in _call(client.me).get("groups", [])
-  headers = ["NAME", "VENDOR", "ACCOUNT", "STATUS", "VALIDATED", *(["OWNER"] if admin else [])]
+  headers = ["NAME", "VENDOR", "ACCOUNT", "STATUS", "VALIDATED", "OWNER", "SHARED"]
   rows = [
-    [item["name"], item["vendor"], item.get("accountId") or "—", item["status"], item.get("lastValidated") or "—", *([item.get("owner") or "—"] if admin else [])]
+    [item["name"], item["vendor"], item.get("accountId") or "—", item["status"], item.get("lastValidated") or "—", item.get("owner") or "—", ", ".join(item.get("sharedWith") or []) or "—"]
     for item in items
   ]
   print_table(headers, rows)
@@ -132,6 +131,26 @@ def verify(
     fail(f"{name}: {account['status']}" + (f" — {account['message']}" if account.get("message") else ""))
   else:
     typer.echo(f"{name}: verification requested")
+
+
+@account_app.command("share", epilog=examples("platform cloud account share sandbox --team team-alpha"))
+def share(name: AccountName, team: Team, output: OutputOption = Format.table):
+  """Share an account with a team you belong to, so its members can use it (owner or platform-admins)."""
+  account = _call(_client().share_cloud_account, name, team)
+  if output == Format.json:
+    print_json(account)
+  else:
+    success(f"{name} shared with {team}")
+
+
+@account_app.command("unshare", epilog=examples("platform cloud account unshare sandbox --team team-alpha"))
+def unshare(name: AccountName, team: Team, output: OutputOption = Format.table):
+  """Stop sharing an account with a team (owner or platform-admins)."""
+  account = _call(_client().unshare_cloud_account, name, team)
+  if output == Format.json:
+    print_json(account)
+  else:
+    success(f"{name} no longer shared with {team}")
 
 
 @account_app.command("remove", epilog=examples("platform cloud account remove sandbox"))

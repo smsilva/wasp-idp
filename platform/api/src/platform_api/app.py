@@ -262,7 +262,7 @@ def create_app(
   app.include_router(binding_policies.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "resources"))])
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
-  app.include_router(cloud_accounts.router(state, journal, base_identity), dependencies=[Depends(capabilities.requires(deployments, cloud_accounts.CAPABILITY))])
+  app.include_router(cloud_accounts.router(state, journal, base_identity, check_share), dependencies=[Depends(capabilities.requires(deployments, cloud_accounts.CAPABILITY))])
   app.include_router(capabilities.router(state, deployments, base_identity))
   github = github or httpx.Client(base_url=scm.GITHUB_API, timeout=15)
   app.include_router(scm.router(state, journal, secrets, github, public_url, scm_states or scm.States()), dependencies=[Depends(capabilities.requires(deployments, "scm"))])
