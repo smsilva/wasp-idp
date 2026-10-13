@@ -17,9 +17,15 @@ platform build list \
 building from feat/greetings @ b5f9569 …
 ✓ app-spec.yaml valid · db (postgres), dns, route
 ✓ image hello-api:1.0.0-rc.1 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/hello-api)
-VERSION                  BRANCH          REGISTRY           CREATED
-1.0.0-rc.1               feat/greetings  ghcr-wasp-foundry  2026-10-12T19:12:49Z
-0.1.0-greetings.b5f9569  feat/greetings  ghcr-wasp-foundry  2026-10-12T18:37:33Z
+NAME                               VERSION                  BRANCH          REGISTRY           CREATED
+hello-api.1.0.0-rc.1               1.0.0-rc.1               feat/greetings  ghcr-wasp-foundry  2026-10-12T19:12:49Z
+hello-api.0.1.0-greetings.b5f9569  0.1.0-greetings.b5f9569  feat/greetings  ghcr-wasp-foundry  2026-10-12T18:37:33Z
+```
+
+`NAME` is the version itself, and `build get` takes it too: it shows the build that produced the version, while that build lasts.
+
+```bash
+platform build get hello-api.1.0.0-rc.1
 ```
 
 Underneath, a build is a `Build` and a version is a `Version` in the catalog group:
@@ -29,4 +35,4 @@ kubectl --context k3d-platform-local --namespace platform-system get builds,vers
 ```
 
 !!! note
-    The index keeps the image digest of each version. A `Build` is removed 24 h after it ends; its version stays.
+    The index keeps the image digest of each version. A `Build` is removed 24 h after it ends; its version stays, and `build get <version>` then says the build is gone. A version written without a build (by `kubectl`, for instance) says so too.

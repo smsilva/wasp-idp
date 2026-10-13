@@ -13,7 +13,7 @@ from wasp_templates.render import RenderError, annotate_origin, load_template, r
 from wasp_templates.source import SourceError, coerce, fetch
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 from .catalog_import import ImportFileError, Ref, Repo, origin, read_documents, run_import
 
 app = typer.Typer(help="Templates a component is created from; one default per type.", no_args_is_help=True)
@@ -38,7 +38,10 @@ def _location(source: dict | None) -> str:
   return f"{source['repo'].rstrip('/')}/{source['path']}"
 
 
-@app.command("list")
+@app.command("list", epilog=examples(
+  "platform catalog template list",
+  "platform catalog template list --output json",
+))
 def list_(output: OutputOption = Format.table):
   """List templates."""
   try:
@@ -71,8 +74,11 @@ def _parameter_lines(parameters: dict) -> list[str]:
   return lines
 
 
-@app.command("get")
-def get(name: str, output: OutputOption = Format.table):
+@app.command("get", epilog=examples(
+  "platform catalog template get python-service",
+  "platform catalog template get python-service --output json",
+))
+def get(name: Annotated[str, typer.Argument(help="Template name (platform catalog template list).")], output: OutputOption = Format.table):
   """Show a template and the extra parameters it takes."""
   try:
     template = _client().get_template(name)
@@ -95,9 +101,12 @@ def get(name: str, output: OutputOption = Format.table):
     typer.echo(f"    {line}")
 
 
-@app.command("create")
+@app.command("create", epilog=examples(
+  "platform catalog template create python-service --type service --owner team-a --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service --ref main",
+  "platform catalog template create python-service --type service --owner team-a --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service --ref main --default",
+))
 def create(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Name of the new template.")],
   type_: Annotated[Type, typer.Option("--type", help="Kind of component it creates.")],
   owner: Annotated[str, typer.Option(help="Owner team of the template.")],
   repo: Annotated[str, typer.Option(help="https URL of the Git repo holding the template.")],
@@ -121,8 +130,8 @@ def create(
     success(f"template {template['name']} created" + (f", default for {template['type']}" if template.get("default") else ""))
 
 
-@app.command("default")
-def make_default(name: str, output: OutputOption = Format.table):
+@app.command("default", epilog=examples("platform catalog template default python-service"))
+def make_default(name: Annotated[str, typer.Argument(help="Template name (platform catalog template list).")], output: OutputOption = Format.table):
   """Make a template the default of its type; the previous default stops being it (platform-admins only)."""
   try:
     template = _client().make_default_template(name)
@@ -134,8 +143,8 @@ def make_default(name: str, output: OutputOption = Format.table):
     success(f"template {name} is the default for {template['type']}")
 
 
-@app.command("delete")
-def delete(name: str, output: OutputOption = Format.table):
+@app.command("delete", epilog=examples("platform catalog template delete python-service"))
+def delete(name: Annotated[str, typer.Argument(help="Template name (platform catalog template list).")], output: OutputOption = Format.table):
   """Delete a template; the default of a type goes only after another one takes its place (platform-admins only)."""
   try:
     _client().delete_template(name)
@@ -147,7 +156,10 @@ def delete(name: str, output: OutputOption = Format.table):
     success(f"template {name} deleted")
 
 
-@app.command("import")
+@app.command("import", epilog=examples(
+  "platform catalog template import platform/templates/python-service --dry-run",
+  "platform catalog template import templates/ --repo https://github.com/smsilva/wasp-idp --ref main --yes",
+))
 def import_templates(
   paths: Annotated[list[Path], typer.Argument(help="A template file or a folder (recursive): Backstage kind: Template or template.yaml in the platform format.")],
   repo: Repo = None,
@@ -175,7 +187,10 @@ def _params(pairs: list[str]) -> dict:
   return given
 
 
-@app.command("render")
+@app.command("render", epilog=examples(
+  "platform catalog template render python-service --name hello-api --output /tmp/hello-api",
+  "platform catalog template render --from platform/templates/python-service --name hello-api --output /tmp/hello-api --param port=8080",
+))
 def render(
   name: Annotated[str | None, typer.Argument(help="Registered template; its content is fetched at the registered ref.")] = None,
   component: Annotated[str, typer.Option("--name", help="Name of the component, as component create would use it.")] = ...,

@@ -3,13 +3,14 @@ import typer
 from .commands import build, catalog, cloud, environment, registry, scm, status, team, workload
 from .commands.auth import login, logout, whoami
 from .commands.init import init
+from .output import examples
 
 app = typer.Typer(help="platform: the wasp-idp platform CLI.", no_args_is_help=True)
-app.command("init")(init)
-app.command("login")(login)
-app.command("logout")(logout)
-app.command("whoami")(whoami)
-app.command("status")(status.status)
+app.command("init", epilog=examples("platform init --target local", "platform init --target local --admin you@example.com"))(init)
+app.command("login", epilog=examples("platform login", "platform login --use-device-code"))(login)
+app.command("logout", epilog=examples("platform logout"))(logout)
+app.command("whoami", epilog=examples("platform whoami", "platform whoami --output json"))(whoami)
+app.command("status", epilog=examples("platform status", "platform status identity --verbose"))(status.status)
 app.add_typer(environment.app, name="environment")
 app.add_typer(catalog.app, name="catalog")
 app.add_typer(build.app, name="build")

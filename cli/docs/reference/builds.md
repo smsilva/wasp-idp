@@ -4,12 +4,12 @@
 platform build create --component <component> --branch <branch> \
   [--version <major.minor.patch[-pre-release]>] [--registry <registry>] [--wait] [--timeout <seconds>]
 platform build list --component <component>
-platform build get <build>
+platform build get <build | version>
 ```
 
 `create` turns a branch of a component into a version. The platform dispatches the repo's `.github/workflows/platform-build.yaml` on GitHub Actions with the App of the org's SCM connection, follows the run, reads its `platform-build` artifact, checks `app-spec.yaml` at the built commit and registers the version in the index. The App, not you, dispatches and reads the repo, so GitHub does not decide who builds: only members of the component's owner team and `platform-admins` create a build. `list` and `get` are open to any authenticated user, like the component index.
 
-The image goes to an [OCI registry](registries.md): `--registry`, or the default registry. `list` reads the version index (VERSION, BRANCH, REGISTRY, CREATED, newest first; `—` for a version indexed before the registry was recorded): only versions whose `app-spec.yaml` passed. `get` shows a build and its steps; a build is removed 24 h after it ends, the version stays.
+The image goes to an [OCI registry](registries.md): `--registry`, or the default registry. `list` reads the version index (NAME, VERSION, BRANCH, REGISTRY, CREATED, newest first; `—` for a version indexed before the registry was recorded): only versions whose `app-spec.yaml` passed. `get` shows a build and its steps, by the build's name or by a version's `NAME`; a build is removed 24 h after it ends, the version stays, and `get` of the version then says the build is gone.
 
 ## The contract with the CI
 

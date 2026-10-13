@@ -32,9 +32,16 @@ DONE = {**build("ready", commit=COMMIT, result=RESULT, app_spec=APP_SPEC, condit
         "registry": "ghcr-wasp-foundry", "image": "ghcr.io/wasp-foundry/greeting-api"}
 
 
+VERSIONS = [
+  {"name": "greeting-api.0.3.0-greetings.1a2b3c4", "version": "0.3.0-greetings.1a2b3c4", "branch": "feat/greetings",
+   "registry": "ghcr-wasp-foundry", "createdAt": "2026-10-11T17:47:40Z", "build": "greeting-api-a1b2c3"},
+  {"name": "greeting-api.0.2.0", "version": "0.2.0", "branch": "main", "createdAt": "2026-10-10T10:00:00Z", "build": None},
+]
+
+
 @pytest.fixture
 def api(monkeypatch):
-  state = {"requests": [], "polls": [RUNNING, DONE], "error": None}
+  state = {"requests": [], "polls": [RUNNING, DONE], "error": None, "gone": set()}
 
   def handler(request: httpx.Request) -> httpx.Response:
     state["requests"].append(request)
@@ -43,11 +50,9 @@ def api(monkeypatch):
     if request.method == "POST":
       return httpx.Response(202, json=build())
     if request.url.path == "/v1/versions":
-      items = [
-        {"version": "0.3.0-greetings.1a2b3c4", "branch": "feat/greetings", "registry": "ghcr-wasp-foundry", "createdAt": "2026-10-11T17:47:40Z"},
-        {"version": "0.2.0", "branch": "main", "createdAt": "2026-10-10T10:00:00Z"},
-      ]
-      return httpx.Response(200, json={"items": items})
+      return httpx.Response(200, json={"items": VERSIONS})
+    if request.url.path.removeprefix("/v1/builds/") in state["gone"]:
+      return httpx.Response(404, json={"error": {"code": "NotFound", "message": f"build '{request.url.path.rsplit('/', 1)[-1]}' not found"}})
     return httpx.Response(200, json=state["polls"].pop(0) if len(state["polls"]) > 1 else state["polls"][0])
 
   transport = httpx.MockTransport(handler)
@@ -138,10 +143,10 @@ def test_list_reads_the_version_index(api):
   assert api["requests"][0].url.path == "/v1/versions"
   assert api["requests"][0].url.params["component"] == "greeting-api"
   lines = result.output.splitlines()
-  assert lines[0].split() == ["VERSION", "BRANCH", "REGISTRY", "CREATED"]
-  assert lines[1].split() == ["0.3.0-greetings.1a2b3c4", "feat/greetings", "ghcr-wasp-foundry", "2026-10-11T17:47:40Z"]
+  assert lines[0].split() == ["NAME", "VERSION", "BRANCH", "REGISTRY", "CREATED"]
+  assert lines[1].split() == ["greeting-api.0.3.0-greetings.1a2b3c4", "0.3.0-greetings.1a2b3c4", "feat/greetings", "ghcr-wasp-foundry", "2026-10-11T17:47:40Z"]
   # Indexed before #365: no registry recorded.
-  assert lines[2].split() == ["0.2.0", "main", "—", "2026-10-10T10:00:00Z"]
+  assert lines[2].split() == ["greeting-api.0.2.0", "0.2.0", "main", "—", "2026-10-10T10:00:00Z"]
 
 
 def test_get_shows_the_steps(api):
@@ -151,3 +156,35 @@ def test_get_shows_the_steps(api):
   assert "build/greeting-api-a1b2c3 (pending)" in result.output
   assert "commit        1a2b3c4" in result.output
   assert "✓ Running" in result.output
+
+
+def test_get_takes_the_name_of_a_version(api):
+  api["gone"] = {"greeting-api.0.3.0-greetings.1a2b3c4"}
+  api["polls"] = [DONE]
+  result = run("get", "greeting-api.0.3.0-greetings.1a2b3c4")
+  assert result.exit_code == 0, result.output
+  assert [request.url.path for request in api["requests"]] == [
+    "/v1/builds/greeting-api.0.3.0-greetings.1a2b3c4", "/v1/versions", "/v1/builds/greeting-api-a1b2c3",
+  ]
+  assert "build/greeting-api-a1b2c3 (ready)" in result.output
+
+
+def test_get_of_a_version_whose_build_is_gone(api):
+  api["gone"] = {"greeting-api.0.3.0-greetings.1a2b3c4", "greeting-api-a1b2c3"}
+  result = run("get", "greeting-api.0.3.0-greetings.1a2b3c4")
+  assert result.exit_code == 1
+  assert "version greeting-api.0.3.0-greetings.1a2b3c4: its build greeting-api-a1b2c3 is gone (builds are kept for 24 h after they end)" in result.output
+
+
+def test_get_of_a_version_without_a_build(api):
+  api["gone"] = {"greeting-api.0.2.0"}
+  result = run("get", "greeting-api.0.2.0")
+  assert result.exit_code == 1
+  assert "version greeting-api.0.2.0 was registered without a build" in result.output
+
+
+def test_get_of_an_unknown_name(api):
+  api["gone"] = {"nope"}
+  result = run("get", "nope")
+  assert result.exit_code == 1
+  assert "build 'nope' not found" in result.output

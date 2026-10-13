@@ -637,7 +637,7 @@ expect_failure "no scm connection for the org 'smoke-no-connection'" \
     --branch main \
     --registry "${smoke_registry}"
 output="$(platform build list --component "${build_component}")"
-expect_output "VERSION" "${output}"
+expect_output "NAME" "${output}"
 if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
   echo "expected no versions of ${build_component}, got:" >&2
   echo "${output}" >&2

@@ -17,7 +17,7 @@ import typer
 import yaml
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
 # The kube API keeps the spec as JSON with sorted keys: the top level goes back to the order of a Score.
 SCORE_ORDER = ("apiVersion", "metadata", "resources", "containers", "service")
@@ -39,7 +39,7 @@ def _resources(items: list[dict]) -> str:
   return ", ".join(item["name"] if item["name"] == item["type"] else f"{item['name']} ({item['type']})" for item in items)
 
 
-@spec_app.command("validate")
+@spec_app.command("validate", epilog=examples("platform workload spec validate", "platform workload spec validate --file app-spec.yaml --output json"))
 def validate(
   file: Annotated[Path, typer.Option(help="The Score file to validate.")] = Path("app-spec.yaml"),
   output: OutputOption = Format.table,
@@ -67,7 +67,7 @@ def validate(
     fail(f"{file.name}: {len(result['errors'])} error(s)")
 
 
-@spec_app.command("get")
+@spec_app.command("get", epilog=examples("platform workload spec get --component hello-api", "platform workload spec get --component hello-api --version 0.1.0-greetings.b5f9569"))
 def get(
   component: Annotated[str, typer.Option(help="Component whose spec to show.")],
   version: Annotated[str | None, typer.Option(help="Version from the index; by default the newest.")] = None,
@@ -125,7 +125,7 @@ def _wait(client: PlatformClient, revision: dict, timeout: int) -> dict:
   return revision
 
 
-@app.command("deploy")
+@app.command("deploy", epilog=examples("platform workload deploy --component hello-api --environment demo --version 0.1.0-greetings.b5f9569 --wait", "platform workload deploy --component hello-api --environment demo --instance hello-api-canary --branch feat/greetings --replicas 2"))
 def deploy(
   component: Annotated[str, typer.Option(help="Component to deploy.")],
   environment: Annotated[str, typer.Option(help="Environment to deploy to.")],
@@ -230,7 +230,7 @@ def _previous(client: PlatformClient, environment: str, instance: str) -> int:
   return max(candidates)
 
 
-@app.command("rollback")
+@app.command("rollback", epilog=examples("platform workload rollback --component hello-api --environment demo", "platform workload rollback --instance hello-api-canary --environment demo --revision 3 --wait"))
 def rollback(
   environment: Annotated[str, typer.Option(help="Environment of the workload.")],
   component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
@@ -253,7 +253,7 @@ def rollback(
   _report(client, created, wait, output, f"rolling back to revision {target} ({created['version']}) …")
 
 
-@app.command("remove")
+@app.command("remove", epilog=examples("platform workload remove --instance hello-api-canary --environment demo", "platform workload remove --component hello-api --environment demo --wait"))
 def remove(
   environment: Annotated[str, typer.Option(help="Environment of the workload.")],
   component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
@@ -306,7 +306,7 @@ def _target(state: dict | None) -> str:
   return f"{state['version']} ×{state['replicas']}{classes}"
 
 
-@app.command("apply")
+@app.command("apply", epilog=examples("platform workload apply --file demo-plan.yaml --dry-run", "platform workload apply --file demo-plan.yaml --prune --wait"))
 def apply(
   file: Annotated[Path, typer.Option(help="The plan: environment, and workloads by instance with version or branch, replicas and resourceClasses.")],
   dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would change and exit.")] = False,
@@ -357,7 +357,7 @@ def apply(
     fail(f"{environment}: {len(failed)} of {len(ended)} revision(s) did not succeed")
 
 
-@app.command("list")
+@app.command("list", epilog=examples("platform workload list --environment demo", "platform workload list --environment demo --output json"))
 def list_(
   environment: Annotated[str, typer.Option(help="Environment whose workloads to list.")],
   output: OutputOption = Format.table,
@@ -376,7 +376,7 @@ def list_(
   )
 
 
-@app.command("get")
+@app.command("get", epilog=examples("platform workload get --component hello-api --environment demo", "platform workload get --instance hello-api-canary --environment demo"))
 def get_(
   environment: Annotated[str, typer.Option(help="Environment of the workload.")],
   component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
@@ -413,7 +413,7 @@ def get_(
     typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")
 
 
-@app.command("history")
+@app.command("history", epilog=examples("platform workload history --environment demo", "platform workload history --environment demo --component hello-api"))
 def history(
   environment: Annotated[str, typer.Option(help="Environment whose revisions to list.")],
   component: Annotated[str | None, typer.Option(help="Only the revisions of this component, in all its instances.")] = None,
@@ -491,7 +491,7 @@ def _rule_text(rule: dict) -> str:
   return " · ".join(f"{instance} {weight}%" for instance, weight in rule["weights"].items())
 
 
-@app.command("route")
+@app.command("route", epilog=examples("platform workload route --component hello-api --environment demo --to hello-api-canary --header x-sandbox=pr-42", "platform workload route --component hello-api --environment demo --to hello-api-canary --weight 10"))
 def route(
   component: Annotated[str, typer.Option(help="Component whose traffic to route; the route attaches to the Service of its main instance.")],
   environment: Annotated[str, typer.Option(help="Environment of the instances.")],

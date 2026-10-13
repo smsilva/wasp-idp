@@ -12,13 +12,15 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
 app = typer.Typer(help="Cloud resources the platform provisions into.", no_args_is_help=True)
 account_app = typer.Typer(help="Cloud accounts: AWS accounts the platform assumes a role in.", no_args_is_help=True)
 app.add_typer(account_app, name="account")
 
 ADMIN_GROUP = "platform-admins"
+
+AccountName = Annotated[str, typer.Argument(help="Cloud account name (platform cloud account list).")]
 
 
 class Vendor(str, Enum):
@@ -60,9 +62,9 @@ def _print_account(account: dict) -> None:
   typer.echo(f"  validated  {account.get('lastValidated') or '—'}")
 
 
-@account_app.command("add")
+@account_app.command("add", epilog=examples("platform cloud account add sandbox --role-arn arn:aws:iam::123456789012:role/platform", "platform cloud account add sandbox --role-arn arn:aws:iam::123456789012:role/platform --region us-east-1 --region sa-east-1"))
 def add(
-  name: str,
+  name: Annotated[str, typer.Argument(help="Name for the new cloud account, such as sandbox.")],
   role_arn: Annotated[str, typer.Option("--role-arn", help="IAM role the platform assumes, such as arn:aws:iam::123456789012:role/platform.")],
   vendor: Annotated[Vendor, typer.Option(help="Cloud vendor.")] = Vendor.aws,
   region: Annotated[list[str] | None, typer.Option("--region", help="Region the platform may use; repeat for more.")] = None,
@@ -78,7 +80,7 @@ def add(
   typer.echo(f"Apply it as the trust policy of the role, then run: platform cloud account verify {name} --wait")
 
 
-@account_app.command("list")
+@account_app.command("list", epilog=examples("platform cloud account list", "platform cloud account list --output json"))
 def list_(output: OutputOption = Format.table):
   """List your cloud accounts (platform-admins see every one)."""
   client = _client()
@@ -95,8 +97,8 @@ def list_(output: OutputOption = Format.table):
   print_table(headers, rows)
 
 
-@account_app.command("get")
-def get(name: str, output: OutputOption = Format.table):
+@account_app.command("get", epilog=examples("platform cloud account get sandbox"))
+def get(name: AccountName, output: OutputOption = Format.table):
   """Show a cloud account with its trust policy."""
   account = _call(_client().get_cloud_account, name)
   if output == Format.json:
@@ -106,9 +108,9 @@ def get(name: str, output: OutputOption = Format.table):
   _print_trust_policy(account)
 
 
-@account_app.command("verify")
+@account_app.command("verify", epilog=examples("platform cloud account verify sandbox", "platform cloud account verify sandbox --wait --timeout 300"))
 def verify(
-  name: str,
+  name: AccountName,
   wait: Annotated[bool, typer.Option("--wait", help="Wait for the provider's answer.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 120,
   output: OutputOption = Format.table,
@@ -132,8 +134,8 @@ def verify(
     typer.echo(f"{name}: verification requested")
 
 
-@account_app.command("remove")
-def remove(name: str, output: OutputOption = Format.table):
+@account_app.command("remove", epilog=examples("platform cloud account remove sandbox"))
+def remove(name: AccountName, output: OutputOption = Format.table):
   """Remove a cloud account from the platform (the role stays in the account)."""
   result = _call(_client().remove_cloud_account, name)
   if output == Format.json:

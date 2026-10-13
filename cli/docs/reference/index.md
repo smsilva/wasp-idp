@@ -21,4 +21,4 @@ Look up a command, a flag or a status. To learn the CLI by doing, start with the
 | [Under the hood](under-the-hood.md) | CRDs, journal, ports |
 | [Tear down](teardown.md) | removing everything |
 
-Every command accepts `--output json`; without a login, every command but `init` answers `not logged in: run 'platform login'`.
+`platform <command> --help` explains each argument (which name it takes and where to list it) and ends with `Examples:`, one or two real calls. Every command accepts `--output json`; without a login, every command but `init` answers `not logged in: run 'platform login'`.
