@@ -61,7 +61,52 @@ def environments(client: ClientFactory) -> list[ToolSpec]:
   ]
 
 
+CatalogKind = Literal["domain", "system", "resource"]
+
+
+def catalog(client: ClientFactory) -> list[ToolSpec]:
+  """The catalog in the vocabulary of ADR 0023, read-only in phase 1: writes wait for #219."""
+  def catalog_list(kind: CatalogKind | None = None, owner: str | None = None) -> dict[str, Any]:
+    """Domains, systems and resources of the catalog, each with its parent; filter by kind or owner team."""
+    return {"items": client().list_catalog_entities(kind, owner)}
+
+  def catalog_get(kind: CatalogKind, name: str) -> dict[str, Any]:
+    """One domain, system or resource, with the entities that point to it (dependents, as kind/name)."""
+    return client().get_catalog_entity(f"{kind}s", name)
+
+  def catalog_components_list(system: str | None = None, owner: str | None = None) -> dict[str, Any]:
+    """Components in the catalog index: system, owner team, type and the repo with their catalog-info.yaml."""
+    return {"items": client().list_components(system, owner)}
+
+  def catalog_components_get(name: str) -> dict[str, Any]:
+    """One component, with where it runs (runningIn) in the environments the caller can use."""
+    return client().get_component(name)
+
+  def catalog_components_creation_get(name: str) -> dict[str, Any]:
+    """Status of a component created from a template: repo, files and conditions. Visible to who requested it."""
+    return client().component_creation(name)
+
+  def catalog_templates_list() -> dict[str, Any]:
+    """Templates a component can be created from (ADR 0024): type, owner and whether it is the default."""
+    return {"items": client().list_templates()}
+
+  def catalog_templates_get(name: str) -> dict[str, Any]:
+    """One template: its source (repo, path, ref) and the parameters it asks for."""
+    return client().get_template(name)
+
+  return [
+    ToolSpec("catalog_list", catalog_list),
+    ToolSpec("catalog_get", catalog_get),
+    ToolSpec("catalog_components_list", catalog_components_list),
+    ToolSpec("catalog_components_get", catalog_components_get),
+    ToolSpec("catalog_components_creation_get", catalog_components_creation_get),
+    ToolSpec("catalog_templates_list", catalog_templates_list),
+    ToolSpec("catalog_templates_get", catalog_templates_get),
+  ]
+
+
 TOOLSETS: dict[str, Callable[[ClientFactory], list[ToolSpec]]] = {
   "core": core,
   "environments": environments,
+  "catalog": catalog,
 }
