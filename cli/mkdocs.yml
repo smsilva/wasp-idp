@@ -29,6 +29,7 @@ nav:
                   - Install the App on the org: walkthrough/scm-connection/github/install.md
                   - Install on all repositories: walkthrough/scm-connection/github/all-repositories.md
                   - Until the App is installed: walkthrough/scm-connection/github/not-installed.md
+                  - The App is installed: walkthrough/scm-connection/github/app-installed.md
                   - Verify: walkthrough/scm-connection/github/verify.md
                   - The connection in detail: walkthrough/scm-connection/github/connection-details.md
                   - Connection statuses: walkthrough/scm-connection/github/connection-statuses.md

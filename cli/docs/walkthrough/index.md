@@ -46,6 +46,7 @@ Each step shows the command and, right below it, the expected **output**.
   - [Install the App on the org](scm-connection/github/install.md)
   - [Install on all repositories](scm-connection/github/all-repositories.md)
   - [Until the App is installed](scm-connection/github/not-installed.md)
+  - [The App is installed](scm-connection/github/app-installed.md)
   - [Verify](scm-connection/github/verify.md)
   - [The connection in detail](scm-connection/github/connection-details.md)
   - [Connection statuses](scm-connection/github/connection-statuses.md)

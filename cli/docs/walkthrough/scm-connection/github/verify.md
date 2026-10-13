@@ -1,8 +1,6 @@
 # Verify the GitHub connection
 
-After the installation, GitHub returns to the "App installed" page, which **already requests the verification**:
-
-![Platform API "App installed" page, which already requested the verification](../../images/scm-04-app-installed.png){ .screenshot loading=lazy width="500" }
+Check the connection, whether the App was just created or reused:
 
 ```bash
 platform scm connection verify wasp-foundry \
