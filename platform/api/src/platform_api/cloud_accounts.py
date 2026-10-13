@@ -169,7 +169,7 @@ def view(obj: dict, base_arn: str | None = None) -> dict:
   return result
 
 
-def router(state, journal: Journal, base_identity, check_share=None) -> APIRouter:
+def router(state, journal: Journal, base_identity, check_share) -> APIRouter:
   """check_share is the environments' rule for adding a team (ADR 0026), shared from app.py."""
   routes = APIRouter(prefix="/v1/cloud/accounts")
 
@@ -233,8 +233,7 @@ def router(state, journal: Journal, base_identity, check_share=None) -> APIRoute
       raise HTTPException(403, f"cloud account '{name}' can only be shared by its owner or {ADMIN_GROUP}")
     current = shared_with(obj)
     if add:
-      if check_share:
-        check_share([team], principal)
+      check_share([team], principal)
       if team in current:
         return view(obj, base_arn())
       updated = sorted({*current, team})
