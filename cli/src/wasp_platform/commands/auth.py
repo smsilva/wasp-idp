@@ -10,12 +10,23 @@ from ..output import Format, OutputOption, fail, print_json, success
 
 def login(
   use_device_code: Annotated[bool, typer.Option("--use-device-code", help="Sign in from another device (SSH, containers, no browser).")] = False,
+  refresh: Annotated[bool, typer.Option("--refresh", help="Renew the token without the browser, so a team joined since the last login shows; signs in again if the session expired.")] = False,
   # Local test identities (#179): hidden, they exist only in the realm of the local target.
   test_user: Annotated[bool, typer.Option("--test-user", hidden=True)] = False,
   test_admin: Annotated[bool, typer.Option("--test-admin", hidden=True)] = False,
   test_member: Annotated[bool, typer.Option("--test-member", hidden=True)] = False,
 ):
   """Sign in to the platform with your Google account."""
+  if refresh and (test_user or test_admin or test_member):
+    raise typer.BadParameter("--refresh renews the current session; it does not go with a test identity", param_hint="--refresh")
+  if refresh:
+    try:
+      tokens = auth.refresh_now()
+    except auth.AuthError as error:
+      typer.echo(f"{error}; signing in again", err=True)
+    else:
+      _logged_in(tokens)
+      return
   if test_user or test_admin or test_member:
     _login_test_user(local.SMOKE_ADMIN if test_admin else local.SMOKE_MEMBER if test_member else local.SMOKE_USER)
     return
@@ -32,6 +43,14 @@ def login(
     auth.save_credentials(tokens)
     me = PlatformClient(token=lambda: tokens["access_token"]).me()
   except (auth.AuthError, ApiError) as error:
+    fail(str(error))
+  success(f"Logged in as {_who(me)}")
+
+
+def _logged_in(tokens: dict) -> None:
+  try:
+    me = PlatformClient(token=lambda: tokens["access_token"]).me()
+  except ApiError as error:
     fail(str(error))
   success(f"Logged in as {_who(me)}")
 

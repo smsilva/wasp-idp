@@ -342,6 +342,18 @@ output="$(platform team get "${team}")"
 expect_output "platform-smoke@platform.local" "${output}"
 expect_output "platform-smoke-member@platform.local" "${output}"
 
+step "member add of yourself renews the token; login --refresh drops a team you left (#426)"
+output="$(platform team member add "${team}" platform-smoke-admin@platform.local 2>&1)"
+expect_output "token renewed, ${team} is in it" "${output}"
+expect_output "${team}" "$(platform whoami)"
+platform team member remove "${team}" platform-smoke-admin@platform.local
+output="$(platform login --refresh)"
+expect_output "Logged in as platform-smoke-admin@platform.local" "${output}"
+if grep --quiet --fixed-strings -- "${team}" <<< "$(platform whoami)"; then
+  echo "${team} still in the token after login --refresh" >&2
+  exit 1
+fi
+
 step "the test user gets the team in its token, and cannot manage teams"
 platform login --test-user
 output="$(platform whoami)"

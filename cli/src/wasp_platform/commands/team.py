@@ -1,12 +1,14 @@
 """Teams (ADR 0026): Keycloak groups under /teams that the Platform API manages.
 
 Anyone logged in reads them; only platform-admins create, delete and change members. A membership
-change reaches the `groups` claim at the next token, so the member runs `platform login` again.
+change reaches the token at the next refresh: `member add` of yourself renews it, anyone else runs
+`platform login --refresh`.
 """
 from typing import Annotated
 
 import typer
 
+from .. import auth
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
 
@@ -77,12 +79,28 @@ def delete(name: TeamName, output: OutputOption = Format.table):
 
 @member_app.command("add", epilog=examples("platform team member add team-a dev@example.com"))
 def member_add(team: TeamName, email: Email, output: OutputOption = Format.table):
-  """Add someone to a team; they see it after the next 'platform login'."""
-  result = _call(_client().add_team_member, team, email)
+  """Add someone to a team; they see it after 'platform login --refresh' (yourself: at once)."""
+  client = _client()
+  result = _call(client.add_team_member, team, email)
+  renewed = _renew_if_yourself(client, team, email)
   if output == Format.json:
     print_json(result)
+  elif renewed:
+    success(f"{email} added to {team} · token renewed, {team} is in it")
   else:
     success(f"{email} added to {team}")
+
+
+def _renew_if_yourself(client: PlatformClient, team: str, email: str) -> bool:
+  """Teams travel in the token: renew it when the caller added themselves, so the team works now."""
+  try:
+    if (client.me().get("email") or "").lower() != email.lower():
+      return False
+    auth.refresh_now()
+    return team in (client.me().get("teams") or [])
+  except (ApiError, auth.AuthError):
+    typer.echo(f"  {team} reaches your token after: platform login --refresh", err=True)
+    return False
 
 
 @member_app.command("remove", epilog=examples("platform team member remove team-a dev@example.com"))

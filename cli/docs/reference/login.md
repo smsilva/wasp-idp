@@ -5,6 +5,7 @@ Every command but `init` talks to the Platform API, which requires a Keycloak to
 | Command | What it does |
 |---|---|
 | `platform login` | opens the browser on the Google screen (Authorization Code with PKCE, code received on a temporary listener at `127.0.0.1`) |
+| `platform login --refresh` | renews the token without the browser, so a team joined since the last login shows at once; signs in again when the session expired |
 | `platform login --use-device-code` | prints a URL and a code to confirm on any device: for SSH, containers, or a browser signed in to another Google account |
 | `platform whoami` | e-mail and groups, as the API sees them (not read from the local token) |
 | `platform logout` | revokes the session in Keycloak and deletes the credentials |
@@ -23,7 +24,7 @@ and confirm the code ABCD-EFGH
 
 - Stored in `~/.config/platform/credentials` (permission `0600`), with the client that issued them: refresh and revoke go to that same client.
 - The CLI refreshes the access token by itself when less than 60 s remain.
-- Team membership changes reach the token on the next `platform login`.
+- Team membership changes reach the token on the next refresh: `platform login --refresh` forces one, since Keycloak reads the groups again on every refresh. `platform team member add` of yourself already does it.
 
 ## Test users
 

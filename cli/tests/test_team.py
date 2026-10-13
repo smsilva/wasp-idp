@@ -4,7 +4,7 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from wasp_platform import client as client_module
+from wasp_platform import auth, client as client_module
 from wasp_platform.cli import app
 
 runner = CliRunner()
@@ -69,7 +69,8 @@ def test_member_add_and_remove(api):
   run("create", "team-alpha")
   result = run("member", "add", "team-alpha", "dev@example.com")
   assert result.exit_code == 0, result.output
-  assert json.loads(api[-1].content) == {"email": "dev@example.com"}
+  added = [request for request in api if request.method == "POST" and request.url.path.endswith("/members")]
+  assert json.loads(added[-1].content) == {"email": "dev@example.com"}
   output = run("get", "team-alpha").output
   assert "1 member(s)" in output and "dev@example.com" in output
   assert run("member", "remove", "team-alpha", "dev@example.com").exit_code == 0
@@ -87,3 +88,45 @@ def test_errors_exit_non_zero_with_api_message(api):
 def test_json_output(api):
   run("create", "team-alpha")
   assert json.loads(run("list", "--output", "json").output) == [{"name": "team-alpha"}]
+
+
+@pytest.fixture
+def me(monkeypatch):
+  """The caller is dev@example.com; each refresh adds the teams the next me() returns."""
+  state = {"teams": [], "refreshed": 0, "fail": False}
+
+  def refresh_now():
+    if state["fail"]:
+      raise auth.AuthError("session expired: run 'platform login'")
+    state["refreshed"] += 1
+    state["teams"] = ["team-alpha"]
+    return {"access_token": "renewed"}
+
+  monkeypatch.setattr(client_module.PlatformClient, "me", lambda self: {"sub": "s", "email": "Dev@Example.com", "teams": state["teams"]})
+  monkeypatch.setattr(auth, "refresh_now", refresh_now)
+  return state
+
+
+def test_member_add_of_yourself_renews_the_token(api, me):
+  run("create", "team-alpha")
+  result = run("member", "add", "team-alpha", "dev@example.com")
+  assert result.exit_code == 0, result.output
+  assert "✓ dev@example.com added to team-alpha · token renewed, team-alpha is in it" in result.output
+  assert me["refreshed"] == 1
+
+
+def test_member_add_of_someone_else_keeps_the_token(api, me):
+  run("create", "team-alpha")
+  result = run("member", "add", "team-alpha", "other@example.com")
+  assert result.exit_code == 0, result.output
+  assert result.output.strip() == "✓ other@example.com added to team-alpha"
+  assert me["refreshed"] == 0
+
+
+def test_member_add_of_yourself_survives_a_failed_refresh(api, me):
+  me["fail"] = True
+  run("create", "team-alpha")
+  result = run("member", "add", "team-alpha", "dev@example.com")
+  assert result.exit_code == 0, result.output
+  assert "✓ dev@example.com added to team-alpha" in result.output
+  assert "platform login --refresh" in result.output

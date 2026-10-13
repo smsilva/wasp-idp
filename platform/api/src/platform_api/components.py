@@ -111,7 +111,7 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
     if request.owner is None:
       if not principal.teams:
         # Teams come from the token: one joined after it was issued only shows after a new login.
-        raise HTTPException(422, f"component '{request.name}': pass --owner, the team that owns it (your token has no team; joined one just now? run 'platform login')")
+        raise HTTPException(422, f"component '{request.name}': pass --owner, the team that owns it (your token has no team; joined one just now? run 'platform login --refresh')")
       if len(principal.teams) > 1:
         raise HTTPException(422, f"component '{request.name}': pass --owner, the team that owns it (your teams: {', '.join(principal.teams)})")
       owner = principal.teams[0]
