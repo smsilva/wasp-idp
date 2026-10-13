@@ -27,6 +27,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [Install the CLI](bootstrap/install.md)
 - [Google credentials](bootstrap/google-credentials.md)
 - [Start the control plane](bootstrap/control-plane.md)
+- [CLI configuration](bootstrap/config.md)
 
 **Login**
 
@@ -34,16 +35,28 @@ Each step shows the command and, right below it, the expected **output**.
 - [Sign in](login/sign-in.md)
 - [Who am I](login/whoami.md)
 - [What the platform can do](login/status.md)
+- [One capability in full](login/capability.md)
 
 ### Configuration
 
 **SCM connection**
 
-- GitHub
-  - [Create the App](scm-connection/github/create-app.md)
-  - [Install on the org](scm-connection/github/install.md)
+- [GitHub](scm-connection/github/index.md)
+  - New App
+    - [Connect the platform to GitHub](scm-connection/github/create-app.md)
+    - [Confirm the App on GitHub](scm-connection/github/confirm-app.md)
+    - [Install the App on the org](scm-connection/github/install.md)
+    - [Install on all repositories](scm-connection/github/all-repositories.md)
+    - [Until the App is installed](scm-connection/github/not-installed.md)
+    - [The App is installed](scm-connection/github/app-installed.md)
+  - Reuse an existing App
+    - [Generate a new key](scm-connection/github/existing-app/new-key.md)
+    - [Register the App](scm-connection/github/existing-app/register.md)
+    - [Delete the downloaded key](scm-connection/github/existing-app/delete-key.md)
   - [Verify](scm-connection/github/verify.md)
-  - [The key stays off this machine](scm-connection/github/private-key.md)
+  - [The connection in detail](scm-connection/github/connection-details.md)
+  - [Connection statuses](scm-connection/github/connection-statuses.md)
+  - [The App key stays off this machine](scm-connection/github/private-key.md)
 
 **Registry**
 
@@ -95,12 +108,15 @@ Each step shows the command and, right below it, the expected **output**.
 - [Create a component](components/create.md)
 - [The component in the catalog](components/list.md)
 - [Clone the component](components/clone.md)
+- [Clone over HTTPS](components/clone-https.md)
 - [What is refused before GitHub](components/refused.md)
 
 **Builds**
 
+- [Push a branch](builds/branch.md)
 - [Validate a spec before the build](builds/validate.md)
 - [Build a branch](builds/create.md)
+- [The version and the image](builds/version.md)
 - [The versions of a component](builds/list.md)
 - [What a build refuses](builds/refused.md)
 

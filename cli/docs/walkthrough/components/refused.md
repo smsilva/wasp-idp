@@ -15,9 +15,9 @@ platform catalog component create other-api \
 ```
 
 ``` { .text .output title="output" }
-✗ component 'hello-api' already exists
-✗ component 'other-api': system 'nope' not found
-✗ params.colour: not a parameter of python-service (port)
+✗ 409: component 'hello-api' already exists
+✗ 422: component 'other-api': system 'nope' not found
+✗ 422: params.colour: not a parameter of python-service (port)
 ```
 
 | Refusal | Code |
@@ -36,7 +36,16 @@ platform catalog component create greeting-api \
 
 ``` { .text .output title="output" }
   ✓ Validated: scm connection 'wasp-foundry' is ready
-  ✓ Rendered: 15 files from python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+  ✓ Rendered: 19 files from python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
   … RepoCreated: wasp-foundry/greeting-api exists and was not created by this request: it is left untouched
 ✗ greeting-api: RepoAlreadyExists: wasp-foundry/greeting-api exists and was not created by this request: it is left untouched
 ```
+
+!!! warning "A failed creation keeps the name"
+    The creation stays at `RepoAlreadyExists`: `create` with the same name answers `409` and `clone` says the component is still being created. The CLI has no command to discard it yet; an admin removes it with `kubectl`:
+
+    ```bash
+    kubectl delete componentcreations.platform.wasp.silvios.me greeting-api \
+      --context k3d-platform-local \
+      --namespace platform-system
+    ```

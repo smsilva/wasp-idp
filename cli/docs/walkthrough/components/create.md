@@ -25,9 +25,9 @@ platform catalog component create hello-api \
 
 ``` { .text .output title="output" }
   ✓ Validated: scm connection 'wasp-foundry' is ready
-  ✓ Rendered: 15 files from python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+  ✓ Rendered: 19 files from python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
   ✓ RepoCreated: wasp-foundry/hello-api created (public)
-  ✓ Pushed: first commit 9ba3ad4 on main
+  ✓ Pushed: first commit c11d7df on main
   ✓ Protected: main changes only by pull request (no approval required)
   ✓ Registered: in the catalog (lifecycle: experimental)
 ✓ golden path “python-service” (default for service): repo wasp-foundry/hello-api created

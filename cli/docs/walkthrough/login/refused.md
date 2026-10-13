@@ -1,7 +1,7 @@
 # Refused without login
 
 ```bash
-platform environment list
+platform whoami
 ```
 
 ``` { .text .output title="output" }

@@ -10,16 +10,17 @@ platform catalog component get hello-api
 ```
 
 ``` { .text .output title="output" }
-NAME          SYSTEM   OWNER       LIFECYCLE     TEMPLATE
-hello-api  greeter  team-alpha  experimental  python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+NAME       SYSTEM   OWNER       LIFECYCLE     TEMPLATE
+hello-api  greeter  team-alpha  experimental  python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
 component/hello-api
   system       greeter
   owner        team-alpha
   type         service
   lifecycle    experimental
   repo         wasp-foundry/hello-api
-  template     python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+  template     python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
   description  —
+  running in   —
 ```
 
 The repo has a single commit (the README of `auto_init` is replaced), and its `catalog-info.yaml` carries where it came from:
@@ -32,7 +33,7 @@ gh api repos/wasp-foundry/hello-api/contents/catalog-info.yaml \
 ```
 
 ``` { .text .output title="output" }
-    platform.wasp.silvios.me/template: python-service@64a8698f877a28f4c99d5b20aa74003b91c57ea2
+    platform.wasp.silvios.me/template: python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
     github.com/project-slug: wasp-foundry/hello-api
 ```
 

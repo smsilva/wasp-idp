@@ -2,7 +2,7 @@
 
 The Workload Spec is the `app-spec.yaml` (Score) of a version. `workload spec validate` runs the same check as the build ([What a build refuses](refused.md)) on a local file, before any commit: the Score schema, the resource types the platform provisions and each `resources.<name>.id` in the catalog. Anyone signed in can run it.
 
-In the clone of [Build a branch](create.md), on `feat/greetings`:
+In the clone of [Push a branch](branch.md), on `feat/greetings`:
 
 ```bash
 cd /tmp/hello-api

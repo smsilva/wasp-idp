@@ -1,4 +1,4 @@
-# Private key
+# The GitHub App private key stays off this machine
 
 ```bash
 grep --recursive "BEGIN" ~/.config/platform || echo "no key here"
