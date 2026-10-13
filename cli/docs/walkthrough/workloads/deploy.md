@@ -28,7 +28,7 @@ hello-api@demo  hello-api  0.1.0-greetings.b5f9569  Available  2/2       1      
 
 - `--branch <branch>` deploys the newest version built from that branch; `--version <version>` picks one. The version is pinned in the revision: the instance does not follow the branch on its own.
 - `--replicas` is an override of this environment: it goes into the revision, never into the spec. Without it, 1.
-- Each `resource` line is a resource of the Score and the mode the binding policy gave it: `demo` is `shared`, so the `db` is a Postgres of its own (`provision`, [A database for a workload](resources.md)). The `dns` and the `route` give the instance its URL ([Reach an instance from outside](public.md)).
+- Each `resource` line is a resource of the Score and the mode the binding policy gave it: `demo` is `shared`, so the `db` is a Postgres of its own (`provision`, [A database for a workload](resources/provision.md)). The `dns` and the `route` give the instance its URL ([Reach an instance from outside](public.md)).
 - Without `--wait`, `deploy` returns at once with the revision number; `workload get` follows it.
 - Deploying needs access to the environment (owner, a team it is shared with, or `platform-admins`) **and** membership in the component's owner team (or `platform-admins`). Reading needs access to the environment only.
 

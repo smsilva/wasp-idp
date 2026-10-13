@@ -3,7 +3,7 @@
 `get` on a ready environment writes the kubeconfig to `~/.config/platform/environments/`:
 
 ```bash
-platform environment get greetings-test
+platform environment get demo
 
-kubeconfig=~/.config/platform/environments/greetings-test.kubeconfig
+kubeconfig=~/.config/platform/environments/demo.kubeconfig
 ```

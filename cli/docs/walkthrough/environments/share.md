@@ -1,6 +1,6 @@
 # Share an environment
 
-Team members now see the environment in `environment list` and **receive the kubeconfig**:
+Team members (`team-alpha`, from [Teams](../teams/create.md)) now see the environment in `environment list` and **receive the kubeconfig**:
 
 ```bash
 platform environment share demo \

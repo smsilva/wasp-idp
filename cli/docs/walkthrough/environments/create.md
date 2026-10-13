@@ -1,17 +1,19 @@
 # Create an environment
 
+`hello-api` has a version: now it needs somewhere to run. `demo` is `shared`, an environment whose data stays, so its databases are made the way the platform default says ([A database for a workload](../workloads/resources/provision.md)).
+
 ```bash
-time platform environment create greetings-test \
-  --profile ephemeral \
+time platform environment create demo \
+  --profile shared \
   --expires 1h \
   --wait
 ```
 
 ``` { .text .output title="output" }
-provisioning greetings-test (profile: ephemeral) …
+provisioning demo (profile: shared) …
   NoProviderForCapability
   Provisioning
-✓ greetings-test ready
+✓ demo ready
 
 real    0m51s
 ```

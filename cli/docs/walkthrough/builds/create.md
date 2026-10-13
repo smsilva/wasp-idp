@@ -30,6 +30,6 @@ building from feat/greetings @ b5f9569 …
 
 - The version is `0.1.0` (no tag yet: Commitizen starts there), plus `-<branch>.<sha7>` outside `main`. With a `v0.2.0` tag and a `feat:` commit since, it would be `0.3.0-greetings.b5f9569`.
 - The image is `ghcr.io/wasp-foundry/hello-api:<version>`, in the default registry `ghcr-wasp-foundry`, with an OCI manifest carrying the `source`, `revision`, `version` and `me.silvios.wasp.request-id` annotations. `--registry <name>` picks another registry; for GHCR it must be the one of the repo's org (`RegistryNotWritableByCI`).
-- Only members of the component's owner team (`team-alpha`, [joined earlier](../teams/join.md)) and `platform-admins` build it; anyone signed in reads `build list` and `build get`.
+- Only members of the component's owner team (`team-alpha`, [joined earlier](../teams/create.md)) and `platform-admins` build it; anyone signed in reads `build list` and `build get`.
 - `--version 1.0.0-rc.1` makes the CI use that version as is.
 - A build takes about a minute (the run's `test` job, then the image). Without `--wait`, the command returns at once and `platform build get <build>` shows the steps.

@@ -62,4 +62,4 @@ hello-api@demo  4         rollback  0.1.0-greetings.b5f9569  Succeeded          
 hello-api@demo  5         remove    —                        Succeeded              dev@example.com  2026-10-12T19:04:41Z
 ```
 
-The Deployment, the Service and the resources leave the vcluster (the database with its data) and `workload list` no longer shows `hello-api@demo`; the revisions stay until the environment is deleted ([Clean up](../cleanup.md)).
+The Deployment, the Service and the resources leave the vcluster (the database with its data) and `workload list` no longer shows `hello-api@demo`; the revisions stay until the environment is deleted ([Delete the environments](../cleanup/environments.md)).

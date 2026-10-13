@@ -1,11 +1,10 @@
-# Create the team and the hierarchy
+# Create the hierarchy
 
-The owner of an entity is **a team that already exists** (ADR 0026). As an admin, create `team-alpha` first.
+The owner of an entity is **a team that already exists** (ADR 0026): `team-alpha`, from [Teams](../teams/create.md).
 
 One domain, one subdomain, a system inside it and a resource of the system, all owned by `team-alpha`:
 
 ``` { .text .plan title="what will be created" }
-team-alpha              team · owner of everything below
 communication           domain
 └── messaging           subdomain
     └── greeter         system
@@ -15,8 +14,6 @@ communication           domain
 The commands, in the order in which each entity needs the previous one:
 
 ```bash
-platform team create team-alpha
-
 platform catalog domain create communication \
   --owner team-alpha
 

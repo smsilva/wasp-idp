@@ -1,4 +1,4 @@
-# Remove
+# Remove the SCM connection
 
 Removing deletes the connection and the key. The App **remains on GitHub**, and the output says where to delete it:
 

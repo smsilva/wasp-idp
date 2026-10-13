@@ -33,7 +33,7 @@ What a deploy refuses:
 | a version or branch with no version in the index | `404` |
 | a version indexed before the index kept the spec | `409` `SpecNotIndexed` |
 | a resource type with no provisioner in the environment (`redis`) | revision `ResourcesNotSupported` |
-| a resource whose mode would change ([A database for a workload](resources.md)) | revision `ResourceModeChanged` |
+| a resource whose mode would change ([A database for a workload](resources/provision.md)) | revision `ResourceModeChanged` |
 | a provisioner that failed | revision `ResourcesFailed` |
 | a Score field outside phase 1 (anything but `containers` with image, command, args, variables, resources and `httpGet` probes, and `service.ports`) | revision `UnsupportedSpec` |
 | a rollout with no progress for 120 s (an image the vcluster cannot pull, a crash loop) | revision `RolloutFailed` |

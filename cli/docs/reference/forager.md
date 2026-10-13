@@ -207,4 +207,4 @@ Each object has a single writer of its `status`, so the Forager and the workload
 | `HTTPRoute` in the vcluster (`route`) | the **provisioner** `route/provision`, inside the Forager | the `Gateway` of the environment |
 | Deployment in the vcluster | workload provider | the vcluster |
 
-Walkthrough: [A database for a workload](../walkthrough/workloads/resources.md), [A database in the shared instance](../walkthrough/workloads/compose.md) and [Reach an instance from outside](../walkthrough/workloads/public.md).
+Walkthrough: [A database for a workload](../walkthrough/workloads/resources/provision.md), [A database in the shared instance](../walkthrough/workloads/resources/compose.md) and [Reach an instance from outside](../walkthrough/workloads/public.md).
