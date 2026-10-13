@@ -41,7 +41,7 @@ Each step shows the command and, right below it, the expected **output**.
 
 **SCM connection**
 
-- GitHub
+- [GitHub](scm-connection/github/index.md)
   - New App
     - [Connect the platform to GitHub](scm-connection/github/create-app.md)
     - [Install the App on the org](scm-connection/github/install.md)

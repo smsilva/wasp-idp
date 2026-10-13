@@ -25,6 +25,7 @@ nav:
       - Configuration:
           - SCM connection:
               - GitHub:
+                  - walkthrough/scm-connection/github/index.md
                   - New App:
                       - Connect the platform to GitHub: walkthrough/scm-connection/github/create-app.md
                       - Install the App on the org: walkthrough/scm-connection/github/install.md
