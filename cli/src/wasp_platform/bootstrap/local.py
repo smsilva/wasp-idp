@@ -362,6 +362,9 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   log("deploying the environment provider (local_vcluster) …")
   _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
   _kubectl("rollout", "status", "deployment/local-vcluster-provider", "--namespace", NAMESPACE, "--timeout", "180s")
+  # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
+  log("applying the pod policy of the environments (baseline) …")
+  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "pod-security.yaml"))
   install_ingress(provider_dir, log)
 
   scm_dir = root / "platform" / "providers" / "scm_github"

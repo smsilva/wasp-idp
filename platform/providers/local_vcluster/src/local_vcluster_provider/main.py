@@ -7,6 +7,7 @@ import time
 from .entrypoint import DOMAIN, PORT, Entrypoint
 from .helm import Helm
 from .mesh import Mesh
+from .podsecurity import PodSecurity
 from .reconciler import Reconciler
 from .store import EnvironmentStore, KubeconfigSecrets
 
@@ -49,7 +50,7 @@ def main(argv: list[str] | None = None) -> None:
   signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
   logging.getLogger("kubernetes").setLevel(logging.WARNING)
   store = EnvironmentStore(args.namespace, args.context)
-  reconciler = Reconciler(store, Helm(), KubeconfigSecrets(), Mesh(), Entrypoint(args.domain, args.ingress_port))
+  reconciler = Reconciler(store, Helm(), KubeconfigSecrets(), Mesh(), Entrypoint(args.domain, args.ingress_port), PodSecurity())
   log.info("watching environments in %s", args.namespace)
   run(store, reconciler, args.resync_seconds)
 

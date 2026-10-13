@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 import yaml
@@ -6,6 +7,7 @@ import yaml
 from local_vcluster_provider.entrypoint import HOST_SERVICE, Entrypoint, gateway, ingress, programmed
 from local_vcluster_provider.helm import values
 from local_vcluster_provider.mesh import in_cluster, wanted
+from local_vcluster_provider.podsecurity import vcluster_objects
 from local_vcluster_provider.reconciler import FINALIZER, PORTS, RELEASE, Reconciler
 
 NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
@@ -80,6 +82,17 @@ class FakeEntrypoint:
     return self.is_ready
 
 
+class FakePodSecurity:
+  def __init__(self, version="v1"):
+    self.installs, self.version = [], version
+
+  def wanted(self):
+    return self.version
+
+  def install(self, name, kubeconfig):
+    self.installs.append(name)
+
+
 def environment(name="greetings-test", expires=None, finalizers=None, deleting=False, status=None):
   obj = {"metadata": {"name": name, "finalizers": finalizers or []}, "spec": {"profile": "ephemeral"}}
   if expires:
@@ -91,13 +104,14 @@ def environment(name="greetings-test", expires=None, finalizers=None, deleting=F
   return obj
 
 
-def build(helm=None, secrets=None, mesh=None, entrypoint=None):
+def build(helm=None, secrets=None, mesh=None, entrypoint=None, pod_security=None):
   store = FakeStore()
   helm = helm or FakeHelm()
   secrets = secrets or FakeSecrets()
   mesh = mesh or FakeMesh()
   entrypoint = entrypoint or FakeEntrypoint()
-  return store, helm, secrets, Reconciler(store, helm, secrets, mesh, entrypoint, now=lambda: NOW)
+  pod_security = pod_security or FakePodSecurity()
+  return store, helm, secrets, Reconciler(store, helm, secrets, mesh, entrypoint, pod_security, now=lambda: NOW)
 
 
 INGRESS = {"domain": "greetings-test.localhost", "port": 7080}
@@ -129,7 +143,7 @@ def test_ready_environment_is_left_alone():
   helm = FakeHelm()
   helm.releases[(RELEASE, "env-greetings-test")] = 7100
   store, _, _, reconciler = build(helm=helm, secrets=secrets)
-  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "ingress": INGRESS, "conditions": [{"type": "Ready", "status": "True"}]}
+  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "ingress": INGRESS, "podSecurity": "v1", "conditions": [{"type": "Ready", "status": "True"}]}
   reconciler.reconcile(environment(finalizers=[FINALIZER], status=status))
   assert "greetings-test" not in store.statuses
 
@@ -296,3 +310,51 @@ def test_gateway_is_ready_only_when_programmed():
   assert not programmed(None)
   assert not programmed({"status": {"conditions": [{"type": "Accepted", "status": "True"}, {"type": "Programmed", "status": "False"}]}})
   assert programmed({"status": {"conditions": [{"type": "Programmed", "status": "True"}]}})
+
+
+POLICY = Path(__file__).parent.parent / "deploy" / "pod-security.yaml"
+
+
+def test_pod_policy_installed_before_the_mesh():
+  pod_security, mesh = FakePodSecurity(), FakeMesh(ready=False)
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"}), mesh=mesh, pod_security=pod_security)
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100}))
+  assert pod_security.installs == mesh.installs == ["greetings-test"]
+  statuses = store.statuses["greetings-test"]
+  assert statuses.index({"podSecurity": "v1"}) < next(i for i, s in enumerate(statuses) if "installing the mesh" in s.get("conditions", [{}])[0].get("message", ""))
+
+
+def test_environment_ready_before_the_pod_policy_gets_it():
+  # Created before ADR 0041, or with an older policy: Ready with everything else.
+  kubeconfig = "apiVersion: v1\n"
+  pod_security, mesh, entrypoint = FakePodSecurity(version="v2"), FakeMesh(), FakeEntrypoint()
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": kubeconfig}), mesh=mesh, entrypoint=entrypoint, pod_security=pod_security)
+  status = {"port": 7100, "kubeconfigData": kubeconfig, "mesh": wanted(), "ingress": INGRESS, "podSecurity": "v1", "conditions": [{"type": "Ready", "status": "True"}]}
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status=status))
+  assert pod_security.installs == ["greetings-test"]
+  assert mesh.installs == entrypoint.installs == []
+  last = store.statuses["greetings-test"][-1]
+  assert last["podSecurity"] == "v2" and last["conditions"][0]["reason"] == "ClusterReady"
+
+
+def test_pod_policy_failure_becomes_condition():
+  class Failing(FakePodSecurity):
+    def install(self, name, kubeconfig):
+      raise RuntimeError("no ValidatingAdmissionPolicy in the vcluster")
+  store, _, _, reconciler = build(secrets=FakeSecrets(kubeconfigs={"env-greetings-test": "apiVersion: v1\n"}), pod_security=Failing())
+  reconciler.reconcile(environment(finalizers=[FINALIZER], status={"port": 7100}))
+  last = store.statuses["greetings-test"][-1]["conditions"][0]
+  assert (last["reason"], last["message"]) == ("ProvisioningFailed", "no ValidatingAdmissionPolicy in the vcluster")
+
+
+def test_host_binding_covers_only_the_pods_the_vcluster_syncs():
+  docs = list(yaml.safe_load_all(POLICY.read_text()))
+  binding = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicyBinding")
+  assert binding["spec"]["validationActions"] == ["Deny"]
+  assert binding["spec"]["matchResources"]["objectSelector"]["matchExpressions"] == [{"key": "vcluster.loft.sh/managed-by", "operator": "Exists"}]
+
+
+def test_vcluster_binding_covers_every_pod_of_the_vcluster():
+  obj, binding = vcluster_objects(str(POLICY))
+  assert obj["kind"] == "ValidatingAdmissionPolicy" and obj["spec"]["failurePolicy"] == "Fail"
+  assert binding["spec"] == {"policyName": obj["metadata"]["name"], "validationActions": ["Deny"]}
