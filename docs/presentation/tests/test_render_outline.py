@@ -45,7 +45,30 @@ def test_fixture_is_valid():
 
 
 def test_idp_yaml_is_valid():
-  assert ro.validate(yaml.safe_load((HERE / "idp.yaml").read_text())) == []
+  assert ro.validate(yaml.safe_load((HERE / "idp.yaml").read_text()), HERE) == []
+
+
+def test_parts_exist_in_the_diagram(tmp_path):
+  (tmp_path / "d.svg").write_text(SVG)
+  data = outline()
+  assert ro.validate(data, tmp_path) == []
+  slide(data, "map")["links"] = {"p.9": "box"}
+  slide(data, "box")["focus"] = ["nope"]
+  errors = ro.validate(data, tmp_path)
+  assert "map: part 'p.9' is not in d.svg" in errors and "box: part 'nope' is not in d.svg" in errors
+
+
+def test_a_parent_part_names_its_children(tmp_path):
+  # `p` is not a group of its own: it stands for `p.1`, `p.2` (they inherit its state).
+  (tmp_path / "d.svg").write_text(SVG)
+  assert ro.validate(outline(), tmp_path) == []
+
+
+def test_a_detail_comes_after_its_parent():
+  data = outline()
+  box_a = data["slides"].pop(3)
+  data["slides"].insert(2, box_a)
+  assert "box-a: comes before its parent 'box'" in ro.validate(data)
 
 
 def test_unknown_parent():
@@ -167,7 +190,7 @@ def test_diagram_focus_and_links(tmp_path):
 def test_breadcrumb_and_overlay(tmp_path):
   page = deck(tmp_path)
   root = stage(page, 7)
-  assert ("<div class='overlay'><div class='ov-tree'>"
+  assert ("<div class='overlay'><div class='ov-bar'><i></i><i></i><i></i><span>Box</span></div><div class='ov-tree'>"
           "<div class='ov-topic'><div class='ov-r ov-d0'><a data-go-slide='box-a'>A</a></div>"
           "<div class='ov-r ov-d1'><a data-go-slide='box-b'>B</a></div></div></div></div>") in root
 
@@ -190,6 +213,11 @@ def test_trail_in_the_footer(tmp_path):
 def test_trail_sits_above_the_slide():
   # `.inner` covers the whole stage (inset: 0): without a z-index it takes the trail's clicks.
   assert ".stage .trail { position: absolute; z-index: 2;" in ro.CSS
+
+
+def test_index_cursor_from_a_detail():
+  # Opened from a detail step, the index selects the row of the main-track step the detail hangs from.
+  assert "const at = stages[current].dataset.out !== undefined ? Number(stages[current].dataset.out) : current;" in ro.SCRIPT
 
 
 def test_agenda_range_skips_details(tmp_path):

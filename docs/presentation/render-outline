@@ -106,11 +106,16 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .trail a:hover { color: #9fb3c8; }
 .stage .trail a[data-back] { color: #4a9ef4; opacity: 0.7; margin-right: 0.8cqw; }
 .stage .trail .here { color: #6b7a8d; }
-.stage .inner.diagram-inner.with-overlay .diagram { transform: translateX(-17cqw); }
+.stage .inner.diagram-inner.with-overlay .diagram { opacity: 0.45; }
 .stage .diagram .part-link { cursor: pointer; }
 .stage .diagram .part-link:hover > rect:first-of-type { stroke: #4a9ef4; }
-.stage .overlay { position: absolute; right: 5cqw; top: 9cqw; max-height: calc(100% - 15.5cqw); overflow: hidden; width: 58cqw; box-sizing: border-box; background: rgba(12, 17, 30, 0.97); border: 1px solid #1f2937; border-radius: 1cqw; padding: 1.6cqw 2.2cqw; box-shadow: 0 1cqw 3cqw rgba(0, 0, 0, 0.6); }
-.stage .overlay .ov-tree { columns: 2; column-gap: 3.2cqw; }
+.stage .overlay { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%); max-height: calc(100% - 20cqw); overflow: hidden; width: 34cqw; box-sizing: border-box; background: #161e2e; border: 1px solid #2c3a52; border-radius: 1cqw; box-shadow: 0 1.5cqw 5cqw rgba(0, 0, 0, 0.75), 0 0 0 0.4cqw rgba(74, 158, 244, 0.06); }
+.stage .overlay.wide { width: 56cqw; }
+.stage .overlay .ov-bar { display: flex; align-items: center; gap: 0.5cqw; padding: 0.8cqw 1.4cqw; background: #1e2840; border-bottom: 1px solid #2c3a52; border-radius: 1cqw 1cqw 0 0; font-size: 0.95cqw; letter-spacing: 0.15em; text-transform: uppercase; color: #6b7a8d; }
+.stage .overlay .ov-bar i { width: 0.7cqw; height: 0.7cqw; border-radius: 50%; background: #2c3a52; }
+.stage .overlay .ov-bar span { margin-left: 0.8cqw; }
+.stage .overlay .ov-tree { padding: 1.6cqw 2.2cqw; }
+.stage .overlay.wide .ov-tree { columns: 2; column-gap: 3.2cqw; }
 .stage .overlay .ov-topic { break-inside: avoid; }
 .stage .overlay .ov-r { font-size: 1.2cqw; line-height: 1.5; color: #9fb3c8; border-left: 1px solid #1f2937; margin-left: 0.4cqw; break-inside: avoid; }
 .stage .overlay .ov-d0 { border: 0; margin: 0.5cqw 0 0; font-size: 1.55cqw; font-weight: 700; break-after: avoid; }
@@ -356,10 +361,12 @@ function select(index) {
 function openIndex() {
   deck.classList.add('index-open');
   let here = 0;
+  // Detail steps sit after the main track: the index points at the main-track step they hang from.
+  const at = stages[current].dataset.out !== undefined ? Number(stages[current].dataset.out) : current;
   items.forEach((item, i) => {
     const first = Number(item.dataset.go), last = Number(item.dataset.last ?? item.dataset.go);
-    item.classList.toggle('here', item.dataset.last !== undefined && current >= first && current <= last);
-    if (first <= current) here = i;
+    item.classList.toggle('here', item.dataset.last !== undefined && at >= first && at <= last);
+    if (first <= at) here = i;
   });
   select(here);
   items[selected].scrollIntoView({ block: 'center' });
@@ -548,7 +555,8 @@ def detail_root(slides, slide):
   return slide
 
 
-def validate(outline):
+def validate(outline, base=None):
+  """Outline errors; with `base` (the outline's folder), diagram parts are also checked against the SVG."""
   errors = []
   audiences = set(outline.get("audiences", {}))
   acts = {act["name"] for act in outline["acts"]}
@@ -571,6 +579,13 @@ def validate(outline):
     parts = set(slide.get("show", [])) | set(slide.get("dim", [])) | set(slide.get("reveal", [])) | set(slide.get("focus", []))
     if parts and not slide.get("diagram"):
       errors.append(f"{slide['name']}: show/dim/reveal/focus without diagram")
+    # Every part named must be a <g data-part> of the SVG, or a prefix of some (`dev` stands for `dev.1`, …).
+    if base is not None and slide.get("diagram"):
+      groups = set(re.findall(r'<g data-part="([\w.-]+)"', (base / slide["diagram"]).read_text()))
+      known = lambda part: part in groups or any(group.startswith(part + ".") for group in groups)
+      for part in sorted((parts | set(slide.get("links") or {}) | set(slide.get("empty", []))) - {p for p in groups}):
+        if not known(part):
+          errors.append(f"{slide['name']}: part '{part}' is not in {slide['diagram']}")
   # `parent`: detail slides, off the main track and opened by a link (`links`, overlay, breadcrumb).
   by_name = {slide["name"]: slide for slide in outline["slides"]}
   details = [slide for slide in outline["slides"] if slide.get("parent")]
@@ -593,6 +608,11 @@ def validate(outline):
       errors.append(f"{name}: detail slide without label or heading")
     if not by_name[slide["parent"]].get("parent") and not slide.get("diagram"):
       errors.append(f"{name}: a detail root needs a diagram")
+  # A subtree's walk starts at its root: a detail slide comes after its parent in the YAML.
+  position = {slide["name"]: n for n, slide in enumerate(outline["slides"])}
+  for slide in details:
+    if slide["parent"] in position and position[slide["parent"]] > position[slide["name"]]:
+      errors.append(f"{slide['name']}: comes before its parent '{slide['parent']}'")
   if details and outline["deck"].get("home") not in by_name:
     errors.append(f"deck.home: unknown slide '{outline['deck'].get('home')}'")
   for slide in outline["slides"]:
@@ -872,9 +892,12 @@ def render_stage(step, base, outline=None):
     # A detail root lists its children over the dimmed diagram.
     overlay = ""
     if step.get("overlay"):
-      overlay = ("<div class='overlay'>"
+      # A window: a title bar with the root's name, then its tree; two columns only when the tree is long.
+      rows = lambda items: sum(1 + rows(children) for _, _, children in items)
+      wide = " wide" if rows(step["overlay"]) > 7 else ""
+      overlay = (f"<div class='overlay{wide}'><div class='ov-bar'><i></i><i></i><i></i><span>{esc(step['section'][1])}</span></div>"
                  + f"<div class='ov-tree'>{overlay_tree(step['overlay'])}</div></div>")
-    # With an overlay, the diagram moves left (over the empty clients column) so the focused box stays visible.
+    # With an overlay, the diagram dims behind the window, centered over it.
     inner = "inner diagram-inner with-overlay" if overlay else "inner diagram-inner"
     return f"{section}<div class='{inner}'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}{trail}"
   if step.get("code"):
@@ -1064,7 +1087,7 @@ def main():
   TOPICS_URL = args.topics_url
 
   outline = yaml.safe_load(args.outline.read_text())
-  errors = validate(outline)
+  errors = validate(outline, args.outline.parent)
   if errors:
     print("\n".join(errors), file=sys.stderr)
     sys.exit(1)

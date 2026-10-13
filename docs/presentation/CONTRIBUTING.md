@@ -78,8 +78,8 @@ uv run --with pytest --with pyyaml pytest tests
 | `dependsOn` | não | Slides que precisam ter sido vistos antes (o encadeamento do raciocínio) |
 | `focus` | não | Partes do `diagram` com a borda destacada em todos os passos |
 | `spotlight` | não | `true`: a parte revelada no passo também ganha a borda |
-| `links` | não | `{<parte>: <slide>}`: a parte do `diagram` abre o slide com um clique (no modo apresentação) |
-| `parent` | não | Slide de detalhe: sai da trilha principal e vai para um apêndice, aberto por link (`links`, janela de tópicos, breadcrumb). A raiz (pai na trilha principal) precisa de `diagram` e lista os filhos numa janela. → percorre a subárvore e, no último passo, volta à origem; ← no primeiro passo da raiz, Backspace e "↩ back" voltam a qualquer momento. Os slides de uma subárvore ficam seguidos no YAML |
+| `links` | não | `{<parte>: <slide>}`: a parte do `diagram` abre o slide com um clique (no modo apresentação). O `render-outline` falha se uma parte de `show`/`dim`/`reveal`/`focus`/`links` não existir no SVG |
+| `parent` | não | Slide de detalhe: sai da trilha principal e vai para um apêndice, aberto por link (`links`, janela de tópicos, breadcrumb). A raiz (pai na trilha principal) precisa de `diagram` e lista os filhos numa janela. → percorre a subárvore e, no último passo, volta à origem; ← no primeiro passo da raiz, Backspace e "↩ back" voltam a qualquer momento. Os slides de uma subárvore ficam seguidos no YAML, cada um depois do seu pai |
 | `label` | não | Nome do slide no breadcrumb e na janela de tópicos; sem ele, `heading`. Slide de detalhe precisa de um dos dois |
 | `audiences` | não | Públicos para os quais o slide é mais relevante (`executive`, `engineering`, `platform`). Base do filtro que gera versões por público |
 
@@ -109,5 +109,6 @@ parts:                     # o índice (tecla I) no formato de agenda
 ```
 
 - **Toda parte cobre atos contíguos**, e todo ato fora de `parts` é só a abertura. O `render-outline` falha se um `acts` ou `go` não existir.
+- **Cada plane é um slide de diagrama na trilha principal** (`landscape-dev`, `landscape-ind`, `landscape-res`, `landscape-obs`, `landscape-sec`, `landscape-clients`): o plane em `focus`, as caixas em `reveal` com `spotlight`, e cada caixa com `links` para a sua raiz (`detail-<caixa>`). Caixas do mesmo assunto apontam para a mesma raiz (Compute, Data, Networking e Services → `detail-cloud-resources`); caixa sem slide fica sem link. `landscape-full` liga todas. Um slide cujo `screen` traz um `**Example:**` vira o conceito mais um filho `<nome>-example` com `label: "<Conceito> example"`.
 - **Slides de detalhe:** o cabeçalho é o mesmo da trilha principal (o plane pequeno, a caixinha como título). O caminho inteiro fica numa linha esmaecida no rodapé, com cada nível clicável e um ↩ para voltar à origem. Um slide de detalhe sem `heading` abre com o seu `label` ("System example").
 - **Diagrama que cresce ao longo do deck** (a landscape): um SVG só, gerado por script (`diagrams/landscape/build.py`), com uma parte por `<g data-part>`. Cada volta ao diagrama é um slide com `show` (o que já foi visto) e `reveal` (o que entra agora). Nunca editar o SVG à mão.

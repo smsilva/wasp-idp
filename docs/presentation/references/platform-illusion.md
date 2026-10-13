@@ -61,7 +61,7 @@ Reforça teses que já estão no deck com uma segunda voz, e acrescenta três id
 | `empathy-gap` | Segunda voz da mesma tese: "the platform was correct and nobody wanted it"; ponte vs. pedágio |
 | `cognitive-load` | Expansão do "you build it, you run it"; absorver a complexidade **desnecessária** e preservar a necessária |
 | `platform-as-product` | "infrastructure with an API" vs. "product with users"; o passo manual como "support queue wearing a costume" |
-| `golden-paths` | A pergunta do dev cansado no meio do prazo (paved road vs. goat trail); mandato gera shadow infrastructure (fonte independente da Syntasso) |
+| `golden-paths`, `golden-paths-shape` | A pergunta do dev cansado no meio do prazo (paved road vs. goat trail); mandato gera shadow infrastructure (fonte independente da Syntasso) |
 | `catalog-ownership` | 43 serviços, 12 desatualizados: catálogo sem dono vira lista morta (relato) |
 | `score-what-not` | Bons times se medem pelo que **se recusam** a expor ao dev |
 | `platform-amplifier` | IA não resolve adoção: o problema é confiança e design |
