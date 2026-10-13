@@ -25,5 +25,15 @@ Another MCP client takes the same command in its configuration:
 }
 ```
 
+## Let the agent manage environments
+
+The `environments` toolset lets the agent list, read and, with `--allow-writes`, create environments:
+
+```bash
+claude mcp add platform -- platform-mcp --toolsets core,environments --allow-writes
+```
+
+Then ask: *"Create an ephemeral environment called demo for 2 hours and tell me when it is ready."* The agent calls `environments_create` with `expires: 2h`, then `environments_get` until the status is `ready`, and answers with the URL of its workloads. The agent must always set an expiration, and it never sees the environment's kubeconfig: you get that one with `platform environment get demo`. Leave out `--allow-writes` to keep the agent read-only.
+
 !!! warning
     In this first phase the agent acts **with your token**: it can do what you can do, and the audit trail records you, not the agent. Tools that change the platform are off unless the server starts with `--allow-writes`. Agents with their own identity, acting on your behalf, come with #219.

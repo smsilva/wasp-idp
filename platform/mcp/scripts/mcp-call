@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch platform-mcp over stdio, call one tool and print its result as JSON (cli-smoke, #222)."""
+"""Launch platform-mcp over stdio, call one tool and print its result as JSON (cli-smoke, #222, #224)."""
 import argparse
 import asyncio
 import json
@@ -9,11 +9,12 @@ import sys
 from mcp import Client, StdioServerParameters
 
 
-async def call(tool: str, arguments: dict, toolsets: str) -> int:
+async def call(tool: str, arguments: dict, toolsets: str, allow_writes: bool) -> int:
   # The stdio client passes only a few variables to the server; the smoke's XDG_CONFIG_HOME
   # (its own login) and PLATFORM_API_URL must reach it.
   env = {key: value for key, value in os.environ.items() if key in ("XDG_CONFIG_HOME", "PLATFORM_API_URL", "HOME")}
-  server = StdioServerParameters(command="platform-mcp", args=["--toolsets", toolsets], env=env)
+  args = ["--toolsets", toolsets] + (["--allow-writes"] if allow_writes else [])
+  server = StdioServerParameters(command="platform-mcp", args=args, env=env)
   async with Client(server) as client:
     result = await client.call_tool(tool, arguments)
   if result.is_error:
@@ -28,8 +29,9 @@ def main() -> None:
   parser.add_argument("tool", help="name of the tool to call")
   parser.add_argument("--arguments", default="{}", help="tool arguments as a JSON object (default: %(default)s)")
   parser.add_argument("--toolsets", default="core", help="toolsets to enable (default: %(default)s)")
+  parser.add_argument("--allow-writes", action="store_true", help="start the server with the write tools")
   args = parser.parse_args()
-  sys.exit(asyncio.run(call(args.tool, json.loads(args.arguments), args.toolsets)))
+  sys.exit(asyncio.run(call(args.tool, json.loads(args.arguments), args.toolsets, args.allow_writes)))
 
 
 if __name__ == "__main__":
