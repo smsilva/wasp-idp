@@ -11,7 +11,7 @@ through platform-mcp (whoami over stdio), the refusals a non-admin gets, an envi
 created (its gateway answering at *.<name>.localhost:7080, read by an agent over MCP
 without its kubeconfig, a hostNetwork or privileged pod refused in the
 vcluster and on the host) and deleted, then
-login as the test admin, the catalog import of idp/catalog/, a team with two
+login as the test admin, the catalog import of idp/catalog/ (then read over MCP), a team with two
 test users, checked in the token, an environment shared with that team (the
 teammate gets a personal kubeconfig whose token the Platform API issues (ADR
 0028), cannot delete the environment nor get its admin kubeconfig, and loses
@@ -324,6 +324,16 @@ platform catalog import idp/catalog/ --yes
 output="$(platform catalog import idp/catalog/ --dry-run)"
 expect_output "nothing to do" "${output}"
 
+step "an agent over MCP reads the catalog: domains, a domain with its dependents, templates (#223)"
+mcp_catalog=(uv run --project platform/mcp python platform/mcp/scripts/mcp-call --toolsets catalog)
+output="$("${mcp_catalog[@]}" catalog_list --arguments '{"kind": "domain"}')"
+expect_output '"name": "platform"' "${output}"
+output="$("${mcp_catalog[@]}" catalog_get --arguments '{"kind": "domain", "name": "platform"}')"
+echo "${output}"
+expect_output '"system/platform"' "${output}"
+output="$("${mcp_catalog[@]}" catalog_templates_list)"
+expect_output '"name": "python-service"' "${output}"
+
 step "team create and member add (platform-admins)"
 platform team create "${team}"
 platform team member add "${team}" platform-smoke@platform.local
@@ -526,6 +536,11 @@ output="$(platform catalog component clone "${clone_component}" \
   --directory "${clone_directory}/details" 2>&1)"
 expect_output "# git clone https://github.com/wasp-foundry/details.git" "${output}"
 test -f "${clone_directory}/details/catalog-info.yaml"
+# The same component as an agent sees it over MCP (#223).
+output="$(uv run --project platform/mcp python platform/mcp/scripts/mcp-call catalog_components_get \
+  --toolsets catalog \
+  --arguments "{\"name\": \"${clone_component}\"}")"
+expect_output '"repo": "wasp-foundry/details"' "${output}"
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${clone_component}"
 expect_failure "platform catalog component list" platform catalog component clone "${component}"
 
