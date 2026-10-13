@@ -44,6 +44,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [GitHub](scm-connection/github/index.md)
   - New App
     - [Connect the platform to GitHub](scm-connection/github/create-app.md)
+    - [Confirm the App on GitHub](scm-connection/github/confirm-app.md)
     - [Install the App on the org](scm-connection/github/install.md)
     - [Install on all repositories](scm-connection/github/all-repositories.md)
     - [Until the App is installed](scm-connection/github/not-installed.md)

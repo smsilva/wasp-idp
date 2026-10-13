@@ -7,9 +7,6 @@ wasp-foundry                connection · the default
 └── wasp-foundry-platform   GitHub App of the wasp-foundry org, on all repositories
 ```
 
-!!! note "The App already exists?"
-    If the org already has the App, go to [Reuse an existing App](existing-app/new-key.md) instead.
-
 ```bash
 platform scm connection add wasp-foundry \
   --vendor github \
@@ -24,13 +21,5 @@ platform scm connection add wasp-foundry \
   then run: platform scm connection verify wasp-foundry --wait
 ```
 
-The browser opens GitHub with the App **manifest**: name and permissions are already filled in. An **org owner** confirms at **Create GitHub App for wasp-foundry**.
-
-![GitHub screen to create the wasp-foundry-platform App from the manifest](../../images/scm-01-create-app.png){ .screenshot loading=lazy width="540" }
-
-GitHub hands the private key **straight to the platform**: it never passes through your machine.
-
 !!! tip
     `--no-browser` only prints the URL, to open on another machine. It is **single-use** and valid for **10 minutes**.
-
-Next: [Install the App on the org](install.md).
