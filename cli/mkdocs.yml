@@ -20,6 +20,8 @@ nav:
           - Sign in: walkthrough/login/sign-in.md
           - Who am I: walkthrough/login/whoami.md
           - What the platform can do: walkthrough/login/status.md
+      - AI agents:
+          - Connect an AI agent: walkthrough/agents/connect.md
       - Environments:
           - Create an environment: walkthrough/environments/create.md
           - The provider inside: walkthrough/environments/provider.md
@@ -105,6 +107,7 @@ nav:
       - Registries: reference/registries.md
       - Workloads: reference/workloads.md
       - The Forager: reference/forager.md
+      - MCP server: reference/mcp.md
       - JSON output: reference/json-output.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md
