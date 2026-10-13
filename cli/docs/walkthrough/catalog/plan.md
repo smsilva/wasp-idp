@@ -28,10 +28,11 @@ Resource  notification-db       create  system notifier
 Resource  notification-jobs     create  system notifier
 Resource  notification-reports  create  system notifier
 Resource  production            create  system platform
+Resource  shared-pg             create  system platform
 —         —                     skip    not a Backstage entity (idp/catalog/communication/greeter/mkdocs.yml#1)
 —         —                     skip    not a Backstage entity (idp/catalog/communication/mkdocs.yml#1)
 
-19 to create, 0 to update, 1 unchanged, 2 skipped.
+20 to create, 0 to update, 1 unchanged, 2 skipped.
 Apply? [y/N]: y
-✓ 19 created, 0 updated
+✓ 20 created, 0 updated
 ```
