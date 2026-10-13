@@ -1,6 +1,6 @@
-# Create the GitHub App of the SCM connection
+# Connect the platform to GitHub
 
-The connection tells the platform **which org to create repos in** and **with which credential** (ADR 0025). Only `platform-admins` manage it.
+The connection is a GitHub App: it tells the platform **which org to create repos in** and **with which credential** (ADR 0025). Only `platform-admins` manage it.
 
 ``` { .text .plan title="what will be created" }
 wasp-foundry                connection · the default
