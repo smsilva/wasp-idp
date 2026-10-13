@@ -1,16 +1,16 @@
 # Generate a new key for the App
 
-If the org already has the platform's GitHub App, such as `wasp-foundry-platform` created before a `k3d cluster delete`, reuse it instead of creating another one. The App lives on GitHub, not in the cluster, so it is still there; only its private key was lost with the cluster.
+Use this page when the org already has the platform's GitHub App, for example `wasp-foundry-platform`. Reuse it with a new private key.
 
-Open the App settings on GitHub, at org **Settings → Developer settings → GitHub Apps → `<org>-platform` → Edit**. For the example:
+Open the App on GitHub: org **Settings → Developer settings → GitHub Apps → the App → Edit**.
 
 ```text
 https://github.com/organizations/wasp-foundry/settings/apps/wasp-foundry-platform
 ```
 
 1. Copy the **App ID**, at the top of **General**.
-2. In **Private keys**, click **Generate a private key**. The browser downloads `<app>.<date>.private-key.pem`.
-3. Delete the old key from the same list: nobody holds it anymore.
+2. In **Private keys**, click **Generate a private key**. The browser downloads the `.pem` file.
+3. Delete the old keys from the same list.
 
 !!! tip
-    To start over with a new App instead, delete the existing one (**Advanced → Delete GitHub App**) and go back to [Connect the platform to GitHub](../create-app.md).
+    Prefer a new App? Delete this one (**Advanced → Delete GitHub App**) and go back to [Connect the platform to GitHub](../create-app.md).

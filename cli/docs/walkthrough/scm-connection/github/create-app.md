@@ -8,7 +8,7 @@ wasp-foundry                connection · the default
 ```
 
 !!! note "The App already exists?"
-    After a cluster recreated from scratch, the App is still on GitHub but its key is gone. Go to [Reuse an existing App](existing-app/new-key.md) instead.
+    If the org already has the App, go to [Reuse an existing App](existing-app/new-key.md) instead.
 
 ```bash
 platform scm connection add wasp-foundry \
