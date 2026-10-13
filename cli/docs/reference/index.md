@@ -17,6 +17,7 @@ Look up a command, a flag or a status. To learn the CLI by doing, start with the
 | [Builds](builds.md) | `platform build …`, the build contract with the CI |
 | [Workloads](workloads.md) | `platform workload spec …` |
 | [The Forager](forager.md) | no command: how a deploy gets its database, with diagrams |
+| [MCP server](mcp.md) | `platform-mcp`: the Platform API as tools for AI agents |
 | [JSON output](json-output.md) | `--output json` |
 | [Under the hood](under-the-hood.md) | CRDs, journal, ports |
 | [Tear down](teardown.md) | removing everything |
