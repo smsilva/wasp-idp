@@ -1,4 +1,4 @@
-# Generate a new key for the App
+# New key for an existing App
 
 Use this page when the org already has the platform's GitHub App, for example `wasp-foundry-platform`. Reuse it with a new private key.
 
