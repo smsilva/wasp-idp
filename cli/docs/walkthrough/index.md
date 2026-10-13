@@ -47,6 +47,8 @@ Each step shows the command and, right below it, the expected **output**.
   - [Install on all repositories](scm-connection/github/all-repositories.md)
   - [Until the App is installed](scm-connection/github/not-installed.md)
   - [Verify](scm-connection/github/verify.md)
+  - [The connection in detail](scm-connection/github/connection-details.md)
+  - [Connection statuses](scm-connection/github/connection-statuses.md)
   - [The App key stays off this machine](scm-connection/github/private-key.md)
   - Reuse an existing App
     - [Generate a new key](scm-connection/github/existing-app/new-key.md)
