@@ -145,7 +145,11 @@ def test_owner_is_one_known_team(client, state, tokens):
   response = create(client, bearer(tokens, teams=()))
   assert response.status_code == 422
   assert "--owner" in response.json()["error"]["message"]
-  assert create(client, bearer(tokens, teams=("team-alpha", "team-beta"))).status_code == 422
+  # A team joined after the token was issued is not in it yet.
+  assert "platform login" in response.json()["error"]["message"]
+  response = create(client, bearer(tokens, teams=("team-alpha", "team-beta")))
+  assert response.status_code == 422
+  assert "platform login" not in response.json()["error"]["message"]
   assert create(client, bearer(tokens, teams=()), owner="ghosts").status_code == 422
   assert create(client, bearer(tokens, teams=()), owner="team-beta").status_code == 202
 
