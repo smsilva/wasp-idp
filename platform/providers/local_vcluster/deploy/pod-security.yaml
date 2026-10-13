@@ -100,7 +100,10 @@ spec:
       message: "only the safe sysctls of baseline are allowed in an environment"
       reason: Forbidden
 ---
-# The pods the vcluster syncs to the host carry this label; the control plane of the vcluster does not.
+# The pods the vcluster syncs to the host carry this label; the control plane of the vcluster does not. The
+# syncer always sets it to `vcluster`, whatever the pod in the vcluster says, so a user cannot drop out of
+# the binding. Excluding the control plane by its own labels (app=vcluster) instead would let one in: the
+# syncer copies every other label of the pod as it is.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
