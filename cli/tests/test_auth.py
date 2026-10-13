@@ -318,3 +318,57 @@ def test_old_credentials_without_client_refresh_with_the_configured_client(idp):
   assert auth.access_token(oidc_factory=factory) == "access-refreshed"
   assert idp.refresh_clients == ["platform-cli"]
   assert "client_id" not in auth.load_credentials()
+
+
+def test_refresh_now_renews_before_expiry(idp, oidc):
+  auth.save_credentials({"access_token": "fresh", "refresh_token": "refresh-old", "expires_in": 300})
+  assert auth.refresh_now(oidc_factory=lambda: oidc)["access_token"] == "access-refreshed"
+  assert idp.refreshed == 1
+  assert auth.load_credentials()["access_token"] == "access-refreshed"
+
+
+def test_refresh_now_without_refresh_token():
+  with pytest.raises(auth.AuthError, match="platform login"):
+    auth.refresh_now()
+  auth.save_credentials({"access_token": "a", "expires_in": 300})
+  with pytest.raises(auth.AuthError, match="platform login"):
+    auth.refresh_now()
+
+
+def me_with_token(monkeypatch):
+  """me() answers with the token it was called with, so a test sees which token login used."""
+  monkeypatch.setattr(client_module.PlatformClient, "me", lambda self: {"sub": "s", "email": "dev@example.com", "groups": [self.token()]})
+
+
+def test_login_refresh_renews_without_browser(idp, local_target, monkeypatch):
+  auth.save_credentials({"access_token": "old", "refresh_token": "refresh-old", "expires_in": 300}, client_id="platform-smoke")
+  monkeypatch.setattr(auth, "Oidc", lambda issuer=None, client_id=None, transport=None: _real_oidc(client_id, idp))
+  monkeypatch.setattr(_ORIGINAL_OIDC, "login_browser", lambda self: pytest.fail("no browser with a live refresh token"))
+  me_with_token(monkeypatch)
+  result = runner.invoke(app, ["login", "--refresh"])
+  assert result.exit_code == 0, result.output
+  assert "Logged in as dev@example.com (access-refreshed)" in result.output
+  assert idp.refresh_clients == ["platform-smoke"]
+  assert auth.load_credentials()["client_id"] == "platform-smoke"
+
+
+@pytest.mark.parametrize("credentials", [None, {"access_token": "a", "refresh_token": "refused", "expires_in": 300}])
+def test_login_refresh_falls_back_to_the_browser(idp, local_target, monkeypatch, credentials):
+  if credentials:
+    auth.save_credentials(credentials)
+  real = idp.handler
+  refused = lambda request: httpx.Response(400, json={"error": "invalid_grant"}) if b"grant_type=refresh_token" in request.content else real(request)
+  browser = _ORIGINAL_OIDC(issuer=ISSUER, client_id="platform-cli", transport=httpx.MockTransport(refused))
+  browser.login_browser = lambda: {"access_token": "access-browser", "refresh_token": "r", "expires_in": 300}
+  monkeypatch.setattr(auth, "Oidc", lambda issuer=None, client_id=None, transport=None: browser)
+  me_with_token(monkeypatch)
+  result = runner.invoke(app, ["login", "--refresh"])
+  assert result.exit_code == 0, result.output
+  assert "signing in again" in result.output
+  assert "Logged in as dev@example.com (access-browser)" in result.output
+
+
+def test_login_refresh_with_a_test_flag_is_a_usage_error(config_home):
+  result = runner.invoke(app, ["login", "--refresh", "--test-user"])
+  assert result.exit_code == 2
+  assert "--refresh" in result.output

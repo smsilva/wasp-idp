@@ -172,13 +172,23 @@ def access_token(oidc_factory=Oidc) -> str:
     raise AuthError("not logged in: run 'platform login'")
   if credentials["expires_at"] - time.time() > REFRESH_MARGIN:
     return credentials["access_token"]
+  return refresh_now(oidc_factory)["access_token"]
+
+
+def refresh_now(oidc_factory=None) -> dict:
+  """A new token from the refresh token, even if the current one is still valid: Keycloak reads the
+  groups again, so a team joined after the last token shows at once (`login --refresh`)."""
+  credentials = load_credentials()
+  if not credentials:
+    raise AuthError("not logged in: run 'platform login'")
   if not credentials.get("refresh_token"):
     raise AuthError("session expired: run 'platform login'")
   client_id = credentials.get("client_id")
-  oidc = oidc_factory(client_id=client_id) if client_id else oidc_factory()
+  factory = oidc_factory or Oidc  # resolved at call time, so a patched Oidc applies
+  oidc = factory(client_id=client_id) if client_id else factory()
   tokens = oidc.refresh(credentials["refresh_token"])
   save_credentials(tokens, client_id)
-  return tokens["access_token"]
+  return tokens
 
 
 def _pkce() -> tuple[str, str]:

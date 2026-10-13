@@ -11,7 +11,7 @@ A team is a Keycloak group that the Platform API maintains (ADR 0026). It owns c
 | `platform team member add\|remove <team> <email>` | changes members | `platform-admins` |
 
 - The member must have signed in to the platform once, with a verified e-mail; before that, the API answers `404`.
-- The team reaches the token on the next `platform login`; `platform whoami` then shows it.
+- The team reaches the token on the next refresh. Adding yourself renews your token at once (`✓ … · token renewed, <team> is in it`); anyone else runs `platform login --refresh`, and `platform whoami` then shows it.
 
 ## Sharing environments
 
