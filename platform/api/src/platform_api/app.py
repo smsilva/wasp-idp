@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import binding_policies, builds, capabilities, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, registries, scm, templates, teams as team_routes, workload_specs, workloads
+from . import binding_policies, builds, capabilities, catalog, catalog_import, cloud_accounts, components, credentials as personal, environments, registries, scm, signals, templates, teams as team_routes, workload_specs, workloads
 from .auth import Principal, Verifier, current_principal
 from .durations import expires_at, parse_duration
 from .journal import Journal
@@ -61,7 +61,7 @@ def _error(status: int, message, headers=None, plan: dict | None = None) -> JSON
 def create_app(
   state, journal: Journal, verifier: Verifier, allowed_hosts: list[str] | None = None, teams=None, credentials=None,
   base_identity=None, secrets=None, github: httpx.Client | None = None, public_url: str = "http://127.0.0.1:9090",
-  scm_states: scm.States | None = None, deployments=None,
+  scm_states: scm.States | None = None, deployments=None, prometheus=None,
 ) -> FastAPI:
   app = FastAPI(title="Platform API", version="0.2.0")
   app.state.verifier = verifier
@@ -82,6 +82,10 @@ def create_app(
   @app.exception_handler(capabilities.NoProvider)
   def no_provider(request: Request, error: capabilities.NoProvider):
     return JSONResponse({"error": {"code": capabilities.NO_PROVIDER, "message": str(error)}}, 503)
+
+  @app.exception_handler(signals.Unreachable)
+  def prometheus_unreachable(request: Request, error: signals.Unreachable):
+    return JSONResponse({"error": {"code": capabilities.UNREACHABLE, "message": str(error)}}, 503)
 
   @app.exception_handler(RequestValidationError)
   def validation_error(request: Request, error: RequestValidationError):
@@ -254,6 +258,7 @@ def create_app(
   app.include_router(registries.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "registry"))])
   app.include_router(workload_specs.router(state))
   app.include_router(workloads.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "workload"))])
+  app.include_router(signals.router(state, deployments, prometheus))
   app.include_router(binding_policies.router(state, journal), dependencies=[Depends(capabilities.requires(deployments, "resources"))])
   app.include_router(catalog.router(state, journal, teams))
   app.include_router(team_routes.router(teams, journal, state, credentials))
@@ -281,7 +286,9 @@ def build() -> FastAPI:
   base_identity = cloud_accounts.KubeBaseIdentity(namespace)
   # Where the browser reaches the API: GitHub redirects there at the end of the manifest flow.
   public_url = os.environ.get("PLATFORM_PUBLIC_URL", "http://127.0.0.1:9090")
+  prometheus = signals.PrometheusQuery(os.environ.get("PLATFORM_PROMETHEUS_URL", "http://prometheus.platform-system:9090"))
   return create_app(
     state, Journal(journal_path), verifier, allowed_hosts, teams, credentials, base_identity,
     secrets=KubeSecretStore(namespace), public_url=public_url, deployments=capabilities.KubeDeployments(),
+    prometheus=prometheus,
   )

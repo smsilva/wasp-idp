@@ -6,6 +6,7 @@ platform workload spec get --component <component> [--version <version> | --bran
 platform workload deploy --component <component> [--instance <instance>] --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--resource-class <resource>=<class> ...] [--wait] [--timeout <seconds>]
 platform workload list --environment <environment>
 platform workload get (--component <component> | --instance <instance>) --environment <environment>
+platform workload signals (--component <component> | --instance <instance>) --environment <environment> [--window <5m>]
 platform workload history --environment <environment> [--component <component> | --instance <instance>]
 platform workload rollback (--component <component> | --instance <instance>) --environment <environment> [--revision <n>] [--wait] [--timeout <seconds>]
 platform workload remove (--component <component> | --instance <instance>) --environment <environment> [--wait] [--timeout <seconds>]
@@ -114,6 +115,20 @@ The mode and the class of a resource never change in place: a deploy that would 
 ## list and get
 
 `list` prints one line per instance: `WORKLOAD`, `COMPONENT`, `VERSION`, `STATUS`, `REPLICAS` (ready/desired), `REVISION` (the one running), `TRAFFIC` and `URL`. `TRAFFIC` is what the [route](#route) of the component sends to the instance: `x-sandbox=pr-42` (a header), `baggage sandbox=pr-42`, `10%` (its weight), several joined by `, `; `default` on the main instance when it only takes what no rule matched; `—` without a route. An instance whose first revision is still open shows as `Pending`; one whose only revision failed is not listed. `get` shows one instance, and a `newest` line when the newest revision is not the one running. Instance status: `Available`, `Progressing` (a rollout under way) or `Degraded` (fewer ready replicas than desired after the rollout, or a failed rollout), refreshed every 30 s. The URL is the public one when the Score has a `route` (`http://<instance>.<environment>.localhost:7080/`), else the address inside the vcluster (`http://<instance>.apps:<port>`), which `get` also prints as `internal url` next to a public one. Without a `route`, reach it from your machine with `kubectl port-forward` and the environment's kubeconfig. `get` also prints one `resource` line per resource of the running revision: `<name> (<type>, <mode>): <status>`, with `, class <class>` when the newest revision asks for one. With `--output json`, `url` is the address inside the vcluster, `publicUrl` the public one (or `null`), `latestRevision` carries the newest revision and `resources` the list of `{name, type, mode, status}`.
+
+## signals
+
+The golden signals of one instance, read from the Prometheus of the `observability` subsystem when you ask ([ADR 0040](https://github.com/smsilva/wasp-idp/blob/main/docs/adr/0040-platform-local-prometheus-scraping-vcluster-sidecars.md)): `latency p95 42 ms · traffic 3 req/s · errors 0% · saturation 12%`. Latency, traffic and errors come from the Istio sidecar of each pod (`reporter="destination"`), so they count the requests from outside and from the other workloads of the environment. Saturation is the higher of CPU and memory usage over the container's limit, on the busiest pod, with `istio-proxy` left out; `—` with the reason when the containers declare no limit, or when no pod was scraped in the window. With no requests in the window, latency and errors are `—`, traffic `0 req/s`, and a second line says `no requests in window (<window>)`. `--window` takes minutes or hours (`5m`, the default, up to `6h`, the retention of Prometheus). With `--output json`: `latencyP95Ms`, `trafficRps`, `errorRate` (a fraction), `saturation` (`{value, cpu, memory, reason}`, fractions) and `message`. Reading needs the environment, as `get` does.
+
+| Refusal | Code |
+|---|---|
+| the environment is neither yours nor shared with your teams | `403` |
+| no such environment, or no instance the provider keeps | `404` |
+| `--window` is not minutes or hours, or longer than `6h` | `422` |
+| no Prometheus installed (`platform status observability`) | `503` (`NoProviderForCapability`) |
+| Prometheus did not answer | `503` (`Unreachable`) |
+
+Walkthrough: [The golden signals of an instance](../walkthrough/workloads/signals.md).
 
 ## route
 

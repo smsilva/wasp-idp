@@ -24,7 +24,7 @@ The exit code is `1` when an installed capability is not `Active`; a capability 
 
 ## The capabilities
 
-The subsystems of ADR 0034, in its order: `identity`, `catalog`, `environment`, `scm`, `registry`, `build`, `cloud-account`, `resources`, `workload`. `depends on` comes from the same map.
+The subsystems of ADR 0034, in its order: `identity`, `catalog`, `environment`, `scm`, `registry`, `build`, `cloud-account`, `resources`, `workload`, then `observability` (ADR 0040: the Prometheus `platform init` installs, which `workload signals` reads). `depends on` comes from the same map.
 
 A capability can have one **driver** per vendor: `scm` is served by `scm_github` today, and a Bitbucket driver would be one more line under the same capability. Its status sums up all of them.
 
@@ -71,8 +71,9 @@ Its writes are refused before anything is stored, since nothing would ever recon
 | `cloud-account` | `cloud account add`, `verify`, `remove` |
 | `resources` | `environment policy set`, `environment profile policy set` |
 | `workload` | `workload deploy`, `rollback`, `remove`, `apply`, `route` (and `route --clear`) |
+| `observability` | `workload signals`: a read, refused because without Prometheus there is nothing to read |
 
-Reads (`list`, `get`, `history`) still answer: what exists stays visible. `Unreachable` and `NotConfigured` refuse nothing: the request is stored and waits for its provider.
+Other reads (`list`, `get`, `history`) still answer: what exists stays visible. `Unreachable` and `NotConfigured` refuse nothing: the request is stored and waits for its provider.
 
 ## Errors
 

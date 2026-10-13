@@ -27,6 +27,7 @@ SUBSYSTEMS = {
   "cloud-account": ["identity"],
   "resources": ["environment", "build", "catalog"],
   "workload": ["environment", "build", "resources", "registry"],
+  "observability": ["environment"],
 }
 
 ACTIVE, NOT_CONFIGURED, DEGRADED, UNREACHABLE, NO_PROVIDER = "Active", "NotConfigured", "Degraded", "Unreachable", "NoProviderForCapability"

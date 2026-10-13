@@ -322,3 +322,45 @@ def test_history_of_an_instance(api):
   assert result.exit_code == 0, result.output
   assert dict(api["requests"][0].url.params) == {"instance": "reviews-pr-42"}
   assert result.output.splitlines()[1].split()[0] == "reviews-pr-42@demo"
+
+
+SIGNALS = {
+  "kind": "WorkloadSignals", "name": "reviews@demo", "environment": "demo", "instance": "reviews", "window": "5m",
+  "latencyP95Ms": 42.31, "trafficRps": 3.0, "errorRate": 0.022, "saturation": {"value": 0.12, "cpu": 0.004, "memory": 0.12, "reason": None}, "message": None,
+}
+
+
+def test_signals(api):
+  api["instance"] = SIGNALS
+  result = run("signals", "--component", "reviews", "--environment", "demo")
+  assert result.exit_code == 0, result.output
+  request = api["requests"][-1]
+  assert (request.url.path, dict(request.url.params)) == ("/v1/environments/demo/workloads/reviews/signals", {"window": "5m"})
+  assert result.output.splitlines() == ["latency p95 42.31 ms · traffic 3 req/s · errors 2.2% · saturation 12%"]
+
+
+def test_signals_without_requests_nor_limit(api):
+  api["instance"] = {
+    **SIGNALS, "latencyP95Ms": None, "trafficRps": 0.0, "errorRate": None, "message": "no requests in window",
+    "saturation": {"value": None, "cpu": None, "memory": None, "reason": "no CPU or memory limit declared"},
+  }
+  result = run("signals", "--instance", "reviews", "--environment", "demo", "--window", "1h")
+  assert result.exit_code == 0, result.output
+  assert dict(api["requests"][-1].url.params) == {"window": "1h"}
+  assert result.output.splitlines() == [
+    "latency p95 — · traffic 0 req/s · errors — · saturation — (no CPU or memory limit declared)",
+    "  no requests in window (5m)",
+  ]
+
+
+def test_signals_json(api):
+  api["instance"] = SIGNALS
+  result = run("signals", "--component", "reviews", "--environment", "demo", "--output", "json")
+  assert json.loads(result.output) == SIGNALS
+
+
+def test_signals_without_prometheus(api):
+  api["error"] = (503, "capability 'observability' has no provider installed: see platform status observability")
+  result = run("signals", "--instance", "reviews", "--environment", "demo")
+  assert result.exit_code == 1
+  assert "observability" in result.output

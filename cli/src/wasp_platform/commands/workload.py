@@ -413,6 +413,44 @@ def get_(
     typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")
 
 
+def _number(value: float) -> str:
+  """At most two decimals, none when whole: 42, 0.49, 2.2."""
+  return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def signals_line(item: dict) -> str:
+  latency, errors, saturation = item.get("latencyP95Ms"), item.get("errorRate"), item.get("saturation") or {}
+  parts = [
+    f"latency p95 {_number(latency) + ' ms' if latency is not None else '—'}",
+    f"traffic {_number(item.get('trafficRps') or 0)} req/s",
+    f"errors {_number(errors * 100) + '%' if errors is not None else '—'}",
+    f"saturation {_number(saturation['value'] * 100) + '%' if saturation.get('value') is not None else '— (' + (saturation.get('reason') or 'no data') + ')'}",
+  ]
+  return " · ".join(parts)
+
+
+@app.command("signals", epilog=examples("platform workload signals --component hello-api --environment demo", "platform workload signals --instance hello-api-canary --environment demo --window 1h --output json"))
+def signals(
+  environment: Annotated[str, typer.Option(help="Environment of the workload.")],
+  component: Annotated[str | None, typer.Option(help="Component of the workload.")] = None,
+  instance: InstanceOption = None,
+  window: Annotated[str, typer.Option(help="How far back the signals look: minutes or hours, as 5m or 1h (at most 6h).")] = "5m",
+  output: OutputOption = Format.table,
+):
+  """Show the golden signals of a workload: latency p95, traffic, errors and saturation."""
+  client = _client()
+  try:
+    item = client.workload_signals(environment, _instance(client, environment, component, instance), window)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(item)
+    return
+  typer.echo(signals_line(item))
+  if item.get("message"):
+    typer.echo(f"  {item['message']} ({item['window']})")
+
+
 @app.command("history", epilog=examples("platform workload history --environment demo", "platform workload history --environment demo --component hello-api"))
 def history(
   environment: Annotated[str, typer.Option(help="Environment whose revisions to list.")],

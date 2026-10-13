@@ -40,7 +40,8 @@ instance of reviews, which a --header route does not reach past the first call (
 of an environment (workload apply with --dry-run, --wait and --prune, refused outside the owner team), a postgres
 provisioned by the Forager (deploy until Ready, an app that connects to it with psql, the derived catalog Resource,
 released on remove), an instance reached from outside through dns and route (its public URL
-answers, and 404 after remove, #358), and a cloud account (ADR 0029): refused with a clear message without an
+answers, and 404 after remove, #358), its golden signals from Prometheus after a burst of traffic
+(workload signals, #411), and a cloud account (ADR 0029): refused with a clear message without an
 AWS base credential; with one, the role the platform cannot assume stays
 TrustNotEstablished, and another user neither sees it nor registers the same
 role. Stops at the first failure with a non-zero exit code.
@@ -193,7 +194,7 @@ step "platform status as a regular user: each capability and its status, nothing
 output="$(platform status 2>&1 || true)"
 echo "${output}"
 expect_output "CAPABILITY     STATUS" "${output}"
-for capability in identity catalog environment resources workload; do
+for capability in identity catalog environment resources workload observability; do
   if ! grep --quiet --extended-regexp "^${capability} +Active\$" <<< "${output}"; then
     echo "expected '${capability}  Active' with no other column" >&2
     exit 1
@@ -1523,6 +1524,11 @@ spec:
           httpGet:
             path: /readyz
             port: 9898
+        # The denominator of saturation in workload signals (#411).
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
     service:
       ports:
         http:
@@ -1553,6 +1559,38 @@ for attempt in $(seq 1 15); do
   sleep 2
 done
 expect_output "\"message\": \"${public_component}\"" "${answer}"
+
+step "workload signals: latency, traffic, errors and saturation from Prometheus (#411, ADR 0040)"
+# Traffic on every attempt: the sidecar creates a series on its first request, so a burst that ends
+# before Prometheus scrapes the series twice (15s apart) leaves a counter that never grows, and no rate.
+for attempt in $(seq 1 30); do
+  for request in $(seq 1 10); do
+    curl --silent --output /dev/null --max-time 5 "${public_url}" || true
+  done
+  curl --silent --output /dev/null --max-time 5 "${public_url}status/500" || true
+  signals="$(platform workload signals --component "${public_component}" --environment "${workload_environment}" --output json)"
+  jq --exit-status '.trafficRps > 0 and .errorRate > 0' <<< "${signals}" > /dev/null && break
+  sleep 5
+done
+echo "${signals}"
+jq --exit-status '.trafficRps > 0 and .errorRate > 0 and .latencyP95Ms != null' <<< "${signals}" > /dev/null || {
+  echo "expected traffic, errors and latency in the signals of ${public_component}" >&2
+  exit 1
+}
+jq --exit-status '.saturation.value != null and .saturation.memory != null' <<< "${signals}" > /dev/null || {
+  echo "expected saturation from the limits of ${public_component}" >&2
+  exit 1
+}
+output="$(platform workload signals --component "${public_component}" --environment "${workload_environment}")"
+echo "${output}"
+expect_output "latency p95 " "${output}"
+expect_output " req/s · errors " "${output}"
+expect_failure "a number of minutes or hours" \
+  platform workload signals \
+    --component "${public_component}" \
+    --environment "${workload_environment}" \
+    --window 1d
+
 output="$(platform workload remove \
   --component "${public_component}" \
   --environment "${workload_environment}" \
