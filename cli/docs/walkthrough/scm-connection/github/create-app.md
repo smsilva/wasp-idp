@@ -56,7 +56,7 @@ wasp-foundry                connection · the default
         → register its GHCR, where builds of wasp-foundry repos push: platform registry add ghcr-wasp-foundry --scm-connection wasp-foundry --default
         ```
 
-        An App still installed on the org goes straight to `ready`, and [Install on the org](install.md) is skipped. Otherwise `--wait` stays at `NotInstalled` until it is installed.
+        An App still installed on the org goes straight to `ready`, and [Install the App on the org](install.md) is skipped. Otherwise `--wait` stays at `NotInstalled` until it is installed.
 
     4. Delete the downloaded file: the platform keeps its own copy, in a Secret only the controller reads.
 
