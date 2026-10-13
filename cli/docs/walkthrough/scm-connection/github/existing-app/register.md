@@ -1,6 +1,6 @@
 # Register the existing App
 
-Give the platform the App ID and the key you just downloaded:
+Give the platform the App ID and the key you just downloaded. In the example, the App `wasp-foundry-platform` has id `5274859`:
 
 ```bash
 platform scm connection add wasp-foundry \
