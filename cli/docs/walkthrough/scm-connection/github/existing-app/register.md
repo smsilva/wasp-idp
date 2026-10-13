@@ -1,6 +1,6 @@
 # Register the existing App
 
-Give the platform the App ID and the key you just downloaded. In the example, the App `wasp-foundry-platform` has id `5274859`:
+Give the platform the **App ID** and the **key file** from the previous page:
 
 ```bash
 platform scm connection add wasp-foundry \
@@ -18,10 +18,11 @@ platform scm connection add wasp-foundry \
 → register its GHCR, where builds of wasp-foundry repos push: platform registry add ghcr-wasp-foundry --scm-connection wasp-foundry --default
 ```
 
-An App still installed on the org goes straight to `ready`. If it was uninstalled, `--wait` stays at `NotInstalled`: [install it on the org](../install.md).
+- **Still installed on the org**: the connection goes straight to `ready`.
+- **Not installed**: `--wait` stops at `NotInstalled`. [Install the App on the org](../install.md).
 
-!!! note "Refused because the name exists?"
-    An earlier `add` through the browser leaves the connection in `AppNotCreated`. Remove it and run `add` again:
+!!! note "`connection 'wasp-foundry' already exists`?"
+    An earlier `add` through the browser left the connection behind. Remove it and run `add` again:
 
     ```bash
     platform scm connection remove wasp-foundry
