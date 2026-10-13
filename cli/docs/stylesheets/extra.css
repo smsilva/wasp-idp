@@ -153,6 +153,13 @@
   color: var(--wasp-heading);
 }
 
+/* Boxes (note, tip, info, warning, step): Material sets them at .64rem, smaller than tables and code. Same
+   size as the prose, since they carry steps and caveats the reader must not skip. */
+.md-typeset .admonition,
+.md-typeset details {
+  font-size: .8rem;
+}
+
 /* Browser screenshots in the walkthrough. */
 .md-typeset img.screenshot {
   display: block;
