@@ -20,7 +20,7 @@ The server runs on this machine (stdio): Claude Code starts it when a session st
     Set up the wasp-idp MCP server for Claude Code on this machine:
     1. Run `make mcp` in this repository and check that `platform-mcp --help` works.
     2. Run `platform whoami`. If it says I am not logged in, stop and ask me to run `platform login`.
-    3. If `claude mcp list` already has a server named `platform`, remove it with `claude mcp remove --scope user platform`.
+    3. Remove any server named `platform` from both scopes: `claude mcp remove --scope local platform` and `claude mcp remove --scope user platform` (a "not found" from either is fine).
     4. Run `claude mcp add --scope user platform -- platform-mcp --toolsets core,environments,catalog`.
     5. Run `claude mcp list` and show me the `platform` line.
     6. Tell me to start a new Claude Code session, so it loads the server.
@@ -34,11 +34,14 @@ The server runs on this machine (stdio): Claude Code starts it when a session st
 
     platform whoami                # the server uses this login; run platform login if it fails
 
+    claude mcp remove --scope local platform   # an older registration here wins over the user one
+    claude mcp remove --scope user platform    # a "not found" from either is fine
+
     claude mcp add --scope user platform -- platform-mcp \
       --toolsets core,environments,catalog
     ```
 
-    `--scope user` makes the server available in every directory; without it, Claude Code keeps it only for the current one. Running `add` again with the same name fails: `claude mcp remove --scope user platform` first.
+    `--scope user` makes the server available in every directory; without it, Claude Code keeps it only for the current one. A `platform` left in the local scope, by an `add` without `--scope user`, wins over the user one in this directory, with the toolsets it had then: that is why both `remove` lines come first.
 
 Then start a **new** Claude Code session: a running session does not load servers added after it started.
 
