@@ -102,3 +102,11 @@ async def test_create_rejects_an_unknown_profile():
   async with Client(mcp_server.build(["environments"], allow_writes=True, client=client_for(no_calls))) as client:
     result = await client.call_tool("environments_create", {"name": "demo", "profile": "prod", "expires": "2h"})
   assert result.is_error
+
+
+@pytest.mark.parametrize("name", ["demo/admin-kubeconfig", "../catalog/domains/x", "demo\n"])
+async def test_get_refuses_a_name_that_is_a_path(name):
+  async with Client(mcp_server.build(["environments"], client=client_for(no_calls))) as client:
+    result = await client.call_tool("environments_get", {"name": name})
+  assert result.is_error
+  assert "is not a platform name" in result.content[0].text

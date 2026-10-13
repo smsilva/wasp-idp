@@ -108,3 +108,16 @@ async def test_creation_of_someone_else_is_a_tool_error():
   result = await call("catalog_components_creation_get", {"name": "details"}, handler)
   assert result.is_error
   assert "visible to who requested it" in result.content[0].text
+
+
+@pytest.mark.parametrize(("tool", "arguments"), [
+  ("catalog_get", {"kind": "domain", "name": "../../environments/demo"}),
+  ("catalog_components_get", {"name": "../../../environments/demo/admin-kubeconfig"}),
+  ("catalog_components_creation_get", {"name": "x/../y"}),
+  ("catalog_templates_get", {"name": "a/b"}),
+  ("catalog_components_get", {"name": "demo\n"}),
+])
+async def test_a_name_never_reaches_another_route(tool, arguments):
+  result = await call(tool, arguments)
+  assert result.is_error
+  assert "is not a platform name" in result.content[0].text

@@ -3,6 +3,7 @@
 Every tool is a thin call to one Platform API route through the CLI client: no logic of its own.
 Authorization, validation and the journal stay in the API.
 """
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -11,6 +12,18 @@ from mcp.server.mcpserver.exceptions import ToolError
 from wasp_platform.client import PlatformClient
 
 ClientFactory = Callable[[], PlatformClient]
+
+# A Kubernetes object name (DNS label), the broadest name the API accepts in a path.
+NAME = re.compile(r"[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?")
+
+
+def checked(name: str) -> str:
+  """A name that goes into a route path. The client resolves '..' and '/' into another route
+  (catalog_get of '../../environments/demo' would read the environment, kubeconfig included),
+  so anything but a plain name stops here, before the API."""
+  if not NAME.fullmatch(name):
+    raise ToolError(f"'{name}' is not a platform name: lowercase letters, digits and '-'")
+  return name
 
 
 @dataclass(frozen=True)
@@ -38,7 +51,7 @@ def environments(client: ClientFactory) -> list[ToolSpec]:
 
   def environments_get(name: str) -> dict[str, Any]:
     """One environment: profile, status (pending, ready, deleting or a failure reason), expiresAt, owner and the URL of its workloads."""
-    environment = client().get_environment(name)
+    environment = client().get_environment(checked(name))
     # The personal kubeconfig of the caller (ADR 0028) never reaches the agent.
     environment.pop("kubeconfigData", None)
     return environment
@@ -72,7 +85,7 @@ def catalog(client: ClientFactory) -> list[ToolSpec]:
 
   def catalog_get(kind: CatalogKind, name: str) -> dict[str, Any]:
     """One domain, system or resource, with the entities that point to it (dependents, as kind/name)."""
-    return client().get_catalog_entity(f"{kind}s", name)
+    return client().get_catalog_entity(f"{kind}s", checked(name))
 
   def catalog_components_list(system: str | None = None, owner: str | None = None) -> dict[str, Any]:
     """Components in the catalog index: system, owner team, type and the repo with their catalog-info.yaml."""
@@ -80,11 +93,11 @@ def catalog(client: ClientFactory) -> list[ToolSpec]:
 
   def catalog_components_get(name: str) -> dict[str, Any]:
     """One component, with where it runs (runningIn) in the environments the caller can use."""
-    return client().get_component(name)
+    return client().get_component(checked(name))
 
   def catalog_components_creation_get(name: str) -> dict[str, Any]:
     """Status of a component created from a template: repo, files and conditions. Visible to who requested it."""
-    return client().component_creation(name)
+    return client().component_creation(checked(name))
 
   def catalog_templates_list() -> dict[str, Any]:
     """Templates a component can be created from (ADR 0024): type, owner and whether it is the default."""
@@ -92,7 +105,7 @@ def catalog(client: ClientFactory) -> list[ToolSpec]:
 
   def catalog_templates_get(name: str) -> dict[str, Any]:
     """One template: its source (repo, path, ref) and the parameters it asks for."""
-    return client().get_template(name)
+    return client().get_template(checked(name))
 
   return [
     ToolSpec("catalog_list", catalog_list),
