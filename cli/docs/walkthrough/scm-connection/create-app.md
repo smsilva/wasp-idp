@@ -34,16 +34,44 @@ wasp-foundry                connection · the default
 
 === "Existing App"
 
-    Goes in without a browser, using the key downloaded from GitHub. The key goes to the platform and is **not kept** in `~/.config/platform`.
+    For an App created earlier, such as the `wasp-foundry-platform` of a cluster recreated from scratch. No browser flow: the platform gets the App id and a private key generated on GitHub.
 
-    ```bash
-    platform scm connection add wasp-foundry \
-      --vendor github \
-      --org wasp-foundry \
-      --app-id 123456 \
-      --private-key-file wasp-foundry-platform.private-key.pem \
-      --wait
-    ```
+    1. Open the App on GitHub: org **Settings → Developer settings → GitHub Apps → wasp-foundry-platform → Edit** (`https://github.com/organizations/wasp-foundry/settings/apps/wasp-foundry-platform`). The **App ID** is at the top of **General**.
+    2. In **Private keys**, click **Generate a private key**. The browser downloads `wasp-foundry-platform.<date>.private-key.pem`.
+    3. Hand both to the platform:
+
+        ```bash
+        platform scm connection add wasp-foundry \
+          --vendor github \
+          --org wasp-foundry \
+          --app-id 5274859 \
+          --private-key-file ~/Downloads/wasp-foundry-platform.2026-10-13.private-key.pem \
+          --default \
+          --wait
+        ```
+
+        ``` { .text .output title="output" }
+        ✓ connection wasp-foundry registered with App 5274859 · private key stored by the platform
+        ✓ wasp-foundry ready (wasp-foundry, all repositories)
+        → register its GHCR, where builds of wasp-foundry repos push: platform registry add ghcr-wasp-foundry --scm-connection wasp-foundry --default
+        ```
+
+        An App still installed on the org goes straight to `ready`, and [Install on the org](install.md) is skipped. Otherwise `--wait` stays at `NotInstalled` until it is installed.
+
+    4. Delete the downloaded file: the platform keeps its own copy, in a Secret only the controller reads.
+
+        ```bash
+        rm ~/Downloads/wasp-foundry-platform.*.private-key.pem
+        ```
+
+    !!! tip
+        On the App page, **Private keys** still lists the key of the old cluster: delete it, since nobody holds it anymore.
 
 !!! warning "A cluster recreated from scratch"
-    The `<org>-platform` App lives on GitHub, not in the cluster: after `k3d cluster delete`, it is still there and its private key is gone with the cluster. A new `add` through the browser then fails on GitHub with **Name is already taken**. Either delete the App (org **Settings → GitHub Apps → wasp-foundry-platform → Advanced → Delete GitHub App**) and run `add` again, or keep it: generate a new private key on its page (**Private keys → Generate a private key**) and go in with **Existing App**, adding `--default`.
+    The `<org>-platform` App lives on GitHub, not in the cluster: after `k3d cluster delete`, it is still there and its private key is gone with the cluster. A new `add` through the browser then fails on GitHub with **Name is already taken**, and the connection stays `AppNotCreated`. Remove it first, since `add --app-id` refuses a name that already exists:
+
+    ```bash
+    platform scm connection remove wasp-foundry
+    ```
+
+    Then either go in with **Existing App**, or delete the App (org **Settings → GitHub Apps → wasp-foundry-platform → Advanced → Delete GitHub App**) and run `add` through the browser again.

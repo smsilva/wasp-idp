@@ -109,9 +109,11 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
 
   def owner_of(request: ComponentRequest, principal: Principal) -> str:
     if request.owner is None:
-      if len(principal.teams) != 1:
-        found = ", ".join(principal.teams) or "none"
-        raise HTTPException(422, f"component '{request.name}': pass --owner, the team that owns it (your teams: {found})")
+      if not principal.teams:
+        # Teams come from the token: one joined after it was issued only shows after a new login.
+        raise HTTPException(422, f"component '{request.name}': pass --owner, the team that owns it (your token has no team; joined one just now? run 'platform login')")
+      if len(principal.teams) > 1:
+        raise HTTPException(422, f"component '{request.name}': pass --owner, the team that owns it (your teams: {', '.join(principal.teams)})")
       owner = principal.teams[0]
     else:
       owner = request.owner
