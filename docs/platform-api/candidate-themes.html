@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Platform API: temas candidatos fora do backlog</title>
+<style>
+  :root { color-scheme: dark; --bg: #0f1419; --panel: #161c24; --head: #1e2631; --line: #2a3441; --fg: #d7dde5; --muted: #8b96a5; --link: #6cb2ff; }
+  body { font-family: system-ui, sans-serif; margin: 24px; color: var(--fg); background: var(--bg); }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.lead { color: var(--muted); max-width: 1100px; }
+  .legend span { display: inline-block; margin-right: 14px; font-size: 13px; }
+  .filters { margin: 12px 0; font-size: 13px; }
+  .filters button { margin-right: 6px; padding: 4px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 4px; cursor: pointer; }
+  .filters button.on { background: var(--link); color: #0f1419; border-color: var(--link); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--panel); }
+  th, td { border: 1px solid var(--line); padding: 8px; vertical-align: top; text-align: left; }
+  th { background: var(--head); position: sticky; top: 0; }
+  tbody tr:hover { background: #1b232d; }
+  td.n { text-align: center; font-weight: 600; }
+  code { background: #232c38; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+  .ev { font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+  .forte { background: #163d22; color: #7ee2a0; }
+  .media { background: #3d3410; color: #f2d36b; }
+  .ref { background: #232c4d; color: #a9b8f5; }
+  .prio-alta { color: #ff7b72; font-weight: 600; }
+  .prio-media { color: #e3b341; font-weight: 600; }
+  .prio-baixa { color: var(--muted); font-weight: 600; }
+  ul { margin: 0; padding-left: 16px; }
+  a { color: var(--link); }
+  td.review { min-width: 110px; }
+  select { font-size: 12px; background: var(--head); color: var(--fg); border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<h1>Platform API: temas recorrentes em CNCF / platform engineering que não estão no backlog</h1>
+<p class="lead">Base: issues abertas em 2026-10-12 (#388 adoção de workloads, #389 secrets de time, #390 CVEs) e o mapa de subsistemas do ADR 0034. Cada linha é um tema que não estava no board. A coluna "Hoje no repo" diz o que já existe para não refazer. Planejamento em <a href="https://github.com/smsilva/wasp-idp/issues/393">#393</a>, um tema por sub-issue (o cert-manager ficou fora). A coluna "Revisão" é só para marcar (não salva).</p>
+<div class="legend">
+  <span><span class="ev forte">Forte</span> caso nomeado com resultado medido</span>
+  <span><span class="ev media">Média</span> projeto CNCF maduro + adotantes nomeados, sem números públicos</span>
+  <span><span class="ev ref">Referência</span> sem caso medido; entra pela justificativa</span>
+</div>
+<div class="filters">Filtrar evidência:
+  <button data-f="all" class="on">Todas</button><button data-f="forte">Forte</button><button data-f="media">Média</button><button data-f="ref">Referência</button>
+</div>
+<table id="t">
+<thead><tr>
+  <th>Tema / issue</th><th>Tema</th><th>Hoje no repo</th><th>Evidência na comunidade</th><th>Nível</th><th>Subsistema (ADR 0034)</th><th>Prioridade sugerida e por quê</th><th>Fontes</th><th>Revisão</th>
+</tr></thead>
+<tbody>
+
+<tr data-ev="forte">
+<td class="n">1<br><a href="https://github.com/smsilva/wasp-idp/issues/395">#395</a></td>
+<td><b>Policy as code / guardrails</b><br>regras de admissão aplicadas em cada Environment (vcluster) e checadas antes do apply: imagem só de registry habilitado, sem <code>:latest</code>, limits obrigatórios, labels de dono.</td>
+<td>BindingPolicy (ADR 0038) decide <i>modo</i> de recurso, não conformidade. #363 aprova ações recusadas. O deck lista <code>Kyverno</code> no plane Security, mas nada roda nos vclusters.</td>
+<td>Kyverno graduou na CNCF em mar/2026; adotantes Bloomberg, Coinbase, Deutsche Telekom, Spotify, Vodafone, DoD Platform One. LinkedIn: 20k+ admission requests/min em 230+ clusters (relato de terceiro, não case oficial). OPA/Gatekeeper é a alternativa graduada.</td>
+<td><span class="ev forte">Forte</span></td>
+<td>novo <code>policy</code> (optional, depende de environment, registry). Fecha o ciclo da #366 (RegistryBinding) e da #390.</td>
+<td class="prio-alta">Alta: é a forma de garantir no runtime o que a API já decide (registry habilitado, owner). Sem isso, um <code>kubectl apply</code> com a credencial pessoal (ADR 0028) contorna a plataforma.</td>
+<td><ul><li><a href="https://www.cncf.io/announcements/2026/03/24/cloud-native-computing-foundation-announces-kyvernos-graduation/">CNCF: Kyverno graduation</a></li><li><a href="https://jorijn.com/en/blog/kyverno-cncf-graduation-kubernetes-policy/">Análise de adotantes</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="forte">
+<td class="n">2<br><a href="https://github.com/smsilva/wasp-idp/issues/399">#399</a></td>
+<td><b>Scorecards / tech health</b><br>checks por Component (tem owner, tem SLO, build verde, sem CVE crítico, imagem assinada) agregados em níveis, com exceção aprovada.</td>
+<td>Nada. #331 trata fitness functions da <i>própria plataforma</i>, não dos componentes dos times. O catálogo (ADR 0023) já tem owner/system/domain para agregar.</td>
+<td>Spotify Soundcheck: squads com 85% de Golden State têm ~20% menos falhas de build e ~25% menos incidentes de alta urgência; +10 p.p. = incidente resolvido ~1,5 h mais rápido (correlação, publicado pela própria Spotify). Silverflow: até 20% de melhora de qualidade em semanas.</td>
+<td><span class="ev forte">Forte</span></td>
+<td><code>catalog</code> (consome dados de build, registry, observability); ou novo <code>scorecard</code> optional.</td>
+<td class="prio-media">Média: agrega o que os outros subsistemas já produzem; vale depois de #390 e de SLOs (linha 5) existirem como fatos a checar.</td>
+<td><ul><li><a href="https://backstage.spotify.com/discover/blog/how-soundcheck-improves-tech-health-pt-1">Spotify: Soundcheck e tech health</a></li><li><a href="https://backstage.spotify.com/discover/blog/soundcheck-healthier-tech-culture">7 ways Soundcheck…</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="forte">
+<td class="n">3<br><a href="https://github.com/smsilva/wasp-idp/issues/394">#394</a></td>
+<td><b>Supply chain: assinatura, proveniência e SBOM</b><br>o build assina a imagem (Sigstore/cosign), gera atestação SLSA (in-toto) e SBOM; o deploy só aceita imagem verificada.</td>
+<td>SBOM só citado no ADR 0037 e no spec do OCI registry. Nenhuma assinatura no <code>scm_github</code>. #390 (CVE) precisa do SBOM para saber o que está afetado.</td>
+<td>in-toto graduou (2025) citando SolarWinds (redesenho pós-SUNBURST), Datadog e Autodesk em produção. Kubernetes publica releases assinadas com Sigstore e proveniência SLSA L3; npm e PyPI adotaram atestações. GitHub Artifact Attestations dá SLSA Build L2 nativo.</td>
+<td><span class="ev forte">Forte</span></td>
+<td><code>build</code> (gera) + <code>registry</code> (guarda) + <code>policy</code> da linha 1 (verifica).</td>
+<td class="prio-alta">Alta: barato no GitHub Actions (attestation nativa) e é pré-requisito real da #390; sem SBOM, CVE é casado por adivinhação.</td>
+<td><ul><li><a href="https://www.cncf.io/projects/in-toto/">CNCF: in-toto</a></li><li><a href="https://www.infoq.com/news/2025/08/provenance/">InfoQ: provenance vira padrão em IDPs</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">4<br><a href="https://github.com/smsilva/wasp-idp/issues/400">#400</a></td>
+<td><b>Custo: showback por time e entidade do catálogo</b><br>custo de cada Environment, WorkloadInstance e ResourceRequest, agregado por Component → System → Domain e por team.</td>
+<td>Só em <code>docs/presentation/references/cost-allocation.md</code> (viabilidade) e <code>Kubecost</code> no deck. Nenhuma issue. #362 trata retenção de imagem, não custo.</td>
+<td>OpenCost incubating na CNCF (out/2024), motor que veio do Kubecost, com AWS, Google, Adobe, New Relic. Inclui custo de inferência (llm-d, 2026). Sem case oficial nomeado com números; FinOps recomenda começar por showback (só ~14% fazem chargeback).</td>
+<td><span class="ev media">Média</span></td>
+<td>novo <code>cost</code> (optional, depende de environment, workload, catalog, cloud-account).</td>
+<td class="prio-media">Média: o deck já promete custo por entidade do catálogo; no local o valor é sintético, ganha sentido com #254 (Environment em CloudAccount).</td>
+<td><ul><li><a href="https://opencost.io/blog/cncf-incubation/">OpenCost: CNCF incubation</a></li><li><a href="https://www.cncf.io/blog/2026/08/05/opencost-1-121-0-first-of-a-kind-kubernetes-inference-cost-tracking/">CNCF: custo de inferência</a></li><li><a href="https://bex.co/blog/2026/07/10/opencost-kubernetes-chargeback-self-hosted">Exemplo de chargeback</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">5<br><a href="https://github.com/smsilva/wasp-idp/issues/397">#397</a></td>
+<td><b>SLOs as code e error budget</b><br>o Component declara SLO (OpenSLO); a plataforma gera as regras de burn rate e expõe o budget, que pode bloquear promoção.</td>
+<td>#326 (golden signals) e #330 (métricas da API) param no sinal; não há objetivo nem budget. Istio nos vclusters (ADR 0035) já dá latência/erros por rota.</td>
+<td>Método do Google SRE Workbook (multi-window burn rate). Pyrra: Wikimedia (SLOs de infra no Thanos) e Daimler Truck tb.lx (3 mil msg/s). Sloth gera as mesmas regras. Sem números de resultado publicados.</td>
+<td><span class="ev media">Média</span></td>
+<td><code>observability</code> (já previsto no ADR 0034).</td>
+<td class="prio-media">Média: próximo passo natural da #326; vira gate de promoção e insumo dos scorecards.</td>
+<td><ul><li><a href="https://openslo.com/">OpenSLO</a></li><li><a href="https://0xdc.me/blog/service-level-objectives-made-easy-with-sloth-and-pyrra/">Sloth e Pyrra</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">6<br><a href="https://github.com/smsilva/wasp-idp/issues/398">#398</a></td>
+<td><b>Progressive delivery (canary com análise)</b><br><code>workload deploy --strategy canary</code>: o tráfego sobe por etapas e volta sozinho se a métrica piorar.</td>
+<td>WorkloadRoute e Gateway API/Istio já existem (#339, #344, ADR 0035): o mecanismo de divisão de tráfego está pronto, falta a estratégia.</td>
+<td>Argo Rollouts nasceu na Intuit (relato: 5% → análise → aumento, rollback automático, Prometheus), parte do Argo graduado. Flagger (Flux, graduado) faz o mesmo. Não há números públicos da Intuit; o único case com números é de consultoria, não confiável.</td>
+<td><span class="ev media">Média</span></td>
+<td><code>workload</code> (depende de observability para a análise).</td>
+<td class="prio-media">Média: o custo marginal é baixo porque o mesh já está lá; depende de SLO/golden signals para ter o que analisar.</td>
+<td><ul><li><a href="https://argoproj.github.io/rollouts/">Argo Rollouts</a></li><li><a href="https://medium.com/@arielsimhon/minimize-impact-in-kubernetes-using-argo-rollouts-992fb9519969">Relato Intuit</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">7<br><a href="https://github.com/smsilva/wasp-idp/issues/396">#396</a></td>
+<td><b>Quotas por time</b><br>limite de Environments, CPU/memória e ResourceRequests por team, com recusa explicada (e pedido de aumento pela #363).</td>
+<td>Nenhum quota nos módulos da API. Environment já tem <code>expires</code> (TTL), mas nada limita quantos um time cria. Portas 7100–7119 são o único teto, e é global.</td>
+<td>Capsule (CNCF sandbox): quota agregada por tenant; adotantes DoD, Die Mobiliar, Fastweb. ResourceQuota é nativo do Kubernetes. CNCF Platforms White Paper põe a governança de consumo entre as capacidades da plataforma.</td>
+<td><span class="ev media">Média</span></td>
+<td><code>environment</code> + <code>identity</code> (team). Usa a #363 para pedido de aumento.</td>
+<td class="prio-alta">Alta quando sair do local: com #254 (Environment em nuvem) cada ambiente tem custo real e o limite de 20 portas some.</td>
+<td><ul><li><a href="https://projectcapsule.dev/adopters/">Capsule: adopters</a></li><li><a href="https://tag-app-delivery.cncf.io/whitepapers/platforms/">CNCF Platforms White Paper</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="ref">
+<td class="n">8<br><a href="https://github.com/smsilva/wasp-idp/issues/401">#401</a></td>
+<td><b>Métricas DORA a partir dos dados da plataforma</b><br>deployment frequency, lead time, change failure rate e time to restore calculados de Build, Version, WorkloadRevision e WorkloadInstance.</td>
+<td>A API já registra commit → build → revisão → instância, com horários. #333 mede uso da CLI, não entrega. <code>dora-metrics.md</code> só na pasta do deck.</td>
+<td>DORA é a referência da área (relatórios anuais, Google); Four Keys é a implementação aberta. Não há case nomeado de "antes e depois" com Four Keys, e a própria DORA desaconselha comparar times entre si (Goodhart).</td>
+<td><span class="ev ref">Referência</span></td>
+<td><code>usage</code> ou <code>observability</code> (previstos no ADR 0034).</td>
+<td class="prio-media">Média: justificativa é o custo quase zero (o dado já existe na API) e a narrativa do deck, que já usa DORA para medir a plataforma. Medir contra a própria baseline, nunca ranking de times.</td>
+<td><ul><li><a href="https://dora.dev/guides/dora-metrics/">DORA metrics</a></li><li><a href="https://github.com/dora-team/fourkeys">Four Keys</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="ref">
+<td class="n">9<br><a href="https://github.com/smsilva/wasp-idp/issues/403">#403</a></td>
+<td><b>Incidentes e on-call ligados ao dono</b><br>Component aponta para escala de plantão; alerta de SLO, CVE (#390) e falha de deploy chegam ao dono certo.</td>
+<td>Deck cita <code>PagerDuty</code> no plane Observability. #390 já precisa do "dono responsável" para notificar.</td>
+<td>Prática consagrada no Backstage (plugin PagerDuty/Opsgenie, ownership no catálogo), mas fora da CNCF e sem case medido isolado. Soundcheck usa PagerDuty como fonte (linha 2).</td>
+<td><span class="ev ref">Referência</span></td>
+<td><code>catalog</code> (owner → escala) + <code>observability</code>.</td>
+<td class="prio-baixa">Baixa agora: a justificativa é dar destino às notificações de #390 e SLOs. Começar como campo no catálogo, sem integração.</td>
+<td><ul><li><a href="https://backstage.spotify.com/discover/blog/soundcheck-healthier-tech-culture">Soundcheck (integrações)</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">10<br><a href="https://github.com/smsilva/wasp-idp/issues/402">#402</a></td>
+<td><b>Backup e restore</b><br>do estado da plataforma (CRDs + journal) e dos dados das apps (ResourceRequests em modo provision).</td>
+<td>ADR 0022 diz que o journal "é durável e precisa de backup" e cita Velero; #172 (journal no Postgres) aberta. Nada para os dados das apps.</td>
+<td>Velero entrou na CNCF (sandbox, 2026); base do AKS Backup (Microsoft) e do OADP (Red Hat OpenShift); BitGo usa em DR. 500M+ pulls.</td>
+<td><span class="ev media">Média</span></td>
+<td><code>platform-core</code> (estado) + <code>resources</code> (dados das apps).</td>
+<td class="prio-baixa">Baixa no local, alta antes de produção: o journal sem backup anula a recuperação prometida no ADR 0022.</td>
+<td><ul><li><a href="https://www.infoq.com/news/2026/05/broadcom-velero-cncf/">InfoQ: Velero na CNCF</a></li><li><a href="https://github.com/velero-io/velero/blob/main/ADOPTERS.md">Velero ADOPTERS</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">11<br><a href="https://github.com/smsilva/wasp-idp/issues/404">#404</a></td>
+<td><b>Autoscaling por evento</b><br>o Score declara escala (fila, cron, req/s) e a plataforma gera o ScaledObject, inclusive scale-to-zero em ambientes efêmeros.</td>
+<td>WorkloadRevision não tem campo de escala. Environments de 3 dias ficam ligados o tempo todo.</td>
+<td>KEDA graduado (2023); FedEx, Grafana Labs ("reducing toil and optimizing costs"), Reddit, Xbox, Zapier. Case CNCF Infosys (mainframe → AKS), mas o ganho medido não é do autoscaling.</td>
+<td><span class="ev media">Média</span></td>
+<td><code>workload</code>.</td>
+<td class="prio-baixa">Baixa: valor aparece com custo (linha 4) e ambientes em nuvem.</td>
+<td><ul><li><a href="https://www.cncf.io/announcements/2023/08/22/cloud-native-computing-foundation-announces-graduation-of-kubernetes-autoscaler-keda/">CNCF: KEDA graduation</a></li><li><a href="https://www.cncf.io/case-studies/infosysmainframe/">Case Infosys</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="forte">
+<td class="n">12<br><a href="https://github.com/smsilva/wasp-idp/issues/405">#405</a></td>
+<td><b>Chaos engineering como serviço</b><br>experimentos (matar pod, latência) contra um Environment, pedidos pela CLI, com o SLO como critério.</td>
+<td>Nada.</td>
+<td>LitmusChaos incubating; case CNCF da Flipkart (plataforma multi-tenant de chaos para o Big Billion Days); Intuit, Adidas, iFood, Emirates NBD, Canonical (2026).</td>
+<td><span class="ev forte">Forte</span></td>
+<td>novo optional, depende de environment e observability.</td>
+<td class="prio-baixa">Baixa: só tem sentido com SLOs (linha 5) e workloads em ambiente compartilhado. Registrar como backlog distante.</td>
+<td><ul><li><a href="https://www.cncf.io/blog/2026/08/06/litmuschaos-q1-q2-2026-update-community-contributions-and-project-progress/">CNCF: Litmus 2026</a></li><li><a href="https://www.cncf.io/blog/2024/11/13/litmuschaos-gains-adoption-in-lower-environments/">Adoção em ambientes de teste</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="media">
+<td class="n">13<br><a href="https://github.com/smsilva/wasp-idp/issues/406">#406</a></td>
+<td><b>Feature flags (OpenFeature)</b><br>o Environment oferece um provider de flags (flagd) e o Score declara as flags da app.</td>
+<td>Nada. O baggage OTel (#340) já faz roteamento por request, que cobre parte do caso "testar só para mim".</td>
+<td>OpenFeature incubating (2023); end users eBay, Google, SAP, Spotify; vendors LaunchDarkly, Flagsmith. Padrão de API, não plataforma; sem números de resultado.</td>
+<td><span class="ev media">Média</span></td>
+<td><code>resources</code> (flagd como recurso do Score).</td>
+<td class="prio-baixa">Baixa: entra como mais um tipo de recurso do Forager, sem subsistema novo.</td>
+<td><ul><li><a href="https://www.cncf.io/blog/2023/12/19/openfeature-becomes-a-cncf-incubating-project/">CNCF: OpenFeature incubating</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+<tr data-ev="forte">
+<td class="n">14</td>
+<td><b>Certificados (cert-manager)</b><br>TLS das rotas públicas e mTLS emitidos pela plataforma.</td>
+<td>Já usado na trilha AWS (ADR 0002, decisions.md). Istio dá mTLS interno nos vclusters.</td>
+<td>cert-manager graduado (2024); 500M downloads/mês; ~86% dos clusters novos de produção o instalam.</td>
+<td><span class="ev forte">Forte</span></td>
+<td>infra do <code>environment</code>, não superfície da API.</td>
+<td class="prio-baixa">Não recomendado como tema da API: é componente do cluster, sem decisão do usuário. Listado para fechar o levantamento.</td>
+<td><ul><li><a href="https://www.cncf.io/announcements/2024/11/12/cloud-native-computing-foundation-announces-cert-manager-graduation/">CNCF: cert-manager graduation</a></li></ul></td>
+<td class="review"><select><option></option><option>criar issue</option><option>depois</option><option>descartar</option></select></td>
+</tr>
+
+</tbody>
+</table>
+<p class="lead" style="margin-top:16px">Moldura: o <a href="https://tag-app-delivery.cncf.io/whitepapers/platforms/">CNCF Platforms White Paper</a> lista as capacidades esperadas (portal, API/CLI, golden paths, build, delivery, ambientes, observabilidade, infraestrutura, dados, mensageria, identidade e secrets, segurança, artefatos). Com #388–#390, o backlog cobre quase todas; as lacunas são <b>segurança como gate</b> (linhas 1 e 3), <b>medição de resultado</b> (2, 5, 8) e <b>governança de consumo</b> (4, 7).</p>
+<script>
+document.querySelectorAll('.filters button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.filters button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  document.querySelectorAll('#t tbody tr').forEach(r =>
+    r.style.display = (b.dataset.f === 'all' || r.dataset.ev === b.dataset.f) ? '' : 'none');
+});
+</script>
+</body>
+</html>
