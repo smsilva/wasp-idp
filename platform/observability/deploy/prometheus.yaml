@@ -117,6 +117,26 @@ spec:
       port: 9090
       targetPort: 9090
 ---
+# Prometheus answers without authentication, and the pods of every environment run on the host network
+# (vcluster syncs them): only the Platform API, which checks can_use, may query it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus
+  namespace: platform-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: platform-api
+      ports:
+        - port: 9090
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
