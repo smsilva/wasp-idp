@@ -27,6 +27,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [Install the CLI](bootstrap/install.md)
 - [Google credentials](bootstrap/google-credentials.md)
 - [Start the control plane](bootstrap/control-plane.md)
+- [CLI configuration](bootstrap/config.md)
 
 **Login**
 

@@ -15,6 +15,7 @@ nav:
           - Install the CLI: walkthrough/bootstrap/install.md
           - Google credentials: walkthrough/bootstrap/google-credentials.md
           - Start the control plane: walkthrough/bootstrap/control-plane.md
+          - CLI configuration: walkthrough/bootstrap/config.md
       - Login:
           - Without login, the API refuses: walkthrough/login/refused.md
           - Sign in: walkthrough/login/sign-in.md
