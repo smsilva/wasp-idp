@@ -81,12 +81,17 @@ Each step shows the command and, right below it, the expected **output**.
 - [Verify](cloud-accounts/verify.md)
 - [ExternalId and removal](cloud-accounts/remove.md)
 
-**GitHub connection**
+**SCM connection: GitHub**
 
-- [Create the App](scm-connection/create-app.md)
-- [Install on the org](scm-connection/install.md)
-- [Verify](scm-connection/verify.md)
-- [The key stays off this machine](scm-connection/private-key.md)
+- [Create the App](scm-connection/github/create-app.md)
+- [Install on the org](scm-connection/github/install.md)
+- [Verify](scm-connection/github/verify.md)
+- [The key stays off this machine](scm-connection/github/private-key.md)
+
+**Registry: GHCR**
+
+- [Register the GHCR of the GitHub org](registry/ghcr/register.md)
+- [The registry is ready](registry/ghcr/ready.md)
 
 **Components**
 
@@ -114,7 +119,7 @@ Each step shows the command and, right below it, the expected **output**.
 - [Another instance of the same component](workloads/instances.md)
 
 - [Connect an AI agent](agents/connect.md)
-- [Remove the GitHub connection](scm-connection/remove.md)
+- [Remove the GitHub connection](scm-connection/github/remove.md)
 - [Clean up and sign out](cleanup.md)
 
 Without a browser: [`scripts/demo/cli-smoke`](cli-smoke.md).

@@ -2,11 +2,11 @@
 
 GitHub returns to the platform, which leads to the installation:
 
-![Platform API "App created" page, with the Install on wasp-foundry button](../images/scm-02-app-created.png){ .screenshot loading=lazy width="500" }
+![Platform API "App created" page, with the Install on wasp-foundry button](../../images/scm-02-app-created.png){ .screenshot loading=lazy width="500" }
 
 Install on **All repositories**; the permissions are those of the manifest:
 
-![App installation screen on the wasp-foundry org, with All repositories selected](../images/scm-03-install.png){ .screenshot loading=lazy width="500" }
+![App installation screen on the wasp-foundry org, with All repositories selected](../../images/scm-03-install.png){ .screenshot loading=lazy width="500" }
 
 Until then, the connection stays `NotInstalled`, and `get` shows the link:
 

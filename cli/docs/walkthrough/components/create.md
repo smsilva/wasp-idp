@@ -1,6 +1,6 @@
 # Create a component
 
-With the connection `ready` ([Verify](../scm-connection/verify.md)), and the system recreated after the [catalog cleanup](../catalog/cleanup.md), `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays. The idea of this component:
+With the connection `ready` ([Verify](../scm-connection/github/verify.md)), and the system recreated after the [catalog cleanup](../catalog/cleanup.md), `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays. The idea of this component:
 
 ``` { .markdown title="/tmp/idea.md" }
 # Problem
