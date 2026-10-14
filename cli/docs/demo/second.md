@@ -8,3 +8,13 @@ platform environment create greetings-test \
   --expires 2h \
   --wait
 ```
+
+The same version, deployed there:
+
+```bash
+platform workload deploy \
+  --component hello-api \
+  --environment greetings-test \
+  --branch feat/greetings \
+  --wait
+```
