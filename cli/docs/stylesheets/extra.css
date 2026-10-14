@@ -286,6 +286,29 @@
 .md-typeset .t-err { color: var(--t-err); }
 .md-typeset .t-info { color: var(--t-info); }
 
+/* A block sits close to the text that introduces it and far from the next one, so each step reads as a
+   unit. The margin lives on the .highlight div (top and bottom only: narrow screens set its side margins),
+   and the paragraph above gives up its own, or the larger of the two would win. */
+.md-typeset p:has(+ .highlight) {
+  margin-bottom: 0;
+}
+
+.md-typeset .highlight {
+  margin-top: .25em;
+  margin-bottom: 2em;
+}
+
+.md-typeset .highlight > pre,
+.md-typeset .highlight > .filename {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Commands a little larger than Material's 85%, for reading on screen. */
+.md-typeset pre > code {
+  font-size: .9em;
+}
+
 /* "What will be created": same panel as the output, the kinds not in italic. */
 .md-typeset .plan .t-comment {
   font-style: normal;
