@@ -97,7 +97,13 @@ In a new session:
 Create an ephemeral environment called agent-demo for 2 hours and tell me when it is ready.
 ```
 
-The agent calls `environments_create` with `expires: 2h`, then `environments_get` until the status is `ready`, and answers with the URL of its workloads. The server refuses a new environment without an expiration. Delete it yourself with `platform environment delete agent-demo`: deleting is not a tool yet.
+The agent calls `environments_create` with `expires: 2h`, then `environments_get` until the status is `ready`, and answers with the URL of its workloads. The server refuses a new environment without an expiration.
+
+```text
+Delete the agent-demo environment.
+```
+
+The agent calls `environments_delete`. It deletes only `ephemeral` environments: a `shared` one is deleted by you, with `platform environment delete`.
 
 ## Another MCP client
 
