@@ -4,8 +4,8 @@ Some of what the walkthrough created has no remove command yet, or is refused wh
 
 | What | Why it stays | To remove it |
 |---|---|---|
-| The component `hello-api` and the repo `wasp-foundry/hello-api` | there is no `component delete` | delete the repo on GitHub; the component leaves with the cluster |
-| The registry `ghcr-wasp-foundry` | `registry remove` is refused (`409`) while a version of the index is in it | the packages stay in GHCR, under the org |
+| The component `hello-api` and the repo `wasp-foundry/hello-api` | there is no `component delete` | [delete the repo and its images](images.md); the component leaves with the cluster |
+| The registry `ghcr-wasp-foundry` | `registry remove` is refused (`409`) while a version of the index is in it | it leaves with the cluster; the images in GHCR go with the [repo](images.md) |
 | The catalog and `team-alpha` | the team owns the imported entities ([A team in use](../catalog/team-in-use.md)) | `catalog <kind> delete`, in reverse order ([Clean up, in reverse order](../catalog/cleanup.md)) |
 | The GitHub App `wasp-foundry-platform` | lives on GitHub, not in the cluster | the org settings, as the [remove output](scm-connection.md) says |
 
