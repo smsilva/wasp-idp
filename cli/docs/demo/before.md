@@ -21,9 +21,26 @@ observability  Active                   prometheus      —
 ✓ all 9 installed capabilities Active (1 not installed: cloud-account)
 ```
 
-Then check that:
+You are in `team-alpha`, the owner of the app:
 
-- `platform whoami` shows you in `team-alpha`, the owner of the app;
-- `platform catalog system get greeter` finds the system the app joins;
-- `gh repo view wasp-foundry/hello-api` fails with `Could not resolve to a Repository`: that is the expected answer, since a repo left by an earlier run stops the create ([After the demo](cleanup.md));
-- `ssh -T git@github.com-personal` answers with an account that is a member of `wasp-foundry` ([Clone and branch](clone.md) pushes through that alias).
+```bash
+platform whoami
+```
+
+The system `greeter`, which the app joins, is in the catalog:
+
+```bash
+platform catalog system get greeter
+```
+
+The repo does not exist yet. A repo left by an earlier run stops the create ([After the demo](cleanup.md)), so `Could not resolve to a Repository` is the expected answer:
+
+```bash
+gh repo view wasp-foundry/hello-api
+```
+
+The SSH alias that [Clone and branch](clone.md) pushes through answers with an account that is a member of `wasp-foundry`:
+
+```bash
+ssh -T git@github.com-personal
+```
