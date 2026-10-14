@@ -6,6 +6,7 @@ import secrets
 import shutil
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -109,20 +110,51 @@ def _ensure_port(ports: str, log) -> None:
   _run("k3d", "cluster", "edit", CLUSTER, "--port-add", f"127.0.0.1:{ports}:{ports}@loadbalancer")
 
 
-def _build_and_import(name: str, context: Path, timings: Timings, dockerfile: Path | None = None) -> str:
-  """Build, tag by image id and import into platform-local: an unchanged build keeps the tag, so the rollout is a no-op.
+def _build(name: str, context: Path, dockerfile: Path | None = None) -> str:
+  """Build and tag by image id: an unchanged build keeps the tag, so its import and rollout are skipped.
   dockerfile: when the context is wider than the project folder (a project with path dependencies)."""
   file = ["--file", str(dockerfile)] if dockerfile else []
-  with timings.step(f"build {name}"):
-    # Without provenance: its attestation changes the image id on every build (containerd image store),
-    # so an unchanged project would get a new tag and a rollout on every init.
-    _run("docker", "build", "--quiet", "--provenance=false", *file, "--tag", f"{name}:dev", str(context))
-    image_id = _run("docker", "image", "inspect", "--format", "{{.Id}}", f"{name}:dev").strip()
-    image = f"{name}:{image_id.removeprefix('sha256:')[:12]}"
-    _run("docker", "tag", f"{name}:dev", image)
-  with timings.step(f"import {name}"):
-    _run("k3d", "image", "import", image, "--cluster", CLUSTER)
+  # Without provenance: its attestation changes the image id on every build (containerd image store),
+  # so an unchanged project would get a new tag and a rollout on every init.
+  _run("docker", "build", "--quiet", "--provenance=false", *file, "--tag", f"{name}:dev", str(context))
+  image_id = _run("docker", "image", "inspect", "--format", "{{.Id}}", f"{name}:dev").strip()
+  image = f"{name}:{image_id.removeprefix('sha256:')[:12]}"
+  _run("docker", "tag", f"{name}:dev", image)
   return image
+
+
+def _cluster_images() -> set[str]:
+  """Images present on every node of platform-local that runs pods, as docker.io/library/<name>:<tag>."""
+  nodes = [
+    node["name"] for node in json.loads(_run("k3d", "node", "list", "--output", "json"))
+    if node.get("runtimeLabels", {}).get("k3d.cluster") == CLUSTER and node["role"] in ("server", "agent")
+  ]
+  listed = [set(_run("docker", "exec", node, "ctr", "--namespace", "k8s.io", "images", "list", "--quiet").split()) for node in nodes]
+  return set.intersection(*listed) if listed else set()
+
+
+def prepare_images(builds: dict[str, tuple[Path, Path | None]], log, timings: Timings) -> dict[str, str]:
+  """Builds every image in parallel, then imports only the ones the cluster lacks, in one k3d call:
+  each `k3d image import` costs ~20 s even for a small image (#443). Returns name -> image."""
+  log(f"building {len(builds)} images …")
+  with timings.step(f"build images ({len(builds)})"), ThreadPoolExecutor(max_workers=len(builds)) as pool:
+    futures = {name: pool.submit(_build, name, context, dockerfile) for name, (context, dockerfile) in builds.items()}
+    try:
+      images = {name: future.result() for name, future in futures.items()}
+    except BootstrapError:
+      for future in futures.values():
+        future.cancel()
+      raise
+  with timings.step("check images in the cluster"):
+    present = _cluster_images()
+  missing = [image for image in images.values() if f"docker.io/library/{image}" not in present]
+  if not missing:
+    log("images already in the cluster, nothing to import")
+    return images
+  log(f"importing {len(missing)} image(s) into {CLUSTER} …")
+  with timings.step(f"import images ({len(missing)})"):
+    _run("k3d", "image", "import", *missing, "--cluster", CLUSTER)
+  return images
 
 
 def _deploy(manifest_path: Path, name: str, image: str) -> None:
@@ -296,9 +328,9 @@ def aws_base_credential(profile: str) -> dict:
   return {"values": values, "expiration": exported.get("Expiration")}
 
 
-def install_aws_account(root: Path, aws_profile: str | None, log, timings: Timings) -> dict:
-  """With --aws-profile, store the base credential; with it stored (now or by an earlier init), deploy
-  the controller. Without one, cloud accounts stay NoProviderForCapability."""
+def store_aws_credential(aws_profile: str | None, log) -> tuple[dict, str | None]:
+  """With --aws-profile, store the base credential. Returns the stored one (now or by an earlier init)
+  and its expiration; without one, cloud accounts stay NoProviderForCapability."""
   expiration = None
   if aws_profile:
     credential = aws_base_credential(aws_profile)
@@ -309,12 +341,11 @@ def install_aws_account(root: Path, aws_profile: str | None, log, timings: Timin
     if expiration:
       log(f"warning: the credential of profile {aws_profile} expires at {expiration}: run init again after that, or use a dedicated IAM user")
   values = {key: _secret_value(NAMESPACE, AWS_BASE_SECRET, key) for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}
-  if not values["AWS_ACCESS_KEY_ID"]:
-    return {"cloud_account": False}
+  return (values if values["AWS_ACCESS_KEY_ID"] else {}), expiration
 
-  provider_dir = root / "platform" / "providers" / "aws_account"
-  log("building the cloud account provider image …")
-  image = _build_and_import(AWS_PROVIDER_IMAGE, provider_dir, timings)
+
+def install_aws_account(provider_dir: Path, image: str, values: dict, expiration: str | None, log, timings: Timings) -> dict:
+  """The aws_account controller, with the stored base credential as its environment."""
   log("deploying the cloud account provider (aws_account) …")
   _deploy(provider_dir / "deploy" / "aws-account-provider.yaml", AWS_PROVIDER_IMAGE, image)
   # The credential reaches the pod as environment: a new one needs a new pod, an unchanged one keeps it.
@@ -363,21 +394,33 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   identity = install_keycloak(root, admin_email, log, timings)
 
   api_dir = root / "platform" / "api"
-  log("building the Platform API image …")
-  # Context platform/: the API depends on platform/libs/templates and platform/libs/score by path.
-  image = _build_and_import(IMAGE, api_dir.parent, timings, api_dir / "Dockerfile")
+  provider_dir = root / "platform" / "providers" / "local_vcluster"
+  scm_dir = root / "platform" / "providers" / "scm_github"
+  workload_dir = root / "platform" / "providers" / "workload"
+  forager_dir = root / "platform" / "providers" / "forager"
+  registry_dir = root / "platform" / "providers" / "registry"
+  aws_dir = root / "platform" / "providers" / "aws_account"
+  aws_values, aws_expiration = store_aws_credential(aws_profile, log)
+  # Context platform/ for the API and scm_github: they depend on platform/libs/templates and platform/libs/score by path.
+  builds = {
+    IMAGE: (api_dir.parent, api_dir / "Dockerfile"),
+    PROVIDER_IMAGE: (provider_dir, None),
+    SCM_PROVIDER_IMAGE: (scm_dir.parent.parent, scm_dir / "Dockerfile"),
+    WORKLOAD_PROVIDER_IMAGE: (workload_dir, None),
+    FORAGER_PROVIDER_IMAGE: (forager_dir, None),
+    REGISTRY_PROVIDER_IMAGE: (registry_dir, None),
+    **({AWS_PROVIDER_IMAGE: (aws_dir, None)} if aws_values else {}),
+  }
+  images = prepare_images(builds, log, timings)
 
   log("deploying the Platform API …")
-  _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, image)
+  _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, images[IMAGE])
   _rollout("platform-api", timings)
   with timings.step("platform-api healthy"):
     wait_healthy(API_URL)
 
-  provider_dir = root / "platform" / "providers" / "local_vcluster"
-  log("building the environment provider image …")
-  provider_image = _build_and_import(PROVIDER_IMAGE, provider_dir, timings)
   log("deploying the environment provider (local_vcluster) …")
-  _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, provider_image)
+  _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, images[PROVIDER_IMAGE])
   _rollout(PROVIDER_IMAGE, timings)
   # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
   log("applying the pod policy of the environments (baseline) …")
@@ -385,40 +428,28 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   with timings.step("traefik"):
     install_ingress(provider_dir, log)
 
-  scm_dir = root / "platform" / "providers" / "scm_github"
-  log("building the SCM provider image …")
-  scm_image = _build_and_import(SCM_PROVIDER_IMAGE, scm_dir.parent.parent, timings, scm_dir / "Dockerfile")
   log("deploying the SCM provider (scm_github) …")
-  _deploy(scm_dir / "deploy" / "scm-github-provider.yaml", SCM_PROVIDER_IMAGE, scm_image)
+  _deploy(scm_dir / "deploy" / "scm-github-provider.yaml", SCM_PROVIDER_IMAGE, images[SCM_PROVIDER_IMAGE])
   _rollout(SCM_PROVIDER_IMAGE, timings)
 
-  workload_dir = root / "platform" / "providers" / "workload"
-  log("building the workload provider image …")
-  workload_image = _build_and_import(WORKLOAD_PROVIDER_IMAGE, workload_dir, timings)
   log("deploying the workload provider (workload) …")
-  _deploy(workload_dir / "deploy" / "workload-provider.yaml", WORKLOAD_PROVIDER_IMAGE, workload_image)
+  _deploy(workload_dir / "deploy" / "workload-provider.yaml", WORKLOAD_PROVIDER_IMAGE, images[WORKLOAD_PROVIDER_IMAGE])
   _rollout(WORKLOAD_PROVIDER_IMAGE, timings)
 
-  forager_dir = root / "platform" / "providers" / "forager"
-  log("building the Forager image …")
-  forager_image = _build_and_import(FORAGER_PROVIDER_IMAGE, forager_dir, timings)
   log("deploying the Forager (resources of each workload) …")
-  _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, forager_image)
+  _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, images[FORAGER_PROVIDER_IMAGE])
   _rollout(FORAGER_PROVIDER_IMAGE, timings)
   with timings.step("shared-pg"):
     install_shared_pg(forager_dir, log)
 
-  registry_dir = root / "platform" / "providers" / "registry"
-  log("building the registry provider image …")
-  registry_image = _build_and_import(REGISTRY_PROVIDER_IMAGE, registry_dir, timings)
   log("deploying the registry provider (OCI registries) …")
-  _deploy(registry_dir / "deploy" / "registry-provider.yaml", REGISTRY_PROVIDER_IMAGE, registry_image)
+  _deploy(registry_dir / "deploy" / "registry-provider.yaml", REGISTRY_PROVIDER_IMAGE, images[REGISTRY_PROVIDER_IMAGE])
   _rollout(REGISTRY_PROVIDER_IMAGE, timings)
   install_profile_policies(forager_dir, log)
   with timings.step("prometheus"):
     install_observability(root / "platform" / "observability", log)
 
-  cloud = install_aws_account(root, aws_profile, log, timings)
+  cloud = install_aws_account(aws_dir, images[AWS_PROVIDER_IMAGE], aws_values, aws_expiration, log, timings) if aws_values else {"cloud_account": False}
   with timings.step("templates"):
     install_templates(root, log)
 
@@ -427,7 +458,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
     "target": "local", "api_url": API_URL, "context": CONTEXT,
     "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
   })
-  return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": image, "config": str(path), **identity, **cloud, "timings": timings.as_dict()}
+  return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": images[IMAGE], "config": str(path), **identity, **cloud, "timings": timings.as_dict()}
 
 
 def install_ingress(provider_dir: Path, log) -> None:
