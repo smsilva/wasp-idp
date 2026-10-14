@@ -18,7 +18,7 @@ cli: ## Put `platform` on the PATH, editable from this checkout
 	esac
 
 cli-uninstall: ## Remove `platform` from the PATH
-	uv tool uninstall wasp-platform
+	uv tool uninstall wasp-platform 2> /dev/null || echo "wasp-platform is not installed"
 
 mcp: ## Put `platform-mcp` (the MCP server, ADR 0027) on the PATH, editable from this checkout
 	uv tool install --force --editable "$(CURDIR)/platform/mcp"
