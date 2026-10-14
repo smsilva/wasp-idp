@@ -4,7 +4,7 @@ hide:
   - toc
 ---
 
-# platform CLI { .home-title }
+# platform-api { .home-title }
 
 <div class="grid cards home-cards" markdown>
 
