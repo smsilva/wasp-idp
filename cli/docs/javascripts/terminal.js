@@ -4,7 +4,8 @@
 (() => {
   // Options that take no value: the word after them is an argument, not their value.
   const FLAGS = new Set(["--wait", "--default", "--dry-run", "--yes", "--all", "--no-browser", "--use-device-code",
-    "--skip-init", "--force", "--editable", "--quiet", "--admin", "--compact-output"]);
+    "--skip-init", "--force", "--editable", "--quiet", "--admin", "--compact-output", "--include", "--silent",
+    "--edit", "--generate-file", "--https"]);
   const OPERATORS = new Set(["|", "||", "&&", ";", ">", ">>", "<", "\\", "--"]);
   // Verbs of the platform and kubectl commands: the word before one is the concept, the first argument
   // after it is the object; both are shown in bold.
@@ -13,6 +14,8 @@
 
   // Values of these options get a color of their own, the same one their part of an instance URL gets.
   const ROLES = { "--component": "component", "--environment": "environment" };
+  // ... and so does the object of a command on that concept (`platform environment create demo`).
+  const CONCEPTS = { component: "component", environment: "environment" };
   // `http://<component>.<environment>.localhost`: the host of a workload instance (Reach an instance from outside).
   const INSTANCE_URL = /^(https?:\/\/)([a-z0-9-]+)\.([a-z0-9-]+)(\.localhost.*)$/;
 
@@ -56,13 +59,19 @@
       const parts = words(line);
       // Concept and object of the command: the word before the verb and the first argument after it.
       const bold = new Set();
+      // The object of `component <verb>` / `environment <verb>` takes the color of that concept.
+      const objectRole = new Map();
       if (start) {
         const plain = parts.map((word, index) => [word, index]).filter(([word]) => !/^\s+$/.test(word));
         const verb = plain.findIndex(([word], position) => position > 0 && VERBS.has(word));
         if (verb > 0) {
           if (verb > 1) bold.add(plain[verb - 1][1]);
           const object = plain.slice(verb + 1).find(([word]) => !word.startsWith("-") && !OPERATORS.has(word));
-          if (object) bold.add(object[1]);
+          if (object) {
+            bold.add(object[1]);
+            const concept = CONCEPTS[plain[verb - 1][0]];
+            if (concept) objectRole.set(object[1], concept);
+          }
         }
       }
       const html = parts.map((word, index) => {
@@ -81,14 +90,17 @@
           role = ROLES[word] || null;
           return span("opt", word);
         }
+        // Before the value check: `curl --include <url>` reads the URL as the value of --include.
+        const url = word.match(INSTANCE_URL);
+        if (url) {
+          expectValue = false;
+          return span("arg", url[1]) + span("component", url[2]) + span("arg", ".") + span("environment", url[3]) + span("arg", url[4]);
+        }
         if (expectValue) {
           expectValue = false;
           return span(role || "val", word);
         }
-        const url = word.match(INSTANCE_URL);
-        if (url) {
-          return span("arg", url[1]) + span("component", url[2]) + span("arg", ".") + span("environment", url[3]) + span("arg", url[4]);
-        }
+        if (objectRole.has(index)) return span(objectRole.get(index), word);
         if (bold.has(index)) return span("key", word);
         if (/^['"$]/.test(word)) return span("val", word);
         return span("arg", word);
