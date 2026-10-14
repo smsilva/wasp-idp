@@ -13,8 +13,9 @@ platform init \
 | `--target local` | the only target today, and the default |
 | `--admin <email>` | joins `platform-admins` on its first Google sign-in; repeat it for more than one; other users land only in `platform-users`; a value that is not an e-mail stops `init` before any step |
 | `--aws-profile <profile>` | the credential of that `~/.aws` profile becomes the platform base credential for [cloud accounts](cloud-accounts.md) |
-| `--file <path>` | the settings file to read, or to write with `--generate-file`; default `~/.config/platform/init.yaml` |
+| `--file <path>` | the settings file to read, to write with `--generate-file` or to open with `--edit`; default `~/.config/platform/init.yaml` |
 | `--generate-file` | writes the settings (flags, then the file, then what the cluster remembers) to the file and installs nothing; refuses an existing file without `--force` |
+| `--edit` | opens the settings file in an editor (see [Edit the file](#edit-the-file)), writing it first when missing, and installs nothing |
 | `--dry-run` | shows the settings and the steps `init` would run, and installs nothing; with `-o json`/`yaml`, as data |
 | `--yes` | installs without asking; required without a terminal or with `-o json`/`yaml` |
 | `--progress auto\|live\|plain` | how the steps show while `init` runs: `live` is a card that redraws in place, `plain` one line per step; `auto` (the default) is `live` on a terminal and `plain` otherwise (CI, a pipe, `cli-smoke`) |
@@ -34,7 +35,23 @@ admins:
 
 `awsProfile` and `withCrossplane` enter the file only when set (`--aws-profile`, `--with-crossplane`).
 
-A key it does not know, or an admin that is not an e-mail, stops `init` before any step. Secrets stay out of the file: the Google credentials come from the environment (below).
+A key it does not know, or an admin that is not an e-mail, stops `init` before any step.
+
+### Edit the file
+
+`platform init --edit` opens the file the way `git config --edit` does, and reads it back once the editor closes: a mistake shows then, not halfway through an install. A missing file is written first, from the flags given with `--edit`.
+
+The editor is the first one found, the way `kubectl edit` reads `KUBE_EDITOR`:
+
+| Order | Editor |
+|---|---|
+| 1 | `PLATFORM_EDITOR` |
+| 2 | `VISUAL` |
+| 3 | `EDITOR` |
+| 4 | `code --wait`, when VS Code is on the `PATH` |
+| 5 | `vi` |
+
+A variable holds a command line (`PLATFORM_EDITOR="nano -w"`); an editor that returns at once, like `code` without `--wait`, leaves `init` reading the file before the change. Without a terminal, `--edit` needs one of the variables. Secrets stay out of the file: the Google credentials come from the environment (below).
 
 Before the install, `init` prints each setting and its source, so a forgotten file never applies unseen, and asks `Proceed?`. On a terminal, the settings open the card of the run (see [Progress](#progress)); without one, they come as a table:
 
