@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -15,12 +16,17 @@ import typer
 from .. import config
 from ..client import ApiError, PlatformClient
 from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from .environment import remaining
 from .template import _params
 
 app = typer.Typer(help="Components: repos created through the golden path, and the index.", no_args_is_help=True)
+creation_app = typer.Typer(help="Creation requests: follow one, or free the name of a stopped one.", no_args_is_help=True)
+app.add_typer(creation_app, name="creation")
 
 # Ready=False with these reasons does not heal by waiting: --wait stops at once.
 FINAL = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected", "ConnectionNotFound", "ConnectionNotReady", "CredentialMissing"}
+# Of those, the ones that stop the creation for good: it holds the name until replaced or deleted (#452).
+STOPPED = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected"}
 # Protected=False with this reason is a warning: main is unprotected (a private repo on GitHub Free), the
 # creation still ends Ready.
 UNPROTECTED = "ProtectionUnavailable"
@@ -29,6 +35,20 @@ GIT_URLS = {"ssh": "git@github.com:{repo}.git", "https": "https://github.com/{re
 REPO = re.compile(r"[\w.-]+/[\w.-]+")
 # Files the summary names when the template generated them.
 ANNOUNCED = ("docs/prd.md", "AGENTS.md")
+
+
+def utcnow() -> datetime:
+  return datetime.now(timezone.utc)
+
+
+def age(since: str | None) -> str:
+  if not since:
+    return "—"
+  seconds = int((utcnow() - datetime.fromisoformat(since.replace("Z", "+00:00"))).total_seconds())
+  days, rest = divmod(max(seconds, 0), 86400)
+  hours, rest = divmod(rest, 3600)
+  minutes = rest // 60
+  return f"{days}d" if days else f"{hours}h" if hours else f"{minutes}m" if minutes else "<1m"
 
 
 def _client() -> PlatformClient:
@@ -88,6 +108,11 @@ def _where(component: str, item: dict) -> str:
   return item["environment"] if instance in (None, component) else f"{instance}@{item['environment']}"
 
 
+def _steps(creation: dict) -> None:
+  for condition in creation.get("conditions") or []:
+    typer.echo(f"  {_mark(condition, '✗')} {condition['type'].ljust(12)} {condition.get('message') or condition.get('reason')}")
+
+
 def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> dict:
   deadline = time.monotonic() + timeout
   shown = set()
@@ -101,7 +126,10 @@ def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> 
     if ready.get("status") == "True":
       return creation
     if ready.get("reason") in FINAL:
-      fail(f"{creation['name']}: {ready['reason']}: {ready.get('message')}")
+      typer.secho(f"✗ {creation['name']}: {ready['reason']}: {ready.get('message')}", fg=typer.colors.RED, err=True)
+      if ready["reason"] in STOPPED:
+        typer.echo(f"  rename it, request it again with --replace, or free the name with: platform catalog component creation delete {creation['name']}", err=True)
+      raise typer.Exit(1)
     if time.monotonic() > deadline:
       fail(f"{creation['name']} not created after {timeout}s (status: {creation['status']})")
     time.sleep(2)
@@ -111,6 +139,7 @@ def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> 
 @app.command("create", epilog=examples(
   "platform catalog component create hello-api --system messaging --type service --wait",
   "platform catalog component create hello-api --system messaging --owner team-a --template python-service --param port=8080",
+  "platform catalog component create hello-api --system messaging --replace --wait",
 ))
 def create(
   name: Annotated[str, typer.Argument(help="Name of the new component, also the repo name.")],
@@ -123,6 +152,7 @@ def create(
   scm: Annotated[str | None, typer.Option(help="SCM connection; defaults to the default connection.")] = None,
   visibility: Annotated[str | None, typer.Option(help="public or private; defaults to the connection's.")] = None,
   prd: Annotated[str | None, typer.Option(help="File that seeds docs/prd.md ('-' reads stdin).")] = None,
+  replace: Annotated[bool, typer.Option("--replace", help="Take the place of a stopped creation with this name (yours, or any as platform-admins).")] = False,
   wait: Annotated[bool, typer.Option("--wait", help="Wait until the repo is created and registered.")] = False,
   timeout: Annotated[int, typer.Option(help="Seconds to wait with --wait.")] = 300,
   output: OutputOption = Format.table,
@@ -134,7 +164,7 @@ def create(
     fail(f"--visibility takes public or private, got '{visibility}'")
   body = {
     "name": name, "system": system, "owner": owner, "type": type_, "template": template, "description": description,
-    "params": _params(param), "scm": scm, "visibility": visibility, "prd": _prd(prd),
+    "params": _params(param), "scm": scm, "visibility": visibility, "prd": _prd(prd), "replace": replace or None,
   }
   client = _client()
   try:
@@ -194,8 +224,7 @@ def get(name: Annotated[str, typer.Argument(help="Component name (platform catal
       print_json(creation)
       return
     typer.echo(f"component/{name} (creating: {creation['status']})")
-    for condition in creation.get("conditions") or []:
-      typer.echo(f"  {_mark(condition, '✗')} {condition['type'].ljust(12)} {condition.get('message') or condition.get('reason')}")
+    _steps(creation)
     return
   if output == Format.json:
     print_json(component)
@@ -238,3 +267,41 @@ def clone(
   typer.echo(f"# git clone {' '.join([url, *target])}")
   # The platform hands out no credential: git uses the developer's own, and its output passes through.
   raise typer.Exit(subprocess.run(["git", "clone", "--", url, *target]).returncode)
+
+
+@creation_app.command("list", epilog=examples("platform catalog component creation list"))
+def creation_list(output: OutputOption = Format.table):
+  """List the creations you requested (all of them for platform-admins), with when each frees its name."""
+  try:
+    items = _client().list_component_creations()
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(items)
+    return
+  rows = [[item["name"], item["status"], item.get("step") or "—", item.get("requestedBy") or "—", age(item.get("createdAt")), remaining(item.get("freesAt"), utcnow())] for item in items]
+  print_table(["NAME", "STATUS", "STEP", "REQUESTED BY", "AGE", "FREES IN"], rows)
+
+
+@creation_app.command("get", epilog=examples("platform catalog component creation get hello-api"))
+def creation_get(name: Annotated[str, typer.Argument(help="Component name (platform catalog component creation list).")], output: OutputOption = Format.table):
+  """Show the steps of a creation."""
+  try:
+    creation = _client().component_creation(name)
+  except ApiError as error:
+    fail(str(error))
+  if output == Format.json:
+    print_json(creation)
+    return
+  typer.echo(f"componentcreation/{name} ({creation['status']})")
+  _steps(creation)
+
+
+@creation_app.command("delete", epilog=examples("platform catalog component creation delete hello-api"))
+def creation_delete(name: Annotated[str, typer.Argument(help="Component name (platform catalog component creation list).")]):
+  """Delete a stopped or finished creation and free its name; a running one is refused."""
+  try:
+    _client().delete_component_creation(name)
+  except ApiError as error:
+    fail(str(error))
+  success(f"creation of {name} deleted: {name} is free")

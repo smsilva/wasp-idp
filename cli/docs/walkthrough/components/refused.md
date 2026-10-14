@@ -41,11 +41,46 @@ platform catalog component create greeting-api \
 ✗ greeting-api: RepoAlreadyExists: wasp-foundry/greeting-api exists and was not created by this request: it is left untouched
 ```
 
-!!! warning "A failed creation keeps the name"
-    The creation stays at `RepoAlreadyExists`: `create` with the same name answers `409` and `clone` says the component is still being created. The CLI has no command to discard it yet; an admin removes it with `kubectl`:
+`--wait` ends with the way out:
 
-    ```bash
-    kubectl delete componentcreations.platform.wasp.silvios.me greeting-api \
-      --context k3d-platform-local \
-      --namespace platform-system
-    ```
+``` { .text .output title="output" }
+  rename it, request it again with --replace, or free the name with: platform catalog component creation delete greeting-api
+```
+
+The stopped creation keeps the name for 24 h. Until then, `create` with that name answers `409`, says what stopped it and points to the two ways out:
+
+``` { .text .output title="output" }
+✗ component 'greeting-api': its last creation stopped at RepoAlreadyExists (wasp-foundry/greeting-api exists and was not created by this request: it is left untouched): pass --replace to request it again, or free the name with: platform catalog component creation delete greeting-api
+```
+
+`component creation list` shows the creations you requested, with the step each one stopped at and when it frees its name:
+
+```bash
+platform catalog component creation list
+```
+
+``` { .text .output title="output" }
+NAME          STATUS             STEP         REQUESTED BY                          AGE  FREES IN
+greeting-api  RepoAlreadyExists  RepoCreated  9b1c6f0e-3d2a-4c55-8f7e-2a1d0c4b6e11  2m   23h 57m
+```
+
+Once the repo on GitHub is dealt with (deleted, or the component renamed), free the name and request it again:
+
+```bash
+platform catalog component creation delete greeting-api
+```
+
+``` { .text .output title="output" }
+✓ creation of greeting-api deleted: greeting-api is free
+```
+
+Or do both in one step with `--replace`, which takes the place of the stopped creation:
+
+```bash
+platform catalog component create greeting-api \
+  --system greeter \
+  --replace \
+  --wait
+```
+
+Only who requested the creation, or `platform-admins`, may replace or delete it. A creation still running is refused with `409`: it would leave a half-made repo behind.

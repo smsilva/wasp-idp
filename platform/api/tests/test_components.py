@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from fakes import CATALOG_TEAMS, FakeState, FakeTeams
 from platform_api.app import create_app
+from platform_api.catalog import CREATED_BY_ANNOTATION
 from platform_api.journal import Journal
 from platform_api.teams import users_of
 from tokens import TokenFactory
@@ -199,3 +200,139 @@ def test_creation_is_visible_to_who_requested_it_and_admins(client, tokens, user
 def test_a_component_keeps_its_team_in_use(state):
   state.create("components", {"metadata": {"name": "greeting-api"}, "spec": {"owner": "team-alpha", "system": "greeter", "source": {"repo": "x/y"}}})
   assert "component/greeting-api" in users_of(state, "team-alpha")
+
+
+def creation(state, name="greeting-api", sub="user-1", reason=None, ready=False, since="2026-10-10T01:00:00Z", done=()):
+  """A ComponentCreation as the provider leaves it: steps in `done` True, then Ready."""
+  conditions = [{"type": step, "status": "True", "reason": "Done"} for step in done]
+  if ready:
+    conditions.append({"type": "Ready", "status": "True", "reason": "Created", "lastTransitionTime": since})
+  elif reason:
+    conditions.append({"type": "Ready", "status": "False", "reason": reason, "message": f"{reason} message", "lastTransitionTime": since})
+  return state.create("componentcreations", {
+    "metadata": {"name": name, "annotations": {CREATED_BY_ANNOTATION: sub}},
+    "spec": {"system": "greeter", "owner": "team-alpha"},
+    "status": {"conditions": conditions},
+  })
+
+
+def admin_of(tokens):
+  return bearer(tokens, sub="admin-1", groups=("platform-admins",))
+
+
+@pytest.mark.parametrize("reason", ["RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected"])
+def test_a_stopped_creation_holds_the_name_and_says_the_way_out(client, state, user, reason):
+  creation(state, reason=reason)
+  response = create(client, user)
+  assert response.status_code == 409
+  message = response.json()["error"]["message"]
+  assert f"stopped at {reason}" in message
+  assert "--replace" in message
+  assert "platform catalog component creation delete greeting-api" in message
+
+
+@pytest.mark.parametrize("kwargs, said", [
+  ({}, "still being created"),
+  ({"reason": "GitHubUnavailable"}, "still being created"),
+  ({"reason": "ConnectionNotReady"}, "still being created"),
+  ({"ready": True}, "already created"),
+])
+def test_replace_does_not_apply_to_a_running_or_ready_creation(client, state, user, kwargs, said):
+  old = creation(state, **kwargs)
+  for body in ({}, {"replace": True}):
+    response = create(client, user, **body)
+    assert response.status_code == 409
+    assert said in response.json()["error"]["message"]
+  assert state.get("componentcreations", "greeting-api")["metadata"]["uid"] == old["metadata"]["uid"]
+
+
+def test_replace_takes_the_place_of_a_stopped_creation(client, state, user, journal_path):
+  old = creation(state, reason="RepoAlreadyExists")
+  response = create(client, user, replace=True)
+  assert response.status_code == 202, response.text
+  new = state.get("componentcreations", "greeting-api")
+  assert new["metadata"]["uid"] != old["metadata"]["uid"]
+  assert new.get("status") is None
+  actions = [entry["action"] for entry in map(json.loads, journal_path.read_text().splitlines()) if "action" in entry]
+  assert actions == ["delete", "create"]
+
+
+def test_replace_is_for_who_requested_it_and_admins(client, state, tokens):
+  creation(state, reason="RepoAlreadyExists", sub="user-1")
+  other = bearer(tokens, sub="user-2")
+  response = create(client, other, replace=True)
+  assert response.status_code == 403
+  assert state.get("componentcreations", "greeting-api")["status"]["conditions"][-1]["reason"] == "RepoAlreadyExists"
+  assert create(client, admin_of(tokens), replace=True).status_code == 202
+
+
+def test_replace_without_a_creation_just_creates(client, state, user):
+  assert create(client, user, replace=True).status_code == 202
+
+
+def test_replace_does_not_free_a_name_in_the_index(client, state, user):
+  state.create("components", {"metadata": {"name": "greeting-api"}, "spec": {}})
+  assert create(client, user, replace=True).status_code == 409
+
+
+CREATIONS_ROUTE = "/v1/catalog/component-creations"
+
+
+def test_list_creations_shows_each_person_their_own_and_admins_all(client, state, tokens, user):
+  creation(state, name="a-api", sub="user-1", reason="RepoAlreadyExists", done=("Validated", "Rendered"))
+  creation(state, name="b-api", sub="user-2")
+  mine = client.get(CREATIONS_ROUTE, headers=user).json()["items"]
+  assert [item["name"] for item in mine] == ["a-api"]
+  assert [item["name"] for item in client.get(CREATIONS_ROUTE, headers=admin_of(tokens)).json()["items"]] == ["a-api", "b-api"]
+  item = mine[0]
+  assert item["status"] == "RepoAlreadyExists"
+  assert item["step"] == "RepoCreated"
+  assert item["requestedBy"] == "user-1"
+  assert item["freesAt"] == "2026-10-11T01:00:00Z"
+
+
+def test_list_creations_has_no_frees_at_while_running(client, state, user):
+  creation(state, reason="GitHubUnavailable")
+  item = client.get(CREATIONS_ROUTE, headers=user).json()["items"][0]
+  assert item["freesAt"] is None
+  assert item["step"] == "Validated"
+
+
+def test_a_ready_creation_has_no_step_left(client, state, user):
+  creation(state, ready=True, done=("Validated", "Rendered", "RepoCreated", "Pushed", "Protected", "Registered"))
+  item = client.get(CREATIONS_ROUTE, headers=user).json()["items"][0]
+  assert item["step"] is None
+  assert item["freesAt"] == "2026-10-11T01:00:00Z"
+
+
+def test_a_component_named_creations_is_not_shadowed(client, state, user):
+  assert client.get(f"{ROUTE}/creations", headers=user).status_code == 404
+
+
+def test_delete_a_stopped_or_ready_creation_frees_the_name(client, state, user, journal_path):
+  creation(state, reason="RepoAlreadyExists")
+  creation(state, name="b-api", ready=True)
+  assert client.delete(f"{ROUTE}/greeting-api/creation", headers=user).status_code == 204
+  assert client.delete(f"{ROUTE}/b-api/creation", headers=user).status_code == 204
+  assert state.list("componentcreations") == []
+  entries = [entry for entry in map(json.loads, journal_path.read_text().splitlines()) if "action" in entry]
+  assert [(entry["action"], entry["kind"], entry["name"]) for entry in entries] == [
+    ("delete", "ComponentCreation", "greeting-api"), ("delete", "ComponentCreation", "b-api"),
+  ]
+  assert create(client, user).status_code == 202
+
+
+@pytest.mark.parametrize("kwargs", [{}, {"reason": "GitHubUnavailable"}])
+def test_delete_a_running_creation_is_409(client, state, user, kwargs):
+  creation(state, **kwargs)
+  response = client.delete(f"{ROUTE}/greeting-api/creation", headers=user)
+  assert response.status_code == 409
+  assert "still being created" in response.json()["error"]["message"]
+  assert len(state.list("componentcreations")) == 1
+
+
+def test_delete_a_creation_is_for_who_requested_it_and_admins(client, state, tokens, user):
+  creation(state, reason="RepoAlreadyExists")
+  assert client.delete(f"{ROUTE}/greeting-api/creation", headers=bearer(tokens, sub="user-2")).status_code == 403
+  assert client.delete(f"{ROUTE}/greeting-api/creation", headers=admin_of(tokens)).status_code == 204
+  assert client.delete(f"{ROUTE}/greeting-api/creation", headers=user).status_code == 404

@@ -45,7 +45,7 @@ rules:
     verbs: [get, list, watch]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [componentcreations]
-    verbs: [get, list, watch, create]
+    verbs: [get, list, watch, create, delete]
   - apiGroups: [platform.wasp.silvios.me]
     resources: [builds]
     verbs: [get, list, watch, create]

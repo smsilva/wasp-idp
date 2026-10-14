@@ -4,6 +4,7 @@ A component lives in its repo's catalog-info.yaml. The platform creates the repo
 run by the scm_github provider) and indexes what it created; the index is a read mirror, never
 changed here at a user's request.
 """
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,10 +13,11 @@ from wasp_templates.source import SourceError, coerce
 
 from .auth import Principal, current_principal
 from .catalog import CREATED_BY_ANNOTATION, DESCRIPTION_MAX, LABEL
+from .durations import format_time
 from .environments import ADMIN_GROUP, can_use, is_owner_or_admin
 from .journal import Journal, redacted
 from .scm import PLURAL as CONNECTIONS, status_of as connection_status
-from .state import CATALOG_GROUP, ENVIRONMENTS, GROUP, VERSION, AlreadyExists, NotFound
+from .state import CATALOG_GROUP, ENVIRONMENTS, GROUP, VERSION, AlreadyExists, Conflict, NotFound
 from .teams import known_teams
 from .templates import TYPES
 from .workloads import INSTANCES, ready_of as instance_ready
@@ -24,7 +26,15 @@ COMPONENTS = "components"
 CREATIONS = "componentcreations"
 CREATION_KIND = "ComponentCreation"
 PRD_MAX = 64 * 1024
-STEPS = ("Validated", "Rendered", "RepoCreated", "Pushed", "Registered")
+# The provider's steps, FINAL reasons and retention (STEPS, FINAL and RETENTION in
+# platform/providers/scm_github/src/scm_github_provider/component_creation.py): this API is a separate
+# uv project, so it keeps a copy, and a provider test fails when they differ.
+STEPS = ("Validated", "Rendered", "RepoCreated", "Pushed", "Protected", "Registered")
+# Ready=False with these reasons is a stopped creation: it holds the name until RETENTION removes it,
+# or until create --replace or creation delete. The CLI's FINAL also has the connection reasons, which
+# the provider retries: those creations are still running.
+FINAL = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected"}
+RETENTION = timedelta(hours=24)
 
 
 class ComponentRequest(BaseModel):
@@ -40,6 +50,8 @@ class ComponentRequest(BaseModel):
   scm: str | None = None
   visibility: Literal["public", "private"] | None = None
   prd: str | None = Field(default=None, max_length=PRD_MAX)
+  # Takes the place of a stopped creation (FINAL) with the same name; never of a running or Ready one.
+  replace: bool = False
 
   @field_validator("name", "system", "owner", "template", "scm")
   @classmethod
@@ -71,6 +83,35 @@ def ready_of(obj: dict) -> dict | None:
   return next((c for c in (obj.get("status") or {}).get("conditions", []) if c.get("type") == "Ready"), None)
 
 
+def stopped(obj: dict) -> bool:
+  ready = ready_of(obj) or {}
+  return ready.get("status") == "False" and ready.get("reason") in FINAL
+
+
+def ended(obj: dict) -> bool:
+  """Ready or stopped: the provider no longer works on it, and RETENTION counts from then."""
+  return (ready_of(obj) or {}).get("status") == "True" or stopped(obj)
+
+
+def creation_row(obj: dict) -> dict:
+  """A line of `component creation list`: what holds the name, and until when."""
+  ready = ready_of(obj) or {}
+  conditions = {item["type"]: item for item in (obj.get("status") or {}).get("conditions", [])}
+  since = ready.get("lastTransitionTime")
+  frees_at = None
+  if ended(obj) and since:
+    frees_at = format_time(datetime.fromisoformat(since.replace("Z", "+00:00")) + RETENTION)
+  return {
+    "kind": CREATION_KIND,
+    "name": obj["metadata"]["name"],
+    "status": creation_view(obj)["status"],
+    "step": next((step for step in STEPS if (conditions.get(step) or {}).get("status") != "True"), None),
+    "requestedBy": (obj["metadata"].get("annotations") or {}).get(CREATED_BY_ANNOTATION),
+    "createdAt": obj["metadata"].get("creationTimestamp"),
+    "freesAt": frees_at,
+  }
+
+
 def creation_view(obj: dict) -> dict:
   spec = obj.get("spec", {})
   status = obj.get("status") or {}
@@ -98,7 +139,8 @@ def creation_view(obj: dict) -> dict:
 
 
 def router(state, journal: Journal, teams=None) -> APIRouter:
-  routes = APIRouter(prefix="/v1/catalog/components")
+  # /component-creations sits beside /components, not under it: a component may be named "creations".
+  routes = APIRouter(prefix="/v1/catalog")
 
   def exists(plural: str, name: str) -> bool:
     try:
@@ -106,6 +148,30 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
       return True
     except NotFound:
       return False
+
+  def held_by(name: str, obj: dict) -> HTTPException:
+    """Why an existing creation holds the name, and the way out when it stopped."""
+    if stopped(obj):
+      ready = ready_of(obj)
+      return HTTPException(409, (
+        f"component '{name}': its last creation stopped at {ready['reason']} ({ready.get('message') or 'no message'}): "
+        f"pass --replace to request it again, or free the name with: platform catalog component creation delete {name}"
+      ))
+    if ended(obj):
+      return HTTPException(409, f"component '{name}' already created: see platform catalog component creation get {name}")
+    return HTTPException(409, f"component '{name}' is still being created: follow it with platform catalog component get {name}")
+
+  def release(obj: dict, principal: Principal) -> None:
+    """Deletes an ended creation, journaled: only that exact object (uid), never one recreated meanwhile."""
+    name = obj["metadata"]["name"]
+    entry = journal.record("delete", CREATION_KIND, name, None, principal.actor)
+    try:
+      state.delete(CREATIONS, name, uid=obj["metadata"].get("uid"))
+    except NotFound:
+      pass
+    except Conflict:
+      raise HTTPException(409, f"the creation of '{name}' changed meanwhile: try again")
+    journal.mark_applied(entry)
 
   def owner_of(request: ComponentRequest, principal: Principal) -> str:
     if request.owner is None:
@@ -149,13 +215,22 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
       raise HTTPException(409, f"component '{request.name}': scm connection '{connection['metadata']['name']}' is not ready ({current})")
     return connection
 
-  @routes.post("", status_code=202)
+  @routes.post("/components", status_code=202)
   def create(request: ComponentRequest, principal: Principal = Depends(current_principal)):
     # Every check runs before the CR is written: a refused request creates nothing on GitHub.
     if not exists("systems", request.system):
       raise HTTPException(422, f"component '{request.name}': system '{request.system}' not found")
-    if exists(COMPONENTS, request.name) or exists(CREATIONS, request.name):
+    if exists(COMPONENTS, request.name):
       raise HTTPException(409, f"component '{request.name}' already exists")
+    try:
+      previous = state.get(CREATIONS, request.name)
+    except NotFound:
+      previous = None
+    if previous is not None:
+      if not (request.replace and stopped(previous)):
+        raise held_by(request.name, previous)
+      if not is_owner_or_admin(previous, principal, CREATED_BY_ANNOTATION):
+        raise HTTPException(403, f"the creation of '{request.name}' can be replaced by who requested it and {ADMIN_GROUP}")
     owner = owner_of(request, principal)
     template, is_default = template_of(request)
     if request.type is not None and template["spec"].get("type") != request.type:
@@ -166,6 +241,9 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
       raise HTTPException(422, f"params.{error}")
     connection = connection_of(request)
     github = connection["spec"].get("github") or {}
+    # Safe to drop: the provider never adopts a repo it did not create (nodeId), and the workdir is per uid.
+    if previous is not None:
+      release(previous, principal)
 
     spec = {
       "system": request.system,
@@ -202,7 +280,7 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
     journal.mark_applied(entry)
     return creation_view(created)
 
-  @routes.get("")
+  @routes.get("/components")
   def list_components(system: str | None = None, owner: str | None = None, principal: Principal = Depends(current_principal)):
     items = [component_view(obj) for obj in sorted(state.list(COMPONENTS), key=lambda obj: obj["metadata"]["name"])]
     return {"items": [item for item in items if (system is None or item["system"] == system) and (owner is None or item["owner"] == owner)]}
@@ -227,7 +305,7 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
       })
     return sorted(items, key=lambda item: (item["environment"], item["instance"] or ""))
 
-  @routes.get("/{name}")
+  @routes.get("/components/{name}")
   def get(name: str, principal: Principal = Depends(current_principal)):
     try:
       component = component_view(state.get(COMPONENTS, name))
@@ -235,14 +313,32 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
       raise HTTPException(404, f"component '{name}' not found")
     return {**component, "runningIn": running_in(name, principal)}
 
-  @routes.get("/{name}/creation")
-  def creation(name: str, principal: Principal = Depends(current_principal)):
+  def visible_creation(name: str, principal: Principal) -> dict:
     try:
       obj = state.get(CREATIONS, name)
     except NotFound:
       raise HTTPException(404, f"no creation of component '{name}'")
     if not is_owner_or_admin(obj, principal, CREATED_BY_ANNOTATION):
       raise HTTPException(403, f"the creation of '{name}' is visible to who requested it and {ADMIN_GROUP}")
-    return creation_view(obj)
+    return obj
+
+  @routes.get("/components/{name}/creation")
+  def creation(name: str, principal: Principal = Depends(current_principal)):
+    return creation_view(visible_creation(name, principal))
+
+  @routes.delete("/components/{name}/creation", status_code=204)
+  def delete_creation(name: str, principal: Principal = Depends(current_principal)):
+    """Frees the name of an ended creation. A running one is refused: the provider skips objects being
+    deleted, so its half-made repo would be left behind."""
+    obj = visible_creation(name, principal)
+    if not ended(obj):
+      raise HTTPException(409, f"component '{name}' is still being created: it can be deleted once it is Ready or stopped")
+    release(obj, principal)
+
+  @routes.get("/component-creations")
+  def list_creations(principal: Principal = Depends(current_principal)):
+    """Each person sees the creations they requested; platform-admins see all."""
+    items = sorted(state.list(CREATIONS), key=lambda obj: obj["metadata"]["name"])
+    return {"items": [creation_row(obj) for obj in items if is_owner_or_admin(obj, principal, CREATED_BY_ANNOTATION)]}
 
   return routes

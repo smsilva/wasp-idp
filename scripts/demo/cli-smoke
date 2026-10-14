@@ -20,6 +20,7 @@ templates (list, render, import plan), an SCM connection up to the GitHub
 manifest page (creating the App needs a browser and an org owner, so it stays
 out), the refusals of component create (unknown system, a --param outside the
 schema, a name already in the index, a connection that is not ready), component
+creation list and delete without a creation, component
 clone --https of a public repo in the index, and of a name outside it, the OCI
 registries (add refused to a non-admin, NoDefaultRegistry when the cluster has no
 default, add with --vendor and --scm-connection, a non-ghcr.io host and a taken
@@ -528,6 +529,18 @@ expect_failure "is not ready (AppNotCreated)" \
     --owner team-platform \
     --scm "${connection}"
 expect_failure "not found" platform catalog component get "${component}"
+
+step "component creation: list and delete without a creation (#452)"
+# A stopped creation needs GitHub (RepoAlreadyExists): replace and delete of one stay in the API tests.
+output="$(platform catalog component creation list)"
+expect_output "FREES IN" "${output}"
+if grep --quiet --fixed-strings -- "${component}" <<< "${output}"; then
+  echo "expected no creation of ${component} in:" >&2
+  echo "${output}" >&2
+  exit 1
+fi
+expect_failure "no creation of component '${component}'" \
+  platform catalog component creation delete "${component}"
 
 step "component clone: the repo of a component in the index (#327)"
 # A component in the index pointing at a public repo of the foundry: an anonymous HTTPS clone needs

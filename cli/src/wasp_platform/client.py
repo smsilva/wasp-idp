@@ -117,6 +117,12 @@ class PlatformClient:
   def component_creation(self, name: str) -> dict:
     return self._request("GET", f"/v1/catalog/components/{name}/creation")
 
+  def list_component_creations(self) -> list[dict]:
+    return self._request("GET", "/v1/catalog/component-creations")["items"]
+
+  def delete_component_creation(self, name: str) -> None:
+    self._request("DELETE", f"/v1/catalog/components/{name}/creation")
+
   def create_build(self, body: dict) -> dict:
     return self._request("POST", "/v1/builds", json=body)
 

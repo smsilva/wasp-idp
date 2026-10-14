@@ -35,7 +35,7 @@ DONE = creation(
 
 @pytest.fixture
 def api(monkeypatch):
-  state = {"requests": [], "polls": [DONE], "component": None, "error": None, "creating": True}
+  state = {"requests": [], "polls": [DONE], "component": None, "error": None, "creating": True, "creations": []}
 
   def handler(request: httpx.Request) -> httpx.Response:
     state["requests"].append(request)
@@ -44,6 +44,10 @@ def api(monkeypatch):
       return httpx.Response(state["error"][0], json={"error": {"code": "x", "message": state["error"][1]}})
     if request.method == "POST":
       return httpx.Response(202, json=creation())
+    if request.method == "DELETE":
+      return httpx.Response(204) if state["creating"] else httpx.Response(404, json={"error": {"code": "not_found", "message": "no creation of component 'greeting-api'"}})
+    if path == "/v1/catalog/component-creations":
+      return httpx.Response(200, json={"items": state["creations"]})
     if path.endswith("/creation"):
       if not state["creating"]:
         return httpx.Response(404, json={"error": {"code": "not_found", "message": "creation 'greeting-api' not found"}})
@@ -111,6 +115,30 @@ def test_wait_stops_at_a_final_reason(api):
   result = run("create", "greeting-api", "--system", "greeter", "--wait")
   assert result.exit_code == 1
   assert "RepoAlreadyExists" in result.output
+
+
+def test_wait_on_a_stopped_creation_points_to_the_way_out(api):
+  failed = creation(conditions=[condition("Ready", ok=False, reason="RepoAlreadyExists", message="left untouched")])
+  api["polls"] = [failed]
+  result = run("create", "greeting-api", "--system", "greeter", "--wait")
+  assert result.exit_code == 1
+  assert "✗ greeting-api: RepoAlreadyExists: left untouched" in result.output
+  assert "rename it, request it again with --replace, or free the name with: platform catalog component creation delete greeting-api" in result.output
+
+
+def test_wait_on_a_connection_reason_gives_no_replace_hint(api):
+  api["polls"] = [creation(conditions=[condition("Ready", ok=False, reason="ConnectionNotReady", message="not verified")])]
+  result = run("create", "greeting-api", "--system", "greeter", "--wait")
+  assert result.exit_code == 1
+  assert "--replace" not in result.output
+
+
+def test_create_replace_sends_the_flag(api):
+  result = run("create", "greeting-api", "--system", "greeter", "--replace")
+  assert result.exit_code == 0, result.output
+  assert json.loads(api["requests"][0].content)["replace"] is True
+  run("create", "greeting-api", "--system", "greeter")
+  assert "replace" not in json.loads(api["requests"][-1].content)
 
 
 def test_wait_shows_an_unprotected_main_as_a_warning(api):
@@ -262,3 +290,41 @@ def test_clone_while_the_component_is_created_points_to_get(api, git):
   assert result.exit_code == 1
   assert "greeting-api is still being created: follow it with platform catalog component get greeting-api" in result.output
   assert git["commands"] == []
+
+
+def test_creation_list_columns(api, monkeypatch):
+  from datetime import datetime, timezone
+  monkeypatch.setattr(component_module, "utcnow", lambda: datetime(2026, 10, 10, 3, 0, tzinfo=timezone.utc))
+  api["creations"] = [
+    {"name": "a-api", "status": "RepoAlreadyExists", "step": "RepoCreated", "requestedBy": "user-1", "createdAt": "2026-10-10T01:00:00Z", "freesAt": "2026-10-11T01:00:00Z"},
+    {"name": "b-api", "status": "pending", "step": "Validated", "requestedBy": "user-1", "createdAt": "2026-10-10T02:59:30Z", "freesAt": None},
+  ]
+  result = run("creation", "list")
+  assert result.exit_code == 0, result.output
+  lines = result.stdout.splitlines()
+  assert lines[0].split() == ["NAME", "STATUS", "STEP", "REQUESTED", "BY", "AGE", "FREES", "IN"]
+  assert lines[1].split() == ["a-api", "RepoAlreadyExists", "RepoCreated", "user-1", "2h", "22h"]
+  assert lines[2].split() == ["b-api", "pending", "Validated", "user-1", "<1m", "—"]
+
+
+def test_creation_get_shows_the_steps(api):
+  api["polls"] = [creation(conditions=[condition("Validated"), condition("Ready", ok=False, reason="RepoAlreadyExists", message="left untouched")])]
+  result = run("creation", "get", "greeting-api")
+  assert result.exit_code == 0, result.output
+  assert "componentcreation/greeting-api (RepoAlreadyExists)" in result.stdout
+  assert "✓ Validated" in result.stdout
+
+
+def test_creation_delete_frees_the_name(api):
+  result = run("creation", "delete", "greeting-api")
+  assert result.exit_code == 0, result.output
+  request = api["requests"][0]
+  assert (request.method, request.url.path) == ("DELETE", "/v1/catalog/components/greeting-api/creation")
+  assert "greeting-api is free" in result.stdout
+
+
+def test_creation_delete_of_an_unknown_name_fails(api):
+  api["creating"] = False
+  result = run("creation", "delete", "greeting-api")
+  assert result.exit_code == 1
+  assert "no creation of component 'greeting-api'" in result.output
