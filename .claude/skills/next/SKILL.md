@@ -12,9 +12,9 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 
 `.claude/PROMPT.local.md` (gitignored) is a session prompt: the instructions the user gave in an earlier session, so `/clear` followed by `/next` resumes the same way of working. It carries no memory of what was done: the work itself is in the repo. An empty file counts as missing.
 
-- **No argument, the file has content:** read it and follow it in place of the steps below. Skip the board.
+- **No argument, the file has content:** read it and follow it in place of the steps below. Skip the board. If the current branch or checkout path differs from the header, say so and ask before the first commit.
 - **No argument, the file is missing:** run the steps below (the board).
-- **`save`:** draft the prompt from the current session (in English, imperative, to a fresh agent: the context, each standing instruction, the start; drop what was done). When the file exists, merge into it and show the diff; else show the draft in full. Write only after the user confirms, then show its absolute path and tell them they can run `/clear` and then `/next`.
+- **`save`:** draft the prompt from the current session (in English, imperative, to a fresh agent: the context, each standing instruction, the start; drop what was done). Record the date, the branch and the checkout path (a worktree's own path, or the main checkout) in the header. When the file exists, merge into it and show the diff; else show the draft in full. Write only after the user confirms, then show its absolute path and tell them they can run `/clear` and then `/next`.
 - **`clear`:** show the file, then remove it with `rm` (never leave it empty) only after the user confirms: it is gitignored, so nothing brings it back. `/next` goes back to the board.
 
 ## Steps
