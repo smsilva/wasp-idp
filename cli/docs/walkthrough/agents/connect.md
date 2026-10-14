@@ -4,8 +4,8 @@
 
 | Toolset | What the agent can do |
 |---|---|
-| `core` | `whoami`: who the platform sees |
-| `environments` | list and read environments; create one, with an expiration, only with `--allow-writes` |
+| `core` | `whoami`: who the platform sees; `status`: which capabilities work |
+| `environments` | list and read environments; create one, with an expiration, and delete an ephemeral one, only with `--allow-writes` |
 | `catalog` | read domains, systems, resources, components and templates |
 
 ## Set it up
@@ -62,6 +62,12 @@ Who am I on the platform?
 ```
 
 The agent calls `whoami`, which answers with the same `sub`, email and groups as `platform whoami --output json`.
+
+```text
+Is the platform working?
+```
+
+The agent calls `status`, the same capabilities as `platform status`.
 
 ## Ask about environments and the catalog
 
