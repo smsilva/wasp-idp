@@ -10,7 +10,7 @@
   // Verbs of the platform and kubectl commands: the word before one is the concept, the first argument
   // after it is the object; both are shown in bold.
   const VERBS = new Set(["create", "delete", "get", "list", "add", "remove", "share", "unshare", "verify", "default",
-    "import", "render", "logs", "exec", "describe", "apply", "auth"]);
+    "import", "render", "logs", "exec", "describe", "apply", "auth", "clone"]);
 
   // Values of these options get a color of their own, the same one their part of an instance URL gets.
   const ROLES = { "--component": "component", "--environment": "environment" };
@@ -18,6 +18,36 @@
   const CONCEPTS = { component: "component", environment: "environment" };
   // `http://<component>.<environment>.localhost`: the host of a workload instance (Reach an instance from outside).
   const INSTANCE_URL = /^(https?:\/\/)([a-z0-9-]+)\.([a-z0-9-]+)(\.localhost.*)$/;
+
+  // Names of components and environments the page's commands use (`--component hello-api`,
+  // `environment create demo`): a path or URL segment equal to one of them takes its color too
+  // (`/tmp/hello-api`, `wasp-foundry/hello-api.git`).
+  let names = new Map();
+
+  function collectNames(texts) {
+    names = new Map();
+    const patterns = [
+      [/--component[ =]([a-z0-9-]+)/g, "component"],
+      [/--environment[ =]([a-z0-9-]+)/g, "environment"],
+      [/\bcomponent\s+[a-z]+\s+([a-z0-9-]+)/g, "component"],
+      [/\benvironment\s+[a-z]+\s+([a-z0-9-]+)/g, "environment"],
+    ];
+    for (const text of texts) {
+      for (const [pattern, role] of patterns) {
+        for (const match of text.matchAll(pattern)) names.set(match[1], role);
+      }
+    }
+  }
+
+  // A word with the known names inside it colored, the rest in `kind`.
+  function withNames(kind, word) {
+    if (!names.size) return span(kind, word);
+    return word.split(/([\/.:@])/).map((part) => {
+      if (!part) return "";
+      const role = names.get(part);
+      return role ? span(role, part) : span(kind, part);
+    }).join("");
+  }
 
   const escape = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const span = (kind, text) => `<span class="t-${kind}">${escape(text)}</span>`;
@@ -98,12 +128,12 @@
         }
         if (expectValue) {
           expectValue = false;
-          return span(role || "val", word);
+          return role ? span(role, word) : withNames("val", word);
         }
         if (objectRole.has(index)) return span(objectRole.get(index), word);
         if (bold.has(index)) return span("key", word);
         if (/^['"$]/.test(word)) return span("val", word);
-        return span("arg", word);
+        return withNames("arg", word);
       }).join("");
       return (start ? '<span class="t-prompt"></span>' : '<span class="t-indent"></span>') + html;
     }).join("\n") + "\n";
@@ -130,6 +160,7 @@
   }
 
   function paint() {
+    collectNames([...document.querySelectorAll(".highlight.language-bash pre > code")].map((code) => code.textContent));
     document.querySelectorAll(".highlight.plan pre > code:not([data-terminal])").forEach((code) => {
       code.innerHTML = plan(code.textContent);
       code.dataset.terminal = "";

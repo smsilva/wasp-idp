@@ -24,7 +24,7 @@ The repo does not exist yet. A repo left by an earlier run stops the create ([Af
 gh repo view wasp-foundry/hello-api
 ```
 
-The SSH alias that [Clone and branch](clone.md) pushes through answers with an account that is a member of `wasp-foundry`:
+The SSH alias that [Clone the app](clone.md) sets up answers with an account that is a member of `wasp-foundry`:
 
 ```bash
 ssh -T git@github.com-personal

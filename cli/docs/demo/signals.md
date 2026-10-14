@@ -20,3 +20,7 @@ platform workload signals \
   --component hello-api \
   --environment demo
 ```
+
+``` { .text .output title="output" }
+latency p95 0.47 ms · traffic 0.98 req/s · errors 0.00% · saturation 10.63%
+```

@@ -120,7 +120,9 @@ nav:
       - demo/index.md
       - Before the demo: demo/before.md
       - Create the app: demo/create.md
-      - Clone and branch: demo/clone.md
+      - Clone the app: demo/clone.md
+      - A branch and a change: demo/branch.md
+      - Push the branch: demo/push.md
       - Build the branch: demo/build.md
       - Create an environment: demo/environment.md
       - Deploy and call it: demo/deploy.md
