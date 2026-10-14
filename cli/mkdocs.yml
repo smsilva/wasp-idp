@@ -116,6 +116,17 @@ nav:
           - Delete the repo and its images: walkthrough/cleanup/images.md
           - What stays: walkthrough/cleanup/what-stays.md
           - Sign out: walkthrough/cleanup/sign-out.md
+  - Demo:
+      - demo/index.md
+      - Before the demo: demo/before.md
+      - Create the app: demo/create.md
+      - Clone and branch: demo/clone.md
+      - Build the branch: demo/build.md
+      - Create an environment: demo/environment.md
+      - Deploy and call it: demo/deploy.md
+      - Golden signals: demo/signals.md
+      - A second environment: demo/second.md
+      - After the demo: demo/cleanup.md
   - Reference:
       - reference/index.md
       - Install the CLI: reference/install.md
