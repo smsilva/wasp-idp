@@ -6,6 +6,9 @@ hide:
 
 # platform-api { .home-title }
 
+The **Platform API** runs environments, the catalog, builds and deploys. The CLI and an AI agent over MCP are two ways to use it.
+{ .home-lead }
+
 <div class="grid cards home-cards" markdown>
 
 -   :material-play-circle-outline: **[Walkthrough](walkthrough/index.md)**
@@ -18,10 +21,10 @@ hide:
 
 -   :material-book-open-variant: **[Reference](reference/index.md)**
 
-    **Every command**: flags, status values and permissions.
+    The **API**, every CLI command and every MCP tool.
 
 -   :material-sitemap-outline: **[Architecture](architecture.md)**
 
-    The **Platform API**, its CRDs and the providers inside platform-local.
+    How the **clients**, the API and the providers fit together.
 
 </div>
