@@ -23,6 +23,6 @@ observability  Active                   prometheus      —
 ```
 
 - `scm` runs (its provider is up) but has no connection yet: [GitHub connection](../scm-connection/github/index.md) adds one, and [Registry](../registry/ghcr/register.md) the GHCR of its org right after. `build` runs through the connection and pushes to the registry, so it waits on both.
-- `cloud-account` is not installed: `init` installs its provider with `--aws-profile`, in [Base credential](../cloud-accounts/aws/base-credential.md). A capability that is not installed does not make the exit code `1`; one installed and not `Active` does.
+- `cloud-account` is not installed. A capability that is not installed does not make the exit code `1`; one installed and not `Active` does.
 
 The next page opens one capability in full, with the command that fixes it.
