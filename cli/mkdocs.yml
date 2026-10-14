@@ -126,6 +126,9 @@ nav:
       - Deploy and call it: demo/deploy.md
       - Golden signals: demo/signals.md
       - A second environment: demo/second.md
+      - Deploy there: demo/second-deploy.md
+      - Call it there: demo/second-call.md
+      - Where the app runs: demo/running-in.md
       - After the demo: demo/cleanup.md
   - Reference:
       - reference/index.md
