@@ -26,11 +26,11 @@ def me_handler(request: httpx.Request) -> httpx.Response:
   return httpx.Response(200, json=ME)
 
 
-async def test_core_lists_whoami_as_read_only():
+async def test_core_lists_whoami_and_status_as_read_only():
   async with Client(mcp_server.build(["core"], client=client_for(me_handler))) as client:
     tools = (await client.list_tools()).tools
-  assert [tool.name for tool in tools] == ["whoami"]
-  assert tools[0].annotations.read_only_hint is True
+  assert sorted(tool.name for tool in tools) == ["status", "whoami"]
+  assert all(tool.annotations.read_only_hint for tool in tools)
 
 
 async def test_whoami_calls_v1_me():
@@ -69,3 +69,37 @@ async def test_write_tools_need_allow_writes(monkeypatch):
     tools = (await client.list_tools()).tools
   assert tools[0].annotations.read_only_hint is False
   assert tools[0].annotations.destructive_hint is True
+
+
+CAPABILITIES = [{"name": "identity", "status": "Active"}, {"name": "build", "status": "NotInstalled"}]
+
+
+async def test_core_status_lists_the_capabilities():
+  def handler(request):
+    assert request.url.path == "/v1/capabilities"
+    return httpx.Response(200, json={"items": CAPABILITIES})
+
+  async with Client(mcp_server.build(["core"], client=client_for(handler))) as client:
+    tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    result = await client.call_tool("status", {})
+  assert tools["status"].annotations.read_only_hint is True
+  assert result.structured_content == {"items": CAPABILITIES}
+
+
+async def test_core_status_of_one_capability():
+  def handler(request):
+    assert request.url.path == "/v1/capabilities/cloud-account"
+    return httpx.Response(200, json={"name": "cloud-account", "status": "Active"})
+
+  async with Client(mcp_server.build(["core"], client=client_for(handler))) as client:
+    result = await client.call_tool("status", {"capability": "cloud-account"})
+  assert result.structured_content == {"name": "cloud-account", "status": "Active"}
+
+
+async def test_core_status_refuses_a_capability_that_is_a_path():
+  def no_calls(request):
+    raise AssertionError(f"unexpected call to {request.url.path}")
+
+  async with Client(mcp_server.build(["core"], client=client_for(no_calls))) as client:
+    result = await client.call_tool("status", {"capability": "../environments/demo"})
+  assert result.is_error

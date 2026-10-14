@@ -41,7 +41,16 @@ def core(client: ClientFactory) -> list[ToolSpec]:
     """Who the Platform API sees the caller as: sub, email, groups and teams."""
     return client().me()
 
-  return [ToolSpec("whoami", whoami)]
+  def status(capability: str | None = None) -> dict[str, Any]:
+    """Each capability of the platform and whether it works (Active, NotInstalled or a failure); one capability by name.
+
+    platform-admins also get the providers that implement it and how to fix a failing one.
+    """
+    if capability is None:
+      return {"items": client().list_capabilities()}
+    return client().get_capability(checked(capability))
+
+  return [ToolSpec("whoami", whoami), ToolSpec("status", status)]
 
 
 def environments(client: ClientFactory) -> list[ToolSpec]:

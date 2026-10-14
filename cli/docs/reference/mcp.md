@@ -20,6 +20,7 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | Toolset | Tool | Route | Annotations |
 |---|---|---|---|
 | `core` | `whoami` | `GET /v1/me` | read-only |
+| `core` | `status` | `GET /v1/capabilities`, or `GET /v1/capabilities/{capability}` | read-only |
 | `environments` | `environments_list` | `GET /v1/environments` (`all=true` lists every environment, `platform-admins` only) | read-only |
 | `environments` | `environments_get` | `GET /v1/environments/{name}`, without `kubeconfigData` | read-only |
 | `environments` | `environments_create` | `POST /v1/environments` | write, not destructive, not idempotent |
@@ -31,6 +32,8 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `catalog` | `catalog_components_creation_get` | `GET /v1/catalog/components/{name}/creation` | read-only |
 | `catalog` | `catalog_templates_list` | `GET /v1/catalog/templates` | read-only |
 | `catalog` | `catalog_templates_get` | `GET /v1/catalog/templates/{name}` | read-only |
+
+`status` answers like `platform status` (ADR 0039): each capability with its status, and for `platform-admins` the drivers that implement it and the fix of a failing one.
 
 `environments_get` drops the personal kubeconfig the API returns to the people who can use the environment (ADR 0028): a kubeconfig never reaches the agent. `environments_create` takes `name`, `profile` (`ephemeral` or `shared`) and a **mandatory** `expires` (`30m`, `12h`, `3d`, `1w`); without it the server refuses before calling the API. The API answers right away with status `pending`, and the agent calls `environments_get` until it is `ready`. `environments_delete` deletes only `ephemeral` environments: it reads the environment first and refuses any other profile before calling the API, since destructive actions on the rest wait for human approval (#220). The API answers with status `deleting`. In this first phase the API cannot tell an agent from you, so the server carries both rules until agents get their own identity (#219). Sharing with a team is not a tool yet.
 
