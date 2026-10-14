@@ -40,6 +40,7 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `workloads` | `workloads_get` | `GET /v1/environments/{environment}/workloads/{instance}` | read-only |
 | `workloads` | `workloads_history` | `GET /v1/environments/{environment}/revisions` (`instance`) | read-only |
 | `workloads` | `workloads_signals` | `GET /v1/environments/{environment}/workloads/{instance}/signals` (`window`, default `5m`) | read-only |
+| `workloads` | `workloads_deploy` | `POST /v1/environments/{environment}/workloads/{instance}/revisions` (`component`; `branch` or `version`; `instance`, default the component name) | write, not destructive, not idempotent |
 
 `status` answers like `platform status` (ADR 0039): each capability with its status, and for `platform-admins` the drivers that implement it and the fix of a failing one.
 
@@ -50,6 +51,8 @@ The `catalog` toolset only reads, in the vocabulary of ADR 0023: creating a comp
 `builds_create` builds a branch like `platform build create`: the platform dispatches the repo's CI workflow and registers the version. Only members of the component's owner team and `platform-admins` build it. The API answers right away with status `pending`, and the agent calls `builds_get` until it is `ready` (about a minute) or a failure reason; `builds_versions_list` shows the version it registered.
 
 The `workloads` toolset reads what runs in an environment you can use (ADR 0033): instances, their revisions and the golden signals from the mesh, as `platform workload list|get|history|signals`. An instance is named after its component unless it is an extra one, such as a canary.
+
+`workloads_deploy` deploys like `platform workload deploy`: a new revision of the instance, with exactly one of `branch` (the newest version built from it) or `version`; another `instance` name runs an extra instance next to the default one. The API answers right away with the revision open, and the agent calls `workloads_history` until it closes with `Succeeded` or a failure reason; there is no `--wait`. Replicas and resource classes stay with the CLI.
 
 Every tool carries the MCP annotations: `readOnlyHint`, and for a write tool `destructiveHint` and `idempotentHint`. Tool names follow `<toolset>_<verb>` (`environments_list`); `core` tools have no prefix.
 
