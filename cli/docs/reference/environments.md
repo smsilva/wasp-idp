@@ -27,6 +27,7 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 - Without `platform init --with-crossplane`, nothing creates it, and it stays `NoProviderForCapability`; `--wait` gives up after 60 s in that status instead of waiting out `--timeout`.
 - It is `ready` once Crossplane reports the VPC `Ready` (`get` shows `vpc <id> in <region>`); `CloudAccountNotReady` while the account is not `ready` and the VPC was not created yet; `ProvisioningFailed` with the Crossplane message when AWS refuses (a role without `ec2:CreateVpc`, for example).
 - `delete` removes the VPC in the account first; the environment goes once Crossplane confirms it is gone.
+- The provider creates the VPC only in the exact account the API authorized on create (its uid is kept on the environment): an environment written around the API, or an account removed and registered again under the same name, gets `ProvisioningFailed`.
 - `--expires` holds as for any environment: `local_vcluster` deletes it when the deadline passes, and the VPC goes with the `crossplane_aws` finalizer.
 - It has no vcluster: `get` writes no kubeconfig, and `get --admin`, `credential` and the workload writes (`deploy`, `apply`, `remove`, `route set|delete`) answer `409`.
 - `platform cloud account remove <account>` answers `409` while an environment references it.

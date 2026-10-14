@@ -56,7 +56,7 @@ class FakeCrossplane:
 
 def account(name="nonprod-aws", ready=True, regions=("us-east-1", "sa-east-1")):
   return {
-    "metadata": {"name": name},
+    "metadata": {"name": name, "uid": f"uid-{name}"},
     "spec": {"vendor": "aws", "aws": {"roleArn": ROLE, "externalId": "external-id", "regions": list(regions)}},
     "status": {"conditions": [{"type": "Ready", "status": "True" if ready else "False", "reason": "Verified" if ready else "TrustNotEstablished"}]},
   }
@@ -64,6 +64,8 @@ def account(name="nonprod-aws", ready=True, regions=("us-east-1", "sa-east-1")):
 
 def environment(name="demo", account_name="nonprod-aws", finalizers=None, deleting=False, status=None):
   metadata = {"name": name, "finalizers": finalizers if finalizers is not None else [FINALIZER]}
+  if account_name:
+    metadata["annotations"] = {"platform.wasp.silvios.me/cloud-account-uid": f"uid-{account_name}"}
   if deleting:
     metadata["deletionTimestamp"] = "2026-10-13T12:00:00Z"
   spec = {"profile": "ephemeral"}
@@ -256,3 +258,14 @@ def test_a_vpc_that_is_not_ours_is_never_adopted_nor_deleted(stores):
   reconciler(stores).reconcile(environment(deleting=True, finalizers=[FINALIZER]), {})
   assert stores[1].deleted_vpcs == []
   assert stores[0].finalizers["demo"] == []
+
+
+@pytest.mark.parametrize("annotations", [{}, {"platform.wasp.silvios.me/cloud-account-uid": "uid-of-an-earlier-account"}])
+def test_only_the_account_the_api_authorized(stores, annotations):
+  # Written around the API, or the account was removed and registered again under the same name.
+  obj = environment()
+  obj["metadata"]["annotations"] = annotations
+  reconciler(stores).reconcile(obj, {"nonprod-aws": account()})
+  assert stores[1].vpcs == {}
+  ready = last_ready(stores)
+  assert (ready["reason"], "not the one authorized" in ready["message"]) == ("ProvisioningFailed", True)

@@ -294,6 +294,9 @@ def test_an_environment_in_a_ready_account(client, as_, state, journal_path):
   assert response.json()["cloudAccount"] == "nonprod-aws"
   assert response.json()["status"] == "NoProviderForCapability"
   assert state.stores[ENVIRONMENTS]["cloud-env"]["spec"]["cloudAccount"] == "nonprod-aws"
+  # The exact account authorized, for the provider to check (#436).
+  annotations = state.stores[ENVIRONMENTS]["cloud-env"]["metadata"]["annotations"]
+  assert annotations["platform.wasp.silvios.me/cloud-account-uid"] == state.stores[CLOUD_ACCOUNTS]["nonprod-aws"]["metadata"]["uid"]
   records = [json.loads(line) for line in journal_path.read_text().splitlines()]
   assert [r["spec"]["cloudAccount"] for r in records if r.get("kind") == "Environment"] == ["nonprod-aws"]
   items = client.get("/v1/environments", headers=as_("owner")).json()["items"]

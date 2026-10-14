@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 GROUP = "platform.wasp.silvios.me"
 FINALIZER = f"{GROUP}/crossplane-aws"
 ENVIRONMENT_LABEL = f"{GROUP}/environment"
+# Set by the Platform API on create, after its can_use check of the account (platform_api.environments).
+CLOUD_ACCOUNT_UID_ANNOTATION = f"{GROUP}/cloud-account-uid"
 MANAGED_BY = "crossplane-aws-provider"
 # Written by `platform init --with-crossplane` from Secret aws-base-credential of platform-system.
 CROSSPLANE_NAMESPACE = "crossplane-system"
@@ -145,6 +147,11 @@ class Reconciler:
         return self._report(obj, "False", "CloudAccountNotReady", f"cloud account {account_name} not found")
       if not is_ready(account):
         return self._report(obj, "False", "CloudAccountNotReady", f"cloud account {account_name} is not ready: platform cloud account get {account_name}")
+      authorized = (metadata.get("annotations") or {}).get(CLOUD_ACCOUNT_UID_ANNOTATION)
+      if authorized != account["metadata"].get("uid"):
+        # Same gate as the API: only the account it authorized, never one registered again under the name,
+        # nor an Environment written around the API.
+        return self._report(obj, "False", "ProvisioningFailed", f"cloud account {account_name} is not the one authorized when the environment was created")
       if not account["spec"]["aws"].get("regions"):
         return self._report(obj, "False", "NoRegion", f"cloud account {account_name} has no region")
       body = vpc(obj, account)
