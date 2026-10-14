@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from kubernetes import client, config, watch
 
-from .reconciler import MANAGED_BY
+from .reconciler import MANAGED_BY, NotManaged, managed
 
 GROUP = "platform.wasp.silvios.me"
 VERSION = "v1alpha1"
@@ -70,13 +70,19 @@ class CrossplaneStore:
     return [item["metadata"]["name"] for item in result["items"]]
 
   def apply_provider_config(self, body: dict) -> None:
+    """Creates it, or updates one this provider wrote. A CloudAccount is named by any user: one named after a
+    ProviderConfig someone else wrote must never take its credential or role over."""
     name = body["metadata"]["name"]
     try:
-      self.api.patch_cluster_custom_object(AWS_GROUP, AWS_VERSION, PROVIDER_CONFIGS, name, {"metadata": body["metadata"], "spec": body["spec"]})
+      current = self.api.get_cluster_custom_object(AWS_GROUP, AWS_VERSION, PROVIDER_CONFIGS, name)
     except client.ApiException as error:
       if error.status != 404:
         raise
       self.api.create_cluster_custom_object(AWS_GROUP, AWS_VERSION, PROVIDER_CONFIGS, body)
+      return
+    if not managed(current):
+      raise NotManaged(f"ProviderConfig {name} exists and was not written by {MANAGED_BY}")
+    self.api.patch_cluster_custom_object(AWS_GROUP, AWS_VERSION, PROVIDER_CONFIGS, name, {"metadata": body["metadata"], "spec": body["spec"]})
 
   def delete_provider_config(self, name: str) -> None:
     self._delete(AWS_GROUP, AWS_VERSION, PROVIDER_CONFIGS, name)

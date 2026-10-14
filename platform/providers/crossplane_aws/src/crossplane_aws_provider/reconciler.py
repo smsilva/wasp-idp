@@ -37,6 +37,17 @@ def is_ready(obj: dict) -> bool:
   return bool(ready and ready.get("status") == "True")
 
 
+class NotManaged(Exception):
+  """An object with the name this provider wants, written by someone else: it is left alone."""
+
+
+def managed(obj: dict, environment: str | None = None) -> bool:
+  """Written by this provider and, for a VPC, for this environment. Names come from users (accounts,
+  environments): a match by name alone must never let the provider change or delete what is not its own."""
+  labels = (obj.get("metadata") or {}).get("labels") or {}
+  return labels.get("app.kubernetes.io/managed-by") == MANAGED_BY and (environment is None or labels.get(ENVIRONMENT_LABEL) == environment)
+
+
 def vpc_name(environment: str) -> str:
   return f"env-{environment}"
 
@@ -85,7 +96,10 @@ class Reconciler:
     names = {account["metadata"]["name"] for account in accounts}
     for account in accounts:
       if is_ready(account):
-        self.crossplane.apply_provider_config(provider_config(account))
+        try:
+          self.crossplane.apply_provider_config(provider_config(account))
+        except Exception:  # one account must not hold back the others
+          log.exception("ProviderConfig of cloud account %s not applied", account["metadata"]["name"])
     for name in self.crossplane.provider_configs():
       if name not in names:
         log.info("cloud account %s is gone, deleting its ProviderConfig", name)
@@ -111,7 +125,8 @@ class Reconciler:
       if FINALIZER not in finalizers:
         return
       found = self.crossplane.get_vpc(vpc_name(name))
-      if found is None:
+      if found is None or not managed(found, name):
+        # Someone else's VPC object with this name is never deleted.
         self.environments.set_finalizers(name, [f for f in finalizers if f != FINALIZER])
         log.info("environment %s removed", name)
       elif not found["metadata"].get("deletionTimestamp"):
@@ -136,6 +151,9 @@ class Reconciler:
       log.info("creating vpc %s in %s (account %s)", vpc_name(name), body["spec"]["forProvider"]["region"], account_name)
       self.crossplane.create_vpc(body)
       found = body
+
+    elif not managed(found, name):
+      return self._report(obj, "False", "ProvisioningFailed", f"vpc {vpc_name(name)} exists and was not created for this environment")
 
     region = found["spec"]["forProvider"]["region"]
     vpc_id = ((found.get("status") or {}).get("atProvider") or {}).get("id")

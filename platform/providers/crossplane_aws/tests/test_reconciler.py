@@ -8,6 +8,7 @@ from crossplane_aws_provider.reconciler import (
   CROSSPLANE_NAMESPACE,
   FINALIZER,
   MANAGED_BY,
+  NotManaged,
   Reconciler,
   provider_config,
   vpc,
@@ -80,7 +81,7 @@ def vpc_with(synced=None, ready=None, vpc_id=None):
   status = {"conditions": conditions}
   if vpc_id:
     status["atProvider"] = {"id": vpc_id}
-  return {"metadata": {"name": "env-demo"}, "status": status}
+  return {"metadata": {"name": "env-demo", "labels": {"app.kubernetes.io/managed-by": MANAGED_BY, "platform.wasp.silvios.me/environment": "demo"}}, "status": status}
 
 
 @pytest.fixture
@@ -228,3 +229,30 @@ def test_a_failure_becomes_the_condition(stores):
 def test_vpc_names_follow_the_environment():
   assert vpc_name("demo") == "env-demo"
   assert vpc(environment(), account())["metadata"]["name"] == "env-demo"
+
+
+# Names come from users: what this provider did not write is never changed nor deleted.
+
+def test_a_provider_config_that_is_not_ours_holds_back_only_its_account(stores):
+  class Guarded(FakeCrossplane):
+    def apply_provider_config(self, body):
+      if body["metadata"]["name"] == "network":
+        raise NotManaged("ProviderConfig network exists and was not written by crossplane-aws-provider")
+      super().apply_provider_config(body)
+
+  stores = (stores[0], Guarded())
+  reconciler(stores).sync_accounts([account("network"), account()])
+  assert list(stores[1].configs) == ["nonprod-aws"]
+
+
+def test_a_vpc_that_is_not_ours_is_never_adopted_nor_deleted(stores):
+  foreign = vpc_with(synced=("True", "ReconcileSuccess"), ready="True", vpc_id="vpc-0abc")
+  foreign["metadata"]["labels"] = {}
+  foreign["spec"] = {"forProvider": {"region": "us-east-1"}}
+  stores[1].vpcs["env-demo"] = foreign
+  reconciler(stores).reconcile(environment(), {"nonprod-aws": account()})
+  ready = last_ready(stores)
+  assert (ready["reason"], "not created for this environment" in ready["message"]) == ("ProvisioningFailed", True)
+  reconciler(stores).reconcile(environment(deleting=True, finalizers=[FINALIZER]), {})
+  assert stores[1].deleted_vpcs == []
+  assert stores[0].finalizers["demo"] == []
