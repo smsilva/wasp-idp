@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 
 app = typer.Typer(help="Connections with code platforms (platform-admins only).", no_args_is_help=True)
 connection_app = typer.Typer(help="Connections with code platforms, such as a GitHub org.", no_args_is_help=True)
@@ -80,12 +80,12 @@ def add(
     except OSError as error:
       fail(f"cannot read {private_key_file}: {error.strerror}")
   client = _client()
-  quiet = output == Format.json
+  quiet = output.data
   connection = _call(client.create_scm_connection, body)
   if "next" in connection and no_browser:
     # The URL is single-use and valid for 10 minutes; `add` again issues a new one.
     if quiet:
-      print_json(connection)
+      print_data(connection, output)
       return
     typer.echo(f"Open this URL to create the GitHub App \"{org}-platform\" (valid for 10 minutes):\n{connection['next']}")
     typer.echo(f"  then install it on the org and run: platform scm connection verify {name} --wait")
@@ -103,7 +103,7 @@ def add(
   if wait:
     connection = _wait_ready(client, name, timeout, quiet)
   if quiet:
-    print_json(connection)
+    print_data(connection, output)
   else:
     _next_steps(connection, client)
 
@@ -154,8 +154,8 @@ def _suggest_registry(connection: dict, client: PlatformClient | None) -> None:
 def list_(output: OutputOption = Format.table):
   """List connections."""
   items = _call(_client().list_scm_connections)
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   rows = [
     [item["name"], item["vendor"], item["org"] or "—", item["status"], "yes" if item["default"] else "", item.get("lastValidated") or "—"]
@@ -168,8 +168,8 @@ def list_(output: OutputOption = Format.table):
 def get(name: ConnectionName, output: OutputOption = Format.table):
   """Show a connection; never its credential."""
   connection = _call(_client().get_scm_connection, name)
-  if output == Format.json:
-    print_json(connection)
+  if output.data:
+    print_data(connection, output)
     return
   default = " (default)" if connection["default"] else ""
   typer.echo(f"{connection['name']}{default}: {connection['status']}")
@@ -201,9 +201,9 @@ def verify(
   client = _client()
   connection = _call(client.verify_scm_connection, name)
   if wait:
-    connection = _wait_ready(client, name, timeout, output == Format.json)
-  if output == Format.json:
-    print_json(connection)
+    connection = _wait_ready(client, name, timeout, output.data)
+  if output.data:
+    print_data(connection, output)
   elif wait:
     _next_steps(connection, client)
   else:
@@ -214,8 +214,8 @@ def verify(
 def make_default(name: ConnectionName, output: OutputOption = Format.table):
   """Make this the connection used when none is named."""
   connection = _call(_client().make_default_scm_connection, name)
-  if output == Format.json:
-    print_json(connection)
+  if output.data:
+    print_data(connection, output)
   else:
     success(f"{name} is the default connection")
 
@@ -224,8 +224,8 @@ def make_default(name: ConnectionName, output: OutputOption = Format.table):
 def remove(name: ConnectionName, output: OutputOption = Format.table):
   """Remove a connection and its credential; the App stays on GitHub."""
   result = _call(_client().delete_scm_connection, name)
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
     return
   success(f"connection {name} removed, with its private key")
   if result.get("appSettingsUrl"):

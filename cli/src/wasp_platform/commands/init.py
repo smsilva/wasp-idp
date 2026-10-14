@@ -4,7 +4,7 @@ import typer
 
 from ..bootstrap import local
 from ..bootstrap.timings import Timings, summary
-from ..output import Format, OutputOption, fail, print_json, success
+from ..output import Format, OutputOption, fail, print_data, success
 
 
 class Target(str, Enum):
@@ -24,13 +24,13 @@ def init(
     fail(f"target '{target.value}' is not supported yet")
   timings = Timings()
   try:
-    result = local.install(admin_email=admin, log=None if output == Format.json else typer.echo, aws_profile=aws_profile, with_crossplane=with_crossplane, timings=timings)
+    result = local.install(admin_email=admin, log=None if output.data else typer.echo, aws_profile=aws_profile, with_crossplane=with_crossplane, timings=timings)
   except local.BootstrapError as error:
-    if output != Format.json:
+    if not output.data:
       print_timings(timings)
     fail(str(error))
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
   else:
     print_timings(timings)
     success(f"Platform API at {result['api_url']} · config in {result['config']}")

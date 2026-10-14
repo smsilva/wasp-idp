@@ -11,7 +11,7 @@ import yaml
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_json, print_data, print_table, success
 
 app = typer.Typer(help="Environments where releases run.", no_args_is_help=True)
 
@@ -70,11 +70,11 @@ def create(
       where = f", cloud account: {cloud_account}" if cloud_account else ""
       typer.echo(f"provisioning {name} (profile: {profile.value}{where}) …")
     if wait:
-      environment = _wait_ready(client, environment, timeout, quiet=output == Format.json)
+      environment = _wait_ready(client, environment, timeout, quiet=output.data)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(environment)
+  if output.data:
+    print_data(environment, output)
   elif environment["status"] == "ready":
     success(f"{name} ready")
   else:
@@ -142,8 +142,8 @@ def list_(
     items = _client().list_environments(all)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   rows = [
     [item["name"], item["profile"], item.get("cloudAccount") or "—", item["status"], remaining(item.get("expiresAt")), item.get("owner") or "—", ", ".join(item.get("sharedWith") or []) or "—"]
@@ -162,8 +162,8 @@ def share(name: Name, team: Team, output: OutputOption = Format.table):
     environment = _client().share_environment(name, team)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(environment)
+  if output.data:
+    print_data(environment, output)
   else:
     success(f"{name} shared with {team}")
 
@@ -175,8 +175,8 @@ def unshare(name: Name, team: Team, output: OutputOption = Format.table):
     environment = _client().unshare_environment(name, team)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(environment)
+  if output.data:
+    print_data(environment, output)
   else:
     success(f"{name} no longer shared with {team}")
 
@@ -197,8 +197,8 @@ def get(
       environment = save_kubeconfig(environment)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(environment)
+  if output.data:
+    print_data(environment, output)
     return
   typer.echo(f"{environment['name']}: {environment['status']}")
   if environment.get("message"):
@@ -231,8 +231,8 @@ def delete(name: Name, output: OutputOption = Format.table):
     result = _client().delete_environment(name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
   else:
     success(f"{name} deleting")
 
@@ -276,8 +276,8 @@ def policy_get(name: Name, output: OutputOption = Format.table):
     policy = _client().get_binding_policy(name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(policy)
+  if output.data:
+    print_data(policy, output)
   else:
     print_policy(policy)
 
@@ -290,8 +290,8 @@ def policy_set(name: Name, file: PolicyFile, output: OutputOption = Format.table
     policy = _client().set_binding_policy(name, provisioners)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(policy)
+  if output.data:
+    print_data(policy, output)
     return
   success(f"{name}: policy set" if policy["provisioners"] else f"{name}: policy removed, its profile and the platform default apply")
   print_policy(policy)
@@ -310,8 +310,8 @@ def profile_policy_get(profile: ProfileName, output: OutputOption = Format.table
     policy = _client().get_profile_policy(profile)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(policy)
+  if output.data:
+    print_data(policy, output)
   else:
     print_policy(policy)
 
@@ -324,8 +324,8 @@ def profile_policy_set(profile: ProfileName, file: PolicyFile, output: OutputOpt
     policy = _client().set_profile_policy(profile, provisioners)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(policy)
+  if output.data:
+    print_data(policy, output)
     return
   success(f"profile {profile}: policy set" if policy["provisioners"] else f"profile {profile}: policy removed, the platform default applies")
   print_policy(policy)

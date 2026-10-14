@@ -10,7 +10,7 @@ import typer
 
 from .. import auth
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 
 app = typer.Typer(help="Teams: who shares environments and owns catalog entities.", no_args_is_help=True)
 member_app = typer.Typer(help="Members of a team (platform-admins only).", no_args_is_help=True)
@@ -39,8 +39,8 @@ def _call(function, *args):
 def create(name: TeamName, output: OutputOption = Format.table):
   """Create a team (platform-admins only)."""
   team = _call(_client().create_team, name)
-  if output == Format.json:
-    print_json(team)
+  if output.data:
+    print_data(team, output)
   else:
     success(f"team {name} created")
 
@@ -49,8 +49,8 @@ def create(name: TeamName, output: OutputOption = Format.table):
 def list_(output: OutputOption = Format.table):
   """List teams."""
   items = _call(_client().list_teams)
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   print_table(["NAME"], [[item["name"]] for item in items])
 
@@ -59,8 +59,8 @@ def list_(output: OutputOption = Format.table):
 def get(name: TeamName, output: OutputOption = Format.table):
   """Show a team and its members."""
   team = _call(_client().get_team, name)
-  if output == Format.json:
-    print_json(team)
+  if output.data:
+    print_data(team, output)
     return
   typer.echo(f"{team['name']}: {len(team['members'])} member(s)")
   if team["members"]:
@@ -71,8 +71,8 @@ def get(name: TeamName, output: OutputOption = Format.table):
 def delete(name: TeamName, output: OutputOption = Format.table):
   """Delete a team (platform-admins only)."""
   _call(_client().delete_team, name)
-  if output == Format.json:
-    print_json({"name": name, "deleted": True})
+  if output.data:
+    print_data({"name": name, "deleted": True}, output)
   else:
     success(f"team {name} deleted")
 
@@ -83,8 +83,8 @@ def member_add(team: TeamName, email: Email, output: OutputOption = Format.table
   client = _client()
   result = _call(client.add_team_member, team, email)
   renewed = _renew_if_yourself(client, team, email)
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
   elif renewed:
     success(f"{email} added to {team} · token renewed, {team} is in it")
   else:
@@ -107,7 +107,7 @@ def _renew_if_yourself(client: PlatformClient, team: str, email: str) -> bool:
 def member_remove(team: TeamName, email: Email, output: OutputOption = Format.table):
   """Remove someone from a team."""
   _call(_client().remove_team_member, team, email)
-  if output == Format.json:
-    print_json({"team": team, "email": email, "removed": True})
+  if output.data:
+    print_data({"team": team, "email": email, "removed": True}, output)
   else:
     success(f"{email} removed from {team}")

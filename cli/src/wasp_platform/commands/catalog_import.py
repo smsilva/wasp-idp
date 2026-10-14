@@ -13,7 +13,7 @@ import typer
 import yaml
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, fail, print_data, print_table, success
 
 PARENT_FIELDS = {"Domain": "parent", "System": "domain", "Resource": "system"}
 SUFFIXES = (".yaml", ".yml")
@@ -154,7 +154,7 @@ def _print_plan(plan: dict) -> None:
 
 
 def _show(plan: dict, output: Format) -> None:
-  print_json(plan) if output == Format.json else _print_plan(plan)
+  print_data(plan, output) if output.data else _print_plan(plan)
 
 
 Repo = Annotated[str | None, typer.Option(help="https URL of the repo where the files are published; required for templates.")]
@@ -195,8 +195,8 @@ def run_import(documents: list[dict], source: dict | None, dry_run: bool, yes: b
   blocked = summary["error"] + summary["forbidden"] > 0
   pending = summary["create"] + summary["update"] > 0
   # JSON is for machines: it never asks, so without --yes it is a dry run.
-  if output == Format.json and (blocked or not pending or dry_run or not yes):
-    print_json(plan)
+  if output.data and (blocked or not pending or dry_run or not yes):
+    print_data(plan, output)
     raise typer.Exit(1 if blocked else 0)
   if output == Format.table:
     _print_plan(plan)
@@ -216,8 +216,8 @@ def run_import(documents: list[dict], source: dict | None, dry_run: bool, yes: b
     if error.plan:
       _show(error.plan, output)
     fail(str(error))
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
     return
   written = [item for item in result["items"] if item.get("applied")]
   created = sum(1 for item in written if item["action"] == "create")

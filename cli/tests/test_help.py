@@ -50,3 +50,10 @@ def test_examples_show_in_help():
   result = CliRunner().invoke(app, ["build", "get", "--help"])
   assert "Examples:" in result.output
   assert "$ platform build get" in result.output
+
+
+def test_output_has_a_short_option():
+  """-o works wherever --output picks a format (not on template render, where --output is a folder)."""
+  missing = [path for path, command in commands() for param in command.params
+             if param.name == "output" and "--output" in param.opts and getattr(param.type, "choices", None) and "-o" not in param.opts]
+  assert missing == []

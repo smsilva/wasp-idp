@@ -2,6 +2,8 @@ import json
 
 import httpx
 import pytest
+import yaml
+from rich.text import Text
 from typer.testing import CliRunner
 
 from wasp_platform import auth, client as client_module
@@ -88,6 +90,21 @@ def test_errors_exit_non_zero_with_api_message(api):
 def test_json_output(api):
   run("create", "team-alpha")
   assert json.loads(run("list", "--output", "json").output) == [{"name": "team-alpha"}]
+
+
+@pytest.mark.parametrize("output", ["yaml", "yamlc"])
+def test_yaml_output(api, output):
+  run("create", "team-alpha")
+  result = run("get", "team-alpha", "-o", output)
+  assert result.exit_code == 0, result.output
+  assert yaml.safe_load(Text.from_ansi(result.output).plain) == {"name": "team-alpha", "members": []}
+
+
+def test_jsonc_output_is_colored_json(api):
+  run("create", "team-alpha")
+  result = run("list", "-o", "jsonc")
+  assert "\x1b[" in result.output
+  assert json.loads(Text.from_ansi(result.output).plain) == [{"name": "team-alpha"}]
 
 
 @pytest.fixture
