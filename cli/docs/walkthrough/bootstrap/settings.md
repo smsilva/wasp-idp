@@ -7,6 +7,3 @@ platform init \
   --generate-file \
   --admin you@example.com
 ```
-
-Repeat `--admin` for more than one admin.
-{ .terminal-note }
