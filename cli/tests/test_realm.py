@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import yaml
@@ -7,20 +8,25 @@ from wasp_platform.bootstrap.local import render_realm
 REALM = yaml.safe_load((Path(__file__).parents[2] / "platform" / "keycloak" / "realm-platform.yaml").read_text())
 
 
-def test_realm_keeps_google_and_bootstrap_admin():
-  realm = render_realm(REALM, google=True, admin=True)
+def test_realm_has_one_bootstrap_mapper_per_admin():
+  realm = render_realm(REALM, google=True, admins=["one@example.org", "two@example.org"])
   assert [idp["alias"] for idp in realm["identityProviders"]] == ["google"]
-  assert [m["name"] for m in realm["identityProviderMappers"]] == ["bootstrap-admin"]
+  mappers = realm["identityProviderMappers"]
+  assert [m["name"] for m in mappers] == ["bootstrap-admin-one@example.org", "bootstrap-admin-two@example.org"]
+  assert json.loads(mappers[1]["config"]["claims"]) == [{"key": "email", "value": "two@example.org"}]
+  assert {m["config"]["group"] for m in mappers} == {"/platform-admins"}
+  # The base realm is not mutated.
+  assert [m["name"] for m in REALM["identityProviderMappers"]] == ["bootstrap-admin"]
 
 
 def test_realm_without_google_has_no_identity_provider():
-  realm = render_realm(REALM, google=False, admin=True)
+  realm = render_realm(REALM, google=False, admins=["you@example.org"])
   assert "identityProviders" not in realm
   assert "identityProviderMappers" not in realm
 
 
 def test_realm_without_admin_drops_bootstrap_mapper():
-  realm = render_realm(REALM, google=True, admin=False)
+  realm = render_realm(REALM, google=True, admins=[])
   assert realm["identityProviders"]
   assert realm["identityProviderMappers"] == []
 
@@ -58,13 +64,13 @@ SMOKE_USERS = [u["username"] for u in SMOKE["users"]]
 
 
 def test_realm_without_smoke_has_no_test_client_nor_users():
-  realm = render_realm(REALM, google=True, admin=True)
+  realm = render_realm(REALM, google=True, admins=["you@example.org"])
   assert "platform-smoke" not in [c["clientId"] for c in realm["clients"]]
   assert [u["username"] for u in realm["users"]] == ["service-account-platform-api-admin"]
 
 
 def test_smoke_adds_password_client_and_three_users():
-  realm = render_realm(REALM, google=True, admin=True, smoke=SMOKE)
+  realm = render_realm(REALM, google=True, admins=["you@example.org"], smoke=SMOKE)
   client = next(c for c in realm["clients"] if c["clientId"] == "platform-smoke")
   assert client["directAccessGrantsEnabled"] is True and client["publicClient"] is True
   assert {"platform-groups", "platform-api-audience"} <= set(client["defaultClientScopes"])
@@ -79,7 +85,7 @@ def test_smoke_adds_password_client_and_three_users():
 
 
 def test_cli_client_never_gets_password_grant():
-  realm = render_realm(REALM, google=True, admin=True, smoke=SMOKE)
+  realm = render_realm(REALM, google=True, admins=["you@example.org"], smoke=SMOKE)
   client = next(c for c in realm["clients"] if c["clientId"] == "platform-cli")
   assert client["directAccessGrantsEnabled"] is False
 

@@ -77,6 +77,20 @@ cd "${repo_root}"
 
 init_step
 
+step "platform init --generate-file and --dry-run, and the checks that stop init before any step (#462)"
+# The run's own XDG_CONFIG_HOME: the user's init.yaml is never read nor written.
+init_file="${XDG_CONFIG_HOME}/platform/init.yaml"
+output="$(platform init --generate-file --admin smoke@example.org --admin other@example.org)"
+expect_output "settings written to ${init_file}" "${output}"
+expect_output "- other@example.org" "$(cat "${init_file}")"
+output="$(platform init --dry-run --output json)"
+expect_output "\"platform-api\"" "${output}"
+expect_failure "already exists" platform init --generate-file
+expect_failure "add --yes" platform init < /dev/null
+sed --in-place "s/- smoke@example.org/- email_not_filled/" "${init_file}"
+expect_failure "not an e-mail" platform init --yes
+rm "${init_file}"
+
 step "login as the test user (platform-users)"
 platform login --test-user
 output="$(platform whoami)"

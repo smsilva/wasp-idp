@@ -78,8 +78,8 @@ expect_failure() {
 
 init_step() {
   if [[ "${skip_init}" == "false" ]]; then
-    step "platform init --target local"
-    platform init --target local
+    step "platform init --target local --yes"
+    platform init --target local --yes
   fi
 }
 

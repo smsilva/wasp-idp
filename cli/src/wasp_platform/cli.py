@@ -6,7 +6,7 @@ from .commands.init import init
 from .output import examples
 
 app = typer.Typer(help="platform: the wasp-idp platform CLI.", no_args_is_help=True)
-app.command("init", epilog=examples("platform init --target local", "platform init --target local --admin you@example.com"))(init)
+app.command("init", epilog=examples("platform init --generate-file --admin you@example.com", "platform init --dry-run", "platform init", "platform init --yes --file init.yaml"))(init)
 app.command("login", epilog=examples("platform login", "platform login --use-device-code"))(login)
 app.command("logout", epilog=examples("platform logout"))(logout)
 app.command("whoami", epilog=examples("platform whoami", "platform whoami --output json"))(whoami)
