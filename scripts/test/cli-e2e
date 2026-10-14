@@ -31,8 +31,8 @@ released on remove), an instance reached from outside through dns and route (its
 answers, and 404 after remove, #358), and its golden signals from Prometheus after a burst of
 traffic (workload signals, #411). Stops at the first failure with a non-zero exit code.
 
-It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
-your own login in ~/.config/platform/credentials is never touched.
+It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config) and XDG_STATE_HOME, so
+your own login in ~/.config/platform/credentials and your init logs are never touched.
 
   --skip-init  reuse the running platform-local instead of running 'platform init'
 USAGE

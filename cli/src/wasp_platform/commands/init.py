@@ -4,8 +4,11 @@ from pathlib import Path
 
 import typer
 
+from .. import config
 from ..bootstrap import local
+from ..bootstrap.reporters import LogReporter, PlainReporter
 from ..bootstrap.settings import SettingsError, check_admin, default_file, from_file, resolve, to_file
+from ..bootstrap.tasks import Reporter, Reporters
 from ..bootstrap.timings import Timings, summary
 from ..output import Format, OutputOption, fail, print_data, print_table, success
 
@@ -13,6 +16,15 @@ from ..output import Format, OutputOption, fail, print_data, print_table, succes
 class Target(str, Enum):
   local = "local"
   azure = "azure"
+
+
+class Progress(str, Enum):
+  auto = "auto"
+  plain = "plain"
+
+
+# Lines of the failing step's log shown when init fails: the end of what it ran.
+FAILURE_TAIL = 30
 
 
 def check_emails(values: list[str] | None) -> list[str]:
@@ -44,6 +56,7 @@ def init(
   force: bool = typer.Option(False, "--force", help="With --generate-file, overwrite an existing file."),
   yes: bool = typer.Option(False, "--yes", help="Install without asking."),
   dry_run: bool = typer.Option(False, "--dry-run", help="Show the settings and the steps init would run, and install nothing."),
+  progress: Progress = typer.Option(Progress.auto, "--progress", help="How the steps are shown while init runs: one line per step, and a heartbeat while it runs."),
   output: OutputOption = Format.table,
 ):
   """Install the platform control plane (idempotent)."""
@@ -88,22 +101,33 @@ def init(
     fail("nothing was installed")
 
   timings = Timings()
+  record = LogReporter(config.state_dir() / "init", {name: {"value": setting.value, "source": setting.source} for name, setting in settings.items()})
+  terminal = Reporter() if output.data else PlainReporter(typer.echo)
   try:
     result = local.install(
       admin_emails=settings["admins"].value,
-      log=None if output.data else typer.echo,
+      reporter=Reporters(record, terminal),
       aws_profile=settings["aws_profile"].value,
       with_crossplane=settings["with_crossplane"].value,
       timings=timings,
     )
-  except local.BootstrapError as error:
-    if not output.data:
-      print_timings(timings)
-    fail(str(error))
+  except BaseException as error:
+    terminal.close()
+    record.close(error)
+    if isinstance(error, local.BootstrapError):
+      if not output.data:
+        print_timings(timings)
+        print_failure(record)
+      fail(str(error))
+    raise
+  terminal.close()
+  record.close()
+  result["logs"] = str(record.folder)
   if output.data:
     print_data(result, output)
   else:
     print_timings(timings)
+    typer.echo(f"\nlogs in {record.folder}")
     success(f"Platform API at {result['api_url']} · config in {result['config']}")
     success(f"Keycloak issuer {result['issuer']}" + ("" if result["google"] else " (no Google login: set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)"))
     if result["cloud_account"]:
@@ -121,3 +145,13 @@ def print_timings(timings: Timings) -> None:
   typer.echo("\ntimings:")
   for line in summary(timings):
     typer.echo(f"  {line}")
+
+
+def print_failure(record: LogReporter) -> None:
+  """The end of the failing step's log, and where the whole run is."""
+  path = record.file_of(record.failed_step) if record.failed_step else None
+  if path and path.is_file():
+    typer.echo(f"\nlast lines of {path}:")
+    for line in path.read_text(encoding="utf-8").splitlines()[-FAILURE_TAIL:]:
+      typer.echo(f"  {line}")
+  typer.echo(f"\nlogs in {record.folder}")

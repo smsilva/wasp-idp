@@ -17,6 +17,7 @@ platform init \
 | `--generate-file` | writes the settings (flags, then the file, then what the cluster remembers) to the file and installs nothing; refuses an existing file without `--force` |
 | `--dry-run` | shows the settings and the steps `init` would run, and installs nothing; with `-o json`/`yaml`, as data |
 | `--yes` | installs without asking; required without a terminal or with `-o json`/`yaml` |
+| `--progress plain` | how the steps show while `init` runs: one line per step, and a heartbeat while it runs (`auto`, the default, is `plain` for now) |
 | `--with-crossplane` | installs Crossplane `2.3.1`, its `provider-aws-ec2` `v2.5.1` and the `crossplane_aws` provider, so [environments can be created in a cloud account](environments.md#in-a-cloud-account); needs the base credential (`--aws-profile` now or on an earlier run) |
 
 ## Settings file
@@ -58,7 +59,45 @@ export GOOGLE_CLIENT_SECRET=<secret>
 
 ## Steps
 
-`init` runs its steps side by side, each one as soon as what it needs is done: the image builds and the cluster first; then, once the CRDs are applied, Keycloak, Traefik, shared-pg and Prometheus together; each provider once its image is in the cluster (providers need neither Keycloak nor the API); the Platform API last, once Keycloak's realm is imported. With `--with-crossplane`, Crossplane comes up beside them, after the `aws_account` provider stores the base credential. Each step prints one line when it starts (`▶`) and one when it ends (`✓`, with its time). The first step that fails (`✗`) stops the others and is the only error reported.
+`init` runs its steps side by side, each one as soon as what it needs is done: the image builds and the cluster first; then, once the CRDs are applied, Keycloak, Traefik, shared-pg and Prometheus together; each provider once its image is in the cluster (providers need neither Keycloak nor the API); the Platform API last, once Keycloak's realm is imported. With `--with-crossplane`, Crossplane comes up beside them, after the `aws_account` provider stores the base credential. The first step that fails stops the others and is the only error reported.
+
+## Progress
+
+Each step prints one line when it starts (`▶`) and one when it ends (`✓`, with its time); a note of a step (a reused cluster, a credential about to expire) comes as `·`. While a step runs, a heartbeat every 30 s (`…`) shows it is waiting, not hung: a rollout, a Helm install job or the Crossplane package pull can take minutes. The output of the commands stays out of the terminal and goes to the [logs](#logs).
+
+``` { .text .output title="output" }
+05:12:03 ▶ cluster
+05:12:04 · cluster                     cluster platform-local already exists, reusing it
+05:12:04 ✓ cluster                        0.6s
+05:12:04 ▶ keycloak
+05:12:34 … keycloak                    still running [30.0s]
+05:12:42 ✓ keycloak                      38.2s
+```
+
+## Logs
+
+Every run leaves one folder under `~/.local/state/platform/init/` (it follows `XDG_STATE_HOME`), named by the time it started, with one plain-text file per step and a `run.yaml`; `latest` points at the newest. `init` keeps the last 20 runs and prints the folder at the end.
+
+```text
+~/.local/state/platform/init/
+├── 2026-10-14T05-12-03/
+│   ├── run.yaml
+│   ├── 01-cluster.log
+│   ├── 02-build-images.log
+│   ├── …
+│   └── 21-platform-api.log
+└── latest -> 2026-10-14T05-12-03
+```
+
+- The file number is the order in which the steps started: they run side by side, so the numbers read as the story of the run.
+- Each file has every command the step ran (`$ kubectl rollout status …`), with the time, its output and its exit code, and the step's notes. A command that reads a credential (a Secret value, the AWS profile) logs only the command and its exit code; the input of a command (a Secret applied through stdin) is never logged.
+- `run.yaml` has the settings and their source, the result (`succeeded` or `failed`, with `failedStep` and `error`), each step with its time, its result (`done`, `failed`, or `stopped` when another step's failure ended it) and its file, and the total.
+
+When a step fails, `init` prints the last 30 lines of its file, the path of the file and the folder of the run:
+
+```bash
+less ~/.local/state/platform/init/latest/09-keycloak.log
+```
 
 ## Images
 
@@ -66,7 +105,7 @@ export GOOGLE_CLIENT_SECRET=<secret>
 
 ## Timings
 
-`init` ends with the wall time of each step (cluster, CRDs, Keycloak, the image builds, the image import, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`).
+`init` ends with the wall time of each step (cluster, CRDs, Keycloak, the image builds, the image import, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`), the run folder in `logs`, and nothing is printed while `init` runs.
 
 ## What `init` remembers
 

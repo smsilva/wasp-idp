@@ -1,5 +1,5 @@
 # Shared by scripts/test/cli-smoke and scripts/test/cli-e2e (#451): sourced after the script defines
-# show_usage. Parses --skip-init, gives the run its own XDG_CONFIG_HOME and the step helpers.
+# show_usage. Parses --skip-init, gives the run its own XDG_CONFIG_HOME and XDG_STATE_HOME and the step helpers.
 
 skip_init="false"
 
@@ -21,6 +21,9 @@ if [[ -f "${user_config}" ]]; then
   cp "${user_config}" "${smoke_config}/platform/config.yaml"
 fi
 export XDG_CONFIG_HOME="${smoke_config}"
+# The logs of the run's own 'platform init' (#458) stay out of the user's ~/.local/state; removed with
+# the config dir by each script's cleanup.
+export XDG_STATE_HOME="${smoke_config}/state"
 
 # The CLI of this checkout, not whatever 'platform' is installed.
 platform() {
@@ -80,6 +83,7 @@ init_step() {
   if [[ "${skip_init}" == "false" ]]; then
     step "platform init --target local --yes"
     platform init --target local --yes
+    expect_output "result: succeeded" "$(cat "${XDG_STATE_HOME}/platform/init/latest/run.yaml")"
   fi
 }
 

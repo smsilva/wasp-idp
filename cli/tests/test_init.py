@@ -10,6 +10,7 @@ from wasp_platform.commands import init
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch, tmp_path):
   monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+  monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
   monkeypatch.setattr(local, "remembered", lambda: {})
   monkeypatch.setattr(init, "interactive", lambda: True)
 
@@ -52,7 +53,7 @@ def test_shows_the_settings_and_installs_once_confirmed(installed):
   result = run("--admin", "you@example.org", input="y\n")
   assert result.exit_code == 0, result.output
   assert "admin" in result.output and "you@example.org" in result.output and "flag" in result.output
-  assert installed == [{"admin_emails": ["you@example.org"], "aws_profile": None, "with_crossplane": False, "log": installed[0]["log"], "timings": installed[0]["timings"]}]
+  assert installed == [{"admin_emails": ["you@example.org"], "aws_profile": None, "with_crossplane": False, "reporter": installed[0]["reporter"], "timings": installed[0]["timings"]}]
 
 
 def test_declined_installs_nothing(no_install):
@@ -171,3 +172,37 @@ def test_admin_can_be_repeated(installed):
   assert result.exit_code == 0, result.output
   assert installed[0]["admin_emails"] == ["one@example.org", "two@example.org"]
   assert "one@example.org, two@example.org" in result.output
+
+
+def test_each_run_leaves_its_logs_and_prints_where(installed, tmp_path):
+  result = run("--yes")
+  assert result.exit_code == 0, result.output
+  latest = tmp_path / "state" / "platform" / "init" / "latest"
+  assert f"logs in {latest.resolve()}" in result.output
+  assert "result: succeeded" in (latest / "run.yaml").read_text()
+
+
+def test_a_failure_shows_the_end_of_the_failing_step_log(monkeypatch, tmp_path):
+  def install(reporter, **_):
+    reporter.planned(["keycloak"])
+    reporter.started("keycloak")
+    for number in range(40):
+      reporter.output("keycloak", f"line {number}")
+    error = local.BootstrapError("rollout timed out")
+    reporter.failed("keycloak", 300, error, True)
+    raise error
+
+  monkeypatch.setattr(local, "install", install)
+  result = run("--yes", "--progress", "plain")
+  assert result.exit_code == 1
+  assert "✗ keycloak" in result.output
+  assert "last lines of" in result.output and "01-keycloak.log" in result.output
+  assert "line 39" in result.output and "line 5\n" not in result.output
+  assert "rollout timed out" in result.output
+  assert "result: failed" in (tmp_path / "state" / "platform" / "init" / "latest" / "run.yaml").read_text()
+
+
+def test_data_output_prints_nothing_while_running_and_keeps_the_logs(installed):
+  result = run("--yes", "--output", "json")
+  assert result.exit_code == 0, result.output
+  assert __import__("json").loads(result.output)["logs"].endswith(tuple("0123456789"))
