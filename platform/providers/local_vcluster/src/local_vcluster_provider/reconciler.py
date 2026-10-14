@@ -81,7 +81,20 @@ class Reconciler:
       raise NoFreePort(f"all {len(PORTS)} environment ports ({PORTS.start}-{PORTS.stop - 1}) are in use")
     return port
 
+  def _expired(self, obj: dict) -> bool:
+    expires_at = obj.get("spec", {}).get("expiresAt")
+    if expires_at and parse_time(expires_at) <= self.now():
+      log.info("environment %s expired at %s, deleting", obj["metadata"]["name"], expires_at)
+      return True
+    return False
+
   def _reconcile(self, obj: dict) -> None:
+    if obj.get("spec", {}).get("cloudAccount"):
+      # Provisioned in a cloud account by another provider (#436): only the expiry is enforced here, for
+      # every environment; the delete leaves the cloud resources to that provider's finalizer.
+      if not obj["metadata"].get("deletionTimestamp") and self._expired(obj):
+        self.store.delete(obj["metadata"]["name"])
+      return
     metadata = obj["metadata"]
     name = metadata["name"]
     namespace = namespace_name(name)
@@ -96,9 +109,7 @@ class Reconciler:
         log.info("environment %s removed", name)
       return
 
-    expires_at = obj.get("spec", {}).get("expiresAt")
-    if expires_at and parse_time(expires_at) <= self.now():
-      log.info("environment %s expired at %s, deleting", name, expires_at)
+    if self._expired(obj):
       self.store.delete(name)
       return
 

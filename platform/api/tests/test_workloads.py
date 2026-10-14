@@ -389,3 +389,19 @@ def test_extra_instance_cannot_take_the_name_of_another_component(client, state,
   assert response.status_code == 409
   assert "'ratings' is the name of another component" in response.json()["error"]["message"]
   assert state.stores["workloadrevisions"] == {}
+
+
+def test_an_environment_in_a_cloud_account_takes_no_workloads(client, state, owner):
+  # No vcluster behind it (#435): writes answer 409, reads still answer.
+  cloud = environment("cloud")
+  cloud["spec"]["cloudAccount"] = "nonprod-aws"
+  state.create("environments", cloud)
+  for response in (
+    client.post("/v1/environments/cloud/workloads/greeting-api/revisions", json={"version": "1.0.0"}, headers=owner),
+    client.post("/v1/environments/cloud/workloads:apply", json={"workloads": {}}, headers=owner),
+    client.delete("/v1/environments/cloud/workloads/greeting-api", headers=owner),
+    client.delete("/v1/environments/cloud/workloads/routes/greeting-api", headers=owner),
+  ):
+    assert response.status_code == 409, response.text
+    assert "has no vcluster" in response.json()["error"]["message"]
+  assert client.get("/v1/environments/cloud/workloads", headers=owner).json() == {"items": []}

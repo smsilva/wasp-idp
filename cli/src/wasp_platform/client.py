@@ -41,10 +41,12 @@ class PlatformClient:
   def me(self) -> dict:
     return self._request("GET", "/v1/me")
 
-  def create_environment(self, name: str, profile: str, expires: str | None, shared_with: list[str] | None = None) -> dict:
+  def create_environment(self, name: str, profile: str, expires: str | None, shared_with: list[str] | None = None, cloud_account: str | None = None) -> dict:
     body = {"name": name, "profile": profile, "expires": expires}
     if shared_with:
       body["sharedWith"] = shared_with
+    if cloud_account:
+      body["cloudAccount"] = cloud_account
     return self._request("POST", "/v1/environments", json=body)
 
   def list_capabilities(self) -> list[dict]:

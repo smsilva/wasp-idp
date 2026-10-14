@@ -10,7 +10,7 @@ A cloud account is an AWS account where the platform can create things (ADR 0029
 | `platform cloud account verify <name> [--wait]` | asks the provider for a new verification |
 | `platform cloud account share <name> --team <team>` | lets the team's members use the account |
 | `platform cloud account unshare <name> --team <team>` | takes that access away |
-| `platform cloud account remove <name>` | removes the registration; the role stays in the AWS account |
+| `platform cloud account remove <name>` | removes the registration; the role stays in the AWS account; `409` while an environment is in it |
 
 ## Trust policy
 
@@ -43,5 +43,6 @@ The provider assumes the role twice: with the ExternalId it must work, without i
 - Each account belongs to whoever registered it: other users neither see nor remove it (`403`); `platform-admins` see all of them.
 - **Sharing** follows the rules of environments (ADR 0026): the owner shares with teams they belong to (`403` for another team), `platform-admins` with any team that exists (`422` otherwise). Members of a shared team see the account in `list` and `get`, never the trust policy, and cannot verify, share, unshare or remove it. Unshare from a team the account is not shared with answers `404`.
 - A team that an account is shared with is in use: deleting the team answers `409` with `cloudaccount/<name>`.
+- An environment goes into an account with `platform environment create --cloud-account <name>` ([Environments](environments.md#in-a-cloud-account)): the account must be `ready` and usable by whoever creates it.
 - The same role is not registered twice (`409`), compared by account and role name, case-insensitive and without the path.
 - Without a base credential, `init` does not install the provider: `add`, `verify` and `remove` answer `503: capability 'cloud-account' has no provider installed: see platform status cloud-account` ([NoProviderForCapability](status.md#noproviderforcapability)). With the provider up and no base identity, `add` answers `409` asking for `init --aws-profile`.
