@@ -5,13 +5,13 @@
 ```bash
 platform init \
   --target local \
-  --admin you@example.com
+  --admin "${PLATFORM_ADMIN_EMAIL:-email_not_filled}"
 ```
 
 | Flag | Meaning |
 |---|---|
 | `--target local` | the only target today |
-| `--admin <email>` | joins `platform-admins` on its first Google sign-in; other users land only in `platform-users` |
+| `--admin <email>` | joins `platform-admins` on its first Google sign-in; other users land only in `platform-users`; a value that is not an e-mail (the `email_not_filled` placeholder) stops `init` before any step |
 | `--aws-profile <profile>` | the credential of that `~/.aws` profile becomes the platform base credential for [cloud accounts](cloud-accounts.md) |
 | `--with-crossplane` | installs Crossplane `2.3.1`, its `provider-aws-ec2` `v2.5.1` and the `crossplane_aws` provider, so [environments can be created in a cloud account](environments.md#in-a-cloud-account); needs the base credential (`--aws-profile` now or on an earlier run) |
 
