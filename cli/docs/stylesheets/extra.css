@@ -240,6 +240,8 @@
   --t-ok: #1a7f37;
   --t-err: #cf222e;
   --t-info: #2f6fd6;
+  --t-component: #0a7f73;
+  --t-environment: #8250df;
 }
 
 [data-md-color-scheme="slate"] {
@@ -253,6 +255,8 @@
   --t-ok: #7ee787;
   --t-err: #ff7b72;
   --t-info: #9fb3c8;
+  --t-component: #5eead4;
+  --t-environment: #c4a7ff;
 }
 
 .md-typeset .t-prompt::before {
@@ -285,6 +289,11 @@
 .md-typeset .t-ok { color: var(--t-ok); }
 .md-typeset .t-err { color: var(--t-err); }
 .md-typeset .t-info { color: var(--t-info); }
+
+/* A component and an environment keep one color each: in --component/--environment and in the
+   instance URL (`<component>.<environment>.localhost`), so the reader links the two at a glance. */
+.md-typeset .t-component { color: var(--t-component); font-weight: 700; }
+.md-typeset .t-environment { color: var(--t-environment); font-weight: 700; }
 
 /* A block sits close to the text that introduces it and far from the next one, so each step reads as a
    unit. The margin lives on the .highlight div (top and bottom only: narrow screens set its side margins),

@@ -11,6 +11,11 @@
   const VERBS = new Set(["create", "delete", "get", "list", "add", "remove", "share", "unshare", "verify", "default",
     "import", "render", "logs", "exec", "describe", "apply", "auth"]);
 
+  // Values of these options get a color of their own, the same one their part of an instance URL gets.
+  const ROLES = { "--component": "component", "--environment": "environment" };
+  // `http://<component>.<environment>.localhost`: the host of a workload instance (Reach an instance from outside).
+  const INSTANCE_URL = /^(https?:\/\/)([a-z0-9-]+)\.([a-z0-9-]+)(\.localhost.*)$/;
+
   const escape = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const span = (kind, text) => `<span class="t-${kind}">${escape(text)}</span>`;
 
@@ -47,6 +52,7 @@
       if (/\b(do|then)\s*$/.test(line)) depth += 1;
       let first = fresh;
       let expectValue = false;
+      let role = null;
       const parts = words(line);
       // Concept and object of the command: the word before the verb and the first argument after it.
       const bold = new Set();
@@ -72,11 +78,16 @@
         }
         if (word.startsWith("--")) {
           expectValue = !FLAGS.has(word) && !word.includes("=");
+          role = ROLES[word] || null;
           return span("opt", word);
         }
         if (expectValue) {
           expectValue = false;
-          return span("val", word);
+          return span(role || "val", word);
+        }
+        const url = word.match(INSTANCE_URL);
+        if (url) {
+          return span("arg", url[1]) + span("component", url[2]) + span("arg", ".") + span("environment", url[3]) + span("arg", url[4]);
         }
         if (bold.has(index)) return span("key", word);
         if (/^['"$]/.test(word)) return span("val", word);
