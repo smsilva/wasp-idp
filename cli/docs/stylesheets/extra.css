@@ -557,8 +557,7 @@
   color: var(--wasp-out-fg);
 }
 
-/* Home: four entry cards in a 2x2 grid, no page title. Each card ends with the command that leads
-   there, in the terminal colors: the one accent of the page, so the text around it stays plain. */
+/* Home: four entry cards in a 2x2 grid, no page title. Plain text, one key phrase per card. */
 .md-typeset h1.home-title {
   display: none;
 }
@@ -596,29 +595,10 @@
   color: var(--md-default-fg-color--light);
 }
 
-/* The command sits at the bottom of the card, whatever the length of the text above. */
-.md-typeset .grid.cards.home-cards > ul > li > p:last-child {
-  margin-top: auto;
-  padding-top: 1rem;
-}
-
-.md-typeset .grid.cards.home-cards code.home-cmd {
-  display: block;
-  padding: .45rem .7rem;
-  border: 1px solid var(--wasp-term-border);
-  border-radius: .3rem;
-  background: var(--wasp-term-bg);
-  color: var(--t-cmd);
-  font-size: .72rem;
-  white-space: nowrap;
-  overflow-x: auto;
-}
-
-.md-typeset .grid.cards.home-cards code.home-cmd::before {
-  content: "$ ";
-  color: var(--t-prompt);
-  font-weight: 700;
-  user-select: none;
+/* One key phrase per card: the text's own color at full contrast, against the muted rest. */
+.md-typeset .grid.cards.home-cards > ul > li > p:not(:first-child) strong {
+  color: var(--wasp-heading);
+  font-weight: 600;
 }
 
 @media screen and (max-width: 44.984375em) {
