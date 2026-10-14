@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from wasp_platform.bootstrap import local
+from wasp_platform.bootstrap.tasks import reporting
 
 BUILDS = {"platform-api": (Path("platform"), Path("platform/api/Dockerfile")), "forager-provider": (Path("forager"), None)}
 NODES = [
@@ -18,7 +19,7 @@ def cluster(monkeypatch):
   """Fakes docker and k3d: builds tag each image <name>:<name>-id; node images are what ctr lists."""
   state = {"node_images": {"k3d-platform-local-server-0": ""}, "imports": [], "built": []}
 
-  def run(*command, input=None, capture=True):
+  def run(*command, input=None, secret=False):
     if command[:3] == ("k3d", "node", "list"):
       return json.dumps(NODES)
     if command[:2] == ("docker", "exec"):
@@ -46,22 +47,22 @@ def test_builds_every_image(cluster):
 
 
 def test_imports_every_missing_image_in_one_call(cluster):
-  local.import_images(IMAGES, lambda message: None)
+  local.import_images(IMAGES)
   assert cluster["imports"] == [["platform-api:platform-api-id", "forager-provider:forager-provider-id"]]
 
 
 def test_an_image_the_node_already_has_is_not_imported(cluster):
   cluster["node_images"]["k3d-platform-local-server-0"] = "docker.io/library/platform-api:platform-api-id\ndocker.io/library/traefik:v3\n"
-  local.import_images(IMAGES, lambda message: None)
+  local.import_images(IMAGES)
   assert cluster["imports"] == [["forager-provider:forager-provider-id"]]
 
 
-def test_nothing_to_import_skips_k3d(cluster):
+def test_nothing_to_import_skips_k3d(cluster, recorder):
   cluster["node_images"]["k3d-platform-local-server-0"] = "docker.io/library/platform-api:platform-api-id\ndocker.io/library/forager-provider:forager-provider-id\n"
-  messages = []
-  local.import_images(IMAGES, messages.append)
+  with reporting("import images", recorder):
+    local.import_images(IMAGES)
   assert cluster["imports"] == []
-  assert any("already in the cluster" in message for message in messages)
+  assert any(event[0] == "note" and "already in the cluster" in event[2] for event in recorder.events)
 
 
 def test_a_failing_build_fails_the_step(cluster, monkeypatch):
@@ -74,7 +75,7 @@ def test_a_failing_build_fails_the_step(cluster, monkeypatch):
 
 
 def test_providers_never_wait_for_keycloak_or_the_api(tmp_path):
-  tasks = {task.name: task for task in local.init_tasks(tmp_path, None, None, lambda message: None)}
+  tasks = {task.name: task for task in local.init_tasks(tmp_path, None, None)}
 
   def ancestors(name):
     found = set()
@@ -111,3 +112,35 @@ def test_stop_ends_running_commands_and_refuses_new_ones():
   with pytest.raises(local.Stopped):
     local._run("true")
   local._stopping.clear()
+
+
+def test_a_command_reaches_the_log_of_its_step_line_by_line(recorder):
+  local._stopping.clear()
+  with reporting("keycloak", recorder):
+    stdout = local._run("sh", "-c", "echo one; echo two >&2; cat", input="three\n")
+  assert stdout == "one\nthree\n"
+  events = recorder.of("keycloak")
+  assert events[0] == ("command", "keycloak", ("sh", "-c", "echo one; echo two >&2; cat"))
+  assert {event[2] for event in events if event[0] == "output"} == {"one", "two", "three"}
+  assert events[-1] == ("exited", "keycloak", 0)
+
+
+def test_a_secret_command_keeps_its_output_out_of_the_log(recorder):
+  local._stopping.clear()
+  with reporting("keycloak", recorder):
+    assert local._run("echo", "c2VjcmV0", secret=True) == "c2VjcmV0\n"
+  assert [event[0] for event in recorder.of("keycloak")] == ["command", "exited"]
+
+
+def test_a_failing_command_keeps_its_stderr_in_the_error(recorder):
+  local._stopping.clear()
+  with reporting("traefik", recorder), pytest.raises(local.BootstrapError, match="no such deployment"):
+    local._run("sh", "-c", "echo no such deployment >&2; exit 3")
+  assert recorder.of("traefik")[-1] == ("exited", "traefik", 3)
+
+
+def test_each_parallel_build_reports_to_the_build_step(monkeypatch, recorder):
+  monkeypatch.setattr(local, "_build", lambda name, context, dockerfile=None: (local.note(f"built {name}"), name)[1])
+  with reporting("build images", recorder):
+    local.build_images(BUILDS)
+  assert sorted(event[2] for event in recorder.of("build images")) == ["built forager-provider", "built platform-api"]

@@ -3,9 +3,13 @@ from enum import Enum
 from pathlib import Path
 
 import typer
+from rich.console import Console
 
+from .. import config
 from ..bootstrap import local
+from ..bootstrap.reporters import LiveReporter, LogReporter, PlainReporter, previous_run, settings_card
 from ..bootstrap.settings import SettingsError, check_admin, default_file, from_file, resolve, to_file
+from ..bootstrap.tasks import Reporter, Reporters
 from ..bootstrap.timings import Timings, summary
 from ..output import Format, OutputOption, fail, print_data, print_table, success
 
@@ -13,6 +17,16 @@ from ..output import Format, OutputOption, fail, print_data, print_table, succes
 class Target(str, Enum):
   local = "local"
   azure = "azure"
+
+
+class Progress(str, Enum):
+  auto = "auto"
+  live = "live"
+  plain = "plain"
+
+
+# Lines of the failing step's log shown when init fails: the end of what it ran.
+FAILURE_TAIL = 30
 
 
 def check_emails(values: list[str] | None) -> list[str]:
@@ -44,6 +58,7 @@ def init(
   force: bool = typer.Option(False, "--force", help="With --generate-file, overwrite an existing file."),
   yes: bool = typer.Option(False, "--yes", help="Install without asking."),
   dry_run: bool = typer.Option(False, "--dry-run", help="Show the settings and the steps init would run, and install nothing."),
+  progress: Progress = typer.Option(Progress.auto, "--progress", help="How the steps are shown while init runs: live is a card that redraws, plain is one line per step with a heartbeat; auto is live on a terminal, plain otherwise."),
   output: OutputOption = Format.table,
 ):
   """Install the platform control plane (idempotent)."""
@@ -81,35 +96,77 @@ def init(
     return
   if not yes and (output.data or not interactive()):
     fail("add --yes to install without asking")
-  # Shown even with --yes: a forgotten init.yaml must never apply unseen.
-  if not output.data:
-    print_settings(settings)
-  if not yes and not typer.confirm("Proceed?", default=False):
-    fail("nothing was installed")
+  console = Console(highlight=False)
+  live = not output.data and wants_live(progress, console)
+  rows = [(name, shown(setting.value), setting.source) for name, setting in settings.items()]
+  # Shown even with --yes: a forgotten init.yaml must never apply unseen. The live card shows them itself.
+  if not output.data and not (live and yes):
+    if live:
+      console.print(settings_card(console, rows))
+    else:
+      print_settings(settings)
+  if not yes:
+    if not typer.confirm("Proceed?", default=False):
+      fail("nothing was installed")
+    if live:
+      # The card redraws from here with the settings at its top: one card, not a copy above it.
+      erase(console, len(console.render_lines(settings_card(console, rows), pad=False)) + 1)
 
   timings = Timings()
+  base = config.state_dir() / "init"
+  previous = previous_run(base)
+  record = LogReporter(base, {name: {"value": setting.value, "source": setting.source} for name, setting in settings.items()})
+  if output.data:
+    terminal = Reporter()
+  elif live:
+    terminal = LiveReporter(console, record.folder, previous, f"{settings['target'].value} · run {record.folder.name}", rows)
+  else:
+    terminal = PlainReporter(typer.echo)
   try:
     result = local.install(
       admin_emails=settings["admins"].value,
-      log=None if output.data else typer.echo,
+      reporter=Reporters(record, terminal),
       aws_profile=settings["aws_profile"].value,
       with_crossplane=settings["with_crossplane"].value,
       timings=timings,
     )
-  except local.BootstrapError as error:
-    if not output.data:
-      print_timings(timings)
-    fail(str(error))
+  except BaseException as error:
+    terminal.close()
+    record.close(error)
+    if isinstance(error, local.BootstrapError):
+      if not output.data:
+        if not live:
+          print_timings(timings)
+        print_failure(record)
+      fail(str(error))
+    raise
+  terminal.close()
+  record.close()
+  result["logs"] = str(record.folder)
   if output.data:
     print_data(result, output)
   else:
-    print_timings(timings)
+    if not live:
+      print_timings(timings)
+      typer.echo(f"\nlogs in {record.folder}")
     success(f"Platform API at {result['api_url']} · config in {result['config']}")
     success(f"Keycloak issuer {result['issuer']}" + ("" if result["google"] else " (no Google login: set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)"))
     if result["cloud_account"]:
       success("cloud accounts verified by the aws_account provider" + (f" (base credential expires at {result['aws_base_expires']})" if result.get("aws_base_expires") else ""))
     if result.get("crossplane"):
       success("environments in cloud accounts provisioned through Crossplane (crossplane_aws provider)")
+
+
+def wants_live(progress: Progress, console: Console) -> bool:
+  """The card needs a terminal that redraws in place; CI, a pipe and cli-smoke get plain lines."""
+  return progress == Progress.live or (progress == Progress.auto and console.is_terminal and not console.is_dumb_terminal)
+
+
+def erase(console: Console, lines: int) -> None:
+  """Moves the cursor up over the last lines and clears them."""
+  if console.is_terminal:
+    console.file.write(f"\x1b[{lines}A\r\x1b[0J")
+    console.file.flush()
 
 
 def print_settings(settings: dict) -> None:
@@ -121,3 +178,13 @@ def print_timings(timings: Timings) -> None:
   typer.echo("\ntimings:")
   for line in summary(timings):
     typer.echo(f"  {line}")
+
+
+def print_failure(record: LogReporter) -> None:
+  """The end of the failing step's log, and where the whole run is."""
+  path = record.file_of(record.failed_step) if record.failed_step else None
+  if path and path.is_file():
+    typer.echo(f"\nlast lines of {path}:")
+    for line in path.read_text(encoding="utf-8").splitlines()[-FAILURE_TAIL:]:
+      typer.echo(f"  {line}")
+  typer.echo(f"\nlogs in {record.folder}")

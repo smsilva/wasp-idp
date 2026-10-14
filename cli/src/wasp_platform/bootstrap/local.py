@@ -1,4 +1,5 @@
 import base64
+import contextvars
 import hashlib
 import json
 import os
@@ -15,7 +16,7 @@ import yaml
 
 from .. import config
 from .admin_permissions import AdminPermissions
-from .tasks import Task, locked, run_tasks
+from .tasks import Reporter, Task, emit, note, run_tasks
 from .timings import Timings
 
 CLUSTER = "platform-local"
@@ -111,30 +112,61 @@ def _pause(seconds: float) -> None:
     raise Stopped("stopped: another step failed")
 
 
-def _run(*command: str, input: str | None = None, capture: bool = True) -> str:
+def _drain(stream, lines: list[str], secret: bool = False) -> None:
+  """Each line goes to the step's log as it comes (#458), and is kept for the result or the error."""
+  for line in stream:
+    lines.append(line)
+    if not secret:
+      emit("output", line.rstrip("\n"))
+
+
+def _feed(stream, text: str) -> None:
+  try:
+    stream.write(text)
+    stream.close()
+  except BrokenPipeError:
+    pass
+
+
+def _run(*command: str, input: str | None = None, secret: bool = False) -> str:
+  """Returns stdout; stdout and stderr both reach the step's log, read side by side so neither pipe fills.
+  secret: the output holds a credential, so the log gets only the command and its exit code. The input
+  never reaches the log: it carries Secrets."""
   if _stopping.is_set():
     raise Stopped("stopped: another step failed")
-  pipe = subprocess.PIPE if capture else None
+  emit("command", command)
   try:
-    process = subprocess.Popen(command, text=True, stdin=subprocess.PIPE if input is not None else None, stdout=pipe, stderr=pipe)
+    process = subprocess.Popen(command, text=True, stdin=subprocess.PIPE if input is not None else None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
   except FileNotFoundError as error:
     raise BootstrapError(f"'{command[0]}' not found in PATH") from error
   with _processes_lock:
     _processes.add(process)
+  stdout: list[str] = []
+  stderr: list[str] = []
   try:
-    stdout, stderr = process.communicate(input)
+    # The context carries the current step into the reader thread; stdin has its own, as communicate() does.
+    threads = [threading.Thread(target=contextvars.copy_context().run, args=(_drain, process.stderr, stderr, secret))]
+    if input is not None:
+      threads.append(threading.Thread(target=_feed, args=(process.stdin, input)))
+    for thread in threads:
+      thread.start()
+    _drain(process.stdout, stdout, secret)
+    for thread in threads:
+      thread.join()
+    process.wait()
   finally:
     with _processes_lock:
       _processes.discard(process)
+  emit("exited", process.returncode)
   if process.returncode != 0:
     if _stopping.is_set():
       raise Stopped("stopped: another step failed")
-    raise BootstrapError(f"{' '.join(command[:3])} … failed:\n{(stderr or stdout or '').strip()}")
-  return stdout if capture else ""
+    raise BootstrapError(f"{' '.join(command[:3])} … failed:\n{(''.join(stderr) or ''.join(stdout)).strip()}")
+  return "".join(stdout)
 
 
-def _kubectl(*args: str, input: str | None = None) -> str:
-  return _run("kubectl", "--context", CONTEXT, *args, input=input)
+def _kubectl(*args: str, input: str | None = None, secret: bool = False) -> str:
+  return _run("kubectl", "--context", CONTEXT, *args, input=input, secret=secret)
 
 
 def cluster_exists() -> bool:
@@ -142,13 +174,13 @@ def cluster_exists() -> bool:
   return CLUSTER in names
 
 
-def _ensure_port(ports: str, log) -> None:
+def _ensure_port(ports: str) -> None:
   """Clusters created by an older init lack newer mappings; k3d can add them to the load balancer."""
   clusters = json.loads(_run("k3d", "cluster", "list", CLUSTER, "--output", "json"))
   mapped = json.dumps(clusters[0].get("nodes", []))
   if f'"HostPort": "{ports.split("-")[0]}"' in mapped:
     return
-  log(f"adding port {ports} to cluster {CLUSTER} …")
+  note(f"adding port {ports} to cluster {CLUSTER} …")
   _run("k3d", "cluster", "edit", CLUSTER, "--port-add", f"127.0.0.1:{ports}:{ports}@loadbalancer")
 
 
@@ -178,7 +210,8 @@ def _cluster_images() -> set[str]:
 def build_images(builds: dict[str, tuple[Path, Path | None]]) -> dict[str, str]:
   """Builds every image in parallel; it needs no cluster, so it starts with init. Returns name -> image."""
   with ThreadPoolExecutor(max_workers=len(builds)) as pool:
-    futures = {name: pool.submit(_build, name, context, dockerfile) for name, (context, dockerfile) in builds.items()}
+    # Each build copies the context, so its commands reach the log of the "build images" step.
+    futures = {name: pool.submit(contextvars.copy_context().run, _build, name, context, dockerfile) for name, (context, dockerfile) in builds.items()}
     try:
       return {name: future.result() for name, future in futures.items()}
     except BootstrapError:
@@ -187,15 +220,15 @@ def build_images(builds: dict[str, tuple[Path, Path | None]]) -> dict[str, str]:
       raise
 
 
-def import_images(images: dict[str, str], log) -> None:
+def import_images(images: dict[str, str]) -> None:
   """Imports only the images the cluster lacks, in one k3d call: each `k3d image import` costs ~20 s
   even for a small image (#443)."""
   present = _cluster_images()
   missing = [image for image in images.values() if f"docker.io/library/{image}" not in present]
   if not missing:
-    log("images already in the cluster, nothing to import")
+    note("images already in the cluster, nothing to import")
     return
-  log(f"importing {len(missing)} image(s) into {CLUSTER} …")
+  note(f"importing {len(missing)} image(s) into {CLUSTER} …")
   _run("k3d", "image", "import", *missing, "--cluster", CLUSTER)
 
 
@@ -210,7 +243,7 @@ def _rollout(deployment: str, namespace: str = NAMESPACE) -> None:
 
 def _secret_value(namespace: str, name: str, key: str) -> str | None:
   try:
-    encoded = _kubectl("get", "secret", name, "--namespace", namespace, "--output", f"jsonpath={{.data.{key}}}")
+    encoded = _kubectl("get", "secret", name, "--namespace", namespace, "--output", f"jsonpath={{.data.{key}}}", secret=True)
   except BootstrapError:
     return None
   return base64.b64decode(encoded).decode() if encoded else None
@@ -258,7 +291,7 @@ def render_realm(realm: dict, google: bool, admins: list[str], smoke: dict | Non
   return realm
 
 
-def deploy_keycloak(root: Path, admin_emails: list[str], log) -> dict:
+def deploy_keycloak(root: Path, admin_emails: list[str]) -> dict:
   keycloak_dir = root / "platform" / "keycloak"
   _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "keycloak.yaml"))
 
@@ -275,7 +308,7 @@ def deploy_keycloak(root: Path, admin_emails: list[str], log) -> dict:
     client_secret = _secret_value(AUTH_NAMESPACE, "keycloak-google", "GOOGLE_CLIENT_SECRET") or ""
   google = bool(client_id and client_secret)
   if not google:
-    log("warning: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not set — realm without the Google identity provider")
+    note("warning: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not set — realm without the Google identity provider")
   _apply_secret(AUTH_NAMESPACE, "keycloak-google", {
     "GOOGLE_CLIENT_ID": client_id,
     "GOOGLE_CLIENT_SECRET": client_secret,
@@ -323,13 +356,13 @@ def import_realm(root: Path, google: bool) -> None:
   _kubectl("annotate", "deployment", "keycloak", "--namespace", AUTH_NAMESPACE, "--overwrite", f"{IDENTITY_PROVIDERS_ANNOTATION}={'google' if google else ''}")
 
 
-def apply_admin_permissions(log) -> None:
+def apply_admin_permissions() -> None:
   try:
     AdminPermissions(
       KEYCLOAK_URL,
       _secret_value(AUTH_NAMESPACE, "keycloak-admin", "username"),
       _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"),
-    ).apply(log)
+    ).apply(note)
   except httpx.HTTPError as error:
     raise BootstrapError(f"admin permissions of {API_ADMIN_SECRET} not applied: {error}") from error
 
@@ -368,14 +401,14 @@ def wait_issuer(issuer: str, timeout: int = 60) -> None:
 
 def aws_base_credential(profile: str) -> dict:
   """The profile's credential as the controller's environment; SSO and assumed roles carry an Expiration."""
-  exported = json.loads(_run("aws", "configure", "export-credentials", "--profile", profile, "--format", "process"))
+  exported = json.loads(_run("aws", "configure", "export-credentials", "--profile", profile, "--format", "process", secret=True))
   values = {"AWS_ACCESS_KEY_ID": exported["AccessKeyId"], "AWS_SECRET_ACCESS_KEY": exported["SecretAccessKey"]}
   if exported.get("SessionToken"):
     values["AWS_SESSION_TOKEN"] = exported["SessionToken"]
   return {"values": values, "expiration": exported.get("Expiration")}
 
 
-def store_aws_credential(aws_profile: str | None, log) -> tuple[dict, str | None]:
+def store_aws_credential(aws_profile: str | None) -> tuple[dict, str | None]:
   """With --aws-profile, store the base credential. Returns the stored one (now or by an earlier init)
   and its expiration; without one, cloud accounts stay NoProviderForCapability."""
   expiration = None
@@ -386,19 +419,19 @@ def store_aws_credential(aws_profile: str | None, log) -> tuple[dict, str | None
     _kubectl("delete", "secret", AWS_BASE_SECRET, "--namespace", NAMESPACE, "--ignore-not-found")
     _apply_secret(NAMESPACE, AWS_BASE_SECRET, credential["values"])
     if expiration:
-      log(f"warning: the credential of profile {aws_profile} expires at {expiration}: run init again after that, or use a dedicated IAM user")
+      note(f"warning: the credential of profile {aws_profile} expires at {expiration}: run init again after that, or use a dedicated IAM user")
   values = {key: _secret_value(NAMESPACE, AWS_BASE_SECRET, key) for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}
   return (values if values["AWS_ACCESS_KEY_ID"] else {}), expiration
 
 
-def install_aws_account(provider_dir: Path, aws_profile: str | None, log) -> dict:
+def install_aws_account(provider_dir: Path, aws_profile: str | None) -> dict:
   """The aws_account controller, with the stored base credential as its environment. Its image is built
   here, not with the others: it exists only when a credential is stored."""
-  values, expiration = store_aws_credential(aws_profile, log)
+  values, expiration = store_aws_credential(aws_profile)
   if not values:
     return {"cloud_account": False, "values": {}}
   image = _build(AWS_PROVIDER_IMAGE, provider_dir)
-  import_images({AWS_PROVIDER_IMAGE: image}, log)
+  import_images({AWS_PROVIDER_IMAGE: image})
   _deploy(provider_dir / "deploy" / "aws-account-provider.yaml", AWS_PROVIDER_IMAGE, image)
   # The credential reaches the pod as environment: a new one needs a new pod, an unchanged one keeps it.
   digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()[:16]
@@ -448,7 +481,7 @@ def planned_steps(aws_profile: str | None, with_crossplane: bool) -> list[str]:
   skipped = {"aws-account-provider"} if not aws else set()
   if not with_crossplane:
     skipped.add("crossplane")
-  return [task.name for task in init_tasks(repo_root(), [], aws_profile, lambda message: None, with_crossplane) if task.name not in skipped]
+  return [task.name for task in init_tasks(repo_root(), [], aws_profile, with_crossplane) if task.name not in skipped]
 
 
 def wants_crossplane(with_crossplane: bool, aws_values: dict) -> bool:
@@ -467,13 +500,13 @@ def _wait_for(description: str, check, timeout: int, hint: str) -> None:
     _pause(3)
 
 
-def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool, log) -> dict:
+def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool) -> dict:
   """Crossplane, provider-aws-ec2, the base credential in crossplane-system and the crossplane_aws provider.
   Its image is built here, like the aws_account one: it exists only with Crossplane."""
   if not wants_crossplane(with_crossplane, values):
     return {"crossplane": False}
   image = _build(CROSSPLANE_PROVIDER_IMAGE, provider_dir)
-  import_images({CROSSPLANE_PROVIDER_IMAGE: image}, log)
+  import_images({CROSSPLANE_PROVIDER_IMAGE: image})
   _kubectl("apply", "--filename", str(provider_dir / "deploy" / "crossplane.yaml"))
   # The CRDs exist only once the helm-controller's install job ran.
   _wait_for(
@@ -485,7 +518,7 @@ def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool, 
   # Replaced whole, as in platform-system: a long-lived key must not keep the session token of a temporary one.
   _kubectl("delete", "secret", AWS_BASE_SECRET, "--namespace", CROSSPLANE_NAMESPACE, "--ignore-not-found")
   _apply_secret(CROSSPLANE_NAMESPACE, AWS_BASE_SECRET, {"creds": crossplane_credential(values)})
-  log("installing the Crossplane provider for AWS EC2 (pulls its package, a few minutes the first time) …")
+  note("installing the Crossplane provider for AWS EC2 (pulls its package, a few minutes the first time) …")
   _kubectl("apply", "--filename", str(provider_dir / "deploy" / "provider-aws-ec2.yaml"))
   _kubectl("wait", f"provider.pkg.crossplane.io/{CROSSPLANE_PROVIDER_PACKAGE}", "--for", "condition=Healthy", "--timeout", "600s")
   _kubectl("wait", "crd", "vpcs.ec2.aws.upbound.io", "providerconfigs.aws.upbound.io", "--for", "condition=Established", "--timeout", "120s")
@@ -494,9 +527,9 @@ def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool, 
   return {"crossplane": True}
 
 
-def ensure_cluster(root: Path, log) -> None:
+def ensure_cluster(root: Path) -> None:
   if cluster_exists():
-    log(f"cluster {CLUSTER} already exists, reusing it")
+    note(f"cluster {CLUSTER} already exists, reusing it")
   else:
     _run(
       str(root / "scripts" / "cluster-zero" / "cluster-create"),
@@ -507,9 +540,9 @@ def ensure_cluster(root: Path, log) -> None:
       "--extra-port", f"127.0.0.1:{ENV_PORTS}:{ENV_PORTS}",
       "--extra-port", f"127.0.0.1:{INGRESS_PORT}:{INGRESS_PORT}",
     )
-  _ensure_port(KEYCLOAK_PORT, log)
-  _ensure_port(ENV_PORTS, log)
-  _ensure_port(INGRESS_PORT, log)
+  _ensure_port(KEYCLOAK_PORT)
+  _ensure_port(ENV_PORTS)
+  _ensure_port(INGRESS_PORT)
 
 
 def apply_crds(root: Path) -> None:
@@ -525,7 +558,7 @@ def deploy_provider(provider_dir: Path, manifest: str, name: str, image: str) ->
   _rollout(name)
 
 
-def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, log, with_crossplane: bool = False) -> list[Task]:
+def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, with_crossplane: bool = False) -> list[Task]:
   """The steps of init and what each one needs (#444). Providers need only the CRDs and their image,
   never Keycloak or the API; the API needs Keycloak's realm (its admin client) and its image."""
   api_dir = root / "platform" / "api"
@@ -557,13 +590,13 @@ def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, log
     return Task(name, lambda results: deploy_provider(directory, manifest, name, results["build images"][name]), needs=("CRDs", "import images"))
 
   return [
-    Task("cluster", lambda results: ensure_cluster(root, log)),
+    Task("cluster", lambda results: ensure_cluster(root)),
     Task("build images", lambda results: build_images(builds)),
     Task("CRDs", lambda results: apply_crds(root), needs=("cluster",)),
-    Task("import images", lambda results: import_images(results["build images"], log), needs=("cluster", "build images")),
-    Task("keycloak", lambda results: deploy_keycloak(root, admin_emails, log), needs=("CRDs",)),
+    Task("import images", lambda results: import_images(results["build images"]), needs=("cluster", "build images")),
+    Task("keycloak", lambda results: deploy_keycloak(root, admin_emails), needs=("CRDs",)),
     Task("keycloak realm", lambda results: import_realm(root, results["keycloak"]["google"]), needs=("keycloak",)),
-    Task("keycloak admin permissions", lambda results: apply_admin_permissions(log), needs=("keycloak realm",)),
+    Task("keycloak admin permissions", lambda results: apply_admin_permissions(), needs=("keycloak realm",)),
     Task(IMAGE, api, needs=("keycloak admin permissions", "import images")),
     *(provider(name, directory, manifest) for name, (directory, manifest) in provider_manifests.items()),
     # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
@@ -572,26 +605,24 @@ def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, log
     Task("shared-pg", lambda results: install_shared_pg(forager_dir), needs=("CRDs",)),
     Task("profile policies", lambda results: install_profile_policies(forager_dir), needs=("CRDs",)),
     Task("prometheus", lambda results: install_observability(root / "platform" / "observability"), needs=("CRDs",)),
-    Task("templates", lambda results: install_templates(root, log), needs=("CRDs",)),
+    Task("templates", lambda results: install_templates(root), needs=("CRDs",)),
     # After the shared import: two `k3d image import` at once would race for the same tools node.
-    Task("aws-account-provider", lambda results: install_aws_account(providers / "aws_account", aws_profile, log), needs=("CRDs", "import images")),
+    Task("aws-account-provider", lambda results: install_aws_account(providers / "aws_account", aws_profile), needs=("CRDs", "import images")),
     # After aws-account-provider: it stores the base credential and imports its own image (one k3d import at a time).
-    Task("crossplane", lambda results: install_crossplane(providers / "crossplane_aws", results["aws-account-provider"]["values"], with_crossplane, log), needs=("aws-account-provider",)),
+    Task("crossplane", lambda results: install_crossplane(providers / "crossplane_aws", results["aws-account-provider"]["values"], with_crossplane), needs=("aws-account-provider",)),
   ]
 
 
-def install(admin_emails: list[str] | None = None, log=None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
+def install(admin_emails: list[str] | None = None, reporter: Reporter | None = None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
   """timings: passed by the caller so the steps run so far can be shown when init fails."""
-  log = log or (lambda message: None)
+  reporter = reporter or Reporter()
   timings = timings or Timings()
   for tool in ("docker", "k3d", "kubectl", *(("aws",) if aws_profile else ())):
     if not shutil.which(tool):
       raise BootstrapError(f"'{tool}' not found in PATH")
   root = repo_root()
   _stopping.clear()
-  # Steps log from their own threads: one lock keeps every line whole.
-  log = locked(log)
-  results = run_tasks(init_tasks(root, admin_emails or [], aws_profile, log, with_crossplane), log, timings, on_failure=stop)
+  results = run_tasks(init_tasks(root, admin_emails or [], aws_profile, with_crossplane), reporter, timings, on_failure=stop)
 
   identity = results["keycloak"]
   path = config.save({
@@ -685,12 +716,12 @@ def seed_ref(root: Path) -> str:
   return _run("git", "-C", str(root), "merge-base", "HEAD", "origin/main").strip()
 
 
-def install_templates(root: Path, log) -> None:
+def install_templates(root: Path) -> None:
   """Registers the factory templates at the checkout's commit; applying again only moves the ref."""
   ref = seed_ref(root)
   existing = json.loads(_kubectl("get", "templates.catalog.platform.wasp.silvios.me", "--namespace", NAMESPACE, "--output", "json"))["items"]
   manifests = seed_templates(root, ref, existing)
-  log(f"registering {len(manifests)} template(s) at {ref[:7]} …")
+  note(f"registering {len(manifests)} template(s) at {ref[:7]} …")
   _kubectl("apply", "--filename", "-", input=json.dumps({"apiVersion": "v1", "kind": "List", "items": manifests}))
 
 
