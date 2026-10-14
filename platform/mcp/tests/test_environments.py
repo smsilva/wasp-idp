@@ -110,3 +110,45 @@ async def test_get_refuses_a_name_that_is_a_path(name):
     result = await client.call_tool("environments_get", {"name": name})
   assert result.is_error
   assert "is not a platform name" in result.content[0].text
+
+
+async def test_delete_needs_allow_writes_and_is_destructive():
+  assert "environments_delete" not in await tool_names()
+  delete = (await tool_names(allow_writes=True))["environments_delete"]
+  assert delete.annotations.read_only_hint is False
+  assert delete.annotations.destructive_hint is True
+  assert delete.annotations.idempotent_hint is True
+
+
+async def test_delete_removes_an_ephemeral_environment():
+  calls = []
+
+  def handler(request):
+    calls.append((request.method, request.url.path))
+    if request.method == "GET":
+      return httpx.Response(200, json=DEMO)
+    return httpx.Response(202, json={"name": "demo", "status": "deleting"})
+
+  async with Client(mcp_server.build(["environments"], allow_writes=True, client=client_for(handler))) as client:
+    result = await client.call_tool("environments_delete", {"name": "demo"})
+  assert not result.is_error
+  assert result.structured_content == {"name": "demo", "status": "deleting"}
+  assert calls == [("GET", "/v1/environments/demo"), ("DELETE", "/v1/environments/demo")]
+
+
+async def test_delete_refuses_a_shared_environment_before_the_api():
+  def handler(request):
+    assert request.method == "GET"
+    return httpx.Response(200, json={**DEMO, "profile": "shared"})
+
+  async with Client(mcp_server.build(["environments"], allow_writes=True, client=client_for(handler))) as client:
+    result = await client.call_tool("environments_delete", {"name": "demo"})
+  assert result.is_error
+  assert "ephemeral" in result.content[0].text
+
+
+async def test_delete_refuses_a_name_that_is_a_path():
+  async with Client(mcp_server.build(["environments"], allow_writes=True, client=client_for(no_calls))) as client:
+    result = await client.call_tool("environments_delete", {"name": "../catalog/domains/x"})
+  assert result.is_error
+  assert "is not a platform name" in result.content[0].text
