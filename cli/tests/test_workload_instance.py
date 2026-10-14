@@ -148,6 +148,18 @@ def test_list(api):
   lines = result.output.splitlines()
   assert lines[0].split() == ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"]
   assert lines[1].split() == ["reviews@demo", "reviews", "2.1.0", "Available", "2/2", "1", "—", "http://reviews.apps:80"]
+  assert api["requests"][-1].url.path == "/v1/workloads"
+  assert dict(api["requests"][-1].url.params) == {"environment": "demo"}
+
+
+def test_list_across_environments(api):
+  api["instances"] = [INSTANCE, {**INSTANCE, "name": "reviews@staging", "environment": "staging"}]
+  result = run("list", "--component", "reviews")
+  assert result.exit_code == 0, result.output
+  assert dict(api["requests"][-1].url.params) == {"component": "reviews"}
+  lines = result.output.splitlines()
+  assert lines[0].split() == ["WORKLOAD", "ENVIRONMENT", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"]
+  assert [line.split()[:2] for line in lines[1:]] == [["reviews@demo", "demo"], ["reviews@staging", "staging"]]
 
 
 def test_get(api):

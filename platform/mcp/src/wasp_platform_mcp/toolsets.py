@@ -175,9 +175,13 @@ def builds(client: ClientFactory) -> list[ToolSpec]:
 def workloads(client: ClientFactory) -> list[ToolSpec]:
   """What runs in an environment (ADR 0033): instances, their revisions and golden signals. An instance
   is named after its component unless it is an extra one, such as a canary."""
-  def workloads_list(environment: str) -> dict[str, Any]:
-    """Workload instances in an environment: component, version, replicas, status, URL and resources."""
-    return {"items": client().list_workloads(checked(environment))}
+  def workloads_list(environment: str | None = None, component: str | None = None) -> dict[str, Any]:
+    """Workload instances, each with its environment, component, version, replicas, status, URL and resources.
+
+    Without environment, every environment the caller can use (their own, shared with their teams, every
+    one for platform-admins); filter by environment or component.
+    """
+    return {"items": client().list_workloads(checked(environment) if environment else None, component)}
 
   def workloads_get(environment: str, instance: str) -> dict[str, Any]:
     """One workload instance: version, replicas, status, URL, its resources (database, route) and traffic."""

@@ -293,6 +293,7 @@ def instance_view(environment: str, instance: str, obj: dict | None, latest: dic
 
 
 def router(state, journal: Journal) -> APIRouter:
+  top = APIRouter()
   routes = APIRouter(prefix="/v1/environments/{environment}")
 
   def usable(environment: str, principal: Principal) -> dict:
@@ -321,20 +322,28 @@ def router(state, journal: Journal) -> APIRouter:
     return sorted(items, key=lambda obj: (obj["spec"]["instance"], obj["spec"]["revision"]))
 
   def instances_of(environment: str) -> list[dict]:
-    """One view per instance: those the provider keeps, and those whose first revision is still open.
-    A closed revision with no instance behind it (a failed first deploy, a remove) shows nothing."""
-    latest: dict[str, dict] = {}
-    for obj in revisions_of(environment):
-      latest[obj["spec"]["instance"]] = obj
-    kept = {obj["spec"]["instance"]: obj for obj in state.list(INSTANCES) if obj["spec"].get("environment") == environment}
-    routes = routes_of(environment)
+    return instances_in({environment})
+
+  def instances_in(environments: set[str]) -> list[dict]:
+    """One view per instance of the environments, sorted by environment and instance: those the provider
+    keeps, and those whose first revision is still open. A closed revision with no instance behind it (a
+    failed first deploy, a remove) shows nothing. One list of each kind, whatever the number of environments."""
+    def key(obj: dict) -> tuple[str, str]:
+      return obj["spec"].get("environment"), obj["spec"].get("instance")
+
+    latest: dict[tuple[str, str], dict] = {}
+    for obj in sorted(state.list(REVISIONS), key=lambda obj: obj["spec"]["revision"]):
+      if obj["spec"].get("environment") in environments:
+        latest[key(obj)] = obj
+    kept = {key(obj): obj for obj in state.list(INSTANCES) if obj["spec"].get("environment") in environments}
+    routes = {(obj["spec"]["environment"], obj["spec"]["component"]): obj for obj in state.list(ROUTES) if obj["spec"].get("environment") in environments}
     views = []
-    for instance, revision in sorted(latest.items()):
-      obj = kept.get(instance)
+    for (environment, instance), revision in sorted(latest.items()):
+      obj = kept.get((environment, instance))
       if obj is None and not is_open(revision):
         continue
       view = instance_view(environment, instance, obj, revision)
-      view["traffic"] = traffic_of(instance, view["component"], routes.get(view["component"]))
+      view["traffic"] = traffic_of(instance, view["component"], routes.get((environment, view["component"])))
       views.append(view)
     return views
 
@@ -561,6 +570,18 @@ def router(state, journal: Journal) -> APIRouter:
     usable(environment, principal)
     return {"items": instances_of(environment)}
 
+  @top.get("/v1/workloads")
+  def list_across(environment: str | None = None, component: str | None = None, principal: Principal = Depends(current_principal)):
+    """The instances of every environment the caller can use (#490), as GET /v1/environments lists them:
+    their own, the ones shared with their teams, and every one for platform-admins."""
+    if environment is not None:
+      usable(environment, principal)
+      names = {environment}
+    else:
+      everything = ADMIN_GROUP in principal.groups
+      names = {obj["metadata"]["name"] for obj in state.list(ENVIRONMENTS) if everything or can_use(obj, principal)}
+    return {"items": [view for view in instances_in(names) if component is None or view["component"] == component]}
+
   @routes.get("/workloads/{instance}")
   def get(environment: str, instance: str, principal: Principal = Depends(current_principal)):
     usable(environment, principal)
@@ -660,4 +681,6 @@ def router(state, journal: Journal) -> APIRouter:
     usable(environment, principal)
     return {"items": [revision_view(obj) for obj in revisions_of(environment, instance, component)]}
 
-  return routes
+  # Included last: include_router copies the routes defined so far.
+  top.include_router(routes)
+  return top

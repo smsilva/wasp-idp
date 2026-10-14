@@ -105,7 +105,7 @@ def _instance(client: PlatformClient, environment: str, component: str | None, i
     fail("give either --component or --instance")
   if instance is not None:
     return instance
-  found = sorted(item["instance"] for item in client.list_workloads(environment) if item.get("component") == component)
+  found = sorted(item["instance"] for item in client.list_workloads(environment, component))
   # --component never lands on an extra instance unasked: that would remove someone's sandbox.
   if found and found != [component]:
     fail(f"{component} has {len(found)} instance{'s' if len(found) > 1 else ''} in {environment}: {', '.join(found)}; give --instance")
@@ -357,22 +357,28 @@ def apply(
     fail(f"{environment}: {len(failed)} of {len(ended)} revision(s) did not succeed")
 
 
-@app.command("list", epilog=examples("platform workload list --environment demo", "platform workload list --environment demo --output json"))
+@app.command("list", epilog=examples("platform workload list", "platform workload list --environment demo", "platform workload list --component hello-api --output json"))
 def list_(
-  environment: Annotated[str, typer.Option(help="Environment whose workloads to list.")],
+  environment: Annotated[str | None, typer.Option(help="Only the workloads of this environment; by default every environment you can use.")] = None,
+  component: Annotated[str | None, typer.Option(help="Only the instances of this component.")] = None,
   output: OutputOption = Format.table,
 ):
-  """List the workloads of an environment: version, status, replicas, revision, URL (the public one when it has a route)."""
+  """List workloads: version, status, replicas, revision, URL (the public one when it has a route).
+
+  Without --environment, the workloads of every environment you can use: yours, the ones shared with
+  your teams, and every one for platform-admins.
+  """
   try:
-    items = _client().list_workloads(environment)
+    items = _client().list_workloads(environment, component)
   except ApiError as error:
     fail(str(error))
   if output.data:
     print_data(items, output)
     return
+  across = environment is None
   print_table(
-    ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"],
-    [[item["name"], item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("traffic") or "—", item.get("publicUrl") or item.get("url") or "—"] for item in items],
+    ["WORKLOAD", *(["ENVIRONMENT"] if across else []), "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"],
+    [[item["name"], *([item["environment"]] if across else []), item.get("component") or "—", item.get("version") or "—", item["status"], _replicas(item), str(item.get("revision") or "—"), item.get("traffic") or "—", item.get("publicUrl") or item.get("url") or "—"] for item in items],
   )
 
 

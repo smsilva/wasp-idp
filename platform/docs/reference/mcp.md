@@ -36,7 +36,7 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `builds` | `builds_get` | `GET /v1/builds/{name}` | read-only |
 | `builds` | `builds_list` | `GET /v1/builds` (`component`) | read-only |
 | `builds` | `builds_versions_list` | `GET /v1/versions` (`component`) | read-only |
-| `workloads` | `workloads_list` | `GET /v1/environments/{environment}/workloads` | read-only |
+| `workloads` | `workloads_list` | `GET /v1/workloads` (`environment`, `component`; without `environment`, every environment you can use) | read-only |
 | `workloads` | `workloads_get` | `GET /v1/environments/{environment}/workloads/{instance}` | read-only |
 | `workloads` | `workloads_history` | `GET /v1/environments/{environment}/revisions` (`instance`) | read-only |
 | `workloads` | `workloads_signals` | `GET /v1/environments/{environment}/workloads/{instance}/signals` (`window`, default `5m`) | read-only |

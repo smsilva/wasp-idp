@@ -306,6 +306,11 @@ output="$(platform workload list --environment "${environment}")"
 echo "${output}"
 expect_output "Available" "${output}"
 expect_output "http://${workload_component}.apps:80" "${output}"
+# Without --environment (#490): every environment the user can use, with an ENVIRONMENT column.
+output="$(platform workload list --component "${workload_component}")"
+echo "${output}"
+expect_output "ENVIRONMENT" "${output}"
+expect_output "${workload_component}@${environment}" "${output}"
 # DNS inside the vcluster (#307): a pod reaches the Service of the instance by its short name, through
 # the resolver an app uses (busybox nslookup ignores the search domains, wget does not).
 platform environment get "${environment}" > /dev/null
