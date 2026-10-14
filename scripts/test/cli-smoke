@@ -1,0 +1,649 @@
+#!/bin/bash
+set -e
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} [--skip-init]
+
+The fast test of the CLI (#179, #451): everything that needs only the control plane of
+platform-local, no environment. Run it on every CLI change; scripts/test/cli-e2e runs the
+journey through a vcluster (environments, sharing, workloads, Forager, routes, signals).
+
+Login as the test user, platform status as each role, the same user seen by an agent through
+platform-mcp (whoami over stdio), the refusals a non-admin gets, then login as the test admin,
+the catalog import of idp/catalog/ (then read over MCP), a team with two test users, checked in
+the token (member add of yourself renews it, login --refresh drops a team you left), the
+Keycloak client of the API unable to promote anyone to platform-admins, the templates (list,
+render, import plan), an SCM connection up to the GitHub manifest page (creating the App needs a
+browser and an org owner, so it stays out), the refusals of component create (unknown system, a
+--param outside the schema, a name already in the index, a connection that is not ready),
+creation list and delete without a creation, component clone --https of a public repo in the
+index, and of a name outside it, the OCI
+registries (add refused to a non-admin, NoDefaultRegistry when the cluster has no default, add
+with --vendor and --scm-connection, a non-ghcr.io host and a taken address refused, ready once
+/v2/ answers, set-default keeping one default, remove refused while a version is in it), the
+refusals of build create (outside the owner team, unknown component, a malformed version, an
+unknown registry, a GHCR of another org with RegistryNotWritableByCI, an org with no
+connection), the Workload Spec (spec validate of a valid and an invalid Score, spec get of a
+Version written by kubectl, refused outside the owner team, by version and by branch, and
+SpecNotIndexed for a Version without it), and a cloud account (ADR 0029): refused with a clear
+message without an AWS base credential; with one, the role the platform cannot assume stays
+TrustNotEstablished, and another user neither sees it nor registers the same role, an
+environment is refused in it while it is not ready and in an account that does not exist
+(#435). Stops at the first failure with a non-zero exit code.
+
+It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
+your own login in ~/.config/platform/credentials is never touched.
+
+  --skip-init  reuse the running platform-local instead of running 'platform init'
+USAGE
+}
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib"
+
+team="smoke-team-${RANDOM}"
+cloud_account="smoke-aws-${RANDOM}"
+# Documentation account ID: AssumeRole there is always denied, which is what the step checks.
+cloud_role="arn:aws:iam::123456789012:role/platform-smoke-${RANDOM}"
+cloud_environment="smoke-cloud-${RANDOM}"
+connection="smoke-scm-${RANDOM}"
+component="smoke-component-${RANDOM}"
+taken_component="smoke-taken-${RANDOM}"
+clone_component="smoke-clone-${RANDOM}"
+build_component="smoke-build-${RANDOM}"
+smoke_registry="smoke-reg-${RANDOM}"
+other_registry="smoke-reg-other-${RANDOM}"
+other_namespace="smoke-other-${RANDOM}"
+workload_component="smoke-workload-${RANDOM}"
+workload_directory="$(mktemp --directory)"
+render_directory="$(mktemp --directory)"
+clone_directory="$(mktemp --directory)"
+
+cleanup() {
+  # After a successful run each of these is already gone and fails silently; bash keeps the script's
+  # own exit status.
+  platform team delete "${team}" > /dev/null 2>&1 || true
+  platform cloud account remove "${cloud_account}" > /dev/null 2>&1 || true
+  platform scm connection remove "${connection}" > /dev/null 2>&1 || true
+  platform registry remove "${smoke_registry}" > /dev/null 2>&1 || true
+  platform registry remove "${other_registry}" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${build_component}" "${workload_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${build_component},${workload_component})" > /dev/null 2>&1 || true
+  rm --recursive --force "${smoke_config}" "${render_directory}" "${clone_directory}" "${workload_directory}"
+}
+trap cleanup EXIT
+
+cd "${repo_root}"
+
+init_step
+
+step "login as the test user (platform-users)"
+platform login --test-user
+output="$(platform whoami)"
+expect_output "platform-smoke@platform.local (platform-users)" "${output}"
+
+step "platform status as a regular user: each capability and its status, nothing more (#269)"
+# Exits 1 while scm has no ready connection: the step checks the lines, not the exit code.
+output="$(platform status 2>&1 || true)"
+echo "${output}"
+expect_output "CAPABILITY     STATUS" "${output}"
+for capability in identity catalog environment resources workload observability; do
+  if ! grep --quiet --extended-regexp "^${capability} +Active\$" <<< "${output}"; then
+    echo "expected '${capability}  Active' with no other column" >&2
+    exit 1
+  fi
+done
+
+step "an agent over MCP sees the same user: platform-mcp whoami (#222, ADR 0027)"
+# The server runs with the CLI login of the smoke (its XDG_CONFIG_HOME), over stdio.
+output="$(uv run --project platform/mcp python platform/mcp/scripts/mcp-call whoami)"
+echo "${output}"
+expect_output '"email": "platform-smoke@platform.local"' "${output}"
+
+step "a non-admin cannot create a domain"
+expect_failure "403" \
+  platform catalog domain create smoke-forbidden \
+    --owner team-platform
+
+step "a non-admin lists templates but cannot create one"
+output="$(platform catalog template list)"
+expect_output "python-service" "${output}"
+expect_failure "403" \
+  platform catalog template create smoke-forbidden \
+    --type service \
+    --owner team-platform \
+    --repo https://github.com/smsilva/wasp-idp \
+    --path platform/templates/python-service/content \
+    --ref main
+
+step "a non-admin cannot list SCM connections"
+expect_failure "403" platform scm connection list
+
+step "login as the test admin (platform-admins)"
+platform login --test-admin
+output="$(platform whoami)"
+expect_output "platform-smoke-admin@platform.local (platform-admins, platform-users)" "${output}"
+
+step "platform status as an admin: providers, detail, and one capability in full (#269, ADR 0039)"
+output="$(platform status 2>&1 || true)"
+echo "${output}"
+expect_output "PROVIDERS" "${output}"
+for line in "catalog +Active +platform-api" "environment +Active +.*local_vcluster" "resources +Active +forager" "workload +Active +workload" "scm +[A-Za-z]+ +scm_github"; do
+  if ! grep --quiet --extended-regexp "^${line}" <<< "${output}"; then
+    echo "expected a line matching '${line}'" >&2
+    exit 1
+  fi
+done
+output="$(platform status environment)"
+echo "${output}"
+expect_output "environment  Active" "${output}"
+expect_output "local_vcluster" "${output}"
+output="$(platform status scm 2>&1 || true)"
+echo "${output}"
+expect_output "depends on    identity, catalog" "${output}"
+if ! grep --quiet --extended-regexp "^  github +scm_github +[0-9a-f]{12} +1/1 +Active" <<< "${output}"; then
+  echo "expected the github driver of scm, Active" >&2
+  exit 1
+fi
+expect_failure "capability 'nope' not found" platform status nope
+
+step "catalog import idp/catalog/"
+platform catalog import idp/catalog/ --yes
+output="$(platform catalog import idp/catalog/ --dry-run)"
+expect_output "nothing to do" "${output}"
+
+step "an agent over MCP reads the catalog: domains, a domain with its dependents, templates (#223)"
+mcp_catalog=(uv run --project platform/mcp python platform/mcp/scripts/mcp-call --toolsets catalog)
+output="$("${mcp_catalog[@]}" catalog_list --arguments '{"kind": "domain"}')"
+expect_output '"name": "platform"' "${output}"
+output="$("${mcp_catalog[@]}" catalog_get --arguments '{"kind": "domain", "name": "platform"}')"
+echo "${output}"
+expect_output '"system/platform"' "${output}"
+output="$("${mcp_catalog[@]}" catalog_templates_list)"
+expect_output '"name": "python-service"' "${output}"
+
+step "team create and member add (platform-admins)"
+platform team create "${team}"
+platform team member add "${team}" platform-smoke@platform.local
+platform team member add "${team}" platform-smoke-member@platform.local
+output="$(platform team get "${team}")"
+expect_output "platform-smoke@platform.local" "${output}"
+expect_output "platform-smoke-member@platform.local" "${output}"
+
+step "member add of yourself renews the token; login --refresh drops a team you left (#426)"
+output="$(platform team member add "${team}" platform-smoke-admin@platform.local 2>&1)"
+expect_output "token renewed, ${team} is in it" "${output}"
+expect_output "${team}" "$(platform whoami)"
+platform team member remove "${team}" platform-smoke-admin@platform.local
+output="$(platform login --refresh)"
+expect_output "Logged in as platform-smoke-admin@platform.local" "${output}"
+if grep --quiet --fixed-strings -- "${team}" <<< "$(platform whoami)"; then
+  echo "${team} still in the token after login --refresh" >&2
+  exit 1
+fi
+
+step "the test user gets the team in its token, and cannot manage teams"
+platform login --test-user
+output="$(platform whoami)"
+expect_output "${team}" "${output}"
+expect_failure "403" platform team create smoke-forbidden
+
+step "the Platform API's Keycloak client cannot put anyone in platform-admins (#238)"
+keycloak_admin_api="http://localhost:8180/admin/realms/platform"
+client_secret="$(kubectl --context k3d-platform-local --namespace platform-system \
+  get secret platform-api-keycloak \
+  --output jsonpath='{.data.PLATFORM_API_ADMIN_SECRET}' | base64 --decode)"
+client_token="$(curl --silent --fail \
+  --data grant_type=client_credentials \
+  --data client_id=platform-api-admin \
+  --data-urlencode "client_secret=${client_secret}" \
+  http://localhost:8180/realms/platform/protocol/openid-connect/token | jq --raw-output .access_token)"
+smoke_user_id="$(curl --silent --fail \
+  --header "Authorization: Bearer ${client_token}" \
+  "${keycloak_admin_api}/users?email=platform-smoke@platform.local&exact=true" | jq --raw-output '.[0].id')"
+admins_group_id="$(curl --silent --fail \
+  --header "Authorization: Bearer ${client_token}" \
+  "${keycloak_admin_api}/groups?search=platform-admins&exact=true" | jq --raw-output '.[] | select(.path == "/platform-admins") | .id')"
+status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request PUT \
+  --header "Authorization: Bearer ${client_token}" \
+  "${keycloak_admin_api}/users/${smoke_user_id}/groups/${admins_group_id}")"
+if [[ "${status}" != "403" ]]; then
+  echo "expected 403 adding a user to platform-admins with the API client, got ${status}" >&2
+  exit 1
+fi
+echo "403 as expected"
+
+step "team delete"
+platform login --test-admin
+platform team delete "${team}"
+output="$(platform team list)"
+if grep --quiet --fixed-strings -- "${team}" <<< "${output}"; then
+  echo "team ${team} still listed after delete" >&2
+  exit 1
+fi
+
+step "catalog template: the seed is the default for service"
+output="$(platform catalog template list)"
+expect_output "python-service  service" "${output}"
+expect_output "yes" "${output}"
+
+step "catalog template render python-service (fetched at the registered ref)"
+platform catalog template render python-service \
+  --name smoke-demo \
+  --system smoke-system \
+  --output "${render_directory}/smoke-demo"
+if grep --recursive --fixed-strings --quiet '${{' --exclude-dir .github "${render_directory}/smoke-demo"; then
+  echo "unrendered expression left in ${render_directory}/smoke-demo" >&2
+  exit 1
+fi
+expect_output "platform.wasp.silvios.me/template: python-service@" "$(cat "${render_directory}/smoke-demo/catalog-info.yaml")"
+expect_output "system: smoke-system" "$(cat "${render_directory}/smoke-demo/catalog-info.yaml")"
+expect_output "# smoke-demo: product requirements" "$(cat "${render_directory}/smoke-demo/docs/prd.md")"
+
+step "catalog template import idp/templates/python-service --dry-run"
+# Dry run: the Backstage template has the seed's name, and applying would repoint the seed. Its
+# owner, group:default/guests, is not a team here: the plan shows that error next to the steps.
+output="$(expect_failure "team 'guests' not found" \
+  platform catalog template import idp/templates/python-service \
+    --repo https://github.com/smsilva/wasp-idp \
+    --ref main \
+    --dry-run)"
+expect_output "publish:github: the platform creates the repo" "${output}"
+expect_output "publish:github:pull-request: GitOps belongs to the release" "${output}"
+
+step "scm connection add --no-browser (the manifest flow stops at GitHub)"
+output="$(platform scm connection add "${connection}" \
+  --vendor github \
+  --org wasp-foundry \
+  --no-browser)"
+next_url="$(grep --only-matching 'http://127.0.0.1:9090/v1/scm/connections/[^ ]*' <<< "${output}")"
+page="$(curl --silent --fail "${next_url}")"
+expect_output 'action="https://github.com/organizations/wasp-foundry/settings/apps/new?state=' "${page}"
+expect_output "default_permissions" "${page}"
+status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  "http://127.0.0.1:9090/v1/scm/connections/${connection}/github/callback?code=fake&state=forged")"
+if [[ "${status}" != "400" ]]; then
+  echo "expected 400 for a forged state, got ${status}" >&2
+  exit 1
+fi
+output="$(platform scm connection get "${connection}")"
+expect_output "AppNotCreated" "${output}"
+
+step "component create: every refusal happens before GitHub (#279)"
+# The happy path needs a ready connection, so it stays in the manual walkthrough (Components).
+expect_failure "system 'smoke-missing' not found" \
+  platform catalog component create "${component}" \
+    --system smoke-missing \
+    --owner team-platform \
+    --scm "${connection}"
+expect_failure "params.colour: not a parameter of python-service" \
+  platform catalog component create "${component}" \
+    --system platform \
+    --owner team-platform \
+    --param colour=blue \
+    --scm "${connection}"
+# A component in the index, as the discovery would write it: the name is taken.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${taken_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: wasp-foundry/${taken_component}
+MANIFEST
+expect_failure "component '${taken_component}' already exists" \
+  platform catalog component create "${taken_component}" \
+    --system platform \
+    --owner team-platform \
+    --scm "${connection}"
+output="$(platform catalog component list --system platform)"
+expect_output "${taken_component}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}"
+expect_failure "is not ready (AppNotCreated)" \
+  platform catalog component create "${component}" \
+    --system platform \
+    --owner team-platform \
+    --scm "${connection}"
+expect_failure "not found" platform catalog component get "${component}"
+
+step "component creation: list and delete without a creation (#452)"
+# A stopped creation needs GitHub (RepoAlreadyExists): replace and delete of one stay in the API tests.
+output="$(platform catalog component creation list)"
+expect_output "FREES IN" "${output}"
+if grep --quiet --fixed-strings -- "${component}" <<< "${output}"; then
+  echo "expected no creation of ${component} in:" >&2
+  echo "${output}" >&2
+  exit 1
+fi
+expect_failure "no creation of component '${component}'" \
+  platform catalog component creation delete "${component}"
+
+step "component clone: the repo of a component in the index (#327)"
+# A component in the index pointing at a public repo of the foundry: an anonymous HTTPS clone needs
+# no credential.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${clone_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: wasp-foundry/details
+MANIFEST
+output="$(platform catalog component clone "${clone_component}" \
+  --https \
+  --directory "${clone_directory}/details" 2>&1)"
+expect_output "# git clone https://github.com/wasp-foundry/details.git" "${output}"
+test -f "${clone_directory}/details/catalog-info.yaml"
+# The same component as an agent sees it over MCP (#223).
+output="$(uv run --project platform/mcp python platform/mcp/scripts/mcp-call catalog_components_get \
+  --toolsets catalog \
+  --arguments "{\"name\": \"${clone_component}\"}")"
+expect_output '"repo": "wasp-foundry/details"' "${output}"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${clone_component}"
+expect_failure "platform catalog component list" platform catalog component clone "${component}"
+
+step "registry add|list|get|set-default|remove: the OCI registries builds push to (ADR 0037, #365)"
+# Registries of the smoke only: a GHCR of smoke-no-connection (the org of the build step below) and one
+# of another org. The default of the cluster, if any, is restored at the end.
+platform login --test-user
+expect_failure "requires group 'platform-admins'" \
+  platform registry add "${smoke_registry}" \
+    --vendor ghcr \
+    --namespace smoke-no-connection
+platform registry list > /dev/null
+platform login --test-admin
+previous_default="$(platform registry list --output json | jq --raw-output '.[] | select(.default) | .name')"
+if [[ -z "${previous_default}" ]]; then
+  # No default in this cluster: a build without --registry is refused before the connection is looked up.
+  kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${build_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${build_component}
+MANIFEST
+  expect_failure "NoDefaultRegistry" \
+    platform build create \
+      --component "${build_component}" \
+      --branch main
+else
+  echo "the cluster has a default registry (${previous_default}): NoDefaultRegistry is not checked"
+fi
+output="$(platform registry add "${smoke_registry}" \
+  --vendor ghcr \
+  --namespace smoke-no-connection \
+  --default)"
+echo "${output}"
+expect_output "registry ${smoke_registry} added (default) · ghcr.io/smoke-no-connection" "${output}"
+platform registry add "${other_registry}" \
+  --vendor ghcr \
+  --namespace "${other_namespace}"
+expect_failure "a ghcr registry is ghcr.io" \
+  platform registry add smoke-reg-bad \
+    --vendor ghcr \
+    --host registry.example.com \
+    --namespace acme
+expect_failure "is already registry '${smoke_registry}'" \
+  platform registry add smoke-reg-twice \
+    --vendor ghcr \
+    --namespace smoke-no-connection
+# --scm-connection fills ghcr.io/<org> from the connection added above (wasp-foundry): refused here
+# only when the cluster already has that address.
+if platform registry list --output json | jq --exit-status '.[] | select(.address == "ghcr.io/wasp-foundry")' > /dev/null; then
+  expect_failure "ghcr.io/wasp-foundry is already registry" \
+    platform registry add smoke-reg-from-connection \
+      --scm-connection "${connection}"
+else
+  output="$(platform registry add smoke-reg-from-connection --scm-connection "${connection}")"
+  expect_output "ghcr.io/wasp-foundry, pushed by the CI of wasp-foundry repos" "${output}"
+  platform registry remove smoke-reg-from-connection
+fi
+# The registry controller checks https://ghcr.io/v2/ (401 with a token challenge): ready.
+for attempt in $(seq 1 30); do
+  output="$(platform registry get "${smoke_registry}")"
+  grep --quiet "^${smoke_registry}: ready" <<< "${output}" && break
+  sleep 2
+done
+echo "${output}"
+expect_output "${smoke_registry}: ready" "${output}"
+expect_output "address   ghcr.io/smoke-no-connection" "${output}"
+output="$(platform registry list)"
+echo "${output}"
+expect_output "${other_registry}" "${output}"
+output="$(platform registry set-default "${other_registry}")"
+expect_output "${other_registry} is the default registry" "${output}"
+if [[ "$(platform registry list --output json | jq --raw-output '[.[] | select(.default) | .name] | join(",")')" != "${other_registry}" ]]; then
+  echo "expected ${other_registry} as the only default registry" >&2
+  exit 1
+fi
+platform registry set-default "${smoke_registry}" > /dev/null
+# A version in the registry keeps it.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${build_component}.0.0.1
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${build_component}
+spec:
+  component: ${build_component}
+  version: "0.0.1"
+  image: ghcr.io/smoke-no-connection/${build_component}
+  registry: ${other_registry}
+  digest: "sha256:$(printf 'c%.0s' {1..64})"
+  commit: "$(printf 'c%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-12T12:00:00Z"
+MANIFEST
+expect_failure "holds 1 version(s) of the index" \
+  platform registry remove "${other_registry}"
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me "${build_component}.0.0.1"
+
+step "build create: every refusal happens before GitHub (#287)"
+# The happy path dispatches a real workflow, so it stays in the manual walkthrough (Builds). The repo's
+# org has no connection here, so no request can reach GitHub, even with a ready one for wasp-foundry.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${build_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${build_component}
+MANIFEST
+# The test user is not in team-platform, the owner: refused before anything else.
+platform login --test-user
+expect_failure "only members of its owner team (team-platform)" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main
+platform login --test-admin
+expect_failure "component not found" \
+  platform build create \
+    --component smoke-missing \
+    --branch main
+expect_failure "<major>.<minor>.<patch>" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --version v1
+expect_failure "registry 'smoke-reg-missing' not found" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --registry smoke-reg-missing
+expect_failure "RegistryNotWritableByCI" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --registry "${other_registry}"
+expect_failure "no scm connection for the org 'smoke-no-connection'" \
+  platform build create \
+    --component "${build_component}" \
+    --branch main \
+    --registry "${smoke_registry}"
+output="$(platform build list --component "${build_component}")"
+expect_output "NAME" "${output}"
+if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
+  echo "expected no versions of ${build_component}, got:" >&2
+  echo "${output}" >&2
+  exit 1
+fi
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${build_component}"
+platform registry remove "${other_registry}"
+platform registry remove "${smoke_registry}"
+if [[ -n "${previous_default}" ]]; then
+  platform registry set-default "${previous_default}" > /dev/null
+fi
+
+step "workload spec validate|get: the Score gate and the spec of a version (#291)"
+# The seed Score, rendered: what a component created from python-service carries.
+sed \
+  --expression 's/\${{ values.name }}/'"${workload_component}"'/' \
+  --expression 's/\${{ values.port }}/8000/' \
+  platform/templates/python-service/content/app-spec.yaml > "${workload_directory}/app-spec.yaml"
+sed 's/^    type: postgres$/    type: redis/' "${workload_directory}/app-spec.yaml" > "${workload_directory}/invalid.yaml"
+# Open to any signed-in user, before any build.
+platform login --test-user
+output="$(cd "${workload_directory}" && platform workload spec validate)"
+expect_output "app-spec.yaml valid · db (postgres), dns, route" "${output}"
+expect_failure "resources.db.type: 'redis' is not a resource type of the platform" \
+  platform workload spec validate \
+    --file "${workload_directory}/invalid.yaml"
+# Versions as the build registers them: the newest of the branch has the spec, an older one predates it.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${workload_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${workload_component}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.1.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.1.0"
+  image: ghcr.io/smoke-no-connection/${workload_component}
+  digest: "sha256:$(printf 'a%.0s' {1..64})"
+  commit: "$(printf '1%.0s' {1..40})"
+  branch: feat/greetings
+  createdAt: "2026-10-11T10:00:00Z"
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.2.0-greetings.2222222
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.2.0-greetings.2222222"
+  image: ghcr.io/smoke-no-connection/${workload_component}
+  digest: "sha256:$(printf 'b%.0s' {1..64})"
+  commit: "$(printf '2%.0s' {1..40})"
+  branch: feat/greetings
+  createdAt: "2026-10-11T11:00:00Z"
+  appSpec:
+$(sed 's/^/    /' "${workload_directory}/app-spec.yaml")
+MANIFEST
+# A Score may carry plain values from a private repo: the test user is not in team-platform, the owner.
+expect_failure "only members of its owner team (team-platform)" \
+  platform workload spec get \
+    --component "${workload_component}"
+platform login --test-admin
+output="$(platform workload spec get --component "${workload_component}" --branch feat/greetings)"
+expect_output "# ${workload_component} 0.2.0-greetings.2222222 · feat/greetings @ 2222222" "${output}"
+expect_output "targetPort: 8000" "${output}"
+output="$(platform workload spec get --component "${workload_component}" --output json)"
+expect_output '"version": "0.2.0-greetings.2222222"' "${output}"
+expect_failure "SpecNotIndexed" \
+  platform workload spec get \
+    --component "${workload_component}" \
+    --version 0.1.0
+expect_failure "no version built from branch 'main' in the index" \
+  platform workload spec get \
+    --component "${workload_component}" \
+    --branch main
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
+
+step "scm connection remove"
+platform scm connection remove "${connection}"
+expect_failure "404" platform scm connection get "${connection}"
+
+step "cloud account: trust policy, TrustNotEstablished, private to its owner, shared only with its teams (#193, #434)"
+platform login --test-user
+if output="$(platform cloud account add "${cloud_account}" --role-arn "${cloud_role}" 2>&1)"; then
+  echo "${output}"
+  expect_output '"sts:ExternalId"' "${output}"
+  output="$(expect_failure "TrustNotEstablished" platform cloud account verify "${cloud_account}" --wait)"
+  # Shared only with the owner's own teams (#434); the test user is in none by now.
+  expect_failure "you can only share with teams you are a member of" \
+    platform cloud account share "${cloud_account}" \
+      --team smoke-not-a-member
+  platform login --test-member
+  output="$(platform cloud account list)"
+  if grep --quiet --fixed-strings -- "${cloud_account}" <<< "${output}"; then
+    echo "${cloud_account} listed for another user" >&2
+    exit 1
+  fi
+  expect_failure "403" platform cloud account remove "${cloud_account}"
+  expect_failure "already registered" \
+    platform cloud account add "${cloud_account}-again" \
+      --role-arn "${cloud_role}"
+  platform login --test-user
+  # An environment goes only into a ready account (#435).
+  expect_failure "cloud account '${cloud_account}' is not ready" \
+    platform environment create "${cloud_environment}" \
+      --profile ephemeral \
+      --cloud-account "${cloud_account}"
+  platform cloud account remove "${cloud_account}"
+else
+  # init ran without --aws-profile: the capability has no provider, and its writes answer 503 (#377).
+  expect_output "capability 'cloud-account' has no provider installed: see platform status cloud-account" "${output}"
+  echo "${output}"
+  expect_failure "capability 'cloud-account' has no provider installed" \
+    platform cloud account share "${cloud_account}" \
+      --team smoke-not-a-member
+fi
+
+step "environment create --cloud-account: refused for an account that does not exist (#435)"
+expect_failure "422" \
+  platform environment create "${cloud_environment}" \
+    --profile ephemeral \
+    --cloud-account smoke-missing-account
+
+step "logout"
+platform logout
+expect_failure "not logged in" platform whoami
+
+passed

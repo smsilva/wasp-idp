@@ -33,7 +33,7 @@ IDENTITY_PROVIDERS_ANNOTATION = "platform.wasp.silvios.me/identity-providers"
 KEYCLOAK_URL = f"http://localhost:{KEYCLOAK_PORT}"
 ISSUER = f"{KEYCLOAK_URL}/realms/platform"
 CLI_CLIENT_ID = "platform-cli"
-# Test client and users of scripts/demo/cli-smoke (#179, realm-smoke.yaml): local target only.
+# Test client and users of scripts/test/cli-smoke and cli-e2e (#179, realm-smoke.yaml): local target only.
 SMOKE_CLIENT_ID = "platform-smoke"
 SMOKE_USER = "platform-smoke"
 SMOKE_ADMIN = "platform-smoke-admin"

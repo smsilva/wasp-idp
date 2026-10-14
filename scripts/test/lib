@@ -1,0 +1,88 @@
+# Shared by scripts/test/cli-smoke and scripts/test/cli-e2e (#451): sourced after the script defines
+# show_usage. Parses --skip-init, gives the run its own XDG_CONFIG_HOME and the step helpers.
+
+skip_init="false"
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --skip-init) skip_init="true"; shift ;;
+    --help) show_usage; exit 0 ;;
+    *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+  esac
+done
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
+
+# The test logins replace the credentials file; a private config dir keeps the user's session.
+smoke_config="$(mktemp --directory)"
+mkdir --parents "${smoke_config}/platform"
+if [[ -f "${user_config}" ]]; then
+  cp "${user_config}" "${smoke_config}/platform/config.yaml"
+fi
+export XDG_CONFIG_HOME="${smoke_config}"
+
+# The CLI of this checkout, not whatever 'platform' is installed.
+platform() {
+  uv run --quiet --project "${repo_root}/cli" platform "$@"
+}
+
+# Each step header shows its position and the elapsed time, so a slow --wait reads apart from a hung one.
+# The init step lives in init_step below, outside the script grep reads.
+step_total="$(grep --count --extended-regexp '^ *step "' "${0}")"
+if [[ "${skip_init}" == "false" ]]; then
+  step_total="$(( step_total + 1 ))"
+fi
+step_number=0
+
+# Color only on a terminal: a log file keeps plain text.
+if [[ -t 1 ]]; then
+  bold=$'\033[1m'
+  green=$'\033[32m'
+  reset=$'\033[0m'
+else
+  bold=""
+  green=""
+  reset=""
+fi
+
+step() {
+  step_number="$(( step_number + 1 ))"
+  printf '\n%s== [%d/%d · %dm%02ds] %s%s\n' "${bold}" "${step_number}" "${step_total}" "$(( SECONDS / 60 ))" "$(( SECONDS % 60 ))" "$*" "${reset}"
+}
+
+expect_output() {
+  local expected="${1?}"
+  local output="${2?}"
+  if ! grep --quiet --fixed-strings -- "${expected}" <<< "${output}"; then
+    echo "expected '${expected}' in:" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
+}
+
+# Runs a command that must fail, and checks its message.
+expect_failure() {
+  local expected="${1?}"
+  shift
+  local output
+  if output="$("$@" 2>&1)"; then
+    echo "expected '$*' to fail, it succeeded:" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
+  expect_output "${expected}" "${output}"
+  # Prefixed, so that a refusal the step expects never reads as a failure.
+  sed 's/^/  expected refusal: /' <<< "${output}"
+}
+
+init_step() {
+  if [[ "${skip_init}" == "false" ]]; then
+    step "platform init --target local"
+    platform init --target local
+  fi
+}
+
+passed() {
+  printf '\n%s✓ %s passed in %dm%02ds%s\n' "${green}" "${0##*/}" "$(( SECONDS / 60 ))" "$(( SECONDS % 60 ))" "${reset}"
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch platform-mcp over stdio, call one tool and print its result as JSON (cli-smoke, #222, #224)."""
+"""Launch platform-mcp over stdio, call one tool and print its result as JSON (cli-smoke and cli-e2e, #222, #224)."""
 import argparse
 import asyncio
 import json

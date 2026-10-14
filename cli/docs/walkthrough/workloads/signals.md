@@ -1,6 +1,6 @@
 # The golden signals of an instance
 
-The environment was born observed: each pod in `apps` runs an Istio sidecar, and the Prometheus that `platform init` installs in `platform-local` scrapes them all ([ADR 0040](https://github.com/smsilva/wasp-idp/blob/main/docs/adr/0040-platform-local-prometheus-scraping-vcluster-sidecars.md)). The app needs no instrumentation. Send some traffic to the `hello-api` of [Reach an instance from outside](public.md), then read its four signals (the output below is from the `cli-smoke` run, with a `/status/500` every ten requests):
+The environment was born observed: each pod in `apps` runs an Istio sidecar, and the Prometheus that `platform init` installs in `platform-local` scrapes them all ([ADR 0040](https://github.com/smsilva/wasp-idp/blob/main/docs/adr/0040-platform-local-prometheus-scraping-vcluster-sidecars.md)). The app needs no instrumentation. Send some traffic to the `hello-api` of [Reach an instance from outside](public.md), then read its four signals (the output below is from the `cli-e2e` run, with a `/status/500` every ten requests):
 
 ```bash
 for i in $(seq 1 60); do curl --silent --output /dev/null http://hello-api.demo.localhost:7080/; sleep 1; done
