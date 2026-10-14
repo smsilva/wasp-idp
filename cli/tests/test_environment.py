@@ -63,7 +63,7 @@ def api(monkeypatch):
       return httpx.Response(404, json={"error": {"code": "not_found", "message": f"environment '{name}' not found"}})
     if request.method == "GET":
       calls["get"] += 1
-      if calls["get"] >= 2:
+      if calls["get"] >= 2 and not environments[name].get("cloudAccount"):
         environments[name]["status"] = "ready"
       return httpx.Response(200, json=environments[name])
     if request.method == "DELETE":
@@ -118,6 +118,16 @@ def test_create_in_a_cloud_account(api):
   assert api["cloud-dev"]["cloudAccount"] == "nonprod-aws"
   assert runner.invoke(app, ["environment", "list"]).output.splitlines()[1].split()[:3] == ["cloud-dev", "ephemeral", "nonprod-aws"]
   assert "in cloud account nonprod-aws" in runner.invoke(app, ["environment", "get", "cloud-dev"]).output
+
+
+def test_wait_gives_up_when_no_provider_claims_it(api, monkeypatch):
+  # Unclaimed after the grace: no provider is installed for it, so --wait stops instead of waiting out the timeout.
+  clock = iter(range(0, 1000, 10))
+  monkeypatch.setattr(environment.time, "monotonic", lambda: next(clock))
+  result = runner.invoke(app, ["environment", "create", "cloud-dev", "--profile", "ephemeral", "--cloud-account", "nonprod-aws", "--wait"])
+  assert result.exit_code == 1
+  assert "cloud-dev: no provider claimed it" in result.output
+  assert "in cloud accounts" in result.output
 
 
 def test_share_and_unshare(api):

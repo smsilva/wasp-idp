@@ -18,6 +18,10 @@ app = typer.Typer(help="Environments where releases run.", no_args_is_help=True)
 Name = Annotated[str, typer.Argument(help="Environment name (platform environment list).")]
 ProfileName = Annotated[str, typer.Argument(help="Profile name: ephemeral or shared.")]
 FAILED = {"ProvisioningFailed"}
+NO_PROVIDER = "NoProviderForCapability"
+# A cloud provider claims an environment within seconds: still unclaimed after this, none is installed
+# (#436). Not for local ones: local_vcluster reconciles one at a time, so a queued one waits longer.
+NO_PROVIDER_GRACE = 60
 EXEC_API_VERSION = "client.authentication.k8s.io/v1"
 
 
@@ -78,7 +82,8 @@ def create(
 
 
 def _wait_ready(client: PlatformClient, environment: dict, timeout: int, quiet: bool) -> dict:
-  deadline = time.monotonic() + timeout
+  started = time.monotonic()
+  deadline = started + timeout
   last = None
   while environment["status"] != "ready":
     if environment["status"] != last and not quiet:
@@ -86,6 +91,8 @@ def _wait_ready(client: PlatformClient, environment: dict, timeout: int, quiet: 
       last = environment["status"]
     if environment["status"] in FAILED:
       fail(f"{environment['name']}: {environment.get('message') or environment['status']}")
+    if environment.get("cloudAccount") and environment["status"] == NO_PROVIDER and time.monotonic() - started > NO_PROVIDER_GRACE:
+      fail(f"{environment['name']}: no provider claimed it after {NO_PROVIDER_GRACE}s; none is installed for environments in cloud accounts (#436)")
     if time.monotonic() > deadline:
       fail(f"{environment['name']} not ready after {timeout}s (status: {environment['status']})")
     time.sleep(2)

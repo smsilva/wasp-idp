@@ -17,7 +17,7 @@ NAME        PROFILE    ACCOUNT   STATUS                   EXPIRES  OWNER        
 demo-cloud  ephemeral  demo-aws  NoProviderForCapability  —        you@example.com  —
 ```
 
-- The environment stays `NoProviderForCapability` until the provider that creates things in the account (Crossplane, ADR 0032) is installed (#436): the `local_vcluster` provider leaves it alone.
+- The environment stays `NoProviderForCapability` until the provider that creates things in the account (Crossplane, ADR 0032) is installed (#436): the `local_vcluster` provider creates nothing for it, and `--wait` gives up after 60 s. `--expires` still holds.
 - It has no vcluster: `environment get --admin`, `environment credential` and `workload deploy|apply|remove|route` answer `409`.
 - The account is fixed at creation: the CRD refuses a change, and access to the account is checked only then. An unshare stops new environments, never the ones already there.
 - An account in use is not removed: `platform cloud account remove demo-aws` answers `409` with the environment names.

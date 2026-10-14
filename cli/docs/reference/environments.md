@@ -24,7 +24,8 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 
 - On create, the account must exist and be `ready` (`422` otherwise), and you must be able to use it: owner, `platform-admins`, or a member of a team it is shared with (`403` otherwise). This is checked only at creation: an unshare never takes down environments already there.
 - The account is immutable: the CRD refuses changing, adding or removing `spec.cloudAccount`.
-- The `local_vcluster` provider ignores the environment, which stays `NoProviderForCapability` until the cloud provider (ADR 0032, #436) is installed. Expiry is not enforced until then either.
+- The `local_vcluster` provider creates nothing for it, which stays `NoProviderForCapability` until the cloud provider (ADR 0032, #436) is installed; `--wait` gives up after 60 s in that status instead of waiting out `--timeout`.
+- `--expires` holds as for any environment: `local_vcluster` deletes it when the deadline passes, and the cloud resources go with the provider's finalizer.
 - It has no vcluster: `get` writes no kubeconfig, and `get --admin`, `credential` and the workload writes (`deploy`, `apply`, `remove`, `route set|delete`) answer `409`.
 - `platform cloud account remove <account>` answers `409` while an environment references it.
 
