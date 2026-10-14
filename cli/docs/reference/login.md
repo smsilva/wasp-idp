@@ -28,7 +28,7 @@ and confirm the code ABCD-EFGH
 
 ## Test users
 
-On the local target, `platform login --test-user` (`platform-users`) and `--test-admin` (`platform-admins`) sign in without a browser, for `scripts/demo/cli-smoke`. They are hidden from `--help` and refuse any other target; the reasons are in `platform/keycloak/README.md`.
+On the local target, `platform login --test-user` (`platform-users`) and `--test-admin` (`platform-admins`) sign in without a browser, for [`scripts/demo/cli-smoke`](cli-smoke.md). They are hidden from `--help` and refuse any other target; the reasons are in `platform/keycloak/README.md`.
 
 !!! warning
     The browser must reach Keycloak at `localhost:8180`, the address Google accepts as a redirect. Over SSH, use `--use-device-code` with a tunnel (`ssh -L 8180:localhost:8180`).

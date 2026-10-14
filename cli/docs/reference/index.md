@@ -19,6 +19,7 @@ Look up a command, a flag or a status. To learn the CLI by doing, start with the
 | [The Forager](forager.md) | no command: how a deploy gets its database, with diagrams |
 | [MCP server](mcp.md) | `platform-mcp`: the Platform API as tools for AI agents |
 | [JSON output](json-output.md) | `--output json` |
+| [Smoke test](cli-smoke.md) | `scripts/demo/cli-smoke`: the automated test of the CLI |
 | [Under the hood](under-the-hood.md) | CRDs, journal, ports |
 | [Tear down](teardown.md) | removing everything |
 
