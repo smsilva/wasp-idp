@@ -1,0 +1,1114 @@
+#!/bin/bash
+set -e
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} [--skip-init]
+
+The journey of the CLI through a vcluster (#451), on the local target; scripts/test/cli-smoke
+covers the control plane. Run it when a change touches environments, workloads, providers or the
+mesh, and before a walkthrough run.
+
+One environment, owned by the test user: created with the mesh (its gateway answering at
+*.<name>.localhost:7080, read by an agent over MCP without its kubeconfig, a hostNetwork or
+privileged pod refused in the vcluster and on the host), shared with a team of two test users (the
+teammate gets a personal kubeconfig whose token the Platform API issues (ADR 0028), cannot delete
+the environment nor get its admin kubeconfig, and loses access after unshare, in kubectl too), then
+a Workload Instance (deploy of a public image by digest with --wait, list, get, history, rollback
+to the previous success, runningIn in catalog component get, remove; refused outside the owner
+team, for a version outside the index, a rollback to a failed revision, and ResourcesNotSupported
+for a resource type without provider; a pod in the vcluster reaches the Service of the instance by
+DNS), a second instance of the same component (deploy --instance, list with COMPONENT, get
+--component refused as ambiguous, the Service of the component without the pods of the second
+instance, remove --instance), a route (workload route --header to the second instance: a client
+with the sidecar reaches it with the header and the first one without; TRAFFIC in list; refused to
+another component's instance, remove of a routed instance refused; --clear), a chain of two calls
+(productpage -> reviews) routed by --baggage to a second instance of reviews, which a --header
+route does not reach past the first call (#340), the plan of an environment (workload apply with
+--dry-run, --wait and --prune, refused outside the owner team), a postgres by the Forager in modes
+provision, compose and bind (an app that connects to it with psql, the derived catalog Resource,
+released on remove), an instance reached from outside through dns and route (its public URL
+answers, and 404 after remove, #358), and its golden signals from Prometheus after a burst of
+traffic (workload signals, #411). Stops at the first failure with a non-zero exit code.
+
+It runs with its own XDG_CONFIG_HOME (a temporary copy of the platform config), so
+your own login in ~/.config/platform/credentials is never touched.
+
+  --skip-init  reuse the running platform-local instead of running 'platform init'
+USAGE
+}
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib"
+
+environment="e2e-${RANDOM}"
+team="e2e-team-${RANDOM}"
+workload_component="e2e-workload-${RANDOM}"
+route_component="e2e-route-${RANDOM}"
+public_component="e2e-public-${RANDOM}"
+chain_suffix="${RANDOM}"
+productpage_component="e2e-productpage-${chain_suffix}"
+reviews_component="e2e-reviews-${chain_suffix}"
+workload_directory="$(mktemp --directory)"
+# ghcr.io/stefanprodan/podinfo:6.7.1, public: the vcluster pulls it without credentials.
+workload_digest="sha256:862ca45e61b32392f7941a1bdfdbe5ff8b6899070135f1bdca1c287d0057fc94"
+# postgres:17-alpine, public: the app of the Forager step is its psql client.
+postgres_digest="sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24"
+
+cleanup() {
+  # An environment left behind keeps a vcluster and a host port busy. After a successful run it is
+  # already gone and this fails silently; bash keeps the script's own exit status.
+  platform login --test-user > /dev/null 2>&1 || true
+  platform environment delete "${environment}" > /dev/null 2>&1 || true
+  platform login --test-admin > /dev/null 2>&1 || true
+  platform team delete "${team}" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}" "${route_component}" "${productpage_component}" "${reviews_component}" "${public_component}" --ignore-not-found > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${workload_component},${route_component},${productpage_component},${reviews_component},${public_component})" > /dev/null 2>&1 || true
+  # The database restored by hand for bind (#306): a run stopped mid-step leaves it, and the next one
+  # fails on "role restored already exists".
+  kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
+    psql --username postgres --command "drop database if exists restored with (force)" --command "drop role if exists restored" > /dev/null 2>&1 || true
+  kubectl --context k3d-platform-local --namespace platform-resources delete secret restored-db --ignore-not-found > /dev/null 2>&1 || true
+  rm --recursive --force "${smoke_config}" "${workload_directory}"
+}
+trap cleanup EXIT
+
+cd "${repo_root}"
+
+init_step
+
+step "login as the test user (platform-users)"
+platform login --test-user
+output="$(platform whoami)"
+expect_output "platform-smoke@platform.local (platform-users)" "${output}"
+
+step "environment create --wait: a vcluster with the mesh (ADR 0035, #343)"
+# shared: the profile has no binding policy, so the platform default (provision) applies to the
+# workloads below until the environment gets its own (#329).
+platform environment create "${environment}" \
+  --profile shared \
+  --wait
+output="$(platform environment list)"
+expect_output "${environment}" "${output}"
+# Ready only with istiod up: status.mesh holds the versions the provider installed.
+mesh="$(kubectl --context k3d-platform-local --namespace platform-system get environment "${environment}" \
+  --output jsonpath='{.status.mesh.istio} {.status.mesh.gatewayAPI}')"
+echo "mesh: ${mesh}"
+if [[ ! "${mesh}" =~ ^1\.30\.[0-9]+\ v1\.5\.[0-9]+$ ]]; then
+  echo "expected istio 1.30 and gateway api 1.5 in status.mesh of ${environment}, got '${mesh}'" >&2
+  exit 1
+fi
+
+step "environment get: the entry point of its workloads (ADR 0036, #357)"
+output="$(platform environment get "${environment}")"
+expect_output "workloads at http://*.${environment}.localhost:7080" "${output}"
+# No route yet: the shared Traefik reaches the environment's Gateway, which answers 404.
+headers="$(curl --silent --output /dev/null --dump-header - "http://smoke.${environment}.localhost:7080/" | tr --delete '\r' || true)"
+server="$(grep --ignore-case '^server:' <<< "${headers}" || true)"
+echo "${server}"
+if [[ "${server,,}" != "server: istio-envoy" ]]; then
+  echo "expected the Gateway of ${environment} (server: istio-envoy) at http://smoke.${environment}.localhost:7080/, got: ${headers:-no answer}" >&2
+  exit 1
+fi
+
+step "an agent over MCP lists and reads the environment, never its kubeconfig, and must set expires (#224)"
+mcp_call=(uv run --project platform/mcp python platform/mcp/scripts/mcp-call --toolsets environments)
+output="$("${mcp_call[@]}" environments_list)"
+expect_output "\"name\": \"${environment}\"" "${output}"
+output="$("${mcp_call[@]}" environments_get --arguments "{\"name\": \"${environment}\"}")"
+echo "${output}"
+expect_output '"status": "ready"' "${output}"
+if grep --quiet "kubeconfig" <<< "${output}"; then
+  echo "environments_get handed a kubeconfig to the agent" >&2
+  exit 1
+fi
+expect_failure "an agent must set expires" \
+  "${mcp_call[@]}" environments_create \
+    --allow-writes \
+    --arguments '{"name": "smoke-mcp", "profile": "ephemeral", "expires": ""}'
+
+step "a pod cannot reach the host: baseline in the vcluster and on the host (#414, ADR 0041)"
+owner_kubeconfig="${smoke_config}/platform/environments/${environment}.kubeconfig"
+expect_failure "hostNetwork, hostPID and hostIPC are not allowed in an environment" \
+  kubectl --kubeconfig "${owner_kubeconfig}" run smoke-host-network \
+    --image busybox \
+    --overrides '{"spec":{"hostNetwork":true}}' \
+    --dry-run=server
+# The guard is the host: the owner is cluster-admin in the vcluster and can delete the copy there. A pod
+# as the vcluster syncs it (its label) into env-<name> is refused too.
+expect_failure "privileged containers are not allowed in an environment" \
+  kubectl --context k3d-platform-local --namespace "env-${environment}" run smoke-privileged \
+    --image busybox \
+    --labels vcluster.loft.sh/managed-by=vcluster \
+    --privileged \
+    --dry-run=server
+
+
+step "team create and member add (platform-admins)"
+platform login --test-admin
+platform team create "${team}"
+platform team member add "${team}" platform-smoke@platform.local
+platform team member add "${team}" platform-smoke-member@platform.local
+output="$(platform team get "${team}")"
+expect_output "platform-smoke-member@platform.local" "${output}"
+
+step "environment share: the owner shares it with a team they are in (ADR 0026)"
+# A new login: the team enters the token only on the next one.
+platform login --test-user
+output="$(platform environment share "${environment}" --team "${team}" 2>&1)"
+echo "${output}"
+expect_output "${team}" "${output}"
+
+step "the teammate sees it, gets the kubeconfig, and cannot delete it"
+platform login --test-member
+output="$(platform environment list)"
+expect_output "${environment}" "${output}"
+expect_output "platform-smoke@platform.local" "${output}"
+output="$(platform environment get "${environment}")"
+expect_output "kubectl --kubeconfig" "${output}"
+expect_failure "403" platform environment delete "${environment}"
+expect_failure "403" platform environment get "${environment}" --admin
+
+step "the teammate's kubectl runs as their own identity, with no certificate in the file (#233)"
+member_kubeconfig="${smoke_config}/platform/environments/${environment}.kubeconfig"
+if grep --quiet -- "client-key-data" "${member_kubeconfig}"; then
+  echo "the personal kubeconfig carries a static credential" >&2
+  exit 1
+fi
+output="$(kubectl --kubeconfig "${member_kubeconfig}" auth whoami)"
+expect_output "system:serviceaccount:platform-identities:" "${output}"
+
+step "after unshare, the teammate no longer gets it"
+platform login --test-user
+platform environment unshare "${environment}" --team "${team}"
+platform login --test-member
+output="$(platform environment get "${environment}")"
+if grep --quiet --fixed-strings -- "kubectl --kubeconfig" <<< "${output}"; then
+  echo "teammate still gets the kubeconfig after unshare" >&2
+  exit 1
+fi
+output="$(platform environment list)"
+if grep --quiet --fixed-strings -- "${environment}" <<< "${output}"; then
+  echo "teammate still lists ${environment} after unshare" >&2
+  exit 1
+fi
+expect_failure "not yours nor shared" kubectl --kubeconfig "${member_kubeconfig}" get namespaces
+
+
+step "team delete"
+platform login --test-admin
+platform team delete "${team}"
+output="$(platform team list)"
+if grep --quiet --fixed-strings -- "${team}" <<< "${output}"; then
+  echo "team ${team} still listed after delete" >&2
+  exit 1
+fi
+
+step "workload deploy|list|get|history|rollback|remove: a version from the index in an environment (#292)"
+# A public image by digest the vcluster can pull, and a Score without resources; the next version is
+# the python-service Score with a resource type no policy resolves (redis): ResourcesNotSupported.
+# The seed Score, rendered: what a component created from python-service carries.
+sed \
+  --expression 's/\${{ values.name }}/'"${workload_component}"'/' \
+  --expression 's/\${{ values.port }}/8000/' \
+  platform/templates/python-service/content/app-spec.yaml > "${workload_directory}/app-spec.yaml"
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${workload_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${workload_component}
+MANIFEST
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.3.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.3.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '3%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${workload_component}
+    containers:
+      app:
+        image: .
+        variables:
+          PODINFO_UI_MESSAGE: \${metadata.name}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9898
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.4.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.4.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '4%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T13:00:00Z"
+  appSpec:
+$(sed --expression 's/^    type: dns$/    type: redis/' --expression 's/^/    /' "${workload_directory}/app-spec.yaml")
+MANIFEST
+# The test user owns the environment but is not in team-platform, the owner team of the component.
+platform login --test-user
+expect_failure "only members of its owner team (team-platform)" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${environment}" \
+    --version 0.3.0
+platform login --test-admin
+expect_failure "no version 9.9.9 in the index" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${environment}" \
+    --version 9.9.9
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --replicas 2 \
+  --wait)"
+echo "${output}"
+expect_output "${workload_component}@${environment} revision 1: 0.3.0 running · 2/2 replicas available" "${output}"
+expect_output "url           http://${workload_component}.apps:80" "${output}"
+output="$(platform workload list --environment "${environment}")"
+echo "${output}"
+expect_output "Available" "${output}"
+expect_output "http://${workload_component}.apps:80" "${output}"
+# DNS inside the vcluster (#307): a pod reaches the Service of the instance by its short name, through
+# the resolver an app uses (busybox nslookup ignores the search domains, wget does not).
+platform environment get "${environment}" > /dev/null
+workload_kubeconfig="${smoke_config}/platform/environments/${environment}.kubeconfig"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps run dns-check \
+  --image busybox:1.36 \
+  --restart Never \
+  --command -- sh -c "until wget -q -T 2 -O /dev/null http://${workload_component}.apps; do sleep 2; done"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/dns-check \
+  --for jsonpath='{.status.phase}'=Succeeded \
+  --timeout 120s
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod dns-check
+output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+expect_output "ghcr.io/stefanprodan/podinfo@${workload_digest}" "${output}"
+expect_failure "revision 2: ResourcesNotSupported" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${environment}" \
+    --version 0.4.0 \
+    --wait
+output="$(platform workload history --environment "${environment}" --component "${workload_component}")"
+echo "${output}"
+expect_output "ResourcesNotSupported" "${output}"
+# The failed revision changes nothing: the instance still runs revision 1.
+output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+expect_output "(Available)" "${output}"
+expect_output "newest        revision 2" "${output}"
+platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --replicas 1 \
+  --wait
+# By default, back to the revision that succeeded before the running one: 1, with its 2 replicas.
+output="$(platform workload rollback \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --wait)"
+echo "${output}"
+expect_output "revision 4: 0.3.0 running · 2/2 replicas available" "${output}"
+expect_failure "revision 2 did not succeed" \
+  platform workload rollback \
+    --component "${workload_component}" \
+    --environment "${environment}" \
+    --revision 2
+output="$(platform catalog component get "${workload_component}")"
+expect_output "running in   ${environment} (0.3.0, Available)" "${output}"
+step "workload deploy --instance: a second instance of the same component, without its traffic (#294)"
+workload_extra="${workload_component}-pr-1"
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --instance "${workload_extra}" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --wait)"
+echo "${output}"
+expect_output "${workload_extra}@${environment} revision 1: 0.3.0 running · 1/1 replicas available" "${output}"
+output="$(platform workload list --environment "${environment}")"
+echo "${output}"
+expect_output "http://${workload_extra}.apps:80" "${output}"
+expect_failure "${workload_component} has 2 instances in ${environment}" \
+  platform workload get \
+    --component "${workload_component}" \
+    --environment "${environment}"
+output="$(platform workload get --instance "${workload_extra}" --environment "${environment}")"
+expect_output "${workload_extra}@${environment} (Available)" "${output}"
+# The Service of the component balances only its own instance: 2 pods, none of the second instance.
+endpoints="$(kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps get endpointslices \
+  --selector "kubernetes.io/service-name=${workload_component}" \
+  --output jsonpath='{range .items[*].endpoints[*]}{.targetRef.name}{"\n"}{end}')"
+echo "${endpoints}"
+if [[ "$(grep --count . <<< "${endpoints}")" != "2" ]] || grep --quiet -- "^${workload_extra}-" <<< "${endpoints}"; then
+  echo "expected the 2 pods of ${workload_component} behind its Service, and none of ${workload_extra}" >&2
+  exit 1
+fi
+output="$(platform catalog component get "${workload_component}")"
+expect_output "${workload_extra}@${environment} (0.3.0, Available)" "${output}"
+
+step "workload route: a header sends calls to the second instance through the mesh (#344)"
+# Another component in the environment, the target of a refused route.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${route_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${route_component}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${route_component}.0.3.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${route_component}
+spec:
+  component: ${route_component}
+  version: "0.3.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '3%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${route_component}
+    containers:
+      app:
+        image: .
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+MANIFEST
+platform workload deploy \
+  --component "${route_component}" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --wait
+expect_failure "runs component '${route_component}'" \
+  platform workload route \
+    --component "${workload_component}" \
+    --environment "${environment}" \
+    --header x-sandbox=pr-1 \
+    --to "${route_component}"
+output="$(platform workload route \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --header x-sandbox=pr-1 \
+  --to "${workload_extra}")"
+echo "${output}"
+expect_output "x-sandbox=pr-1 → ${workload_extra}" "${output}"
+output="$(platform workload list --environment "${environment}")"
+echo "${output}"
+expect_output "x-sandbox=pr-1" "${output}"
+expect_output "default" "${output}"
+# A client in apps, with the sidecar: a pod with a sidecar never ends, so it sleeps and curl runs by exec.
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps run route-check \
+  --image curlimages/curl:8.11.1 \
+  --command -- sleep 3600
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/route-check \
+  --for condition=Ready \
+  --timeout 120s
+containers="$(kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps get pod route-check --output jsonpath='{.spec.containers[*].name} {.spec.initContainers[*].name}')"
+expect_output "istio-proxy" "${containers}"
+hostname_of() {
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps exec route-check -- \
+    curl --silent --max-time 5 "$@" "http://${workload_component}" \
+    | sed --quiet 's/.*"hostname": *"\([^"]*\)".*/\1/p'
+}
+# The route takes effect in about a second; the mesh may take a few more to accept it.
+for attempt in $(seq 30); do
+  routed="$(hostname_of --header 'x-sandbox: pr-1' || true)"
+  [[ "${routed}" == "${workload_extra}-"* ]] && break
+  sleep 2
+done
+echo "with the header: ${routed}"
+if [[ "${routed}" != "${workload_extra}-"* ]]; then
+  echo "expected a pod of ${workload_extra} with x-sandbox: pr-1, got '${routed}'" >&2
+  exit 1
+fi
+for attempt in $(seq 5); do
+  default="$(hostname_of)"
+  if [[ "${default}" != "${workload_component}-"* || "${default}" == "${workload_extra}-"* ]]; then
+    echo "expected a pod of ${workload_component} without the header, got '${default}'" >&2
+    exit 1
+  fi
+done
+echo "without the header: ${default}"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod route-check --wait=false
+expect_failure "the route of '${workload_component}' sends traffic to it" \
+  platform workload remove \
+    --instance "${workload_extra}" \
+    --environment "${environment}"
+expect_failure "main instance of the route" \
+  platform workload remove \
+    --instance "${workload_component}" \
+    --environment "${environment}"
+output="$(platform workload route \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --clear)"
+echo "${output}"
+expect_output "every request goes to ${workload_component}" "${output}"
+platform workload remove \
+  --component "${route_component}" \
+  --environment "${environment}" \
+  --wait
+output="$(platform workload remove \
+  --instance "${workload_extra}" \
+  --environment "${environment}" \
+  --wait)"
+echo "${output}"
+expect_output "${workload_extra}@${environment} revision 2: removed from ${environment}" "${output}"
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --wait)"
+echo "${output}"
+expect_output "revision 5: removed from ${environment}" "${output}"
+output="$(platform workload list --environment "${environment}")"
+if grep --quiet --fixed-strings -- "${workload_component}@" <<< "${output}"; then
+  echo "${workload_component} still listed after remove" >&2
+  exit 1
+fi
+# The history stays until the environment goes.
+output="$(platform workload history --environment "${environment}")"
+echo "${output}"
+expect_output "rollback" "${output}"
+expect_output "remove" "${output}"
+
+step "workload route --baggage: the route holds down a chain of calls, a header does not (#340)"
+# podinfo as both services: POST /api/echo calls PODINFO_BACKEND_URL with OpenTelemetry instrumentation,
+# which passes the baggage on (its propagators are set only with PODINFO_OTEL_SERVICE_NAME; with no
+# collector, the trace export fails in its logs), but not x-sandbox. /env answers with the HOSTNAME of
+# the pod of reviews that the call reached.
+podinfo_component() {
+  local name="${1?}"
+  local variables="${2?}"
+  kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${name}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: smoke-no-connection/${name}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${name}.0.3.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${name}
+spec:
+  component: ${name}
+  version: "0.3.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '3%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${name}
+    containers:
+      app:
+        image: .
+        variables: ${variables}
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+MANIFEST
+}
+podinfo_component "${reviews_component}" "{}"
+podinfo_component "${productpage_component}" "{PODINFO_BACKEND_URL: 'http://${reviews_component}/env', PODINFO_OTEL_SERVICE_NAME: ${productpage_component}}"
+platform workload deploy \
+  --component "${reviews_component}" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --replicas 1 \
+  --wait
+platform workload deploy \
+  --component "${reviews_component}" \
+  --instance "${reviews_component}-pr-1" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --wait
+platform workload deploy \
+  --component "${productpage_component}" \
+  --environment "${environment}" \
+  --version 0.3.0 \
+  --replicas 1 \
+  --wait
+output="$(platform workload route \
+  --component "${reviews_component}" \
+  --environment "${environment}" \
+  --baggage sandbox=pr-1 \
+  --to "${reviews_component}-pr-1")"
+echo "${output}"
+expect_output "baggage sandbox=pr-1 → ${reviews_component}-pr-1" "${output}"
+platform workload route \
+  --component "${reviews_component}" \
+  --environment "${environment}" \
+  --header x-sandbox=pr-1 \
+  --to "${reviews_component}-pr-1"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps run chain-check \
+  --image curlimages/curl:8.11.1 \
+  --command -- sleep 3600
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/chain-check \
+  --for condition=Ready \
+  --timeout 120s
+# The HOSTNAME of the pod of reviews that the chain reached, from the /env that productpage echoes back.
+reviews_through() {
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps exec chain-check -- \
+    curl --silent --max-time 5 --request POST --data '{}' "$@" "http://${productpage_component}/api/echo" \
+    | grep --only-matching 'HOSTNAME=[a-z0-9-]*' \
+    | cut --delimiter = --fields 2
+}
+for attempt in $(seq 30); do
+  routed="$(reviews_through --header 'baggage: userid=7,sandbox=pr-1' || true)"
+  [[ "${routed}" == "${reviews_component}-pr-1-"* ]] && break
+  sleep 2
+done
+echo "with the baggage: ${routed}"
+if [[ "${routed}" != "${reviews_component}-pr-1-"* ]]; then
+  echo "expected the chain to reach a pod of ${reviews_component}-pr-1 with baggage sandbox=pr-1, got '${routed}'" >&2
+  exit 1
+fi
+for attempt in $(seq 5); do
+  for header in "x-sandbox: pr-1" "baggage: sandbox=pr-2"; do
+    reached="$(reviews_through --header "${header}")"
+    if [[ "${reached}" != "${reviews_component}-"* || "${reached}" == "${reviews_component}-pr-1-"* ]]; then
+      echo "expected a pod of ${reviews_component} with '${header}' through ${productpage_component}, got '${reached}'" >&2
+      exit 1
+    fi
+  done
+done
+echo "with x-sandbox through ${productpage_component}: ${reached}"
+kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod chain-check --wait=false
+platform workload route \
+  --component "${reviews_component}" \
+  --environment "${environment}" \
+  --clear
+platform workload remove \
+  --component "${productpage_component}" \
+  --environment "${environment}" \
+  --wait
+platform workload remove \
+  --instance "${reviews_component}-pr-1" \
+  --environment "${environment}" \
+  --wait
+platform workload remove \
+  --component "${reviews_component}" \
+  --environment "${environment}" \
+  --wait
+
+step "workload apply: the plan of an environment, with --dry-run and --prune (#293)"
+cat > "${workload_directory}/plan.yaml" <<PLAN
+environment: ${environment}
+workloads:
+  ${workload_component}:
+    version: 0.3.0
+    replicas: 2
+PLAN
+output="$(platform workload apply --file "${workload_directory}/plan.yaml" --dry-run)"
+echo "${output}"
+expect_output "${environment}: 1 to add, 0 to change, 0 to remove" "${output}"
+expect_output "dry run: nothing applied" "${output}"
+# The environment's owner is not in the component's owner team: the whole plan is refused.
+platform login --test-user
+expect_failure "only members of its owner team (team-platform)" \
+  platform workload apply \
+    --file "${workload_directory}/plan.yaml"
+platform login --test-admin
+output="$(platform workload apply \
+  --file "${workload_directory}/plan.yaml" \
+  --wait)"
+echo "${output}"
+expect_output "${workload_component}@${environment} revision 6: 0.3.0 running · 2/2 replicas available" "${output}"
+output="$(platform workload apply --file "${workload_directory}/plan.yaml" --dry-run)"
+expect_output "${environment}: 0 to add, 0 to change, 0 to remove" "${output}"
+expect_output "unchanged" "${output}"
+sed --in-place 's/replicas: 2/replicas: 1/' "${workload_directory}/plan.yaml"
+output="$(platform workload apply --file "${workload_directory}/plan.yaml" --dry-run)"
+expect_output "${environment}: 0 to add, 1 to change, 0 to remove" "${output}"
+cat > "${workload_directory}/empty.yaml" <<PLAN
+environment: ${environment}
+workloads: {}
+PLAN
+output="$(platform workload apply --file "${workload_directory}/empty.yaml")"
+expect_output "${environment}: 0 to add, 0 to change, 0 to remove" "${output}"
+output="$(platform workload apply \
+  --file "${workload_directory}/empty.yaml" \
+  --prune \
+  --wait)"
+echo "${output}"
+expect_output "${environment}: 0 to add, 0 to change, 1 to remove" "${output}"
+expect_output "revision 7: removed from ${environment}" "${output}"
+
+step "workload deploy with a postgres: the Forager provisions it, remove undoes it (#304)"
+# The platform default policy (platform-default) resolves postgres as provision: a dedicated
+# Postgres in the vcluster, its outputs in the variables and the password as a secretKeyRef. The app
+# is a psql client that selects until it connects: the deploy proves the wiring, its log the database.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${workload_component}.0.5.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${workload_component}
+spec:
+  component: ${workload_component}
+  version: "0.5.0"
+  image: docker.io/library/postgres
+  digest: "${postgres_digest}"
+  commit: "$(printf '5%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-11T14:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${workload_component}
+    resources:
+      db:
+        type: postgres
+    containers:
+      app:
+        image: .
+        command: ["sh", "-c"]
+        args: ["until psql --command 'select current_database()'; do sleep 2; done; sleep infinity"]
+        variables:
+          PGHOST: \${resources.db.host}
+          PGPORT: \${resources.db.port}
+          PGDATABASE: \${resources.db.name}
+          PGUSER: \${resources.db.username}
+          PGPASSWORD: \${resources.db.password}
+MANIFEST
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --version 0.5.0 \
+  --wait)"
+echo "${output}"
+expect_output "revision 8: 0.5.0 running" "${output}"
+expect_output "resource      db (postgres, provision): Ready" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+echo "${output}"
+expect_output "resource      db (postgres, provision): Ready" "${output}"
+connected="false"
+for attempt in $(seq 1 30); do
+  if kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" 2>/dev/null | grep --quiet "current_database"; then
+    connected="true"
+    break
+  fi
+  sleep 2
+done
+if [[ "${connected}" != "true" ]]; then
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" | tail -5 >&2
+  echo "the app never connected to its postgres" >&2
+  exit 1
+fi
+# The Resource of the catalog derived from the Score (no id): <component>-<resource>.
+output="$(platform catalog resource get "${workload_component}-db")"
+expect_output "team-platform" "${output}"
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --wait)"
+expect_output "revision 9: removed from ${environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${environment}.${workload_component}.db" \
+  --for delete \
+  --timeout 60s
+
+step "environment policy set|get: postgres in mode compose, in the shared instance (#305, #329)"
+# The policy of the environment comes before the platform default: the same 0.5.0 now gets a role
+# and a database in shared-pg (platform-resources), reached through the Service the vcluster
+# replicates into its namespace resources. remove drops them.
+expect_failure "compose needs params.instance" \
+  platform environment policy set "${environment}" --file - <<< "provisioners: [{type: postgres, mode: compose}]"
+output="$(platform environment policy set "${environment}" --file - <<POLICY
+provisioners:
+  - type: postgres
+    mode: compose
+    params:
+      instance: shared-pg
+POLICY
+)"
+echo "${output}"
+expect_output "${environment}: policy set" "${output}"
+output="$(platform environment policy get "${environment}")"
+echo "${output}"
+expect_output "environment  postgres  —      —   compose    instance=shared-pg" "${output}"
+expect_output "default      postgres  —      —   provision  —" "${output}"
+# The profile layer (#329): an ephemeral environment gets compose without an admin step. Only
+# platform-admins change it, since it applies to every environment of the profile.
+output="$(platform environment profile policy get ephemeral)"
+echo "${output}"
+expect_output "profile  postgres  —      —   compose    instance=shared-pg" "${output}"
+expect_output "default  postgres  —      —   provision  —" "${output}"
+expect_failure "profile 'nope' not found (profiles: ephemeral, shared)" \
+  platform environment profile policy get nope
+platform login --test-user
+expect_failure "the binding policy of a profile is set by platform-admins" \
+  platform environment profile policy set ephemeral --file - <<< "provisioners: []"
+platform login --test-admin
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --version 0.5.0 \
+  --wait)"
+echo "${output}"
+expect_output "revision 10: 0.5.0 running" "${output}"
+expect_output "resource      db (postgres, compose): Ready" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+echo "${output}"
+expect_output "resource      db (postgres, compose): Ready" "${output}"
+connected="false"
+for attempt in $(seq 1 30); do
+  if kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" 2>/dev/null | grep --quiet "${workload_component}-db-"; then
+    connected="true"
+    break
+  fi
+  sleep 2
+done
+if [[ "${connected}" != "true" ]]; then
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" | tail -5 >&2
+  echo "the app never connected to its database in shared-pg" >&2
+  exit 1
+fi
+shared_databases() {
+  kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
+    psql \
+      --username postgres \
+      --tuples-only \
+      --no-align \
+      --command "select count(*) from pg_database where datname like '${workload_component}-db-%'"
+}
+if [[ "$(shared_databases)" != "1" ]]; then
+  echo "no database of ${workload_component} in shared-pg" >&2
+  exit 1
+fi
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --wait)"
+expect_output "revision 11: removed from ${environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${environment}.${workload_component}.db" \
+  --for delete \
+  --timeout 60s
+if [[ "$(shared_databases)" != "0" ]]; then
+  echo "remove left the database of ${workload_component} in shared-pg" >&2
+  exit 1
+fi
+
+step "workload deploy --resource-class: postgres in mode bind, to a database that exists (#306)"
+# A database restored by hand in shared-pg, with its password in a bindable Secret of
+# platform-resources. The branch asks for the class restored; the policy item binds it, and the
+# developer never sees the credential. remove takes only the copy of the Secret: the database stays.
+shared_psql() {
+  kubectl --context k3d-platform-local --namespace platform-resources exec statefulset/shared-pg -- \
+    psql \
+      --username postgres \
+      --tuples-only \
+      --no-align \
+      --command "${1?}"
+}
+restored_password="$(openssl rand -hex 16)"
+shared_psql "create role restored login password '${restored_password}'"
+shared_psql "create database restored owner restored"
+kubectl --context k3d-platform-local --namespace platform-resources create secret generic restored-db \
+  --from-literal "password=${restored_password}"
+kubectl --context k3d-platform-local --namespace platform-resources label secret restored-db \
+  platform.wasp.silvios.me/bindable=true
+expect_failure "bind needs a valid params.host" \
+  platform environment policy set "${environment}" --file - <<< "provisioners: [{type: postgres, class: restored, mode: bind, params: {secretRef: restored-db}}]"
+output="$(platform environment policy set "${environment}" --file - <<POLICY
+provisioners:
+  - type: postgres
+    mode: compose
+    params:
+      instance: shared-pg
+  - type: postgres
+    class: restored
+    mode: bind
+    params:
+      secretRef: restored-db
+      host: shared-pg.resources
+      database: restored
+      username: restored
+POLICY
+)"
+echo "${output}"
+expect_output "environment  postgres  restored  —   bind       database=restored, host=shared-pg.resources, secretRef=restored-db, username=restored" "${output}"
+expect_failure "has no resource 'cache'" \
+  platform workload deploy \
+    --component "${workload_component}" \
+    --environment "${environment}" \
+    --version 0.5.0 \
+    --resource-class cache=restored
+output="$(platform workload deploy \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --version 0.5.0 \
+  --resource-class db=restored \
+  --wait)"
+echo "${output}"
+expect_output "revision 12: 0.5.0 running" "${output}"
+output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+echo "${output}"
+expect_output "resource      db (postgres, bind, class restored): Ready" "${output}"
+connected="false"
+for attempt in $(seq 1 30); do
+  if kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" 2>/dev/null | grep --quiet --extended-regexp '^ restored *$'; then
+    connected="true"
+    break
+  fi
+  sleep 2
+done
+if [[ "${connected}" != "true" ]]; then
+  kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps logs "deployment/${workload_component}" | tail -5 >&2
+  echo "the app never connected to the restored database" >&2
+  exit 1
+fi
+# The plan carries the class too (#313): with it the instance is unchanged, without it a change.
+cat > "${workload_directory}/restored.yaml" <<PLAN
+environment: ${environment}
+workloads:
+  ${workload_component}:
+    version: 0.5.0
+    resourceClasses:
+      db: restored
+PLAN
+output="$(platform workload apply --file "${workload_directory}/restored.yaml" --dry-run)"
+echo "${output}"
+expect_output "unchanged" "${output}"
+expect_output "0.5.0 ×1 db=restored" "${output}"
+expect_output "${environment}: 0 to add, 0 to change, 0 to remove" "${output}"
+sed --in-place '/resourceClasses:/,$d' "${workload_directory}/restored.yaml"
+output="$(platform workload apply --file "${workload_directory}/restored.yaml" --dry-run)"
+echo "${output}"
+expect_output "${environment}: 0 to add, 1 to change, 0 to remove" "${output}"
+output="$(platform workload remove \
+  --component "${workload_component}" \
+  --environment "${environment}" \
+  --wait)"
+expect_output "revision 13: removed from ${environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${environment}.${workload_component}.db" \
+  --for delete \
+  --timeout 60s
+if [[ "$(shared_psql "select count(*) from pg_database where datname = 'restored'")" != "1" ]]; then
+  echo "remove dropped the database a bind only pointed at" >&2
+  exit 1
+fi
+shared_psql "drop database restored with (force)"
+shared_psql "drop role restored"
+kubectl --context k3d-platform-local --namespace platform-resources delete secret restored-db
+
+step "workload deploy with dns and route: the instance reached from outside (#358)"
+# The platform default resolves dns and route as provision: a host under the environment's entry point
+# (ADR 0036) and an HTTPRoute on its Gateway. The route takes the host from the dns output.
+kubectl --context k3d-platform-local apply --filename - <<MANIFEST
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Component
+metadata:
+  name: ${public_component}
+  namespace: platform-system
+spec:
+  owner: team-platform
+  system: platform
+  source:
+    repo: wasp-foundry/${public_component}
+---
+apiVersion: catalog.platform.wasp.silvios.me/v1alpha1
+kind: Version
+metadata:
+  name: ${public_component}.0.1.0
+  namespace: platform-system
+  labels:
+    platform.wasp.silvios.me/component: ${public_component}
+spec:
+  component: ${public_component}
+  version: "0.1.0"
+  image: ghcr.io/stefanprodan/podinfo
+  digest: "${workload_digest}"
+  commit: "$(printf '6%.0s' {1..40})"
+  branch: main
+  createdAt: "2026-10-12T12:00:00Z"
+  appSpec:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: ${public_component}
+    resources:
+      dns:
+        type: dns
+      route:
+        type: route
+        params:
+          host: \${resources.dns.host}
+          path: /
+          port: 80
+    containers:
+      app:
+        image: .
+        variables:
+          PODINFO_UI_MESSAGE: \${metadata.name}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9898
+        # The denominator of saturation in workload signals (#411).
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+    service:
+      ports:
+        http:
+          port: 80
+          targetPort: 9898
+MANIFEST
+public_url="http://${public_component}.${environment}.localhost:7080/"
+output="$(platform workload deploy \
+  --component "${public_component}" \
+  --environment "${environment}" \
+  --version 0.1.0 \
+  --wait)"
+echo "${output}"
+expect_output "revision 1: 0.1.0 running" "${output}"
+output="$(platform workload list --environment "${environment}")"
+echo "${output}"
+expect_output "${public_url}" "${output}"
+output="$(platform workload get --component "${public_component}" --environment "${environment}")"
+echo "${output}"
+expect_output "url           ${public_url}" "${output}"
+expect_output "internal url  http://${public_component}.apps:80" "${output}"
+expect_output "resource      route (route, provision): Ready" "${output}"
+# --wait ends when the pods are ready; the Gateway's Envoy may get the Service's endpoints a moment later
+# (istiod push), so the first answer can still be an error under load.
+for attempt in $(seq 1 15); do
+  answer="$(curl --silent --fail --max-time 10 "${public_url}" || true)"
+  [[ -n "${answer}" ]] && break
+  sleep 2
+done
+expect_output "\"message\": \"${public_component}\"" "${answer}"
+
+step "workload signals: latency, traffic, errors and saturation from Prometheus (#411, ADR 0040)"
+# Traffic on every attempt: the sidecar creates a series on its first request, so a burst that ends
+# before Prometheus scrapes the series twice (15s apart) leaves a counter that never grows, and no rate.
+for attempt in $(seq 1 30); do
+  for request in $(seq 1 10); do
+    curl --silent --output /dev/null --max-time 5 "${public_url}" || true
+  done
+  curl --silent --output /dev/null --max-time 5 "${public_url}status/500" || true
+  signals="$(platform workload signals --component "${public_component}" --environment "${environment}" --output json)"
+  jq --exit-status '.trafficRps > 0 and .errorRate > 0' <<< "${signals}" > /dev/null && break
+  sleep 5
+done
+echo "${signals}"
+jq --exit-status '.trafficRps > 0 and .errorRate > 0 and .latencyP95Ms != null' <<< "${signals}" > /dev/null || {
+  echo "expected traffic, errors and latency in the signals of ${public_component}" >&2
+  exit 1
+}
+jq --exit-status '.saturation.value != null and .saturation.memory != null' <<< "${signals}" > /dev/null || {
+  echo "expected saturation from the limits of ${public_component}" >&2
+  exit 1
+}
+output="$(platform workload signals --component "${public_component}" --environment "${environment}")"
+echo "${output}"
+expect_output "latency p95 " "${output}"
+expect_output " req/s · errors " "${output}"
+expect_failure "a number of minutes or hours" \
+  platform workload signals \
+    --component "${public_component}" \
+    --environment "${environment}" \
+    --window 1d
+
+output="$(platform workload remove \
+  --component "${public_component}" \
+  --environment "${environment}" \
+  --wait)"
+expect_output "revision 2: removed from ${environment}" "${output}"
+kubectl --context k3d-platform-local --namespace platform-system wait \
+  "resourcerequests.platform.wasp.silvios.me/${environment}.${public_component}.route" \
+  --for delete \
+  --timeout 60s
+# The Forager released the route: the HTTPRoute is gone, and the Gateway answers 404 for the host once
+# istiod pushed the change (until then, 500: the route points at the Service remove already deleted).
+for attempt in $(seq 1 15); do
+  status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 "${public_url}")"
+  [[ "${status}" == "404" ]] && break
+  sleep 2
+done
+if [[ "${status}" != "404" ]]; then
+  echo "expected 404 at ${public_url} after remove, got ${status}" >&2
+  exit 1
+fi
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${public_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${public_component}-dns" "${public_component}-route"
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${public_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component=${workload_component}"
+kubectl --context k3d-platform-local --namespace platform-system delete resources.catalog.platform.wasp.silvios.me "${workload_component}-db" "${workload_component}-dns" "${workload_component}-redis" "${workload_component}-route" --ignore-not-found
+kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${workload_component}"
+
+step "environment delete"
+platform login --test-user
+platform environment delete "${environment}"
+
+step "logout"
+platform logout
+expect_failure "not logged in" platform whoami
+
+passed

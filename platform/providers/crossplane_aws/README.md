@@ -24,7 +24,7 @@ Roda **dentro do cluster**, como Deployment `crossplane-aws-provider` em `platfo
 
 ## Testes
 
-`uv run pytest`: o reconciler com stores falsos, sem cluster nem AWS. A validação contra a AWS é manual (`cli/docs/walkthrough/cloud-accounts/aws/environment.md`); o `scripts/demo/cli-smoke` nunca chama a AWS.
+`uv run pytest`: o reconciler com stores falsos, sem cluster nem AWS. A validação contra a AWS é manual (`cli/docs/walkthrough/cloud-accounts/aws/environment.md`); nem o `scripts/test/cli-smoke` nem o `scripts/test/cli-e2e` chamam a AWS.
 
 ## Depurar
 

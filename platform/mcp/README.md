@@ -13,7 +13,7 @@ uv run pytest
 uv run platform-mcp --help
 ```
 
-`make mcp` na raiz instala `platform-mcp` no `PATH` (editable). `scripts/mcp-call whoami` sobe o server por stdio e chama uma tool; é o que o `scripts/demo/cli-smoke` usa.
+`make mcp` na raiz instala `platform-mcp` no `PATH` (editable). `scripts/mcp-call whoami` sobe o server por stdio e chama uma tool; é o que o `scripts/test/cli-smoke` e o `scripts/test/cli-e2e` usam.
 
 ## Toolsets
 

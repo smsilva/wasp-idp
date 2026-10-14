@@ -1,4 +1,4 @@
-# Test identities for scripts/demo/cli-smoke (#179). Only `platform init --target local` merges this
+# Test identities for scripts/test/cli-smoke and cli-e2e (#179, #451). Only `platform init --target local` merges this
 # into realm-platform.yaml; nothing here ever reaches another target.
 #
 # Password grant is discouraged (OAuth 2.1) and stays off in platform-cli. It is acceptable here

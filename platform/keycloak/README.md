@@ -51,7 +51,7 @@ O que o Keycloak `26.5.5` mostrou ao desenhar isso, para não reaprender:
 - Criar grupo de nível raiz continua permitido, e é inofensivo: a API autoriza pelo path completo (`group_paths`), então um grupo fora de `/teams` não dá direito a nada.
 - O keycloak-config-cli não declara essas permissões, mas o realm import as mantém, junto com o client `admin-permissions`.
 
-O `scripts/demo/cli-smoke` confere que, com o token desse client, pôr alguém em `platform-admins` responde `403`.
+O `scripts/test/cli-smoke` confere que, com o token desse client, pôr alguém em `platform-admins` responde `403`.
 
 ## Identidades de teste (só no target local)
 
@@ -64,13 +64,13 @@ O `platform init --target local` junta ao realm o `realm-smoke.yaml` (#179). Ele
 | Usuário `platform-smoke-admin` | `platform-admins` e `platform-users` |
 | Senhas | aleatórias, geradas uma vez no Secret `keycloak-smoke-user` (`platform-auth`) e lidas pelo keycloak-config-cli via `$(env:…)` |
 
-`platform login --test-user` e `--test-admin` (ocultos no `--help`) leem a senha do Secret pelo `kubectl` e fazem o password grant nesse client. Fora do target local, o comando recusa. É o que deixa o `scripts/demo/cli-smoke` rodar o fluxo da CLI sem navegador e sem conta Google.
+`platform login --test-user` e `--test-admin` (ocultos no `--help`) leem a senha do Secret pelo `kubectl` e fazem o password grant nesse client. Fora do target local, o comando recusa. É o que deixa o `scripts/test/cli-smoke` e o `scripts/test/cli-e2e` rodarem o fluxo da CLI sem navegador e sem conta Google.
 
 **Por que o password grant aqui:** o OAuth 2.1 desaconselha esse grant, e o `platform-cli` continua sem ele. Ele é aceitável neste caso porque o client é dedicado, existe só no cluster local de quem roda o `init`, serve só a teste, e as senhas nunca saem do Secret nem entram no repo.
 
 O password grant só no `platform-smoke` limita **como** a senha é enviada, não **quem** a usa: o realm mantém o formulário de usuário e senha, então quem tem a senha também entra pela tela de login, inclusive como `platform-smoke-admin`. Isso é aceitável porque o Keycloak só escuta em `127.0.0.1:8180` e quem lê o Secret já tem o kubeconfig do `platform-local`, isto é, já é admin do cluster.
 
-O `scripts/demo/cli-smoke` roda com um `XDG_CONFIG_HOME` temporário: o login de teste não substitui nem encerra a sessão Google de quem o executa.
+Os dois rodam com um `XDG_CONFIG_HOME` temporário: o login de teste não substitui nem encerra a sessão Google de quem o executa.
 
 **Se o `realm-smoke.yaml` deixar de ser aplicado,** o keycloak-config-cli apaga o client `platform-smoke` (clients são gerenciados), mas não apaga usuários: remova `platform-smoke` e `platform-smoke-admin` à mão no console do Keycloak, junto com o Secret `keycloak-smoke-user`.
 

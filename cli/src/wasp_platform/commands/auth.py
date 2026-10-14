@@ -56,7 +56,7 @@ def _logged_in(tokens: dict) -> None:
 
 
 def _login_test_user(username: str) -> None:
-  """Password grant on the local test client: the CLI flow without a browser (scripts/demo/cli-smoke)."""
+  """Password grant on the local test client: the CLI flow without a browser (scripts/test/cli-smoke)."""
   flag = {local.SMOKE_ADMIN: "--test-admin", local.SMOKE_MEMBER: "--test-member"}.get(username, "--test-user")
   if config.load().get("target") != "local":
     fail(f"{flag} is only supported on the local target")

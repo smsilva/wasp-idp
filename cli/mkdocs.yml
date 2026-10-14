@@ -139,7 +139,7 @@ nav:
       - The Forager: reference/forager.md
       - MCP server: reference/mcp.md
       - JSON output: reference/json-output.md
-      - Smoke test: reference/cli-smoke.md
+      - Smoke and e2e tests: reference/cli-smoke.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md
 theme:

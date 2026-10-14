@@ -39,7 +39,7 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 6. **Present the design and stop.** Reply in pt-BR with:
    - one line on the issue and its state (new, resuming, blocked);
    - the cut: one PR, or sub-issues (one per deliverable) when the scope spans several;
-   - per deliverable: CRDs, API routes, controller, CLI, docs (`cli/docs/walkthrough/`, `cli/docs/reference/`) and the `scripts/demo/cli-smoke` step;
+   - per deliverable: CRDs, API routes, controller, CLI, docs (`cli/docs/walkthrough/`, `cli/docs/reference/`) and its step in `scripts/test/cli-smoke` (control plane) or `scripts/test/cli-e2e` (needs an environment);
    - open decisions, each with a recommendation.
 
    Do not write code, create branches, or change the board before the user approves.
