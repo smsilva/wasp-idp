@@ -1,4 +1,4 @@
-site_name: platform CLI
+site_name: platform-api
 site_description: A local Environment with the platform CLI
 site_url: https://smsilva.github.io/wasp-idp/cli/
 repo_url: https://github.com/smsilva/wasp-idp
@@ -143,6 +143,7 @@ nav:
           - Call it there: demo/cli/second-call.md
           - Where the app runs: demo/cli/running-in.md
           - After the demo: demo/cli/cleanup.md
+  - Architecture: architecture.md
   - Reference:
       - reference/index.md
       - Install the CLI: reference/install.md

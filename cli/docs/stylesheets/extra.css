@@ -556,3 +556,59 @@
 .md-typeset ol.journey > li.prep a {
   color: var(--wasp-out-fg);
 }
+
+/* Home: four entry cards in a 2x2 grid, no page title. Plain text, one key phrase per card. */
+.md-typeset h1.home-title {
+  display: none;
+}
+
+.md-typeset .grid.cards.home-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .8rem;
+  margin-top: 1.6rem;
+}
+
+.md-typeset .grid.cards.home-cards > ul > li {
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 1.2rem 1rem;
+  border: 1px solid var(--wasp-code-border);
+  border-radius: .4rem;
+  background: var(--md-default-bg-color--light, transparent);
+  box-shadow: none;
+  transition: border-color 150ms ease;
+}
+
+.md-typeset .grid.cards.home-cards > ul > li:hover,
+.md-typeset .grid.cards.home-cards > ul > li:focus-within {
+  border-color: var(--md-typeset-a-color);
+  box-shadow: none;
+}
+
+.md-typeset .grid.cards.home-cards > ul > li > p:first-child {
+  margin: 0 0 .5rem;
+  font-size: 1rem;
+}
+
+.md-typeset .grid.cards.home-cards > ul > li > p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+}
+
+/* One key phrase per card: the text's own color at full contrast, against the muted rest. */
+.md-typeset .grid.cards.home-cards > ul > li > p:not(:first-child) strong {
+  color: var(--wasp-heading);
+  font-weight: 600;
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-typeset .grid.cards.home-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset .grid.cards.home-cards > ul > li {
+    transition: none;
+  }
+}
