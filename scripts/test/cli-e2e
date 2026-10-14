@@ -1049,7 +1049,7 @@ for attempt in $(seq 1 15); do
 done
 expect_output "\"message\": \"${public_component}\"" "${answer}"
 
-step "workload signals: latency, traffic, errors and saturation from Prometheus (#411, ADR 0040)"
+step "workload signals: latency, traffic, errors and saturation from Prometheus, from the CLI and over MCP (#411, #473, ADR 0040)"
 # Traffic on every attempt: the sidecar creates a series on its first request, so a burst that ends
 # before Prometheus scrapes the series twice (15s apart) leaves a counter that never grows, and no rate.
 for attempt in $(seq 1 30); do
@@ -1079,6 +1079,20 @@ expect_failure "a number of minutes or hours" \
     --component "${public_component}" \
     --environment "${environment}" \
     --window 1d
+
+# The same instance over MCP: list, get, history and signals (#473).
+mcp_workloads=(uv run --project platform/mcp python platform/mcp/scripts/mcp-call --toolsets workloads)
+output="$("${mcp_workloads[@]}" workloads_list --arguments "{\"environment\": \"${environment}\"}")"
+expect_output "\"instance\": \"${public_component}\"" "${output}"
+output="$("${mcp_workloads[@]}" workloads_get --arguments "{\"environment\": \"${environment}\", \"instance\": \"${public_component}\"}")"
+expect_output "\"component\": \"${public_component}\"" "${output}"
+output="$("${mcp_workloads[@]}" workloads_history --arguments "{\"environment\": \"${environment}\", \"instance\": \"${public_component}\"}")"
+expect_output "\"revision\": 1" "${output}"
+output="$("${mcp_workloads[@]}" workloads_signals --arguments "{\"environment\": \"${environment}\", \"instance\": \"${public_component}\"}")"
+jq --exit-status '.trafficRps > 0' <<< "${output}" > /dev/null || {
+  echo "expected traffic in workloads_signals of ${public_component}, got: ${output}" >&2
+  exit 1
+}
 
 output="$(platform workload remove \
   --component "${public_component}" \

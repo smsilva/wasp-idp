@@ -172,9 +172,39 @@ def builds(client: ClientFactory) -> list[ToolSpec]:
   ]
 
 
+def workloads(client: ClientFactory) -> list[ToolSpec]:
+  """What runs in an environment (ADR 0033): instances, their revisions and golden signals. An instance
+  is named after its component unless it is an extra one, such as a canary."""
+  def workloads_list(environment: str) -> dict[str, Any]:
+    """Workload instances in an environment: component, version, replicas, status, URL and resources."""
+    return {"items": client().list_workloads(checked(environment))}
+
+  def workloads_get(environment: str, instance: str) -> dict[str, Any]:
+    """One workload instance: version, replicas, status, URL, its resources (database, route) and traffic."""
+    return client().get_workload(checked(environment), checked(instance))
+
+  def workloads_history(environment: str, instance: str | None = None) -> dict[str, Any]:
+    """Revisions of the instances in an environment, newest first. A revision with open=true is still rolling out;
+    status Succeeded or a failure reason closes it."""
+    return {"items": client().workload_history(checked(environment), checked(instance) if instance else None)}
+
+  def workloads_signals(environment: str, instance: str, window: str = "5m") -> dict[str, Any]:
+    """Golden signals of an instance from the mesh, no instrumentation in the app: latency p95, traffic, errors
+    and saturation over the window (minutes or hours, as 5m or 1h, at most 6h)."""
+    return client().workload_signals(checked(environment), checked(instance), window)
+
+  return [
+    ToolSpec("workloads_list", workloads_list),
+    ToolSpec("workloads_get", workloads_get),
+    ToolSpec("workloads_history", workloads_history),
+    ToolSpec("workloads_signals", workloads_signals),
+  ]
+
+
 TOOLSETS: dict[str, Callable[[ClientFactory], list[ToolSpec]]] = {
   "core": core,
   "environments": environments,
   "catalog": catalog,
   "builds": builds,
+  "workloads": workloads,
 }

@@ -1,4 +1,4 @@
-# MCP: an agent in 17 minutes
+# MCP: an agent in 19 minutes
 
 An agent in Claude Code asks the platform questions in plain language, through the MCP server: same answers as the CLI, same permissions, same audit trail.
 
@@ -17,6 +17,7 @@ An agent in Claude Code asks the platform questions in plain language, through t
   <li><a href="environments/">Environments</a><span>2 min</span></li>
   <li><a href="create/">Create an environment</a><span>3 min</span></li>
   <li><a href="build/">Build a branch</a><span>2 min</span></li>
+  <li><a href="signals/">What runs</a><span>2 min</span></li>
   <li class="prep">Questions<span>2 min</span></li>
 </ol>
 

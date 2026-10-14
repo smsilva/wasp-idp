@@ -8,6 +8,7 @@
 | `environments` | list and read environments; create one, with an expiration, and delete an ephemeral one, only with `--allow-writes` |
 | `catalog` | read domains, systems, resources, components and templates |
 | `builds` | read builds and versions; build a branch only with `--allow-writes` |
+| `workloads` | read what runs in an environment: instances, revisions and golden signals |
 
 ## Set it up
 
@@ -22,7 +23,7 @@ The server runs on this machine (stdio): Claude Code starts it when a session st
     1. Run `make mcp` in this repository and check that `platform-mcp --help` works.
     2. Run `platform whoami`. If it says I am not logged in, stop and ask me to run `platform login`.
     3. Remove any server named `platform` from both scopes: `claude mcp remove --scope local platform` and `claude mcp remove --scope user platform` (a "not found" from either is fine).
-    4. Run `claude mcp add --scope user platform -- platform-mcp --toolsets core,environments,catalog`.
+    4. Run `claude mcp add --scope user platform -- platform-mcp --toolsets core,environments,catalog,builds,workloads`.
     5. Run `claude mcp list` and show me the `platform` line.
     6. Tell me to start a new Claude Code session, so it loads the server.
     Do not add --allow-writes.
@@ -39,7 +40,7 @@ The server runs on this machine (stdio): Claude Code starts it when a session st
     claude mcp remove --scope user platform    # a "not found" from either is fine
 
     claude mcp add --scope user platform -- platform-mcp \
-      --toolsets core,environments,catalog
+      --toolsets core,environments,catalog,builds,workloads
     ```
 
     `--scope user` makes the server available in every directory; without it, Claude Code keeps it only for the current one. A `platform` left in the local scope, by an `add` without `--scope user`, wins over the user one in this directory, with the toolsets it had then: that is why both `remove` lines come first.
@@ -53,7 +54,7 @@ claude mcp list | grep platform
 ```
 
 ``` { .text .output title="output" }
-platform: platform-mcp --toolsets core,environments,catalog - ✔ Connected
+platform: platform-mcp --toolsets core,environments,catalog,builds,workloads - ✔ Connected
 ```
 
 Inside the session, `/mcp` lists `platform` with its tools. Ask the first question:
@@ -94,7 +95,7 @@ Tools that change the platform exist only when the server starts with `--allow-w
 claude mcp remove --scope user platform
 
 claude mcp add --scope user platform -- platform-mcp \
-  --toolsets core,environments,catalog \
+  --toolsets core,environments,catalog,builds,workloads \
   --allow-writes
 ```
 
@@ -121,7 +122,7 @@ Any MCP client takes the same command in its configuration:
   "mcpServers": {
     "platform": {
       "command": "platform-mcp",
-      "args": ["--toolsets", "core,environments,catalog"]
+      "args": ["--toolsets", "core,environments,catalog,builds,workloads"]
     }
   }
 }
