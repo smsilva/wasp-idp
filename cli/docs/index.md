@@ -10,26 +10,26 @@ hide:
 
 -   :material-play-circle-outline: **[Walkthrough](walkthrough/index.md)**
 
-    ---
+    From an empty machine to a running environment, one step per page.
 
-    From an **empty machine** to a **running environment**, one step per page.
+    `platform init`{ .home-cmd }
 
 -   :material-presentation-play: **[Demo](demo/index.md)**
 
-    ---
+    An AI agent over MCP, then the developer journey with the CLI.
 
-    An **AI agent** over **MCP**, then the **developer journey** with the CLI.
+    `platform-mcp --toolsets core,environments`{ .home-cmd }
 
 -   :material-book-open-variant: **[Reference](reference/index.md)**
 
-    ---
+    Every command: flags, status values and permissions.
 
-    Every **command**: flags, status values and **permissions**.
+    `platform --help`{ .home-cmd }
 
 -   :material-sitemap-outline: **[Architecture](architecture.md)**
 
-    ---
+    The Platform API, its CRDs and the providers inside platform-local.
 
-    The **Platform API**, its **CRDs** and the **providers** inside `platform-local`.
+    `platform status`{ .home-cmd }
 
 </div>
