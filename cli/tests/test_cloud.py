@@ -163,3 +163,24 @@ def test_base_credential_from_a_profile(monkeypatch):
   }
   exported = {"Version": 1, "AccessKeyId": "AKIAEXAMPLE", "SecretAccessKey": "secret"}
   assert local.aws_base_credential("platform-base") == {"values": {"AWS_ACCESS_KEY_ID": "AKIAEXAMPLE", "AWS_SECRET_ACCESS_KEY": "secret"}, "expiration": None}
+
+
+def test_crossplane_reads_the_base_credential_as_a_credentials_file():
+  from wasp_platform.bootstrap import local
+
+  values = {"AWS_ACCESS_KEY_ID": "AKIAEXAMPLE", "AWS_SECRET_ACCESS_KEY": "secret", "AWS_SESSION_TOKEN": None}
+  assert local.crossplane_credential(values) == "[default]\naws_access_key_id = AKIAEXAMPLE\naws_secret_access_key = secret\n"
+  assert local.crossplane_credential({**values, "AWS_SESSION_TOKEN": "token"}).endswith("aws_session_token = token\n")
+
+
+def test_with_crossplane_needs_the_base_credential(monkeypatch):
+  from wasp_platform.bootstrap import local
+
+  with pytest.raises(local.BootstrapError, match="--aws-profile"):
+    local.wants_crossplane(True, {})
+  monkeypatch.setattr(local, "crossplane_installed", lambda: False)
+  credential = {"AWS_ACCESS_KEY_ID": "AKIAEXAMPLE"}
+  assert (local.wants_crossplane(False, credential), local.wants_crossplane(True, credential)) == (False, True)
+  # Remembered: installed by an earlier init.
+  monkeypatch.setattr(local, "crossplane_installed", lambda: True)
+  assert (local.wants_crossplane(False, credential), local.wants_crossplane(False, {})) == (True, False)

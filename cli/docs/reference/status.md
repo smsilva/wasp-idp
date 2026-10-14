@@ -26,7 +26,7 @@ The exit code is `1` when an installed capability is not `Active`; a capability 
 
 The subsystems of ADR 0034, in its order: `identity`, `catalog`, `environment`, `scm`, `registry`, `build`, `cloud-account`, `resources`, `workload`, then `observability` (ADR 0040: the Prometheus `platform init` installs, which `workload signals` reads). `depends on` comes from the same map.
 
-A capability can have one **driver** per vendor: `scm` is served by `scm_github` today, and a Bitbucket driver would be one more line under the same capability. Its status sums up all of them.
+A capability can have one **driver** per vendor: `scm` is served by `scm_github` today, and a Bitbucket driver would be one more line under the same capability. `environment` has `local_vcluster` and, after `platform init --with-crossplane`, `crossplane_aws` (vendor `aws`) for the environments in a cloud account. Its status sums up all of them.
 
 ## Statuses
 

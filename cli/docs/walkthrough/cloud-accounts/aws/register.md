@@ -1,10 +1,11 @@
 # Register the account
 
-Register an account by the **role the platform will assume** in it:
+Register an account by the **role the platform will assume** in it, and the regions the platform may use; environments go to the first one:
 
 ```bash
 platform cloud account add demo-aws \
-  --role-arn arn:aws:iam::<account>:role/platform
+  --role-arn arn:aws:iam::<account>:role/platform \
+  --region us-east-1
 ```
 
 ``` { .text .output title="output" }

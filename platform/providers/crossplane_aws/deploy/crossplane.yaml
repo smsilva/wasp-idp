@@ -1,0 +1,23 @@
+# Crossplane and its AWS EC2 provider for environments in a cloud account (#436, ADR 0032): the same versions
+# as the EKS (aws/eks/scripts/install-crossplane, aws/eks/providers/providers-aws.yaml). Installed by
+# `platform init --with-crossplane` through the helm-controller of k3s, like the Traefik of the environments.
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: crossplane
+  namespace: kube-system
+spec:
+  repo: https://charts.crossplane.io/stable
+  chart: crossplane
+  version: 2.3.1
+  targetNamespace: crossplane-system
+  createNamespace: true
+  valuesContent: |-
+    resourcesCrossplane:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+    resourcesRBACManager:
+      requests:
+        cpu: 10m
+        memory: 64Mi

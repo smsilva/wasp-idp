@@ -111,6 +111,8 @@ def view(obj: dict, kubeconfig: str | None = None) -> dict:
     "message": ready.get("message") if ready else None,
     "port": status.get("port"),
     "ingress": ingress_url(status.get("ingress")),
+    # What the environment has in its cloud account (#436): vendor, region and the network.
+    "cloud": status.get("cloud"),
     "createdAt": metadata.get("creationTimestamp"),
     "owner": (metadata.get("annotations") or {}).get(OWNER_NAME_ANNOTATION),
     "sharedWith": shared_with(obj),
