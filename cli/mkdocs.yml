@@ -14,6 +14,9 @@ nav:
           - Prerequisites: walkthrough/bootstrap/prerequisites.md
           - Install the CLI: walkthrough/bootstrap/install.md
           - Google credentials: walkthrough/bootstrap/google-credentials.md
+          - Write the settings: walkthrough/bootstrap/settings.md
+          - Edit the settings: walkthrough/bootstrap/edit.md
+          - See what will be installed: walkthrough/bootstrap/dry-run.md
           - Start the control plane: walkthrough/bootstrap/control-plane.md
           - Progress and logs: walkthrough/bootstrap/logs.md
           - CLI configuration: walkthrough/bootstrap/config.md
