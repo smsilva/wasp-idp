@@ -143,6 +143,7 @@ nav:
           - Call it there: demo/cli/second-call.md
           - Where the app runs: demo/cli/running-in.md
           - After the demo: demo/cli/cleanup.md
+  - Architecture: architecture.md
   - Reference:
       - reference/index.md
       - Install the CLI: reference/install.md
