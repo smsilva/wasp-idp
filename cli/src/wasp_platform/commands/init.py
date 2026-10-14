@@ -1,3 +1,4 @@
+import re
 from enum import Enum
 
 import typer
@@ -7,6 +8,16 @@ from ..bootstrap.timings import Timings, summary
 from ..output import Format, OutputOption, fail, print_data, success
 
 
+# Enough to catch a placeholder left in the command (`email_not_filled`), not a full RFC 5322 check.
+EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+def check_email(value: str | None) -> str | None:
+  if value is not None and not EMAIL.fullmatch(value):
+    raise typer.BadParameter(f"'{value}' is not an e-mail")
+  return value
+
+
 class Target(str, Enum):
   local = "local"
   azure = "azure"
@@ -14,7 +25,7 @@ class Target(str, Enum):
 
 def init(
   target: Target = typer.Option(..., help="Where the platform is installed."),
-  admin: str = typer.Option(None, help="E-mail that joins platform-admins on its first Google login (remembered)."),
+  admin: str = typer.Option(None, callback=check_email, help="E-mail that joins platform-admins on its first Google login (remembered)."),
   aws_profile: str = typer.Option(None, "--aws-profile", help="AWS profile whose credential becomes the base of cloud accounts (remembered)."),
   with_crossplane: bool = typer.Option(False, "--with-crossplane", help="Install Crossplane, so environments can be created in cloud accounts; needs the base credential of --aws-profile (remembered)."),
   output: OutputOption = Format.table,
