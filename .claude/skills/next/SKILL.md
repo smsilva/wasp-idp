@@ -1,6 +1,6 @@
 ---
 name: next
-description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" removes it.
+description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" archives it to ~/.claude/prompts/ and removes it.
 argument-hint: "[issue-number|save|clear]"
 ---
 
@@ -15,7 +15,7 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 - **No argument, the file has content:** read it and follow it in place of the steps below. Skip the board. If the current branch or checkout path differs from the header, say so and ask before the first commit.
 - **No argument, the file is missing:** run the steps below (the board).
 - **`save`:** draft the prompt from the current session (in English, imperative, to a fresh agent: the context, each standing instruction, the start; drop what was done). Record the date, the branch and the checkout path (a worktree's own path, or the main checkout) in the header. When the file exists, merge into it and show the diff; else show the draft in full. Write only after the user confirms, then show its absolute path and tell them they can run `/clear` and then `/next`.
-- **`clear`:** show the file, then remove it with `rm` (never leave it empty) only after the user confirms: it is gitignored, so nothing brings it back. `/next` goes back to the board.
+- **`clear`:** show the file, then archive it before removing: copy it to `~/.claude/prompts/wasp-idp/<topic>.md`, where `<topic>` names the theme it covers in lowercase-hyphenated words (`walkthrough-review.md`); when that name exists, add a date suffix (`walkthrough-review-2026-10-14.md`). Confirm the copy with `cmp`, show its absolute path, then remove the original with `rm` (never leave it empty) only after the user confirms. `/next` goes back to the board.
 
 ## Steps
 
