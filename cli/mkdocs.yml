@@ -15,6 +15,7 @@ nav:
           - Install the CLI: walkthrough/bootstrap/install.md
           - Google credentials: walkthrough/bootstrap/google-credentials.md
           - Start the control plane: walkthrough/bootstrap/control-plane.md
+          - Progress and logs: walkthrough/bootstrap/logs.md
           - CLI configuration: walkthrough/bootstrap/config.md
       - Login:
           - Without login, the API refuses: walkthrough/login/refused.md
@@ -45,15 +46,6 @@ nav:
               - GHCR:
                   - Register the org: walkthrough/registry/ghcr/register.md
                   - The registry is ready: walkthrough/registry/ghcr/ready.md
-          - Cloud accounts:
-              - AWS:
-                  - Base credential: walkthrough/cloud-accounts/aws/base-credential.md
-                  - Register the account: walkthrough/cloud-accounts/aws/register.md
-                  - Apply the trust policy: walkthrough/cloud-accounts/aws/trust-policy.md
-                  - Verify: walkthrough/cloud-accounts/aws/verify.md
-                  - Share the account: walkthrough/cloud-accounts/aws/share.md
-                  - An environment in the account: walkthrough/cloud-accounts/aws/environment.md
-                  - ExternalId and removal: walkthrough/cloud-accounts/aws/remove.md
           - Teams:
               - Create the team and join it: walkthrough/teams/create.md
               - Renew the token: walkthrough/teams/token.md
@@ -183,6 +175,9 @@ theme:
     - navigation.tracking
     - search.highlight
     - toc.follow
+# The Cloud accounts walkthrough returns once an admin can set the platform's AWS identity (#467).
+exclude_docs: |
+  walkthrough/cloud-accounts/
 validation:
   links:
     anchors: warn

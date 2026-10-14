@@ -21,6 +21,6 @@ observability  Active                   prometheus      —
 ✓ all 9 installed capabilities Active (1 not installed: cloud-account)
 ```
 
-`cloud-account` shows `Active` too when `init` ran with `--aws-profile` ([Base credential](cloud-accounts/aws/base-credential.md)). Nothing below needs it.
+Nothing below needs `cloud-account`.
 
 From here on, the walkthrough follows a **developer** of `team-alpha`: a component from a template, a build, an environment to run it, and the deploy.
