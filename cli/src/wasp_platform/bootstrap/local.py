@@ -237,9 +237,10 @@ def smoke_password(username: str) -> str:
   return password
 
 
-def render_realm(realm: dict, google: bool, admin: bool, smoke: dict | None = None) -> dict:
-  """Drop the Google identity provider without credentials, and the bootstrap-admin mapper without --admin.
-  With smoke (realm-smoke.yaml, local target only), add the test client and users of #179."""
+def render_realm(realm: dict, google: bool, admins: list[str], smoke: dict | None = None) -> dict:
+  """Drop the Google identity provider without credentials; the bootstrap-admin mapper becomes one mapper
+  per --admin e-mail (#462), none without --admin. With smoke (realm-smoke.yaml, local target only), add
+  the test client and users of #179."""
   realm = dict(realm)
   if smoke:
     realm["clients"] = [*realm.get("clients", []), *smoke.get("clients", [])]
@@ -247,12 +248,17 @@ def render_realm(realm: dict, google: bool, admin: bool, smoke: dict | None = No
   if not google:
     realm.pop("identityProviders", None)
     realm.pop("identityProviderMappers", None)
-  elif not admin:
-    realm["identityProviderMappers"] = [m for m in realm.get("identityProviderMappers", []) if m["name"] != "bootstrap-admin"]
+  else:
+    mappers = realm.get("identityProviderMappers", [])
+    template = next(m for m in mappers if m["name"] == "bootstrap-admin")
+    realm["identityProviderMappers"] = [m for m in mappers if m["name"] != "bootstrap-admin"] + [
+      {**template, "name": f"bootstrap-admin-{email}", "config": {**template["config"], "claims": json.dumps([{"key": "email", "value": email}])}}
+      for email in admins
+    ]
   return realm
 
 
-def deploy_keycloak(root: Path, admin_email: str | None, log) -> dict:
+def deploy_keycloak(root: Path, admin_emails: list[str], log) -> dict:
   keycloak_dir = root / "platform" / "keycloak"
   _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "keycloak.yaml"))
 
@@ -260,8 +266,8 @@ def deploy_keycloak(root: Path, admin_email: str | None, log) -> dict:
   if not _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"):
     _apply_secret(AUTH_NAMESPACE, "keycloak-admin", {"username": "admin", "password": secrets.token_urlsafe(24)})
 
-  # --admin is remembered in the Secret, so a later `init` without it keeps the bootstrap admin.
-  admin_email = admin_email or _secret_value(AUTH_NAMESPACE, "keycloak-google", "PLATFORM_ADMIN_EMAIL") or ""
+  # --admin is remembered in the Secret (comma-separated), so a later `init` without it keeps the bootstrap admins.
+  admin_emails = admin_emails or remembered_admins()
   client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
   client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
   if not (client_id and client_secret):
@@ -273,7 +279,7 @@ def deploy_keycloak(root: Path, admin_email: str | None, log) -> dict:
   _apply_secret(AUTH_NAMESPACE, "keycloak-google", {
     "GOOGLE_CLIENT_ID": client_id,
     "GOOGLE_CLIENT_SECRET": client_secret,
-    "PLATFORM_ADMIN_EMAIL": admin_email,
+    "PLATFORM_ADMIN_EMAIL": ",".join(admin_emails),
   })
 
   # Test identities of #179, generated once; local target only (realm-smoke.yaml explains why).
@@ -287,7 +293,7 @@ def deploy_keycloak(root: Path, admin_email: str | None, log) -> dict:
     _ensure_namespace(namespace)
     _apply_secret(namespace, API_ADMIN_SECRET, {API_ADMIN_KEY: admin_secret})
 
-  realm = render_realm(yaml.safe_load((keycloak_dir / "realm-platform.yaml").read_text()), google, bool(admin_email), smoke)
+  realm = render_realm(yaml.safe_load((keycloak_dir / "realm-platform.yaml").read_text()), google, admin_emails, smoke)
   configmap = {
     "apiVersion": "v1", "kind": "ConfigMap",
     "metadata": {"name": "keycloak-realm", "namespace": AUTH_NAMESPACE},
@@ -297,7 +303,7 @@ def deploy_keycloak(root: Path, admin_email: str | None, log) -> dict:
 
   _apply_theme(keycloak_dir / "theme" / "platform")
   _kubectl("rollout", "status", "deployment/keycloak", "--namespace", AUTH_NAMESPACE, "--timeout", "300s")
-  return {"issuer": ISSUER, "google": google, "admin": admin_email or None}
+  return {"issuer": ISSUER, "google": google, "admins": admin_emails}
 
 
 def import_realm(root: Path, google: bool) -> None:
@@ -414,6 +420,37 @@ def crossplane_installed() -> bool:
   return bool(_kubectl("get", "helmchart", "crossplane", "--namespace", "kube-system", "--ignore-not-found", "--output", "name").strip())
 
 
+def remembered() -> dict:
+  """What an earlier init kept in the cluster (#462), for the settings table; nothing without a cluster.
+  The AWS profile is not kept, only its credential."""
+  if not shutil.which("k3d") or not cluster_exists():
+    return {}
+  return {
+    "admins": remembered_admins(),
+    "with_crossplane": crossplane_installed() or None,
+  }
+
+
+def remembered_admins() -> list[str]:
+  return [email for email in (_secret_value(AUTH_NAMESPACE, "keycloak-google", "PLATFORM_ADMIN_EMAIL") or "").split(",") if email]
+
+
+def aws_credential_stored() -> bool:
+  return bool(shutil.which("k3d")) and cluster_exists() and bool(_secret_value(NAMESPACE, AWS_BASE_SECRET, "AWS_ACCESS_KEY_ID"))
+
+
+def planned_steps(aws_profile: str | None, with_crossplane: bool) -> list[str]:
+  """The steps init would run (#462, --dry-run), in their declared order. aws-account-provider and
+  crossplane run always but do nothing without a credential: they are listed only when they install."""
+  aws = bool(aws_profile) or aws_credential_stored()
+  if with_crossplane and not aws:
+    raise BootstrapError("--with-crossplane needs the base credential of cloud accounts: add --aws-profile <profile>")
+  skipped = {"aws-account-provider"} if not aws else set()
+  if not with_crossplane:
+    skipped.add("crossplane")
+  return [task.name for task in init_tasks(repo_root(), [], aws_profile, lambda message: None, with_crossplane) if task.name not in skipped]
+
+
 def wants_crossplane(with_crossplane: bool, aws_values: dict) -> bool:
   """With --with-crossplane, or installed by an earlier init. Without it, environments in a cloud account
   stay NoProviderForCapability."""
@@ -488,7 +525,7 @@ def deploy_provider(provider_dir: Path, manifest: str, name: str, image: str) ->
   _rollout(name)
 
 
-def init_tasks(root: Path, admin_email: str | None, aws_profile: str | None, log, with_crossplane: bool = False) -> list[Task]:
+def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, log, with_crossplane: bool = False) -> list[Task]:
   """The steps of init and what each one needs (#444). Providers need only the CRDs and their image,
   never Keycloak or the API; the API needs Keycloak's realm (its admin client) and its image."""
   api_dir = root / "platform" / "api"
@@ -524,7 +561,7 @@ def init_tasks(root: Path, admin_email: str | None, aws_profile: str | None, log
     Task("build images", lambda results: build_images(builds)),
     Task("CRDs", lambda results: apply_crds(root), needs=("cluster",)),
     Task("import images", lambda results: import_images(results["build images"], log), needs=("cluster", "build images")),
-    Task("keycloak", lambda results: deploy_keycloak(root, admin_email, log), needs=("CRDs",)),
+    Task("keycloak", lambda results: deploy_keycloak(root, admin_emails, log), needs=("CRDs",)),
     Task("keycloak realm", lambda results: import_realm(root, results["keycloak"]["google"]), needs=("keycloak",)),
     Task("keycloak admin permissions", lambda results: apply_admin_permissions(log), needs=("keycloak realm",)),
     Task(IMAGE, api, needs=("keycloak admin permissions", "import images")),
@@ -543,7 +580,7 @@ def init_tasks(root: Path, admin_email: str | None, aws_profile: str | None, log
   ]
 
 
-def install(admin_email: str | None = None, log=None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
+def install(admin_emails: list[str] | None = None, log=None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
   """timings: passed by the caller so the steps run so far can be shown when init fails."""
   log = log or (lambda message: None)
   timings = timings or Timings()
@@ -554,7 +591,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   _stopping.clear()
   # Steps log from their own threads: one lock keeps every line whole.
   log = locked(log)
-  results = run_tasks(init_tasks(root, admin_email, aws_profile, log, with_crossplane), log, timings, on_failure=stop)
+  results = run_tasks(init_tasks(root, admin_emails or [], aws_profile, log, with_crossplane), log, timings, on_failure=stop)
 
   identity = results["keycloak"]
   path = config.save({

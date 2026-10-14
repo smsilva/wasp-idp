@@ -6,7 +6,7 @@ Broker de identidade da plataforma (ADR 0021): o Google autentica, o Keycloak gu
 
 - Sobe o Keycloak (`deploy/keycloak.yaml`) no namespace `platform-auth` do `platform-local`, em `start-dev`, com o banco H2 embutido num PVC. Ele fica exposto em `http://localhost:8180`, pela porta 8180 do load balancer do k3d.
 - Gera a senha do admin do Keycloak uma vez e a guarda no Secret `keycloak-admin`.
-- Grava `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e o `--admin` no Secret `keycloak-google`. Um `init` posterior sem essas variáveis reaproveita o que está lá.
+- Grava `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e os `--admin` (separados por vírgula) no Secret `keycloak-google`. Um `init` posterior sem essas variáveis reaproveita o que está lá.
 - Aplica o realm `realm-platform.yaml` com o keycloak-config-cli (`deploy/realm-import.yaml`). O import é idempotente, e o `init` recria o Job a cada execução.
 - Grava `issuer` e `client_id` em `~/.config/platform/config.yaml`.
 
@@ -32,9 +32,9 @@ O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado
 | Client `platform-cli` | público, Authorization Code + PKCE (S256), device code, redirect `http://127.0.0.1/*` |
 | Client `platform-api` | bearer-only; o scope `platform-api-audience` põe `platform-api` no `aud` |
 | Claim `groups` | nomes sem path, do scope `platform-groups` |
-| Identity Provider | `google`; o mapper `bootstrap-admin` põe o e-mail do `--admin` em `platform-admins` |
+| Identity Provider | `google`; um mapper `bootstrap-admin-<email>` por `--admin` põe cada e-mail em `platform-admins` |
 
-Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o realm sobe sem o Identity Provider e o `init` avisa. Sem `--admin`, o mapper `bootstrap-admin` fica de fora.
+Sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`, o realm sobe sem o Identity Provider e o `init` avisa. Sem `--admin`, não há mapper `bootstrap-admin-*`.
 
 ## Client da Platform API (`platform-api-admin`)
 

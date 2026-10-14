@@ -1,7 +1,7 @@
 # Realm `platform` as code, applied by keycloak-config-cli (deploy/realm-import.yaml) on every `platform init`.
 # $(env:…) is resolved by keycloak-config-cli from Secrets, so no credential lives here.
 # `platform init` drops identityProviders/identityProviderMappers when GOOGLE_CLIENT_ID is not set,
-# and the bootstrap-admin mapper when --admin was never given.
+# and turns the bootstrap-admin mapper into one mapper per --admin e-mail (none without --admin).
 realm: platform
 enabled: true
 displayName: wasp platform

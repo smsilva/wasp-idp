@@ -52,19 +52,21 @@ def test_summary_aligns_steps_and_ends_with_the_total():
   ]
 
 
-def test_init_prints_the_timings_before_the_result(monkeypatch):
+def test_init_prints_the_timings_before_the_result(monkeypatch, tmp_path):
   from typer.testing import CliRunner
 
   from wasp_platform.bootstrap import local
   from wasp_platform.cli import app
 
-  def install(admin_email, log, aws_profile, with_crossplane, timings):
+  def install(admin_emails, log, aws_profile, with_crossplane, timings):
     with timings.step("build platform-api"):
       pass
     return {"api_url": "http://127.0.0.1:9090", "config": "config.yaml", "issuer": "http://issuer", "google": True, "cloud_account": False, "timings": timings.as_dict()}
 
   monkeypatch.setattr(local, "install", install)
-  result = CliRunner().invoke(app, ["init", "--target", "local"])
+  monkeypatch.setattr(local, "remembered", lambda: {})
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  result = CliRunner().invoke(app, ["init", "--target", "local", "--yes"])
   assert result.exit_code == 0, result.output
   lines = result.output.splitlines()
   start = lines.index("timings:")
@@ -73,18 +75,20 @@ def test_init_prints_the_timings_before_the_result(monkeypatch):
   assert "Platform API at http://127.0.0.1:9090" in lines[-2]
 
 
-def test_init_prints_the_timings_so_far_when_it_fails(monkeypatch):
+def test_init_prints_the_timings_so_far_when_it_fails(monkeypatch, tmp_path):
   from typer.testing import CliRunner
 
   from wasp_platform.bootstrap import local
   from wasp_platform.cli import app
 
-  def install(admin_email, log, aws_profile, with_crossplane, timings):
+  def install(admin_emails, log, aws_profile, with_crossplane, timings):
     with timings.step("rollout forager-provider"):
       raise local.BootstrapError("rollout timed out")
 
   monkeypatch.setattr(local, "install", install)
-  result = CliRunner().invoke(app, ["init", "--target", "local"])
+  monkeypatch.setattr(local, "remembered", lambda: {})
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  result = CliRunner().invoke(app, ["init", "--target", "local", "--yes"])
   assert result.exit_code == 1
   assert "rollout forager-provider" in result.output
   assert "rollout timed out" in result.output
