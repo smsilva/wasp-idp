@@ -21,6 +21,9 @@
 
   function shell(text) {
     let continued = false;
+    // Open `do`/`then` blocks of a loop or an if: their lines and the closing `done`/`fi` belong to the
+    // command that opened them, so they get no prompt of their own.
+    let depth = 0;
     // Delimiter of an open here-document: its lines are input to the command, not commands.
     let heredoc = null;
     return text.replace(/\n$/, "").split("\n").map((line) => {
@@ -35,9 +38,14 @@
         return "";
       }
       if (/^\s*#/.test(line)) return span("comment", line);
-      const start = !continued;
+      const closes = /^\s*(done|fi)\b/.test(line);
+      if (closes && depth > 0) depth -= 1;
+      // A line inside a block still opens with a command (colored), only without the prompt.
+      const fresh = !continued;
+      const start = fresh && depth === 0 && !closes;
       continued = /\\\s*$/.test(line);
-      let first = start;
+      if (/\b(do|then)\s*$/.test(line)) depth += 1;
+      let first = fresh;
       let expectValue = false;
       const parts = words(line);
       // Concept and object of the command: the word before the verb and the first argument after it.
