@@ -11,7 +11,7 @@ An agent in Claude Code asks the platform questions in plain language, through t
 <ol class="journey">
   <li class="prep"><a href="before/">Before the demo</a><span>before</span></li>
   <li><a href="setup/">Connect the agent</a><span>2 min</span></li>
-  <li><a href="whoami/">Who am I</a><span>1 min</span></li>
+  <li><a href="whoami/">Who am I</a><span>2 min</span></li>
   <li><a href="catalog/">The catalog</a><span>3 min</span></li>
   <li><a href="templates/">The golden paths</a><span>2 min</span></li>
   <li><a href="environments/">Environments</a><span>2 min</span></li>

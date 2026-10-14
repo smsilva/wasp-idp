@@ -1,7 +1,5 @@
 # Create an environment
 
-The one tool that changes the platform:
-
 ```text
 Create an ephemeral environment called agent-demo for 2 hours and tell me when it is ready.
 ```

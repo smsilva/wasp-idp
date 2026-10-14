@@ -1,10 +1,14 @@
 # After the demo
 
-Deleting is not a tool yet:
+Ask the agent to delete what it made:
 
-```bash
-platform environment delete agent-demo
+```text
+Delete the agent-demo environment.
 ```
+
+| Tool | |
+|---|---|
+| `environments_delete` | only `ephemeral` environments: a `shared` one is deleted with `platform environment delete` |
 
 Back to the read-only server:
 

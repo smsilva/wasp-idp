@@ -16,4 +16,4 @@ claude mcp list | grep platform
 platform: platform-mcp --toolsets core,environments,catalog --allow-writes - ✔ Connected
 ```
 
-Start a **new** Claude Code session and type `/mcp`: `platform` lists 11 tools.
+Start a **new** Claude Code session and type `/mcp`: `platform` lists 13 tools.
