@@ -31,9 +31,41 @@ building the registry provider image …
 deploying the registry provider (OCI registries) …
 creating the binding policies of the profiles …
 deploying Prometheus (golden signals of each workload) …
-registering 1 template(s) at 5adb796 …
+registering 1 template(s) at 8924a87 …
+
+timings:
+  cluster                          38.5s
+  cluster ports                     0.4s
+  CRDs                              2.9s
+  rollout keycloak                 1m08s
+  keycloak realm import            24.1s
+  keycloak admin permissions        0.8s
+  build platform-api                4.0s
+  import platform-api              30.5s
+  rollout platform-api             14.4s
+  platform-api healthy              0.0s
+  build local-vcluster-provider     1.8s
+  import local-vcluster-provider   35.1s
+  rollout local-vcluster-provider   1.9s
+  traefik                          1m21s
+  build scm-github-provider        13.4s
+  import scm-github-provider       45.7s
+  rollout scm-github-provider       3.7s
+  build workload-provider           2.4s
+  import workload-provider         33.9s
+  rollout workload-provider         1.5s
+  build forager-provider            1.7s
+  import forager-provider          31.9s
+  rollout forager-provider          1.1s
+  shared-pg                        16.2s
+  build registry-provider           1.5s
+  import registry-provider         37.3s
+  rollout registry-provider         2.1s
+  prometheus                        8.8s
+  templates                         1.2s
+  total                            8m47s
 ✓ Platform API at http://127.0.0.1:9090 · config in ~/.config/platform/config.yaml
 ✓ Keycloak issuer http://localhost:8180/realms/platform
 
-real    6m56s
+real    8m48s
 ```
