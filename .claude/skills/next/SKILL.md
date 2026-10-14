@@ -1,26 +1,25 @@
 ---
 name: next
-description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. With "local" ("next local"), runs the session prompt in .claude/PROMPT.local.md instead.
-argument-hint: "[issue-number|local]"
+description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" removes it.
+argument-hint: "[issue-number|save|clear]"
 ---
 
 # Next issue from the board
 
 The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is the item position, top first. This skill loads one issue and stops at a design for the user to approve.
 
-## With `local`
+## Session prompt
 
-`.claude/PROMPT.local.md` (gitignored) is a session prompt: the instructions the user gave in an earlier session, so a `/clear` followed by `/next local` resumes the same way of working. It carries no memory of what was done: the work itself is in the repo.
+`.claude/PROMPT.local.md` (gitignored) is a session prompt: the instructions the user gave in an earlier session, so `/clear` followed by `/next` resumes the same way of working. It carries no memory of what was done: the work itself is in the repo. An empty file counts as missing.
 
-- **The file exists:** read it and follow it in place of the steps below. Skip the board.
-- **The file is missing:** write it from the current session.
-  1. Draft it in English, as an imperative prompt to a fresh agent: the context (what the user is doing, where), each standing instruction the user gave in this session (how to look, what to report, how to commit), and the start (what to do on the first message). Keep instructions, drop what was done (fixes, commits): the repo has that.
-  2. Show the draft in full and ask the user to confirm or correct it. Write nothing before they confirm.
-  3. Write `.claude/PROMPT.local.md`, show its absolute path, and tell the user they can run `/clear` and then `/next local`.
+- **No argument, the file has content:** read it and follow it in place of the steps below. Skip the board.
+- **No argument, the file is missing:** run the steps below (the board).
+- **`save`:** draft the prompt from the current session (in English, imperative, to a fresh agent: the context, each standing instruction, the start; drop what was done). When the file exists, merge into it and show the diff; else show the draft in full. Write only after the user confirms, then show its absolute path and tell them they can run `/clear` and then `/next`.
+- **`clear`:** show the file, then remove it with `rm` (never leave it empty) only after the user confirms: it is gitignored, so nothing brings it back. `/next` goes back to the board.
 
 ## Steps
 
-1. **Pick the issue.** With an argument, use that issue number. Without one, run `scripts/board/queue next`: an `In Progress` item wins over the top of `Todo`, and an issue with open sub-issues is skipped (the parent stays `In Progress` while its sub-issues are the work). If both are empty, show `scripts/board/queue list --status Backlog | head` and ask which one to promote.
+1. **Pick the issue.** With an issue number, use it. Without one, run `scripts/board/queue next`: an `In Progress` item wins over the top of `Todo`, and an issue with open sub-issues is skipped (the parent stays `In Progress` while its sub-issues are the work). If both are empty, show `scripts/board/queue list --status Backlog | head` and ask which one to promote.
 
 2. **Read the whole issue.** `gh issue view <n> --comments` omits the body, so run both:
 
