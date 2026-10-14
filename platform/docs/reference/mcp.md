@@ -36,6 +36,10 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `builds` | `builds_get` | `GET /v1/builds/{name}` | read-only |
 | `builds` | `builds_list` | `GET /v1/builds` (`component`) | read-only |
 | `builds` | `builds_versions_list` | `GET /v1/versions` (`component`) | read-only |
+| `workloads` | `workloads_list` | `GET /v1/environments/{environment}/workloads` | read-only |
+| `workloads` | `workloads_get` | `GET /v1/environments/{environment}/workloads/{instance}` | read-only |
+| `workloads` | `workloads_history` | `GET /v1/environments/{environment}/revisions` (`instance`) | read-only |
+| `workloads` | `workloads_signals` | `GET /v1/environments/{environment}/workloads/{instance}/signals` (`window`, default `5m`) | read-only |
 
 `status` answers like `platform status` (ADR 0039): each capability with its status, and for `platform-admins` the drivers that implement it and the fix of a failing one.
 
@@ -44,6 +48,8 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 The `catalog` toolset only reads, in the vocabulary of ADR 0023: creating a component from an agent is #475. `catalog_components_get` lists where the component runs only in the environments you can use, and `catalog_components_creation_get` answers only to who requested the creation and `platform-admins`. APIs are not a tool yet: the API has no route for them until #205 imports them from `catalog-info.yaml`.
 
 `builds_create` builds a branch like `platform build create`: the platform dispatches the repo's CI workflow and registers the version. Only members of the component's owner team and `platform-admins` build it. The API answers right away with status `pending`, and the agent calls `builds_get` until it is `ready` (about a minute) or a failure reason; `builds_versions_list` shows the version it registered.
+
+The `workloads` toolset reads what runs in an environment you can use (ADR 0033): instances, their revisions and the golden signals from the mesh, as `platform workload list|get|history|signals`. An instance is named after its component unless it is an extra one, such as a canary.
 
 Every tool carries the MCP annotations: `readOnlyHint`, and for a write tool `destructiveHint` and `idempotentHint`. Tool names follow `<toolset>_<verb>` (`environments_list`); `core` tools have no prefix.
 

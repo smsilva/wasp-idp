@@ -128,6 +128,7 @@ nav:
           - Environments: demo/mcp/environments.md
           - Create an environment: demo/mcp/create.md
           - Build a branch: demo/mcp/build.md
+          - What runs: demo/mcp/signals.md
           - After the demo: demo/mcp/cleanup.md
       - CLI:
           - demo/cli/index.md

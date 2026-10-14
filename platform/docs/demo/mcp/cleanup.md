@@ -18,5 +18,5 @@ claude mcp remove --scope user platform
 
 ```bash
 claude mcp add --scope user platform -- platform-mcp \
-  --toolsets core,environments,catalog,builds
+  --toolsets core,environments,catalog,builds,workloads
 ```

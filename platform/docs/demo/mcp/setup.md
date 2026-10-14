@@ -4,7 +4,7 @@ Register the server, with every toolset and the tools that change the platform:
 
 ```bash
 claude mcp add --scope user platform -- platform-mcp \
-  --toolsets core,environments,catalog,builds \
+  --toolsets core,environments,catalog,builds,workloads \
   --allow-writes
 ```
 
@@ -13,7 +13,7 @@ claude mcp list | grep platform
 ```
 
 ``` { .text .output title="output" }
-platform: platform-mcp --toolsets core,environments,catalog,builds --allow-writes - ✔ Connected
+platform: platform-mcp --toolsets core,environments,catalog,builds,workloads --allow-writes - ✔ Connected
 ```
 
-Start a **new** Claude Code session and type `/mcp`: `platform` lists 17 tools.
+Start a **new** Claude Code session and type `/mcp`: `platform` lists 21 tools.
