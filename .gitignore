@@ -44,5 +44,5 @@ docs/superpowers/context/
 __pycache__/
 .pytest_cache/
 
-# Saída do `mkdocs build` local do guia da CLI (o CI gera em ${RUNNER_TEMP})
-cli/site/
+# Saída do `mkdocs build` local do guia da Platform API (o CI gera em ${RUNNER_TEMP})
+platform/site/

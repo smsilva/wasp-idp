@@ -5,14 +5,16 @@ name: pages
 # - / : the IDP presentation (docs/presentation/), regenerated from idp.yaml, so the site never
 #   depends on the committed HTML. Links to references/*.md point to the blob on GitHub — on Pages
 #   the raw .md would show as plain text.
-# - /cli/ : the platform CLI guide (cli/docs/, MkDocs).
+# - /platform/ : the Platform API guide (platform/docs/, MkDocs): walkthrough, demos, reference.
+# - /cli/ : redirects to /platform/, where the guide lived before #483.
 on:
   push:
     branches: [main]
     paths:
       - docs/presentation/**
-      - cli/docs/**
-      - cli/mkdocs.yml
+      - platform/docs/**
+      - platform/mkdocs.yml
+      - scripts/bin/docs-redirects
       - .github/workflows/pages.yaml
   workflow_dispatch:
 
@@ -50,18 +52,25 @@ jobs:
             --output "${site}/index.html" \
             --topics-url "${TOPICS_URL}"
 
-      - name: Build the CLI guide
+      - name: Build the Platform API guide
         run: |
           mkdocs build \
             --strict \
-            --config-file cli/mkdocs.yml \
-            --site-dir "${RUNNER_TEMP}/site/cli"
+            --config-file platform/mkdocs.yml \
+            --site-dir "${RUNNER_TEMP}/site/platform"
+
+      - name: Redirect the old CLI guide paths
+        run: |
+          scripts/bin/docs-redirects \
+            --site "${RUNNER_TEMP}/site" \
+            --from cli \
+            --to platform
 
       # Our own JS/CSS keep the same URL across deploys, so a browser would keep the old copy in cache:
       # the commit in the query string makes each deploy fetch them again.
-      - name: Version the CLI guide assets
+      - name: Version the Platform API guide assets
         run: |
-          find "${RUNNER_TEMP}/site/cli" -name '*.html' -exec \
+          find "${RUNNER_TEMP}/site/platform" -name '*.html' -exec \
             sed --in-place --regexp-extended \
               "s#((javascripts|stylesheets)/[A-Za-z0-9_-]+\.(js|css))\"#\1?v=${GITHUB_SHA:0:7}\"#g" {} +
 

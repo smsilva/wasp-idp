@@ -37,7 +37,7 @@ Uma criação `Ready`, ou parada num reason definitivo, é removida 24 h depois 
 
 ## Build
 
-Cada `Build` (#206, ADR 0030) segue o contrato `platform-build` (`cli/docs/reference/builds.md`). O token da instalação é reaproveitado por 50 min, e o status só é gravado quando muda.
+Cada `Build` (#206, ADR 0030) segue o contrato `platform-build` (`platform/docs/reference/builds.md`). O token da instalação é reaproveitado por 50 min, e o status só é gravado quando muda.
 
 1. `Dispatched`: `GET …/actions/workflows/platform-build.yaml` (`404` → `WorkflowNotFound`), `GET …/branches/{branch}` (`404` → `BranchNotFound`), e `POST …/dispatches` com `request-id` e `version`. Antes do dispatch procura o run pelo `run-name`: um restart entre o dispatch e o status gravado não dispara de novo. `422` no dispatch → `ContractViolation`. O status é gravado na hora.
 2. `Running`: acha o run em `GET …/actions/runs?event=workflow_dispatch&branch=…` pelo `display_title` `platform-build <requestId>` e grava `runUrl` e `run.headSha`. Enquanto o run não termina, `Ready=False, reason=Building`, e o resync (15 s) olha de novo. Sem run 10 min depois do dispatch → `ContractViolation`. Run sem sucesso → `BuildFailed`.

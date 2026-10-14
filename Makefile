@@ -30,8 +30,8 @@ mcp: ## Put `platform-mcp` (the MCP server, ADR 0027) on the PATH, editable from
 mcp-uninstall: ## Remove `platform-mcp` from the PATH
 	uv tool uninstall wasp-platform-mcp
 
-docs: ## Serve the CLI guide (cli/docs) with live reload and open it in the browser; builds to a temp dir
+docs: ## Serve the Platform API guide (platform/docs) with live reload and open it in the browser; builds to a temp dir
 	uvx --with mkdocs-material mkdocs serve \
-	  --config-file "$(CURDIR)/cli/mkdocs.yml" \
+	  --config-file "$(CURDIR)/platform/mkdocs.yml" \
 	  --dev-addr 127.0.0.1:$(DOCS_PORT) \
 	  --open

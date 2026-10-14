@@ -36,10 +36,10 @@ Contas AWS entram com `platform cloud account add <nome> --role-arn <arn>` (ADR 
 
 ## Documentação
 
-Site MkDocs em inglês: walkthrough do zero em `docs/walkthrough/` (uma etapa por página) e referência dos comandos em `docs/reference/`, publicado em https://smsilva.github.io/wasp-idp/cli/ pelo workflow `.github/workflows/pages.yaml` a cada push na `main`. Para ver localmente:
+A documentação da CLI faz parte do guia da Platform API (`platform/docs/`, MkDocs em inglês): o walkthrough do zero em `platform/docs/walkthrough/` (uma etapa por página) e a referência dos comandos em `platform/docs/reference/`, publicados em https://smsilva.github.io/wasp-idp/platform/ pelo workflow `.github/workflows/pages.yaml` a cada push na `main`. Para ver localmente:
 
 ```bash
-uvx --with mkdocs-material mkdocs serve --config-file cli/mkdocs.yml
+make docs
 ```
 
 ## Fronteira

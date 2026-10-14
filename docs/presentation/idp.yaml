@@ -1085,7 +1085,7 @@ slides:
 
       É o mesmo `hello-api` que a jornada leva até o `curl`.
 
-      Fonte: cli/docs/walkthrough/components/create.md.
+      Fonte: platform/docs/walkthrough/components/create.md.
 
     dependsOn: [golden-paths-output]
 
