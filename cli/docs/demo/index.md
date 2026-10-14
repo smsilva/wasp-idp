@@ -1,19 +1,27 @@
 # Developer journey in 30 minutes
 
-A short path through the platform as a developer sees it: a new app, its repo, a build, two environments and the deploy to each one. It assumes a platform that is already configured. The [walkthrough](../walkthrough/index.md) covers every step from scratch.
+From a new app to two running environments, on a platform already configured.
 
-| # | Step | Time |
-|---|---|---|
-| 0 | [Before the demo](before.md) | before the meeting |
-| 1 | [Create the app](create.md) | 3 min |
-| 2 | [Clone and branch](clone.md) | 3 min |
-| 3 | [Build the branch](build.md) | 3 min |
-| 4 | [Create an environment](environment.md) | 2 min |
-| 5 | [Deploy and call it](deploy.md) | 3 min |
-| 6 | [Golden signals](signals.md) | 3 min |
-| 7 | [A second environment](second.md) | 4 min |
-| 8 | [Call it there](second-call.md) | 1 min |
-| 9 | [Where the app runs](running-in.md) | 1 min |
-| | Questions | 7 min |
+<p class="cast">
+  <span class="t-component">hello-api</span>
+  <span class="cast-sep">→</span>
+  <span class="t-environment">demo</span>
+  <span class="cast-sep">·</span>
+  <span class="t-environment">greetings-test</span>
+</p>
 
-The app is `hello-api`, in the system `greeter`, owned by `team-alpha`. The environments are `demo` (`shared`) and `greetings-test` (`ephemeral`). [After the demo](cleanup.md) removes all of it.
+<ol class="journey">
+  <li class="prep"><a href="before/">Before the demo</a><span>before</span></li>
+  <li><a href="create/">Create the app</a><span>3 min</span></li>
+  <li><a href="clone/">Clone and branch</a><span>3 min</span></li>
+  <li><a href="build/">Build the branch</a><span>3 min</span></li>
+  <li><a href="environment/">Create an environment</a><span>2 min</span></li>
+  <li><a href="deploy/">Deploy and call it</a><span>3 min</span></li>
+  <li><a href="signals/">Golden signals</a><span>3 min</span></li>
+  <li><a href="second/">A second environment</a><span>4 min</span></li>
+  <li><a href="second-call/">Call it there</a><span>1 min</span></li>
+  <li><a href="running-in/">Where the app runs</a><span>1 min</span></li>
+  <li class="prep">Questions<span>7 min</span></li>
+</ol>
+
+[After the demo](cleanup.md) removes it all. The [walkthrough](../walkthrough/index.md) starts from scratch.

@@ -484,3 +484,75 @@
 .md-typeset .fallback > ol > li small code {
   color: inherit;
 }
+
+/* Demo index: the app and its environments in the concept colors, then the steps as a numbered track
+   with the time of each one on the right. Steps outside the clock (before, questions) are muted. */
+.md-typeset .cast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .5em;
+  margin: 0 0 1.5em;
+  font-family: var(--md-code-font-family);
+  font-size: .85rem;
+}
+
+.md-typeset .cast-sep {
+  color: var(--t-op);
+}
+
+.md-typeset ol.journey {
+  counter-reset: step -1;
+  margin: 0 0 2em;
+  padding: 0;
+  list-style: none;
+  border-left: 2px solid var(--wasp-term-border);
+}
+
+.md-typeset ol.journey > li {
+  counter-increment: step;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1em;
+  margin: 0;
+  padding: .45em .2em .45em 2.4em;
+  border-bottom: 1px solid var(--wasp-code-border);
+}
+
+.md-typeset ol.journey > li::before {
+  content: counter(step);
+  position: absolute;
+  left: -.85em;
+  top: .5em;
+  width: 1.6em;
+  height: 1.6em;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--md-typeset-a-color);
+  color: var(--md-typeset-a-color);
+  font: 700 .7rem var(--md-code-font-family);
+}
+
+.md-typeset ol.journey > li > span {
+  color: var(--wasp-out-fg);
+  font: .7rem var(--md-code-font-family);
+  white-space: nowrap;
+}
+
+.md-typeset ol.journey > li.prep {
+  color: var(--wasp-out-fg);
+}
+
+.md-typeset ol.journey > li.prep::before {
+  content: "";
+  border-color: var(--wasp-term-border);
+  background: var(--md-default-bg-color);
+}
+
+.md-typeset ol.journey > li.prep a {
+  color: var(--wasp-out-fg);
+}
