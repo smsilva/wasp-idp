@@ -13,7 +13,7 @@ The **Platform API** runs environments, the catalog, builds and deploys. The CLI
 
 -   :material-play-circle-outline: **[Walkthrough](walkthrough/index.md)**
 
-    From an empty machine to a **running environment**, one step per page.
+    With the CLI, from an empty machine to a **running environment**, one step per page.
 
 -   :material-presentation-play: **[Demo](demo/index.md)**
 
