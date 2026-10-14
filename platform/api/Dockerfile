@@ -6,9 +6,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 COPY libs/templates /app/libs/templates
 COPY libs/score /app/libs/score
 COPY api/pyproject.toml api/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# The uv cache outlives the layer: a lock change downloads only the wheels that changed (#443).
+RUN --mount=type=cache,target=/root/.cache/uv \
+  UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
 COPY api/src ./src
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+  UV_LINK_MODE=copy uv sync --frozen --no-dev
 ENV PATH="/app/api/.venv/bin:${PATH}"
 USER 65532
 EXPOSE 8080
