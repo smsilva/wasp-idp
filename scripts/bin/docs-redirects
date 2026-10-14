@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+show_usage() {
+  cat <<USAGE
+Usage: ${0##*/} --site <dir> --from <path> --to <path>
+
+Writes, under <site>/<from>, one redirect page for each page built under <site>/<to>, so the
+links published before a guide moved keep working (#483).
+
+Example:
+  ${0##*/} --site "\${RUNNER_TEMP}/site" --from cli --to platform
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    --site) site="${2}"; shift 2 ;;
+    --from) from="${2}"; shift 2 ;;
+    --to) to="${2}"; shift 2 ;;
+    --help) show_usage; exit 0 ;;
+    *) show_usage >&2; exit 1 ;;
+  esac
+done
+
+: "${site?}" "${from?}" "${to?}"
+
+count=0
+while IFS= read -r page; do
+  relative="${page#"${site}/${to}/"}"
+  target_dir="${site}/${from}/$(dirname "${relative}")"
+  # From <from>/a/b/index.html back to the site root, then down into <to>.
+  depth="$(tr --delete --complement '/' <<< "${from}/${relative}" | wc --chars)"
+  up="$(printf '../%.0s' $(seq 1 "${depth}"))"
+  url="${up}${to}/${relative%index.html}"
+  mkdir --parents "${target_dir}"
+  cat > "${site}/${from}/${relative}" <<HTML
+<!doctype html>
+<meta charset="utf-8">
+<title>Moved</title>
+<link rel="canonical" href="${url}">
+<meta http-equiv="refresh" content="0; url=${url}">
+<p>This page moved to <a href="${url}">${url}</a>.</p>
+HTML
+  count=$((count + 1))
+done < <(find "${site}/${to}" -name index.html)
+
+echo "${count} redirect pages from /${from}/ to /${to}/"

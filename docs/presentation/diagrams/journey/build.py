@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Journey slides: one SVG per moment of the delivery line, a CLI session revealed command by command.
 
-Commands and outputs follow the real `platform` CLI (`cli/docs/walkthrough/`), cropped to fit the terminal;
+Commands and outputs follow the real `platform` CLI (`platform/docs/walkthrough/`), cropped to fit the terminal;
 the steps that depend on an open issue show the target shape, and the slide notes say which.
 Parts: `strip` (the line, current moment lit, with the terminal), `cmd.N` (a command) and `cmd.N-out` / `cmd.N-editor`
 (what it shows, one step later). The setup sessions (moment 0, the platform team) have `terminal` instead of `strip`.

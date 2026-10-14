@@ -1,9 +1,9 @@
 site_name: platform-api
-site_description: A local Environment with the platform CLI
-site_url: https://smsilva.github.io/wasp-idp/cli/
+site_description: The Platform API of wasp-idp, its CLI and its MCP server
+site_url: https://smsilva.github.io/wasp-idp/platform/
 repo_url: https://github.com/smsilva/wasp-idp
 repo_name: smsilva/wasp-idp
-edit_uri: edit/main/cli/docs/
+edit_uri: edit/main/platform/docs/
 docs_dir: docs
 nav:
   - Home: index.md
