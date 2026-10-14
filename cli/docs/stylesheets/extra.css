@@ -286,39 +286,9 @@
 .md-typeset .t-err { color: var(--t-err); }
 .md-typeset .t-info { color: var(--t-info); }
 
-/* Window bar with the three dots, as in the deck. */
-.md-typeset .highlight.language-bash::before {
-  content: "";
-  display: block;
-  height: 1.5rem;
-  border: 1px solid var(--wasp-term-border);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background:
-    radial-gradient(circle at .9rem 50%, #ff5f57 .22rem, transparent .24rem),
-    radial-gradient(circle at 1.6rem 50%, #febc2e .22rem, transparent .24rem),
-    radial-gradient(circle at 2.3rem 50%, #28c840 .22rem, transparent .24rem),
-    var(--wasp-term-bar);
-}
-
-.md-typeset .highlight.language-bash pre > code {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
-.md-typeset .highlight.language-bash pre {
-  margin-top: 0;
-}
-
 /* "What will be created": same panel as the output, the kinds not in italic. */
 .md-typeset .plan .t-comment {
   font-style: normal;
-}
-
-/* A box that opens with a code block: keep the terminal bar off the box title. */
-.md-typeset .admonition > .admonition-title + .highlight,
-.md-typeset details > summary + .highlight {
-  margin-top: 1em;
 }
 
 /* A command followed by its output reads as one terminal: the output continues the command panel after a
