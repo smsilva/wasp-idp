@@ -41,7 +41,16 @@ def core(client: ClientFactory) -> list[ToolSpec]:
     """Who the Platform API sees the caller as: sub, email, groups and teams."""
     return client().me()
 
-  return [ToolSpec("whoami", whoami)]
+  def status(capability: str | None = None) -> dict[str, Any]:
+    """Each capability of the platform and whether it works (Active, NotInstalled or a failure); one capability by name.
+
+    platform-admins also get the providers that implement it and how to fix a failing one.
+    """
+    if capability is None:
+      return {"items": client().list_capabilities()}
+    return client().get_capability(checked(capability))
+
+  return [ToolSpec("whoami", whoami), ToolSpec("status", status)]
 
 
 def environments(client: ClientFactory) -> list[ToolSpec]:
@@ -67,10 +76,24 @@ def environments(client: ClientFactory) -> list[ToolSpec]:
       raise ToolError("an agent must set expires on a new environment, such as 2h or 1d")
     return client().create_environment(name, profile, expires)
 
+  def environments_delete(name: str) -> dict[str, Any]:
+    """Delete an ephemeral environment and everything deployed in it. Answers with status deleting.
+
+    Only ephemeral environments: a shared one is deleted by a person, with the platform CLI.
+    """
+    api = client()
+    # Destructive actions outside ephemeral environments wait for human approval (#220): until
+    # #219 lets the API tell an agent from the user, this server holds the line.
+    profile = api.get_environment(checked(name))["profile"]
+    if profile != "ephemeral":
+      raise ToolError(f"an agent deletes only ephemeral environments; '{name}' is {profile}")
+    return api.delete_environment(name)
+
   return [
     ToolSpec("environments_list", environments_list),
     ToolSpec("environments_get", environments_get),
     ToolSpec("environments_create", environments_create, write=True, idempotent=False),
+    ToolSpec("environments_delete", environments_delete, write=True, destructive=True),
   ]
 
 

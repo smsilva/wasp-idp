@@ -110,7 +110,7 @@ if [[ "${server,,}" != "server: istio-envoy" ]]; then
   exit 1
 fi
 
-step "an agent over MCP lists and reads the environment, never its kubeconfig, and must set expires (#224)"
+step "an agent over MCP lists and reads the environment, never its kubeconfig, must set expires and deletes only ephemeral ones (#224, #470)"
 mcp_call=(uv run --project platform/mcp python platform/mcp/scripts/mcp-call --toolsets environments)
 output="$("${mcp_call[@]}" environments_list)"
 expect_output "\"name\": \"${environment}\"" "${output}"
@@ -125,6 +125,10 @@ expect_failure "an agent must set expires" \
   "${mcp_call[@]}" environments_create \
     --allow-writes \
     --arguments '{"name": "smoke-mcp", "profile": "ephemeral", "expires": ""}'
+expect_failure "an agent deletes only ephemeral environments; '${environment}' is shared" \
+  "${mcp_call[@]}" environments_delete \
+    --allow-writes \
+    --arguments "{\"name\": \"${environment}\"}"
 
 step "a pod cannot reach the host: baseline in the vcluster and on the host (#414, ADR 0041)"
 owner_kubeconfig="${smoke_config}/platform/environments/${environment}.kubeconfig"

@@ -114,11 +114,14 @@ for capability in identity catalog environment resources workload observability;
   fi
 done
 
-step "an agent over MCP sees the same user: platform-mcp whoami (#222, ADR 0027)"
+step "an agent over MCP sees the same user and the capabilities: platform-mcp whoami and status (#222, #471, ADR 0027)"
 # The server runs with the CLI login of the smoke (its XDG_CONFIG_HOME), over stdio.
 output="$(uv run --project platform/mcp python platform/mcp/scripts/mcp-call whoami)"
 echo "${output}"
 expect_output '"email": "platform-smoke@platform.local"' "${output}"
+output="$(uv run --project platform/mcp python platform/mcp/scripts/mcp-call status --arguments '{"capability": "identity"}')"
+echo "${output}"
+expect_output '"status": "Active"' "${output}"
 
 step "a non-admin cannot create a domain"
 expect_failure "403" \

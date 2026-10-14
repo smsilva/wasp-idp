@@ -20,9 +20,11 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | Toolset | Tool | Route | Annotations |
 |---|---|---|---|
 | `core` | `whoami` | `GET /v1/me` | read-only |
+| `core` | `status` | `GET /v1/capabilities`, or `GET /v1/capabilities/{capability}` | read-only |
 | `environments` | `environments_list` | `GET /v1/environments` (`all=true` lists every environment, `platform-admins` only) | read-only |
 | `environments` | `environments_get` | `GET /v1/environments/{name}`, without `kubeconfigData` | read-only |
 | `environments` | `environments_create` | `POST /v1/environments` | write, not destructive, not idempotent |
+| `environments` | `environments_delete` | `DELETE /v1/environments/{name}`, ephemeral only | write, destructive, idempotent |
 | `catalog` | `catalog_list` | `GET /v1/catalog/entities` (`kind`: `domain`, `system` or `resource`; `owner`) | read-only |
 | `catalog` | `catalog_get` | `GET /v1/catalog/{kind}s/{name}`, with its `dependents` | read-only |
 | `catalog` | `catalog_components_list` | `GET /v1/catalog/components` (`system`, `owner`) | read-only |
@@ -31,7 +33,9 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `catalog` | `catalog_templates_list` | `GET /v1/catalog/templates` | read-only |
 | `catalog` | `catalog_templates_get` | `GET /v1/catalog/templates/{name}` | read-only |
 
-`environments_get` drops the personal kubeconfig the API returns to the people who can use the environment (ADR 0028): a kubeconfig never reaches the agent. `environments_create` takes `name`, `profile` (`ephemeral` or `shared`) and a **mandatory** `expires` (`30m`, `12h`, `3d`, `1w`); without it the server refuses before calling the API. The API answers right away with status `pending`, and the agent calls `environments_get` until it is `ready`. In this first phase the API cannot tell an agent from you, so the server carries the rule until agents get their own identity (#219). Sharing with a team and deleting an environment are not tools yet.
+`status` answers like `platform status` (ADR 0039): each capability with its status, and for `platform-admins` the drivers that implement it and the fix of a failing one.
+
+`environments_get` drops the personal kubeconfig the API returns to the people who can use the environment (ADR 0028): a kubeconfig never reaches the agent. `environments_create` takes `name`, `profile` (`ephemeral` or `shared`) and a **mandatory** `expires` (`30m`, `12h`, `3d`, `1w`); without it the server refuses before calling the API. The API answers right away with status `pending`, and the agent calls `environments_get` until it is `ready`. `environments_delete` deletes only `ephemeral` environments: it reads the environment first and refuses any other profile before calling the API, since destructive actions on the rest wait for human approval (#220). The API answers with status `deleting`. In this first phase the API cannot tell an agent from you, so the server carries both rules until agents get their own identity (#219). Sharing with a team is not a tool yet.
 
 The `catalog` toolset only reads, in the vocabulary of ADR 0023: creating a component or a build from an agent comes after #219. `catalog_components_get` lists where the component runs only in the environments you can use, and `catalog_components_creation_get` answers only to who requested the creation and `platform-admins`. APIs are not a tool yet: the API has no route for them until #205 imports them from `catalog-info.yaml`.
 
