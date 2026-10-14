@@ -147,25 +147,28 @@ nav:
   - Architecture: architecture.md
   - Reference:
       - reference/index.md
-      - Install the CLI: reference/install.md
-      - Control plane: reference/init.md
-      - Sign-in: reference/login.md
-      - Status: reference/status.md
-      - Environments: reference/environments.md
-      - Catalog: reference/catalog.md
-      - Templates: reference/templates.md
-      - Teams: reference/teams.md
-      - Cloud accounts: reference/cloud-accounts.md
-      - SCM connections: reference/scm-connections.md
-      - Builds: reference/builds.md
-      - Registries: reference/registries.md
-      - Workloads: reference/workloads.md
-      - The Forager: reference/forager.md
-      - MCP server: reference/mcp.md
-      - Output formats: reference/output.md
-      - Smoke and e2e tests: reference/cli-smoke.md
-      - Under the hood: reference/under-the-hood.md
-      - Tear down: reference/teardown.md
+      - API:
+          - Status: reference/status.md
+          - Under the hood: reference/under-the-hood.md
+          - The Forager: reference/forager.md
+      - CLI:
+          - Install the CLI: reference/install.md
+          - Control plane: reference/init.md
+          - Sign-in: reference/login.md
+          - Environments: reference/environments.md
+          - Catalog: reference/catalog.md
+          - Templates: reference/templates.md
+          - Teams: reference/teams.md
+          - Cloud accounts: reference/cloud-accounts.md
+          - SCM connections: reference/scm-connections.md
+          - Builds: reference/builds.md
+          - Registries: reference/registries.md
+          - Workloads: reference/workloads.md
+          - Output formats: reference/output.md
+          - Smoke and e2e tests: reference/cli-smoke.md
+          - Tear down: reference/teardown.md
+      - MCP:
+          - MCP server: reference/mcp.md
 theme:
   name: material
   language: en
