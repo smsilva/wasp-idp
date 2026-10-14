@@ -119,7 +119,6 @@ nav:
           - Remove the SCM connection: walkthrough/cleanup/scm-connection.md
           - What stays: walkthrough/cleanup/what-stays.md
           - Sign out: walkthrough/cleanup/sign-out.md
-      - Without a browser: walkthrough/cli-smoke.md
   - Reference:
       - reference/index.md
       - Install the CLI: reference/install.md
@@ -138,6 +137,7 @@ nav:
       - The Forager: reference/forager.md
       - MCP server: reference/mcp.md
       - JSON output: reference/json-output.md
+      - Smoke test: reference/cli-smoke.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md
 theme:
