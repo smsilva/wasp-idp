@@ -32,12 +32,18 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `catalog` | `catalog_components_creation_get` | `GET /v1/catalog/components/{name}/creation` | read-only |
 | `catalog` | `catalog_templates_list` | `GET /v1/catalog/templates` | read-only |
 | `catalog` | `catalog_templates_get` | `GET /v1/catalog/templates/{name}` | read-only |
+| `builds` | `builds_create` | `POST /v1/builds` (`component`, `branch`; `version`, `registry`) | write, not destructive, not idempotent |
+| `builds` | `builds_get` | `GET /v1/builds/{name}` | read-only |
+| `builds` | `builds_list` | `GET /v1/builds` (`component`) | read-only |
+| `builds` | `builds_versions_list` | `GET /v1/versions` (`component`) | read-only |
 
 `status` answers like `platform status` (ADR 0039): each capability with its status, and for `platform-admins` the drivers that implement it and the fix of a failing one.
 
 `environments_get` drops the personal kubeconfig the API returns to the people who can use the environment (ADR 0028): a kubeconfig never reaches the agent. `environments_create` takes `name`, `profile` (`ephemeral` or `shared`) and a **mandatory** `expires` (`30m`, `12h`, `3d`, `1w`); without it the server refuses before calling the API. The API answers right away with status `pending`, and the agent calls `environments_get` until it is `ready`. `environments_delete` deletes only `ephemeral` environments: it reads the environment first and refuses any other profile before calling the API, since destructive actions on the rest wait for human approval (#220). The API answers with status `deleting`. In this first phase the API cannot tell an agent from you, so the server carries both rules until agents get their own identity (#219). Sharing with a team is not a tool yet.
 
-The `catalog` toolset only reads, in the vocabulary of ADR 0023: creating a component or a build from an agent comes after #219. `catalog_components_get` lists where the component runs only in the environments you can use, and `catalog_components_creation_get` answers only to who requested the creation and `platform-admins`. APIs are not a tool yet: the API has no route for them until #205 imports them from `catalog-info.yaml`.
+The `catalog` toolset only reads, in the vocabulary of ADR 0023: creating a component from an agent is #475. `catalog_components_get` lists where the component runs only in the environments you can use, and `catalog_components_creation_get` answers only to who requested the creation and `platform-admins`. APIs are not a tool yet: the API has no route for them until #205 imports them from `catalog-info.yaml`.
+
+`builds_create` builds a branch like `platform build create`: the platform dispatches the repo's CI workflow and registers the version. Only members of the component's owner team and `platform-admins` build it. The API answers right away with status `pending`, and the agent calls `builds_get` until it is `ready` (about a minute) or a failure reason; `builds_versions_list` shows the version it registered.
 
 Every tool carries the MCP annotations: `readOnlyHint`, and for a write tool `destructiveHint` and `idempotentHint`. Tool names follow `<toolset>_<verb>` (`environments_list`); `core` tools have no prefix.
 

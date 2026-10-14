@@ -141,8 +141,40 @@ def catalog(client: ClientFactory) -> list[ToolSpec]:
   ]
 
 
+def builds(client: ClientFactory) -> list[ToolSpec]:
+  def builds_create(component: str, branch: str, version: str | None = None, registry: str | None = None) -> dict[str, Any]:
+    """Build a branch of a component: the platform dispatches the repo's CI workflow and registers the version.
+
+    version is computed by the CI from the Conventional Commits unless given; registry defaults to the default
+    registry. The platform answers right away with status pending; call builds_get until status is ready
+    (about a minute) or a failure reason, then deploy the version it registered.
+    """
+    body = {"component": component, "branch": branch, "version": version, "registry": registry}
+    return client().create_build({key: value for key, value in body.items() if value is not None})
+
+  def builds_get(name: str) -> dict[str, Any]:
+    """One build: status (pending, ready or a failure reason), the CI run URL, the commit, the result and the errors."""
+    return client().get_build(checked(name))
+
+  def builds_list(component: str | None = None) -> dict[str, Any]:
+    """Builds, newest first; filter by component."""
+    return {"items": client().list_builds(component)}
+
+  def builds_versions_list(component: str | None = None) -> dict[str, Any]:
+    """Versions registered by builds, newest first, with image, branch and commit: what a deploy takes; filter by component."""
+    return {"items": client().list_versions(component)}
+
+  return [
+    ToolSpec("builds_create", builds_create, write=True, idempotent=False),
+    ToolSpec("builds_get", builds_get),
+    ToolSpec("builds_list", builds_list),
+    ToolSpec("builds_versions_list", builds_versions_list),
+  ]
+
+
 TOOLSETS: dict[str, Callable[[ClientFactory], list[ToolSpec]]] = {
   "core": core,
   "environments": environments,
   "catalog": catalog,
+  "builds": builds,
 }
