@@ -47,27 +47,20 @@ hello-api-pr-42@demo  hello-api  0.1.0-farewell.910ace9   Available  1/1       1
 - Its revisions, its history and its resources are its own: a `provision` database is one per instance, and its `dns` gives it a host of its own.
 - The first deploy names the component of the instance, and the instance keeps it. A deploy that names another component is refused (`409`), and so is an instance named like another component: its Service would answer for it.
 
-With an extra instance in the environment, `--component` no longer picks one, even when the default instance is gone: it acts only on the instance named after the component, and only when that is the one running.
+`get`, `signals`, `rollback` and `remove` take the instance as an argument: `hello-api-pr-42` with `--environment`, or `hello-api-pr-42@demo` alone, the name `list` prints in its `WORKLOAD` column. The default instance is named after its component, so `hello-api` stays `hello-api`:
 
 ```bash
-platform workload get \
-  --component hello-api \
-  --environment demo
+platform workload get hello-api-pr-42@demo
 ```
 
-``` { .text .output title="output" }
-✗ hello-api has 2 instances in demo: hello-api, hello-api-pr-42; give --instance
-```
-
-`get`, `rollback` and `remove` take `--instance`. `history --component` lists every instance of the component, and `history --instance` lists only one:
+`history --component` lists every instance of the component, and `history --instance` lists only one:
 
 ```bash
 platform workload history \
   --environment demo \
   --component hello-api
 
-platform workload remove \
-  --instance hello-api-pr-42 \
+platform workload remove hello-api-pr-42 \
   --environment demo \
   --wait
 ```

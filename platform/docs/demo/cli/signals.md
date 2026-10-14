@@ -16,8 +16,7 @@ done
 The four signals, with no instrumentation in the app:
 
 ```bash
-platform workload signals \
-  --component hello-api \
+platform workload signals hello-api \
   --environment demo
 ```
 

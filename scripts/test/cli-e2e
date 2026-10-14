@@ -323,7 +323,7 @@ kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/dns-chec
   --for jsonpath='{.status.phase}'=Succeeded \
   --timeout 120s
 kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod dns-check
-output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+output="$(platform workload get "${workload_component}" --environment "${environment}")"
 expect_output "ghcr.io/stefanprodan/podinfo@${workload_digest}" "${output}"
 expect_failure "revision 2: ResourcesNotSupported" \
   platform workload deploy \
@@ -335,7 +335,7 @@ output="$(platform workload history --environment "${environment}" --component "
 echo "${output}"
 expect_output "ResourcesNotSupported" "${output}"
 # The failed revision changes nothing: the instance still runs revision 1.
-output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+output="$(platform workload get "${workload_component}" --environment "${environment}")"
 expect_output "(Available)" "${output}"
 expect_output "newest        revision 2" "${output}"
 platform workload deploy \
@@ -345,15 +345,13 @@ platform workload deploy \
   --replicas 1 \
   --wait
 # By default, back to the revision that succeeded before the running one: 1, with its 2 replicas.
-output="$(platform workload rollback \
-  --component "${workload_component}" \
+output="$(platform workload rollback "${workload_component}" \
   --environment "${environment}" \
   --wait)"
 echo "${output}"
 expect_output "revision 4: 0.3.0 running · 2/2 replicas available" "${output}"
 expect_failure "revision 2 did not succeed" \
-  platform workload rollback \
-    --component "${workload_component}" \
+  platform workload rollback "${workload_component}" \
     --environment "${environment}" \
     --revision 2
 output="$(platform catalog component get "${workload_component}")"
@@ -371,11 +369,8 @@ expect_output "${workload_extra}@${environment} revision 1: 0.3.0 running · 1/1
 output="$(platform workload list --environment "${environment}")"
 echo "${output}"
 expect_output "http://${workload_extra}.apps:80" "${output}"
-expect_failure "${workload_component} has 2 instances in ${environment}" \
-  platform workload get \
-    --component "${workload_component}" \
-    --environment "${environment}"
-output="$(platform workload get --instance "${workload_extra}" --environment "${environment}")"
+# The instance as <instance>@<environment> (#492), the name list prints.
+output="$(platform workload get "${workload_extra}@${environment}")"
 expect_output "${workload_extra}@${environment} (Available)" "${output}"
 # The Service of the component balances only its own instance: 2 pods, none of the second instance.
 endpoints="$(kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps get endpointslices \
@@ -488,12 +483,10 @@ done
 echo "without the header: ${default}"
 kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod route-check --wait=false
 expect_failure "the route of '${workload_component}' sends traffic to it" \
-  platform workload remove \
-    --instance "${workload_extra}" \
+  platform workload remove "${workload_extra}" \
     --environment "${environment}"
 expect_failure "main instance of the route" \
-  platform workload remove \
-    --instance "${workload_component}" \
+  platform workload remove "${workload_component}" \
     --environment "${environment}"
 output="$(platform workload route \
   --component "${workload_component}" \
@@ -501,18 +494,15 @@ output="$(platform workload route \
   --clear)"
 echo "${output}"
 expect_output "every request goes to ${workload_component}" "${output}"
-platform workload remove \
-  --component "${route_component}" \
+platform workload remove "${route_component}" \
   --environment "${environment}" \
   --wait
-output="$(platform workload remove \
-  --instance "${workload_extra}" \
+output="$(platform workload remove "${workload_extra}" \
   --environment "${environment}" \
   --wait)"
 echo "${output}"
 expect_output "${workload_extra}@${environment} revision 2: removed from ${environment}" "${output}"
-output="$(platform workload remove \
-  --component "${workload_component}" \
+output="$(platform workload remove "${workload_component}" \
   --environment "${environment}" \
   --wait)"
 echo "${output}"
@@ -648,16 +638,12 @@ platform workload route \
   --component "${reviews_component}" \
   --environment "${environment}" \
   --clear
-platform workload remove \
-  --component "${productpage_component}" \
+platform workload remove "${productpage_component}" \
   --environment "${environment}" \
   --wait
-platform workload remove \
-  --instance "${reviews_component}-pr-1" \
-  --environment "${environment}" \
+platform workload remove "${reviews_component}-pr-1@${environment}" \
   --wait
-platform workload remove \
-  --component "${reviews_component}" \
+platform workload remove "${reviews_component}" \
   --environment "${environment}" \
   --wait
 
@@ -751,7 +737,7 @@ output="$(platform workload deploy \
 echo "${output}"
 expect_output "revision 8: 0.5.0 running" "${output}"
 expect_output "resource      db (postgres, provision): Ready" "${output}"
-output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+output="$(platform workload get "${workload_component}" --environment "${environment}")"
 echo "${output}"
 expect_output "resource      db (postgres, provision): Ready" "${output}"
 connected="false"
@@ -770,8 +756,7 @@ fi
 # The Resource of the catalog derived from the Score (no id): <component>-<resource>.
 output="$(platform catalog resource get "${workload_component}-db")"
 expect_output "team-platform" "${output}"
-output="$(platform workload remove \
-  --component "${workload_component}" \
+output="$(platform workload remove "${workload_component}" \
   --environment "${environment}" \
   --wait)"
 expect_output "revision 9: removed from ${environment}" "${output}"
@@ -820,7 +805,7 @@ output="$(platform workload deploy \
 echo "${output}"
 expect_output "revision 10: 0.5.0 running" "${output}"
 expect_output "resource      db (postgres, compose): Ready" "${output}"
-output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+output="$(platform workload get "${workload_component}" --environment "${environment}")"
 echo "${output}"
 expect_output "resource      db (postgres, compose): Ready" "${output}"
 connected="false"
@@ -848,8 +833,7 @@ if [[ "$(shared_databases)" != "1" ]]; then
   echo "no database of ${workload_component} in shared-pg" >&2
   exit 1
 fi
-output="$(platform workload remove \
-  --component "${workload_component}" \
+output="$(platform workload remove "${workload_component}" \
   --environment "${environment}" \
   --wait)"
 expect_output "revision 11: removed from ${environment}" "${output}"
@@ -915,7 +899,7 @@ output="$(platform workload deploy \
   --wait)"
 echo "${output}"
 expect_output "revision 12: 0.5.0 running" "${output}"
-output="$(platform workload get --component "${workload_component}" --environment "${environment}")"
+output="$(platform workload get "${workload_component}" --environment "${environment}")"
 echo "${output}"
 expect_output "resource      db (postgres, bind, class restored): Ready" "${output}"
 connected="false"
@@ -949,8 +933,7 @@ sed --in-place '/resourceClasses:/,$d' "${workload_directory}/restored.yaml"
 output="$(platform workload apply --file "${workload_directory}/restored.yaml" --dry-run)"
 echo "${output}"
 expect_output "${environment}: 0 to add, 1 to change, 0 to remove" "${output}"
-output="$(platform workload remove \
-  --component "${workload_component}" \
+output="$(platform workload remove "${workload_component}" \
   --environment "${environment}" \
   --wait)"
 expect_output "revision 13: removed from ${environment}" "${output}"
@@ -1040,7 +1023,7 @@ expect_output "revision 1: 0.1.0 running" "${output}"
 output="$(platform workload list --environment "${environment}")"
 echo "${output}"
 expect_output "${public_url}" "${output}"
-output="$(platform workload get --component "${public_component}" --environment "${environment}")"
+output="$(platform workload get "${public_component}" --environment "${environment}")"
 echo "${output}"
 expect_output "url           ${public_url}" "${output}"
 expect_output "internal url  http://${public_component}.apps:80" "${output}"
@@ -1062,7 +1045,7 @@ for attempt in $(seq 1 30); do
     curl --silent --output /dev/null --max-time 5 "${public_url}" || true
   done
   curl --silent --output /dev/null --max-time 5 "${public_url}status/500" || true
-  signals="$(platform workload signals --component "${public_component}" --environment "${environment}" --output json)"
+  signals="$(platform workload signals "${public_component}" --environment "${environment}" --output json)"
   jq --exit-status '.trafficRps > 0 and .errorRate > 0' <<< "${signals}" > /dev/null && break
   sleep 5
 done
@@ -1075,13 +1058,12 @@ jq --exit-status '.saturation.value != null and .saturation.memory != null' <<< 
   echo "expected saturation from the limits of ${public_component}" >&2
   exit 1
 }
-output="$(platform workload signals --component "${public_component}" --environment "${environment}")"
+output="$(platform workload signals "${public_component}" --environment "${environment}")"
 echo "${output}"
 expect_output "latency p95 " "${output}"
 expect_output " req/s · errors " "${output}"
 expect_failure "a number of minutes or hours" \
-  platform workload signals \
-    --component "${public_component}" \
+  platform workload signals "${public_component}" \
     --environment "${environment}" \
     --window 1d
 
@@ -1099,8 +1081,7 @@ jq --exit-status '.trafficRps > 0' <<< "${output}" > /dev/null || {
   exit 1
 }
 
-output="$(platform workload remove \
-  --component "${public_component}" \
+output="$(platform workload remove "${public_component}" \
   --environment "${environment}" \
   --wait)"
 expect_output "revision 2: removed from ${environment}" "${output}"

@@ -43,8 +43,7 @@ platform workload route \
 Each `route` changes one rule and keeps the others: the same header again replaces its rule, and `--weight 0` takes an instance out of the weights. While a route sends traffic to an instance, removing it is refused, and so is removing `hello-api` while it has a route at all:
 
 ```bash
-platform workload remove \
-  --instance hello-api-pr-42 \
+platform workload remove hello-api-pr-42 \
   --environment demo
 ```
 

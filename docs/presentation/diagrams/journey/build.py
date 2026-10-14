@@ -167,9 +167,7 @@ SESSIONS = {
   "run": [
     ("curl https://greeting-api.greetings-test.platform.example.com/greetings",
      ['{"greetings": [{"id": 1, "message": "hello"}], "version": "0.1.0-greetings.1a2b3c4"}']),
-    (["platform workload signals",
-      "--component greeting-api",
-      "--environment greetings-test"],
+    ("platform workload signals greeting-api@greetings-test",
      ["latency p95 42 ms · traffic 3 req/s · errors 0% · saturation 12%"]),
   ],
 }

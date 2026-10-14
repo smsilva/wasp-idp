@@ -4,7 +4,7 @@ The environment was born observed: each pod in `apps` runs an Istio sidecar, and
 
 ```bash
 for i in $(seq 1 60); do curl --silent --output /dev/null http://hello-api.demo.localhost:7080/; sleep 1; done
-platform workload signals --component hello-api --environment demo
+platform workload signals hello-api --environment demo
 ```
 
 ``` { .text .output title="output" }
@@ -21,7 +21,7 @@ latency p95 0.47 ms · traffic 0.2 req/s · errors 9.09% · saturation 10.63%
 With `--output json`, the same values as numbers, with errors and saturation as fractions:
 
 ```bash
-platform workload signals --component hello-api --environment demo --output json
+platform workload signals hello-api --environment demo --output json
 ```
 
 ``` { .json .output title="output" }

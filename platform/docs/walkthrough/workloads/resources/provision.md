@@ -28,8 +28,7 @@ platform workload deploy \
   --version 0.5.0 \
   --wait
 
-platform workload get \
-  --component hello-api \
+platform workload get hello-api \
   --environment demo
 ```
 
