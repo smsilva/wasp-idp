@@ -11,6 +11,7 @@ coverage/
 # Personal/local context (not versioned)
 CLAUDE.local.md
 HANDOFF.local.md
+.claude/*.local.md
 .mcp.json
 
 # Terraform — .terraform.lock.hcl É versionado (fixa o hash do provider)
