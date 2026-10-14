@@ -556,3 +556,18 @@
 .md-typeset ol.journey > li.prep a {
   color: var(--wasp-out-fg);
 }
+
+/* Home: the four entry cards in a 2x2 grid, no page title above them. */
+.md-typeset h1.home-title {
+  display: none;
+}
+
+.md-typeset .grid.cards.home-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-typeset .grid.cards.home-cards {
+    grid-template-columns: 1fr;
+  }
+}
