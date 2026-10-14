@@ -7,6 +7,7 @@
 | `core` | `whoami`: who the platform sees; `status`: which capabilities work |
 | `environments` | list and read environments; create one, with an expiration, and delete an ephemeral one, only with `--allow-writes` |
 | `catalog` | read domains, systems, resources, components and templates |
+| `builds` | read builds and versions; build a branch only with `--allow-writes` |
 
 ## Set it up
 

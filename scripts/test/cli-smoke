@@ -477,7 +477,7 @@ expect_failure "holds 1 version(s) of the index" \
   platform registry remove "${other_registry}"
 kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me "${build_component}.0.0.1"
 
-step "build create: every refusal happens before GitHub (#287)"
+step "build create: every refusal happens before GitHub, from the CLI and over MCP (#287, #472)"
 # The happy path dispatches a real workflow, so it stays in the manual walkthrough (Builds). The repo's
 # org has no connection here, so no request can reach GitHub, even with a ready one for wasp-foundry.
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
@@ -523,6 +523,12 @@ expect_failure "no scm connection for the org 'smoke-no-connection'" \
     --component "${build_component}" \
     --branch main \
     --registry "${smoke_registry}"
+# An agent over MCP gets the same refusal, as a tool error (#472).
+expect_failure "no scm connection for the org 'smoke-no-connection'" \
+  uv run --project platform/mcp python platform/mcp/scripts/mcp-call builds_create \
+    --toolsets builds \
+    --allow-writes \
+    --arguments "{\"component\": \"${build_component}\", \"branch\": \"main\", \"registry\": \"${smoke_registry}\"}"
 output="$(platform build list --component "${build_component}")"
 expect_output "NAME" "${output}"
 if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
