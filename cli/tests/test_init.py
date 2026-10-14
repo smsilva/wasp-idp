@@ -120,7 +120,9 @@ def test_missing_file_option_fails(no_install, tmp_path):
 def test_generate_file_writes_the_default_file_and_installs_nothing(no_install):
   result = run("--generate-file", "--admin", "you@example.org")
   assert result.exit_code == 0, result.output
-  assert "- you@example.org" in default_file().read_text()
+  text = default_file().read_text()
+  assert "- you@example.org" in text
+  assert "awsProfile" not in text and "withCrossplane" not in text
   assert str(default_file()) in result.output
 
 

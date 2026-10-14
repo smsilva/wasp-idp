@@ -30,9 +30,9 @@ kind: InitConfig
 target: local
 admins:
   - you@example.com
-awsProfile: null
-withCrossplane: false
 ```
+
+`awsProfile` and `withCrossplane` enter the file only when set (`--aws-profile`, `--with-crossplane`).
 
 A key it does not know, or an admin that is not an e-mail, stops `init` before any step. Secrets stay out of the file: the Google credentials come from the environment (below).
 
