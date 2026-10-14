@@ -118,6 +118,7 @@ nav:
       - Clean up:
           - Delete the environments: walkthrough/cleanup/environments.md
           - Remove the SCM connection: walkthrough/cleanup/scm-connection.md
+          - Delete the repo and its images: walkthrough/cleanup/images.md
           - What stays: walkthrough/cleanup/what-stays.md
           - Sign out: walkthrough/cleanup/sign-out.md
   - Reference:
