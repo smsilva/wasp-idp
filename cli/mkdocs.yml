@@ -127,6 +127,7 @@ nav:
           - The golden paths: demo/mcp/templates.md
           - Environments: demo/mcp/environments.md
           - Create an environment: demo/mcp/create.md
+          - Build a branch: demo/mcp/build.md
           - After the demo: demo/mcp/cleanup.md
       - CLI:
           - demo/cli/index.md
