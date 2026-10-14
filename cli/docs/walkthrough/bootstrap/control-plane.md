@@ -1,12 +1,15 @@
 # Control plane
 
-Write the settings once, with your Google e-mail as the admin:
+Write the settings once, with your e-mail as the admin:
 
 ```bash
 platform init \
   --generate-file \
   --admin you@example.com
 ```
+
+Repeat `--admin` for more than one admin.
+{ .terminal-note }
 
 See what will be installed:
 
@@ -17,5 +20,5 @@ platform init --dry-run
 Install, after confirming the settings:
 
 ```bash
-time platform init
+platform init
 ```

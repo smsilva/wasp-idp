@@ -309,6 +309,31 @@
   font-size: .9em;
 }
 
+/* A note about the command just above (`{ .terminal-note }` on the paragraph): the last strip of the
+   terminal panel, past a dashed line, muted so the command stays first. */
+.md-typeset .highlight:has(+ .terminal-note),
+.md-typeset .highlight:has(+ .terminal-note) pre {
+  margin-bottom: 0;
+}
+
+.md-typeset .highlight:has(+ .terminal-note) pre > code {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.md-typeset .terminal-note {
+  margin: 0 0 2em;
+  padding: .5em 1.1764705882em;
+  font-size: .7rem;
+  color: var(--wasp-out-fg);
+  background: var(--wasp-term-bar);
+  border: 1px solid var(--wasp-term-border);
+  border-top-style: dashed;
+  border-left: 3px solid var(--md-typeset-a-color);
+  border-radius: 0 0 8px 8px;
+}
+
 /* "What will be created": same panel as the output, the kinds not in italic. */
 .md-typeset .plan .t-comment {
   font-style: normal;
