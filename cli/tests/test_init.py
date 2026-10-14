@@ -1,3 +1,6 @@
+import subprocess
+from pathlib import Path
+
 import pytest
 from typer.testing import CliRunner
 
@@ -120,7 +123,9 @@ def test_missing_file_option_fails(no_install, tmp_path):
 def test_generate_file_writes_the_default_file_and_installs_nothing(no_install):
   result = run("--generate-file", "--admin", "you@example.org")
   assert result.exit_code == 0, result.output
-  assert "- you@example.org" in default_file().read_text()
+  text = default_file().read_text()
+  assert "- you@example.org" in text
+  assert "awsProfile" not in text and "withCrossplane" not in text
   assert str(default_file()) in result.output
 
 
@@ -206,3 +211,94 @@ def test_data_output_prints_nothing_while_running_and_keeps_the_logs(installed):
   result = run("--yes", "--output", "json")
   assert result.exit_code == 0, result.output
   assert __import__("json").loads(result.output)["logs"].endswith(tuple("0123456789"))
+
+
+class Editor(list):
+  """The commands the editor ran with; each run appends the next of `edits` to the file, as a person would."""
+
+  def __init__(self):
+    super().__init__()
+    self.edits = []
+
+  def __call__(self, command, check):
+    self.append(command)
+    path = Path(command[-1])
+    if self.edits:
+      path.write_text(path.read_text() + self.edits.pop(0))
+    return subprocess.CompletedProcess(command, 0)
+
+
+@pytest.fixture
+def editor(monkeypatch):
+  calls = Editor()
+  monkeypatch.setattr(init.subprocess, "run", calls)
+  for name in ("PLATFORM_EDITOR", "VISUAL", "EDITOR"):
+    monkeypatch.delenv(name, raising=False)
+  monkeypatch.setattr(init.shutil, "which", lambda name: None)
+  return calls
+
+
+@pytest.mark.parametrize(("env", "which", "expected"), [
+  ({"PLATFORM_EDITOR": "nano -w", "VISUAL": "vim", "EDITOR": "emacs"}, "/usr/bin/code", ["nano", "-w"]),
+  ({"VISUAL": "vim", "EDITOR": "emacs"}, "/usr/bin/code", ["vim"]),
+  ({"EDITOR": "emacs -nw"}, "/usr/bin/code", ["emacs", "-nw"]),
+  ({}, "/usr/bin/code", ["code", "--wait"]),
+  ({}, None, ["vi"]),
+])
+def test_editor_order(monkeypatch, env, which, expected):
+  for name in ("PLATFORM_EDITOR", "VISUAL", "EDITOR"):
+    monkeypatch.delenv(name, raising=False)
+  for name, value in env.items():
+    monkeypatch.setenv(name, value)
+  monkeypatch.setattr(init.shutil, "which", lambda name: which if name == "code" else None)
+  assert init.editor_command() == expected
+
+
+def test_edit_opens_the_default_file_and_installs_nothing(no_install, editor):
+  write_file(default_file())
+  editor.edits.append("awsProfile: dev\n")
+  result = run("--edit")
+  assert result.exit_code == 0, result.output
+  assert editor == [["vi", str(default_file())]]
+  assert "awsProfile: dev" in default_file().read_text()
+  assert f"settings saved in {default_file()}" in result.output
+
+
+def test_edit_writes_a_missing_file_first(no_install, editor):
+  result = run("--edit", "--admin", "you@example.org")
+  assert result.exit_code == 0, result.output
+  assert "- you@example.org" in default_file().read_text()
+
+
+def test_edit_opens_the_file_option(no_install, editor, tmp_path):
+  path = write_file(tmp_path / "team.yaml")
+  result = run("--edit", "--file", str(path))
+  assert result.exit_code == 0, result.output
+  assert editor == [["vi", str(path)]]
+
+
+def test_edit_reports_an_invalid_file_and_keeps_it(no_install, editor):
+  write_file(default_file())
+  editor.edits.append("colour: blue\n")
+  result = run("--edit")
+  assert result.exit_code == 1
+  assert "unknown key(s) colour" in result.output
+  assert "colour: blue" in default_file().read_text()
+
+
+@pytest.mark.parametrize("other", [["--dry-run"], ["--yes"], ["--generate-file"], ["--output", "json"]])
+def test_edit_refuses_other_modes(no_install, editor, other):
+  result = run("--edit", *other)
+  assert result.exit_code == 1
+  assert "--edit" in result.output
+  assert editor == []
+
+
+def test_edit_without_a_terminal_needs_an_editor_variable(monkeypatch, no_install, editor):
+  monkeypatch.setattr(init, "interactive", lambda: False)
+  result = run("--edit")
+  assert result.exit_code == 1
+  assert "PLATFORM_EDITOR" in result.output
+  monkeypatch.setenv("PLATFORM_EDITOR", "true")
+  result = run("--edit")
+  assert result.exit_code == 0, result.output

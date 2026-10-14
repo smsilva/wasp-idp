@@ -240,6 +240,8 @@
   --t-ok: #1a7f37;
   --t-err: #cf222e;
   --t-info: #2f6fd6;
+  --t-component: #0a7f73;
+  --t-environment: #8250df;
 }
 
 [data-md-color-scheme="slate"] {
@@ -253,6 +255,8 @@
   --t-ok: #7ee787;
   --t-err: #ff7b72;
   --t-info: #9fb3c8;
+  --t-component: #5eead4;
+  --t-environment: #c4a7ff;
 }
 
 .md-typeset .t-prompt::before {
@@ -286,39 +290,62 @@
 .md-typeset .t-err { color: var(--t-err); }
 .md-typeset .t-info { color: var(--t-info); }
 
-/* Window bar with the three dots, as in the deck. */
-.md-typeset .highlight.language-bash::before {
-  content: "";
-  display: block;
-  height: 1.5rem;
-  border: 1px solid var(--wasp-term-border);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background:
-    radial-gradient(circle at .9rem 50%, #ff5f57 .22rem, transparent .24rem),
-    radial-gradient(circle at 1.6rem 50%, #febc2e .22rem, transparent .24rem),
-    radial-gradient(circle at 2.3rem 50%, #28c840 .22rem, transparent .24rem),
-    var(--wasp-term-bar);
+/* A component and an environment keep one color each: in --component/--environment and in the
+   instance URL (`<component>.<environment>.localhost`), so the reader links the two at a glance. */
+.md-typeset .t-component { color: var(--t-component); font-weight: 700; }
+.md-typeset .t-environment { color: var(--t-environment); font-weight: 700; }
+
+/* A block sits close to the text that introduces it and far from the next one, so each step reads as a
+   unit. The margin lives on the .highlight div (top and bottom only: narrow screens set its side margins),
+   and the paragraph above gives up its own, or the larger of the two would win. */
+.md-typeset p:has(+ .highlight) {
+  margin-bottom: 0;
 }
 
-.md-typeset .highlight.language-bash pre > code {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
+.md-typeset .highlight {
+  margin-top: .5em;
+  margin-bottom: 2em;
 }
 
-.md-typeset .highlight.language-bash pre {
+.md-typeset .highlight > pre,
+.md-typeset .highlight > .filename {
   margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Commands a little larger than Material's 85%, for reading on screen. */
+.md-typeset pre > code {
+  font-size: .9em;
+}
+
+/* A note about the command just above (`{ .terminal-note }` on the paragraph): the last strip of the
+   terminal panel, past a dashed line, muted so the command stays first. */
+.md-typeset .highlight:has(+ .terminal-note),
+.md-typeset .highlight:has(+ .terminal-note) pre {
+  margin-bottom: 0;
+}
+
+.md-typeset .highlight:has(+ .terminal-note) pre > code {
+  border-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.md-typeset .terminal-note {
+  margin: 0 0 2em;
+  padding: .5em 1.1764705882em;
+  font-size: .7rem;
+  color: var(--wasp-out-fg);
+  background: var(--wasp-term-bar);
+  border: 1px solid var(--wasp-term-border);
+  border-top-style: dashed;
+  border-left: 3px solid var(--md-typeset-a-color);
+  border-radius: 0 0 8px 8px;
 }
 
 /* "What will be created": same panel as the output, the kinds not in italic. */
 .md-typeset .plan .t-comment {
   font-style: normal;
-}
-
-/* A box that opens with a code block: keep the terminal bar off the box title. */
-.md-typeset .admonition > .admonition-title + .highlight,
-.md-typeset details > summary + .highlight {
-  margin-top: 1em;
 }
 
 /* A command followed by its output reads as one terminal: the output continues the command panel after a
@@ -402,3 +429,130 @@
 .forager-figure .edge.dash { stroke-dasharray: 5 4; }
 .forager-figure .head { fill: var(--fg-muted); }
 .forager-figure .head.hot { fill: var(--fg-accent); }
+
+/* A fallback order (`<div class="fallback" markdown>` around a numbered list): chips in a row, joined by
+   arrows, read left to right; the list stays a list for screen readers and wraps on narrow screens. */
+.md-typeset p:has(+ .fallback) {
+  margin-bottom: 0;
+}
+
+.md-typeset .fallback > ol {
+  font-size: .75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5em .4em;
+  margin: .6em 0 2em;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .fallback > ol > li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .4em;
+  margin: 0;
+  padding: .2em .7em;
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--wasp-term-border);
+  border-radius: 999px;
+}
+
+.md-typeset .fallback > ol > li + li {
+  position: relative;
+  margin-left: 1.4em;
+}
+
+.md-typeset .fallback > ol > li + li::before {
+  content: "→";
+  position: absolute;
+  left: -1.3em;
+  color: var(--t-op);
+}
+
+.md-typeset .fallback > ol > li code {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.md-typeset .fallback > ol > li small {
+  color: var(--wasp-out-fg);
+  font-size: .8em;
+}
+
+.md-typeset .fallback > ol > li small code {
+  color: inherit;
+}
+
+/* Demo index: the app and its environments in the concept colors, then the steps as a numbered track
+   with the time of each one on the right. Steps outside the clock (before, questions) are muted. */
+.md-typeset .cast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .5em;
+  margin: 0 0 1.5em;
+  font-family: var(--md-code-font-family);
+  font-size: .85rem;
+}
+
+.md-typeset .cast-sep {
+  color: var(--t-op);
+}
+
+.md-typeset ol.journey {
+  counter-reset: step -1;
+  margin: 0 0 2em;
+  padding: 0;
+  list-style: none;
+  border-left: 2px solid var(--wasp-term-border);
+}
+
+.md-typeset ol.journey > li {
+  counter-increment: step;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1em;
+  margin: 0;
+  padding: .45em .2em .45em 2.4em;
+  border-bottom: 1px solid var(--wasp-code-border);
+}
+
+.md-typeset ol.journey > li::before {
+  content: counter(step);
+  position: absolute;
+  left: -.85em;
+  top: .5em;
+  width: 1.6em;
+  height: 1.6em;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--md-typeset-a-color);
+  color: var(--md-typeset-a-color);
+  font: 700 .7rem var(--md-code-font-family);
+}
+
+.md-typeset ol.journey > li > span {
+  color: var(--wasp-out-fg);
+  font: .7rem var(--md-code-font-family);
+  white-space: nowrap;
+}
+
+.md-typeset ol.journey > li.prep {
+  color: var(--wasp-out-fg);
+}
+
+.md-typeset ol.journey > li.prep::before {
+  content: "";
+  border-color: var(--wasp-term-border);
+  background: var(--md-default-bg-color);
+}
+
+.md-typeset ol.journey > li.prep a {
+  color: var(--wasp-out-fg);
+}

@@ -98,5 +98,7 @@ def resolve(flags: dict, file: dict, file_source: str | None, remembered: dict) 
 
 
 def to_file(settings: dict[str, Setting]) -> str:
-  document = {"apiVersion": API_VERSION, "kind": KIND, **{key: settings[name].value for name, key, _ in SETTINGS}}
+  """The cloud settings (awsProfile, withCrossplane) enter the file only when set: unset, they are noise."""
+  values = {key: settings[name].value for name, key, _ in SETTINGS}
+  document = {"apiVersion": API_VERSION, "kind": KIND, **{key: value for key, value in values.items() if value not in (None, False)}}
   return yaml.safe_dump(document, sort_keys=False)

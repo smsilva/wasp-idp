@@ -14,6 +14,9 @@ nav:
           - Prerequisites: walkthrough/bootstrap/prerequisites.md
           - Install the CLI: walkthrough/bootstrap/install.md
           - Google credentials: walkthrough/bootstrap/google-credentials.md
+          - Write the settings: walkthrough/bootstrap/settings.md
+          - Edit the settings: walkthrough/bootstrap/edit.md
+          - See what will be installed: walkthrough/bootstrap/dry-run.md
           - Start the control plane: walkthrough/bootstrap/control-plane.md
           - Progress and logs: walkthrough/bootstrap/logs.md
           - CLI configuration: walkthrough/bootstrap/config.md
@@ -113,6 +116,33 @@ nav:
           - Delete the repo and its images: walkthrough/cleanup/images.md
           - What stays: walkthrough/cleanup/what-stays.md
           - Sign out: walkthrough/cleanup/sign-out.md
+  - Demo:
+      - demo/index.md
+      - MCP:
+          - demo/mcp/index.md
+          - Before the demo: demo/mcp/before.md
+          - Connect the agent: demo/mcp/setup.md
+          - Who am I: demo/mcp/whoami.md
+          - The catalog: demo/mcp/catalog.md
+          - The golden paths: demo/mcp/templates.md
+          - Environments: demo/mcp/environments.md
+          - Create an environment: demo/mcp/create.md
+          - After the demo: demo/mcp/cleanup.md
+      - CLI:
+          - demo/cli/index.md
+          - Before the demo: demo/cli/before.md
+          - Create the app: demo/cli/create.md
+          - Clone the app: demo/cli/clone.md
+          - A branch and a change: demo/cli/branch.md
+          - Push the branch: demo/cli/push.md
+          - Build the branch: demo/cli/build.md
+          - Create an environment: demo/cli/environment.md
+          - Deploy and call it: demo/cli/deploy.md
+          - Golden signals: demo/cli/signals.md
+          - A second environment: demo/cli/second.md
+          - Call it there: demo/cli/second-call.md
+          - Where the app runs: demo/cli/running-in.md
+          - After the demo: demo/cli/cleanup.md
   - Reference:
       - reference/index.md
       - Install the CLI: reference/install.md

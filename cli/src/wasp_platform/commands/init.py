@@ -1,3 +1,7 @@
+import os
+import shlex
+import shutil
+import subprocess
 import sys
 from enum import Enum
 from pathlib import Path
@@ -27,6 +31,8 @@ class Progress(str, Enum):
 
 # Lines of the failing step's log shown when init fails: the end of what it ran.
 FAILURE_TAIL = 30
+# Where --edit finds the editor, first set wins: the CLI's own, as KUBE_EDITOR is kubectl's, then the usual ones.
+EDITOR_VARIABLES = ("PLATFORM_EDITOR", "VISUAL", "EDITOR")
 
 
 def check_emails(values: list[str] | None) -> list[str]:
@@ -48,6 +54,19 @@ def interactive() -> bool:
   return sys.stdin.isatty()
 
 
+def editor_variable() -> str | None:
+  return next((name for name in EDITOR_VARIABLES if os.environ.get(name, "").strip()), None)
+
+
+def editor_command() -> list[str]:
+  """The editor for --edit: the first variable set, else VS Code when on the PATH (--wait, so init reads
+  the file once the tab closes), else vi."""
+  variable = editor_variable()
+  if variable:
+    return shlex.split(os.environ[variable])
+  return ["code", "--wait"] if shutil.which("code") else ["vi"]
+
+
 def init(
   target: Target = typer.Option(None, help="Where the platform is installed (default: local)."),
   admin: list[str] = typer.Option(None, callback=check_emails, help="E-mail that joins platform-admins on its first Google login; repeat it for more than one (remembered)."),
@@ -55,6 +74,7 @@ def init(
   with_crossplane: bool = typer.Option(None, "--with-crossplane", help="Install Crossplane, so environments can be created in cloud accounts; needs the base credential of --aws-profile (remembered)."),
   file: Path = typer.Option(None, "--file", help="Settings file to read, or to write with --generate-file (default: ~/.config/platform/init.yaml)."),
   generate_file: bool = typer.Option(False, "--generate-file", help="Write the settings to the file and install nothing."),
+  edit: bool = typer.Option(False, "--edit", help="Open the settings file in $PLATFORM_EDITOR, $VISUAL or $EDITOR (else VS Code, else vi), writing it first when missing, and install nothing."),
   force: bool = typer.Option(False, "--force", help="With --generate-file, overwrite an existing file."),
   yes: bool = typer.Option(False, "--yes", help="Install without asking."),
   dry_run: bool = typer.Option(False, "--dry-run", help="Show the settings and the steps init would run, and install nothing."),
@@ -63,13 +83,23 @@ def init(
 ):
   """Install the platform control plane (idempotent)."""
   path = file or default_file()
+  if edit:
+    others = [name for name, given in (("--generate-file", generate_file), ("--dry-run", dry_run), ("--yes", yes), ("--output", output.data)) if given]
+    if others:
+      fail(f"--edit installs nothing: drop {', '.join(others)}")
+    if not interactive() and not editor_variable():
+      fail(f"--edit needs a terminal, or an editor in {', '.join(EDITOR_VARIABLES)}")
   flags = {"target": target.value if target else None, "admins": admin, "aws_profile": aws_profile, "with_crossplane": with_crossplane}
   try:
     # --file must exist, unless init is about to write it; the default file is read only when present.
-    values = from_file(path) if path.is_file() or (file and not generate_file) else {}
+    values = from_file(path) if path.is_file() or (file and not generate_file and not edit) else {}
   except SettingsError as error:
     fail(str(error))
   settings = resolve(flags, values, str(path), local.remembered())
+
+  if edit:
+    edit_file(path, settings)
+    return
 
   if generate_file:
     if path.exists() and not force:
@@ -155,6 +185,26 @@ def init(
       success("cloud accounts verified by the aws_account provider" + (f" (base credential expires at {result['aws_base_expires']})" if result.get("aws_base_expires") else ""))
     if result.get("crossplane"):
       success("environments in cloud accounts provisioned through Crossplane (crossplane_aws provider)")
+
+
+def edit_file(path: Path, settings: dict) -> None:
+  """Opens the settings file, as `git config --edit` does; a missing one is written first. Read back with
+  the rules of --file, so a mistake shows now and not halfway through an install."""
+  if not path.exists():
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(to_file(settings))
+  command = editor_command()
+  try:
+    subprocess.run([*command, str(path)], check=True)
+  except FileNotFoundError:
+    fail(f"editor '{command[0]}' not found: set {EDITOR_VARIABLES[0]}")
+  except subprocess.CalledProcessError as error:
+    fail(f"the editor exited with {error.returncode}")
+  try:
+    from_file(path)
+  except SettingsError as error:
+    fail(f"{error} (run 'platform init --edit' again)")
+  success(f"settings saved in {path}: run 'platform init --dry-run'")
 
 
 def wants_live(progress: Progress, console: Console) -> bool:

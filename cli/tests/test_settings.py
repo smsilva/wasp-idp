@@ -56,7 +56,7 @@ withCrossplane: true
 def test_generated_file_reads_back(tmp_path):
   settings = resolve({"admins": ["you@example.org"]}, {}, None, {})
   path = write(tmp_path, to_file(settings))
-  assert from_file(path) == {"target": "local", "admins": ["you@example.org"], "aws_profile": None, "with_crossplane": False}
+  assert from_file(path) == {"target": "local", "admins": ["you@example.org"]}
 
 
 def test_empty_flag_list_falls_back_to_the_file():
