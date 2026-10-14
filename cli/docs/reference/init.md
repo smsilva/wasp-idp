@@ -17,7 +17,7 @@ platform init \
 | `--generate-file` | writes the settings (flags, then the file, then what the cluster remembers) to the file and installs nothing; refuses an existing file without `--force` |
 | `--dry-run` | shows the settings and the steps `init` would run, and installs nothing; with `-o json`/`yaml`, as data |
 | `--yes` | installs without asking; required without a terminal or with `-o json`/`yaml` |
-| `--progress plain` | how the steps show while `init` runs: one line per step, and a heartbeat while it runs (`auto`, the default, is `plain` for now) |
+| `--progress auto\|live\|plain` | how the steps show while `init` runs: `live` is a card that redraws in place, `plain` one line per step; `auto` (the default) is `live` on a terminal and `plain` otherwise (CI, a pipe, `cli-smoke`) |
 | `--with-crossplane` | installs Crossplane `2.3.1`, its `provider-aws-ec2` `v2.5.1` and the `crossplane_aws` provider, so [environments can be created in a cloud account](environments.md#in-a-cloud-account); needs the base credential (`--aws-profile` now or on an earlier run) |
 
 ## Settings file
@@ -36,7 +36,7 @@ withCrossplane: false
 
 A key it does not know, or an admin that is not an e-mail, stops `init` before any step. Secrets stay out of the file: the Google credentials come from the environment (below).
 
-Before the install, `init` prints each setting and its source, so a forgotten file never applies unseen, and asks `Proceed?`:
+Before the install, `init` prints each setting and its source, so a forgotten file never applies unseen, and asks `Proceed?`. On a terminal, the settings open the card of the run (see [Progress](#progress)); without one, they come as a table:
 
 ``` { .text .output title="output" }
 SETTING          VALUE            SOURCE
@@ -63,7 +63,50 @@ export GOOGLE_CLIENT_SECRET=<secret>
 
 ## Progress
 
-Each step prints one line when it starts (`▶`) and one when it ends (`✓`, with its time); a note of a step (a reused cluster, a credential about to expire) comes as `·`. While a step runs, a heartbeat every 30 s (`…`) shows it is waiting, not hung: a rollout, a Helm install job or the Crossplane package pull can take minutes. The output of the commands stays out of the terminal and goes to the [logs](#logs).
+On a terminal, `init` shows one card that redraws in place. It opens with the settings and the file they came from (each row shows only its source's file name, `default`, `flag` or `cluster`), then the run: the steps done out of the total, the elapsed time and how far along the last run that is; the steps running now and the next to start (at most 5, `+N more waiting` below), each with its time or the step it waits for, and a bar that fills by the time the step took in the last successful run and stops short of full until the step ends (with no last run, it pulses); a finished step leaves the list and counts in `Overall`. A step's notes (a reused cluster, a credential about to expire) close the card under `Notes`; a warning comes with `⚠` in yellow.
+
+``` { .text .output title="output" }
+╭──────────────────────────────────────────────────────────╮
+│ platform init                                            │
+│ local · run 2026-10-14T05-12-03 · settings from          │
+│ ~/.config/platform/init.yaml                             │
+│                                                          │
+│ target           local                         init.yaml │
+│ admins           you@example.com               init.yaml │
+│ aws_profile      —                             default   │
+│ with_crossplane  false                         init.yaml │
+│                                                          │
+│ ╭──────────────────────────────────────────────────────╮ │
+│ │                                                      │ │
+│ │  17 / 21  steps  13.1s  ~47% of the last run         │ │
+│ │                                                      │ │
+│ │  Now · 4 of 4   bar = time of the last run           │ │
+│ │                                                      │ │
+│ │  keycloak                                      3.3s  │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
+│ │                                                      │ │
+│ │  keycloak realm                      waits keycloak  │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
+│ │                                                      │ │
+│ │  Overall                                             │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
+│ │  0 %                                          100 %  │ │
+│ │                                                      │ │
+│ │  ■ done 17   ■ running 1   ■ waiting 3               │ │
+│ │  logs ~/.local/state/platform/init/2026-10-14T05-1…  │ │
+│ │                                                      │ │
+│ ╰──────────────────────────────────────────────────────╯ │
+│                                                          │
+│ Notes                                                    │
+│ cluster        cluster platform-local already exists,    │
+│                reusing it                                │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+```
+
+The bars are green for done, blue for running and grey for what is left. At the end, the card shows the 3 slowest steps; when a step fails, it stays in the card in red, and `init` prints the end of its log below.
+
+Without a terminal, or with `--progress plain`, each step prints one line when it starts (`▶`) and one when it ends (`✓`, with its time); a note of a step (a reused cluster, a credential about to expire) comes as `·`. While a step runs, a heartbeat every 30 s (`…`) shows it is waiting, not hung: a rollout, a Helm install job or the Crossplane package pull can take minutes. The output of the commands stays out of the terminal and goes to the [logs](#logs).
 
 ``` { .text .output title="output" }
 05:12:03 ▶ cluster
@@ -105,7 +148,7 @@ less ~/.local/state/platform/init/latest/09-keycloak.log
 
 ## Timings
 
-`init` ends with the wall time of each step (cluster, CRDs, Keycloak, the image builds, the image import, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`), the run folder in `logs`, and nothing is printed while `init` runs.
+`init` ends with the wall time of each step (cluster, CRDs, Keycloak, the image builds, the image import, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. The timings are printed in plain mode (the card shows the slowest steps instead). When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`), the run folder in `logs`, and nothing is printed while `init` runs.
 
 ## What `init` remembers
 

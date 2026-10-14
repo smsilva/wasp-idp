@@ -36,7 +36,7 @@ def test_a_task_starts_only_after_what_it_needs():
 def test_reports_when_each_task_starts_and_ends(recorder):
   timings = Timings()
   run_tasks([Task("CRDs", lambda results: None)], recorder, timings)
-  assert [event[:2] for event in recorder.events] == [("planned", ["CRDs"]), ("started", "CRDs"), ("finished", "CRDs")]
+  assert [event[:2] for event in recorder.events] == [("planned", {"CRDs": ()}), ("started", "CRDs"), ("finished", "CRDs")]
   assert [name for name, _ in timings.steps] == ["CRDs"]
 
 

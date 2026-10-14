@@ -116,7 +116,7 @@ def plain(lines, ticks=None):
 def test_plain_prints_one_line_per_step_with_the_names_aligned():
   lines = []
   reporter = plain(lines)
-  reporter.planned(["cluster", "keycloak realm"])
+  reporter.planned({"cluster": (), "keycloak realm": ()})
   reporter.started("cluster")
   reporter.note("cluster", "cluster platform-local already exists, reusing it")
   reporter.output("cluster", "not shown")
@@ -132,7 +132,7 @@ def test_plain_beats_every_interval_while_a_step_runs():
   lines = []
   ticks = Ticks()
   reporter = plain(lines, ticks)
-  reporter.planned(["keycloak"])
+  reporter.planned({"keycloak": ()})
   reporter.started("keycloak")
   ticks.value = 29
   reporter.tick()
@@ -155,7 +155,153 @@ def test_plain_beats_every_interval_while_a_step_runs():
 def test_plain_prints_only_the_failure_that_stopped_the_run():
   lines = []
   reporter = plain(lines)
-  reporter.planned(["forager-provider", "keycloak"])
+  reporter.planned({"forager-provider": (), "keycloak": ()})
   reporter.failed("forager-provider", 180, RuntimeError("rollout timed out"), True)
   reporter.failed("keycloak", 3, RuntimeError("stopped"), False)
   assert lines == ["05:12:03 ✗ forager-provider    3m00s"]
+
+
+from rich.console import Console  # noqa: E402
+
+from wasp_platform.bootstrap.reporters import LiveReporter, previous_run  # noqa: E402
+
+STEPS = {
+  "cluster": (), "build images": (), "CRDs": ("cluster",), "keycloak": ("CRDs",), "traefik": ("CRDs",),
+  "import images": ("cluster", "build images"), "keycloak realm": ("keycloak",), "platform-api": ("keycloak realm", "import images"),
+}
+
+
+def card(previous=None, ticks=None):
+  console = Console(record=True, width=70, color_system=None, force_terminal=False)
+  reporter = LiveReporter(console, __import__("pathlib").Path("/state/init/2026-10-14T05-12-03"), previous, "local · run 2026-10-14T05-12-03", clock=ticks or Ticks(), live=False)
+  reporter.planned(STEPS)
+  return console, reporter
+
+
+def shown(console, reporter):
+  console.print(reporter.render())
+  return console.export_text()
+
+
+def test_card_shows_at_most_five_steps_running_ones_first():
+  ticks = Ticks()
+  console, reporter = card(ticks=ticks)
+  for task in ("cluster", "build images", "CRDs"):
+    reporter.started(task)
+    reporter.finished(task, 1)
+  for task in ("keycloak", "traefik", "import images"):
+    reporter.started(task)
+  ticks.value = 62
+  text = shown(console, reporter)
+  assert "platform init" in text and "local · run 2026-10-14T05-12-03" in text
+  assert "3 / 8  steps  1m02s" in text
+  rows = [name for name in STEPS if f"│  {name} " in text or f"  {name}  " in text]
+  assert rows[:3] == ["keycloak", "traefik", "import images"]
+  assert "keycloak realm" in text and "waits keycloak" in text
+  assert "platform-api" in text and "waits keycloak realm" in text
+  assert "Now · 5 of 5" in text
+  assert "cluster" not in text.split("Now")[1].split("Overall")[0]
+  assert "■ done 3   ■ running 3   ■ waiting 2" in text
+  assert "logs /state/init/2026-10-14T05-12-03" in text
+
+
+def test_card_counts_the_queue_beyond_five():
+  console, reporter = card()
+  text = shown(console, reporter)
+  assert "Now · 5 of 8" in text
+  assert "+3 more waiting" in text
+
+
+def test_card_compares_with_the_last_run():
+  ticks = Ticks()
+  console, reporter = card(previous={"steps": {"keycloak": 40.0}, "total": 120.0}, ticks=ticks)
+  reporter.started("keycloak")
+  ticks.value = 60
+  text = shown(console, reporter)
+  assert "~50% of the last run" in text
+  assert "bar = time of the last run" in text
+
+
+def test_a_running_bar_fills_by_the_last_run_and_stops_short_of_full():
+  ticks = Ticks()
+  _, reporter = card(previous={"steps": {"keycloak": 40.0}, "total": 120.0}, ticks=ticks)
+  reporter.started("keycloak")
+  ticks.value = 20
+  half = reporter._bar(40, "keycloak", ticks.value)
+  assert [span.style for span in half.spans] == ["blue", "grey37"] and half.spans[0].end == 20
+  ticks.value = 400
+  late = reporter._bar(40, "keycloak", ticks.value)
+  assert late.spans[0].end == 38
+
+
+def test_card_at_the_end_shows_the_slowest_steps():
+  ticks = Ticks()
+  console, reporter = card(ticks=ticks)
+  for number, task in enumerate(STEPS):
+    reporter.started(task)
+    reporter.finished(task, number + 1)
+  ticks.value = 212
+  reporter.close()
+  text = shown(console, reporter)
+  assert "8 / 8  steps  3m32s" in text
+  slowest = text.split("Slowest")[1].split("Overall")[0]
+  assert "platform-api" in slowest and "keycloak realm" in slowest and "import images" in slowest
+  assert "cluster" not in slowest
+  assert "of the last run" not in text
+
+
+def test_card_keeps_the_failing_step():
+  console, reporter = card()
+  reporter.started("keycloak")
+  reporter.started("traefik")
+  reporter.failed("keycloak", 300, RuntimeError("rollout timed out"), True)
+  reporter.failed("traefik", 2, RuntimeError("stopped"), False)
+  reporter.close()
+  text = shown(console, reporter)
+  assert "keycloak" in text and "5m00s" in text
+  assert "traefik" not in text.split("Overall")[0]
+  assert "failed 1" in text
+
+
+def test_previous_run_is_the_newest_that_succeeded(tmp_path):
+  assert previous_run(tmp_path / "missing") is None
+  for name, result, seconds in (("2026-10-13T10-00-00", "succeeded", 40.0), ("2026-10-14T10-00-00", "failed", 300.0)):
+    (tmp_path / name).mkdir()
+    (tmp_path / name / "run.yaml").write_text(yaml.safe_dump({"result": result, "steps": [{"step": "keycloak", "seconds": seconds}], "totalSeconds": seconds}))
+  (tmp_path / "2026-10-14T11-00-00").mkdir()
+  assert previous_run(tmp_path) == {"steps": {"keycloak": 40.0}, "total": 40.0}
+
+
+SETTINGS = [("target", "local", "/home/you/.config/platform/init.yaml"), ("aws_profile", "—", "default")]
+
+
+def test_card_opens_with_the_settings_and_their_file():
+  console = Console(record=True, width=70, color_system=None, force_terminal=False)
+  reporter = LiveReporter(console, __import__("pathlib").Path("/state/init/run"), None, "local · run 2026-10-14T05-12-03", SETTINGS, clock=Ticks(), live=False)
+  reporter.planned(STEPS)
+  text = shown(console, reporter)
+  assert "settings from" in text and "/home/you/.config/platform/init.yaml" in text
+  top = text.split("steps")[0]
+  assert "target" in top and "init.yaml" in top and "default" in top
+  assert "/home/you/.config/platform/init.yaml  " not in top.split("target")[1]
+
+
+def test_notes_close_the_card_and_warnings_stand_out():
+  console, reporter = card()
+  reporter.note("cluster", "cluster platform-local already exists, reusing it")
+  reporter.note("keycloak", "warning: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET not set")
+  text = shown(console, reporter)
+  notes = text.split("Notes")[1]
+  assert "cluster platform-local already exists" in notes
+  assert "⚠ keycloak" in notes and "warning:" not in notes
+  assert text.index("Notes") > text.index("Overall")
+
+
+def test_the_settings_card_is_the_top_of_the_run_card():
+  from wasp_platform.bootstrap.reporters import settings_card
+
+  console = Console(record=True, width=70, color_system=None, force_terminal=False)
+  console.print(settings_card(console, SETTINGS))
+  text = console.export_text()
+  assert "platform init" in text and "settings from /home/you/.config/platform/init.yaml" in text
+  assert "default" in text

@@ -184,7 +184,7 @@ def test_each_run_leaves_its_logs_and_prints_where(installed, tmp_path):
 
 def test_a_failure_shows_the_end_of_the_failing_step_log(monkeypatch, tmp_path):
   def install(reporter, **_):
-    reporter.planned(["keycloak"])
+    reporter.planned({"keycloak": ()})
     reporter.started("keycloak")
     for number in range(40):
       reporter.output("keycloak", f"line {number}")

@@ -24,7 +24,8 @@ class Task:
 class Reporter:
   """Receives the events of a run; every method may be called from any step's thread. Does nothing."""
 
-  def planned(self, names: list[str]) -> None: ...
+  def planned(self, needs: dict[str, tuple[str, ...]]) -> None:
+    """Every step of the run, in declared order, with what each one waits for."""
   def started(self, task: str) -> None: ...
   def command(self, task: str, argv: tuple[str, ...]) -> None: ...
   def output(self, task: str, line: str) -> None: ...
@@ -45,7 +46,7 @@ class Reporters(Reporter):
     for reporter in self.reporters:
       getattr(reporter, event)(*args)
 
-  def planned(self, names): self._each("planned", names)
+  def planned(self, needs): self._each("planned", needs)
   def started(self, task): self._each("started", task)
   def command(self, task, argv): self._each("command", task, argv)
   def output(self, task, line): self._each("output", task, line)
@@ -87,7 +88,7 @@ def run_tasks(tasks: list[Task], reporter: Reporter, timings: Timings, on_failur
     for need in task.needs:
       if need not in names:
         raise ValueError(f"task '{task.name}' needs unknown task '{need}'")
-  reporter.planned([task.name for task in tasks])
+  reporter.planned({task.name: task.needs for task in tasks})
   results: dict[str, Any] = {}
   pending = list(tasks)
   running: dict[Future, Task] = {}
