@@ -58,7 +58,7 @@ def test_init_prints_the_timings_before_the_result(monkeypatch):
   from wasp_platform.bootstrap import local
   from wasp_platform.cli import app
 
-  def install(admin_email, log, aws_profile, timings):
+  def install(admin_email, log, aws_profile, with_crossplane, timings):
     with timings.step("build platform-api"):
       pass
     return {"api_url": "http://127.0.0.1:9090", "config": "config.yaml", "issuer": "http://issuer", "google": True, "cloud_account": False, "timings": timings.as_dict()}
@@ -79,7 +79,7 @@ def test_init_prints_the_timings_so_far_when_it_fails(monkeypatch):
   from wasp_platform.bootstrap import local
   from wasp_platform.cli import app
 
-  def install(admin_email, log, aws_profile, timings):
+  def install(admin_email, log, aws_profile, with_crossplane, timings):
     with timings.step("rollout forager-provider"):
       raise local.BootstrapError("rollout timed out")
 

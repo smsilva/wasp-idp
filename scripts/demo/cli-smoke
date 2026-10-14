@@ -301,7 +301,7 @@ step "platform status as an admin: providers, detail, and one capability in full
 output="$(platform status 2>&1 || true)"
 echo "${output}"
 expect_output "PROVIDERS" "${output}"
-for line in "catalog +Active +platform-api" "environment +Active +local_vcluster" "resources +Active +forager" "workload +Active +workload" "scm +[A-Za-z]+ +scm_github"; do
+for line in "catalog +Active +platform-api" "environment +Active +.*local_vcluster" "resources +Active +forager" "workload +Active +workload" "scm +[A-Za-z]+ +scm_github"; do
   if ! grep --quiet --extended-regexp "^${line}" <<< "${output}"; then
     echo "expected a line matching '${line}'" >&2
     exit 1

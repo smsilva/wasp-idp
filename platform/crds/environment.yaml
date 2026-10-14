@@ -90,6 +90,17 @@ spec:
                 podSecurity:
                   description: Version of the pod policy installed in the environment (ADR 0041); absent while it is being installed.
                   type: string
+                cloud:
+                  description: What the environment has in its cloud account (provider crossplane_aws, #436).
+                  type: object
+                  properties:
+                    vendor:
+                      type: string
+                    region:
+                      type: string
+                    vpcId:
+                      description: Absent until the VPC exists in the account.
+                      type: string
                 conditions:
                   type: array
                   items:

@@ -1,0 +1,97 @@
+# Provider crossplane_aws (#436, ADR 0032): a VPC per Environment in an AWS CloudAccount, through
+# Crossplane, and a ProviderConfig per CloudAccount. Installed by `platform init --with-crossplane`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: crossplane-aws-provider
+  namespace: platform-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: crossplane-aws-provider
+  namespace: platform-system
+rules:
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [environments]
+    verbs: [get, list, watch, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [environments/status]
+    verbs: [get, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [cloudaccounts]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: crossplane-aws-provider
+  namespace: platform-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: crossplane-aws-provider
+subjects:
+  - kind: ServiceAccount
+    name: crossplane-aws-provider
+    namespace: platform-system
+---
+# Cluster-scoped: the ProviderConfigs and the managed resources of provider-aws v2 (legacy API).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: crossplane-aws-provider
+rules:
+  - apiGroups: [aws.upbound.io]
+    resources: [providerconfigs]
+    verbs: [get, list, create, patch, delete]
+  - apiGroups: [ec2.aws.upbound.io]
+    resources: [vpcs]
+    verbs: [get, list, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: crossplane-aws-provider
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: crossplane-aws-provider
+subjects:
+  - kind: ServiceAccount
+    name: crossplane-aws-provider
+    namespace: platform-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crossplane-aws-provider
+  namespace: platform-system
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: crossplane_aws
+    platform.wasp.silvios.me/capabilities: environment
+    platform.wasp.silvios.me/vendor: aws
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one reconciler at a time
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: crossplane-aws-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: crossplane-aws-provider
+    spec:
+      serviceAccountName: crossplane-aws-provider
+      containers:
+        - name: provider
+          image: crossplane-aws-provider:dev
+          imagePullPolicy: Never
+          args: [--namespace, platform-system]
+          resources:
+            requests:
+              memory: 96Mi
+            limits:
+              memory: 256Mi

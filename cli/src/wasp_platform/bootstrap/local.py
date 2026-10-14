@@ -53,6 +53,11 @@ PROVIDER_IMAGE = "local-vcluster-provider"
 # Cloud accounts (ADR 0029): the base credential the aws_account controller assumes roles from.
 AWS_PROVIDER_IMAGE = "aws-account-provider"
 AWS_BASE_SECRET = "aws-base-credential"
+# Environments in a cloud account (#436, ADR 0032): Crossplane and the provider that writes its resources.
+# The base credential is copied to CROSSPLANE_NAMESPACE under the same name, in the INI form Crossplane reads.
+CROSSPLANE_NAMESPACE = "crossplane-system"
+CROSSPLANE_PROVIDER_IMAGE = "crossplane-aws-provider"
+CROSSPLANE_PROVIDER_PACKAGE = "upbound-provider-aws-ec2"
 
 SCM_PROVIDER_IMAGE = "scm-github-provider"
 # Workload Instances (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment.
@@ -356,7 +361,61 @@ def install_aws_account(provider_dir: Path, image: str, values: dict, expiration
   return {"cloud_account": True, "aws_base_expires": expiration}
 
 
-def install(admin_email: str | None = None, log=None, aws_profile: str | None = None, timings: Timings | None = None) -> dict:
+def crossplane_credential(values: dict[str, str | None]) -> str:
+  """The base credential as the `creds` key of a Crossplane ProviderConfig (an AWS shared credentials file)."""
+  lines = ["[default]", f"aws_access_key_id = {values['AWS_ACCESS_KEY_ID']}", f"aws_secret_access_key = {values['AWS_SECRET_ACCESS_KEY']}"]
+  if values.get("AWS_SESSION_TOKEN"):
+    lines.append(f"aws_session_token = {values['AWS_SESSION_TOKEN']}")
+  return "\n".join(lines) + "\n"
+
+
+def crossplane_installed() -> bool:
+  return bool(_kubectl("get", "helmchart", "crossplane", "--namespace", "kube-system", "--ignore-not-found", "--output", "name").strip())
+
+
+def wants_crossplane(with_crossplane: bool, aws_values: dict) -> bool:
+  """With --with-crossplane, or installed by an earlier init. Without it, environments in a cloud account
+  stay NoProviderForCapability."""
+  if with_crossplane and not aws_values:
+    raise BootstrapError("--with-crossplane needs the base credential of cloud accounts: add --aws-profile <profile>")
+  return bool(aws_values) and (with_crossplane or crossplane_installed())
+
+
+def _wait_for(description: str, check, timeout: int, hint: str) -> None:
+  deadline = time.monotonic() + timeout
+  while not check():
+    if time.monotonic() > deadline:
+      raise BootstrapError(f"{description} not there after {timeout}s: {hint}")
+    time.sleep(3)
+
+
+def install_crossplane(provider_dir: Path, image: str, values: dict, log, timings: Timings) -> dict:
+  """Crossplane, provider-aws-ec2, the base credential in crossplane-system and the crossplane_aws provider."""
+  log("deploying Crossplane …")
+  with timings.step("crossplane"):
+    _kubectl("apply", "--filename", str(provider_dir / "deploy" / "crossplane.yaml"))
+    # The CRDs exist only once the helm-controller's install job ran.
+    _wait_for(
+      "Crossplane", lambda: bool(_kubectl("get", "crd", "providers.pkg.crossplane.io", "--ignore-not-found", "--output", "name").strip()), 300,
+      f"kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-crossplane",
+    )
+    _kubectl("wait", "crd", "providers.pkg.crossplane.io", "--for", "condition=Established", "--timeout", "60s")
+    _kubectl("rollout", "status", "deployment/crossplane", "--namespace", CROSSPLANE_NAMESPACE, "--timeout", "180s")
+  # Replaced whole, as in platform-system: a long-lived key must not keep the session token of a temporary one.
+  _kubectl("delete", "secret", AWS_BASE_SECRET, "--namespace", CROSSPLANE_NAMESPACE, "--ignore-not-found")
+  _apply_secret(CROSSPLANE_NAMESPACE, AWS_BASE_SECRET, {"creds": crossplane_credential(values)})
+  log("installing the Crossplane provider for AWS EC2 (pulls its package, a few minutes the first time) …")
+  with timings.step("crossplane provider-aws-ec2"):
+    _kubectl("apply", "--filename", str(provider_dir / "deploy" / "provider-aws-ec2.yaml"))
+    _kubectl("wait", f"provider.pkg.crossplane.io/{CROSSPLANE_PROVIDER_PACKAGE}", "--for", "condition=Healthy", "--timeout", "600s")
+    _kubectl("wait", "crd", "vpcs.ec2.aws.upbound.io", "providerconfigs.aws.upbound.io", "--for", "condition=Established", "--timeout", "120s")
+  log("deploying the cloud environment provider (crossplane_aws) …")
+  _deploy(provider_dir / "deploy" / "crossplane-aws-provider.yaml", CROSSPLANE_PROVIDER_IMAGE, image)
+  _rollout(CROSSPLANE_PROVIDER_IMAGE, timings)
+  return {"crossplane": True}
+
+
+def install(admin_email: str | None = None, log=None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
   """timings: passed by the caller so the steps run so far can be shown when init fails."""
   log = log or (lambda message: None)
   timings = timings or Timings()
@@ -400,7 +459,9 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
   forager_dir = root / "platform" / "providers" / "forager"
   registry_dir = root / "platform" / "providers" / "registry"
   aws_dir = root / "platform" / "providers" / "aws_account"
+  crossplane_dir = root / "platform" / "providers" / "crossplane_aws"
   aws_values, aws_expiration = store_aws_credential(aws_profile, log)
+  crossplane = wants_crossplane(with_crossplane, aws_values)
   # Context platform/ for the API and scm_github: they depend on platform/libs/templates and platform/libs/score by path.
   builds = {
     IMAGE: (api_dir.parent, api_dir / "Dockerfile"),
@@ -410,6 +471,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
     FORAGER_PROVIDER_IMAGE: (forager_dir, None),
     REGISTRY_PROVIDER_IMAGE: (registry_dir, None),
     **({AWS_PROVIDER_IMAGE: (aws_dir, None)} if aws_values else {}),
+    **({CROSSPLANE_PROVIDER_IMAGE: (crossplane_dir, None)} if crossplane else {}),
   }
   images = prepare_images(builds, log, timings)
 
@@ -450,6 +512,7 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
     install_observability(root / "platform" / "observability", log)
 
   cloud = install_aws_account(aws_dir, images[AWS_PROVIDER_IMAGE], aws_values, aws_expiration, log, timings) if aws_values else {"cloud_account": False}
+  cloud.update(install_crossplane(crossplane_dir, images[CROSSPLANE_PROVIDER_IMAGE], aws_values, log, timings) if crossplane else {"crossplane": False})
   with timings.step("templates"):
     install_templates(root, log)
 

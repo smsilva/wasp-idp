@@ -92,7 +92,7 @@ def _wait_ready(client: PlatformClient, environment: dict, timeout: int, quiet: 
     if environment["status"] in FAILED:
       fail(f"{environment['name']}: {environment.get('message') or environment['status']}")
     if environment.get("cloudAccount") and environment["status"] == NO_PROVIDER and time.monotonic() - started > NO_PROVIDER_GRACE:
-      fail(f"{environment['name']}: no provider claimed it after {NO_PROVIDER_GRACE}s; none is installed for environments in cloud accounts (#436)")
+      fail(f"{environment['name']}: no provider claimed it after {NO_PROVIDER_GRACE}s; none is installed for environments in cloud accounts: platform init --with-crossplane")
     if time.monotonic() > deadline:
       fail(f"{environment['name']} not ready after {timeout}s (status: {environment['status']})")
     time.sleep(2)

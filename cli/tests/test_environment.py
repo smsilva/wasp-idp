@@ -127,7 +127,7 @@ def test_wait_gives_up_when_no_provider_claims_it(api, monkeypatch):
   result = runner.invoke(app, ["environment", "create", "cloud-dev", "--profile", "ephemeral", "--cloud-account", "nonprod-aws", "--wait"])
   assert result.exit_code == 1
   assert "cloud-dev: no provider claimed it" in result.output
-  assert "in cloud accounts" in result.output
+  assert "platform init --with-crossplane" in result.output
 
 
 def test_share_and_unshare(api):

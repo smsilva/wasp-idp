@@ -1,0 +1,26 @@
+[project]
+name = "crossplane-aws-provider"
+version = "0.1.0"
+description = "Environment provider: a VPC per platform.wasp.silvios.me Environment in an AWS CloudAccount, through Crossplane (ADR 0032)"
+requires-python = ">=3.12"
+dependencies = [
+  "kubernetes>=31.0",
+]
+
+[project.scripts]
+crossplane-aws-provider = "crossplane_aws_provider.main:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crossplane_aws_provider"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

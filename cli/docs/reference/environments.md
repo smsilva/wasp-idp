@@ -1,12 +1,12 @@
 # Environments
 
-An environment is a vcluster created by the `local_vcluster` provider inside `platform-local`, or, with `--cloud-account`, an environment provisioned in a [cloud account](cloud-accounts.md) (see [In a cloud account](#in-a-cloud-account)).
+An environment is a vcluster created by the `local_vcluster` provider inside `platform-local`, or, with `--cloud-account`, a VPC in a [cloud account](cloud-accounts.md), created through Crossplane by the `crossplane_aws` provider (see [In a cloud account](#in-a-cloud-account)).
 
 | Command | What it does |
 |---|---|
 | `platform environment create <name> --profile ephemeral\|shared [--expires <duration>] [--share-with <team>]... [--cloud-account <account>] [--wait]` | requests an environment, private unless shared; `--wait` waits for `ready` and writes the kubeconfig |
 | `platform environment list [--all]` | NAME, PROFILE, ACCOUNT, STATUS, EXPIRES, OWNER, SHARED: yours and your teams'; `--all` (the default for `platform-admins`) shows every environment, without kubeconfig |
-| `platform environment get <name>` | status, message and where its workloads are reached (`http://*.<name>.localhost:7080`); writes your kubeconfig when ready |
+| `platform environment get <name>` | status, message and where its workloads are reached (`http://*.<name>.localhost:7080`), or its VPC and region in a cloud account; writes your kubeconfig when ready |
 | `platform environment get <name> --admin` | writes the vcluster admin kubeconfig (`platform-admins` only) |
 | `platform environment share\|unshare <name> --team <team>` | see [Teams](teams.md#sharing-environments) |
 | `platform environment credential <name>` | a 10-minute token as an `ExecCredential`; called by kubectl through the kubeconfig |
@@ -14,18 +14,21 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | `platform environment policy set <name> --file <file\|->` | replaces the policy with the `provisioners` list of the file; an empty list removes it (`platform-admins` only) |
 | `platform environment profile policy get <profile>` | the binding policy of a profile (`ephemeral`, `shared`), then the platform default; anyone signed in |
 | `platform environment profile policy set <profile> --file <file\|->` | replaces the policy of the profile for all its environments; an empty list removes it (`platform-admins` only) |
-| `platform environment delete <name>` | removes the environment and the vcluster |
+| `platform environment delete <name>` | removes the environment and the vcluster, or the VPC in a cloud account |
 
 `--expires` takes `30m`, `12h`, `3d` or `1w`; the provider deletes the environment when the deadline passes (checked every 10 s).
 
 ## In a cloud account
 
-`--cloud-account <account>` provisions the environment in that account instead of a local vcluster (#435).
+`--cloud-account <account>` provisions the environment in that account instead of a local vcluster (#435): the `crossplane_aws` provider (ADR 0032, #436) creates one VPC (`10.0.0.0/16`, no cost) in the first region of the account, through a Crossplane `ProviderConfig` named after the account that assumes its role with the ExternalId. A cluster in it comes later.
 
-- On create, the account must exist and be `ready` (`422` otherwise), and you must be able to use it: owner, `platform-admins`, or a member of a team it is shared with (`403` otherwise). This is checked only at creation: an unshare never takes down environments already there.
+- On create, the account must exist, be `ready` and have a region (`422` otherwise), and you must be able to use it: owner, `platform-admins`, or a member of a team it is shared with (`403` otherwise). This is checked only at creation: an unshare never takes down environments already there.
 - The account is immutable: the CRD refuses changing, adding or removing `spec.cloudAccount`.
-- The `local_vcluster` provider creates nothing for it, which stays `NoProviderForCapability` until the cloud provider (ADR 0032, #436) is installed; `--wait` gives up after 60 s in that status instead of waiting out `--timeout`.
-- `--expires` holds as for any environment: `local_vcluster` deletes it when the deadline passes, and the cloud resources go with the provider's finalizer.
+- Without `platform init --with-crossplane`, nothing creates it, and it stays `NoProviderForCapability`; `--wait` gives up after 60 s in that status instead of waiting out `--timeout`.
+- It is `ready` once Crossplane reports the VPC `Ready` (the message of `get` names the VPC and its region; `--output json` has them in `cloud`); `CloudAccountNotReady` while the account is not `ready` and the VPC was not created yet; `ProvisioningFailed` with the Crossplane message when AWS refuses (a role without `ec2:CreateVpc`, for example).
+- `delete` removes the VPC in the account first; the environment goes once Crossplane confirms it is gone.
+- The provider creates the VPC only in the exact account the API authorized on create (its uid is kept on the environment): an environment written around the API, or an account removed and registered again under the same name, gets `ProvisioningFailed`.
+- `--expires` holds as for any environment: `local_vcluster` deletes it when the deadline passes, and the VPC goes with the `crossplane_aws` finalizer.
 - It has no vcluster: `get` writes no kubeconfig, and `get --admin`, `credential` and the workload writes (`deploy`, `apply`, `remove`, `route set|delete`) answer `409`.
 - `platform cloud account remove <account>` answers `409` while an environment references it.
 
@@ -34,8 +37,9 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | Status | Meaning |
 |---|---|
 | `NoProviderForCapability` | no provider has picked up the request yet |
-| `Provisioning` | vcluster being created, then the mesh and the gateway installed in it (about 60 s) |
-| `ready` | vcluster, `istiod` and the gateway up; `get` or `--wait` writes the kubeconfig |
+| `Provisioning` | vcluster being created, then the mesh and the gateway installed in it (about 60 s); in a cloud account, the VPC being created |
+| `ready` | vcluster, `istiod` and the gateway up; `get` or `--wait` writes the kubeconfig. In a cloud account: the VPC exists |
+| `CloudAccountNotReady` | in a cloud account: the account is not `ready` (or is gone), so nothing was created yet |
 | `ProvisioningFailed` | provider error; see `message` in the JSON |
 | `deleting` | removal in progress |
 

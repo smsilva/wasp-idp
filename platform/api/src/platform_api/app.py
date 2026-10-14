@@ -112,9 +112,8 @@ def create_app(
   def create_environment(request: EnvironmentRequest, principal: Principal = Depends(current_principal)):
     deadline = expires_at(request.expires) if request.expires else None
     check_share(request.sharedWith, principal)
-    if request.cloudAccount:
-      cloud_accounts.check_usable(state, request.cloudAccount, principal)
-    body = environments.manifest(request.name, request.profile, deadline, principal.sub, principal.email, request.sharedWith, request.cloudAccount)
+    account_uid = cloud_accounts.check_usable(state, request.cloudAccount, principal) if request.cloudAccount else None
+    body = environments.manifest(request.name, request.profile, deadline, principal.sub, principal.email, request.sharedWith, request.cloudAccount, account_uid)
     entry = journal.record("create", "Environment", request.name, body["spec"], principal.actor)
     try:
       created = state.create(ENVIRONMENTS, body)

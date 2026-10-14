@@ -9,13 +9,16 @@ NO_PROVIDER = "NoProviderForCapability"
 OWNER_ANNOTATION = f"{GROUP}/owner"
 # The owner's e-mail, for display only: authorization always goes by OWNER_ANNOTATION (ADR 0026).
 OWNER_NAME_ANNOTATION = f"{GROUP}/owner-name"
+# The uid of the CloudAccount the API authorized on create (#436): the cloud provider provisions only into
+# that exact account, never into one registered again under the same name, nor for a CR written elsewhere.
+CLOUD_ACCOUNT_UID_ANNOTATION = f"{GROUP}/cloud-account-uid"
 ADMIN_GROUP = "platform-admins"
 # The kinds of environment; each can carry a binding policy layer (#329).
 Profile = Literal["ephemeral", "shared"]
 PROFILES = get_args(Profile)
 
 
-def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_name: str | None = None, shared_with: list[str] | None = None, cloud_account: str | None = None) -> dict:
+def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_name: str | None = None, shared_with: list[str] | None = None, cloud_account: str | None = None, cloud_account_uid: str | None = None) -> dict:
   spec = {"profile": profile}
   if cloud_account:
     spec["cloudAccount"] = cloud_account
@@ -26,6 +29,8 @@ def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_
   annotations = {OWNER_ANNOTATION: owner}
   if owner_name:
     annotations[OWNER_NAME_ANNOTATION] = owner_name
+  if cloud_account_uid:
+    annotations[CLOUD_ACCOUNT_UID_ANNOTATION] = cloud_account_uid
   return {
     "apiVersion": f"{GROUP}/{VERSION}",
     "kind": "Environment",
@@ -111,6 +116,8 @@ def view(obj: dict, kubeconfig: str | None = None) -> dict:
     "message": ready.get("message") if ready else None,
     "port": status.get("port"),
     "ingress": ingress_url(status.get("ingress")),
+    # What the environment has in its cloud account (#436): vendor, region and the network.
+    "cloud": status.get("cloud"),
     "createdAt": metadata.get("creationTimestamp"),
     "owner": (metadata.get("annotations") or {}).get(OWNER_NAME_ANNOTATION),
     "sharedWith": shared_with(obj),

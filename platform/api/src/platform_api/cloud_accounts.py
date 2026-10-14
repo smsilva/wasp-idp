@@ -169,7 +169,7 @@ def view(obj: dict, base_arn: str | None = None) -> dict:
   return result
 
 
-def check_usable(state, name: str, principal: Principal) -> None:
+def check_usable(state, name: str, principal: Principal) -> str:
   """An environment goes into an account that is ready and that the caller may use (#435). Checked on
   create only: an unshare takes away new environments, never the ones already there."""
   try:
@@ -180,6 +180,10 @@ def check_usable(state, name: str, principal: Principal) -> None:
     raise HTTPException(403, f"cloud account '{name}' is not yours nor shared with your teams")
   if view(obj)["status"] != "ready":
     raise HTTPException(422, f"cloud account '{name}' is not ready: 'platform cloud account verify {name} --wait' first")
+  # The environment goes to the first region of the account (#436): without one, there is nowhere to put it.
+  if not ((obj.get("spec") or {}).get("aws") or {}).get("regions"):
+    raise HTTPException(422, f"cloud account '{name}' has no region: add it again with --region")
+  return obj["metadata"]["uid"]
 
 
 def environments_in(state, name: str) -> list[str]:

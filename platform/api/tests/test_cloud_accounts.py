@@ -275,8 +275,11 @@ def test_a_team_sharing_an_account_is_in_use(client, as_, state):
 
 # An environment in a cloud account (#435).
 
-def ready(state, name="nonprod-aws"):
-  state.stores[CLOUD_ACCOUNTS][name]["status"] = {"conditions": [{"type": "Ready", "status": "True", "reason": "TrustEstablished"}]}
+def ready(state, name="nonprod-aws", regions=("us-east-1",)):
+  """A usable account: verified, with the region its environments go to (#436)."""
+  obj = state.stores[CLOUD_ACCOUNTS][name]
+  obj["spec"]["aws"]["regions"] = list(regions)
+  obj["status"] = {"conditions": [{"type": "Ready", "status": "True", "reason": "TrustEstablished"}]}
 
 
 def create_environment(client, as_, name="cloud-env", account="nonprod-aws", who="owner"):
@@ -291,6 +294,9 @@ def test_an_environment_in_a_ready_account(client, as_, state, journal_path):
   assert response.json()["cloudAccount"] == "nonprod-aws"
   assert response.json()["status"] == "NoProviderForCapability"
   assert state.stores[ENVIRONMENTS]["cloud-env"]["spec"]["cloudAccount"] == "nonprod-aws"
+  # The exact account authorized, for the provider to check (#436).
+  annotations = state.stores[ENVIRONMENTS]["cloud-env"]["metadata"]["annotations"]
+  assert annotations["platform.wasp.silvios.me/cloud-account-uid"] == state.stores[CLOUD_ACCOUNTS]["nonprod-aws"]["metadata"]["uid"]
   records = [json.loads(line) for line in journal_path.read_text().splitlines()]
   assert [r["spec"]["cloudAccount"] for r in records if r.get("kind") == "Environment"] == ["nonprod-aws"]
   items = client.get("/v1/environments", headers=as_("owner")).json()["items"]
@@ -312,6 +318,15 @@ def test_the_account_must_exist_and_be_ready(client, as_, state):
   assert response.status_code == 422
   assert "is not ready" in response.json()["error"]["message"]
   assert create_environment(client, as_, account="Not_An_Account").status_code == 422
+  assert ENVIRONMENTS not in state.stores or state.stores[ENVIRONMENTS] == {}
+
+
+def test_the_account_must_have_a_region(client, as_, state):
+  add(client, as_)
+  ready(state, regions=())
+  response = create_environment(client, as_)
+  assert response.status_code == 422
+  assert "has no region" in response.json()["error"]["message"]
   assert ENVIRONMENTS not in state.stores or state.stores[ENVIRONMENTS] == {}
 
 
@@ -362,3 +377,14 @@ def test_an_environment_in_an_account_has_no_vcluster(client, as_, state):
     assert response.status_code == 409
     assert "has no vcluster" in response.json()["error"]["message"]
   assert "kubeconfigData" not in client.get("/v1/environments/cloud-env", headers=as_("admin")).json()
+
+
+def test_an_environment_in_an_account_shows_what_it_has_there(client, as_, state):
+  add(client, as_)
+  ready(state)
+  create_environment(client, as_)
+  assert client.get("/v1/environments/cloud-env", headers=as_("owner")).json()["cloud"] is None
+  # Written by the crossplane_aws provider (#436).
+  state.stores[ENVIRONMENTS]["cloud-env"]["status"]["cloud"] = {"vendor": "aws", "region": "us-east-1", "vpcId": "vpc-0abc"}
+  body = client.get("/v1/environments/cloud-env", headers=as_("owner")).json()
+  assert body["cloud"] == {"vendor": "aws", "region": "us-east-1", "vpcId": "vpc-0abc"}
