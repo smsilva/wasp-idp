@@ -133,6 +133,7 @@ def test_an_environment_without_account_is_not_ours(stores):
 def test_first_pass_adds_the_finalizer_and_creates_the_vpc(stores):
   reconciler(stores).reconcile(environment(finalizers=["other"]), {"nonprod-aws": account()})
   assert stores[0].finalizers["demo"] == ["other", FINALIZER]
+  assert list(stores[1].configs) == ["nonprod-aws"]
   body = stores[1].vpcs[vpc_name("demo")]
   assert body["spec"]["providerConfigRef"] == {"name": "nonprod-aws"}
   assert body["spec"]["forProvider"]["region"] == "us-east-1"

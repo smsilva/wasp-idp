@@ -154,6 +154,8 @@ class Reconciler:
         return self._report(obj, "False", "ProvisioningFailed", f"cloud account {account_name} is not the one authorized when the environment was created")
       if not account["spec"]["aws"].get("regions"):
         return self._report(obj, "False", "NoRegion", f"cloud account {account_name} has no region")
+      # Its ProviderConfig first: the account may have turned Ready after the last pass over the accounts.
+      self.crossplane.apply_provider_config(provider_config(account))
       body = vpc(obj, account)
       log.info("creating vpc %s in %s (account %s)", vpc_name(name), body["spec"]["forProvider"]["region"], account_name)
       self.crossplane.create_vpc(body)

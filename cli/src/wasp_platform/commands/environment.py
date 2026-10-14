@@ -205,8 +205,6 @@ def get(
     typer.echo(f"  {environment['message']}")
   if environment.get("cloudAccount"):
     typer.echo(f"  in cloud account {environment['cloudAccount']}")
-  if (cloud := environment.get("cloud")) and cloud.get("vpcId"):
-    typer.echo(f"  vpc {cloud['vpcId']} in {cloud['region']}")
   if environment["status"] == "ready" and environment.get("kubeconfig"):
     typer.echo(f"  kubectl --kubeconfig {environment['kubeconfig']} get nodes")
   if environment.get("ingress"):

@@ -28,6 +28,8 @@ def run(store, reconciler: Reconciler, resync_seconds: int) -> None:
           continue
         current = store.get(obj["metadata"]["name"])
         if current:
+          # Read again: an account verified during this watch would otherwise look not ready until the next pass.
+          by_name = {account["metadata"]["name"]: account for account in store.accounts()}
           reconciler.reconcile(current, by_name)
     except Exception:  # 410 Gone, API unavailable: back off and relist
       log.exception("watch interrupted, relisting")

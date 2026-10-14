@@ -130,12 +130,6 @@ def test_wait_gives_up_when_no_provider_claims_it(api, monkeypatch):
   assert "platform init --with-crossplane" in result.output
 
 
-def test_get_shows_the_network_in_the_account(api):
-  runner.invoke(app, ["environment", "create", "cloud-dev", "--profile", "ephemeral", "--cloud-account", "nonprod-aws"])
-  api["cloud-dev"]["cloud"] = {"vendor": "aws", "region": "us-east-1", "vpcId": "vpc-0abc"}
-  assert "vpc vpc-0abc in us-east-1" in runner.invoke(app, ["environment", "get", "cloud-dev"]).output
-
-
 def test_share_and_unshare(api):
   runner.invoke(app, ["environment", "create", "dev", "--profile", "shared"])
   result = runner.invoke(app, ["environment", "share", "dev", "--team", "team-alpha"])
