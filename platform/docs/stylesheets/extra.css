@@ -557,9 +557,21 @@
   color: var(--wasp-out-fg);
 }
 
-/* Home: four entry cards in a 2x2 grid, no page title. Plain text, one key phrase per card. */
+/* Home: one lead line and four entry cards in a 2x2 grid, no page title. Plain text, one key phrase per card. */
 .md-typeset h1.home-title {
   display: none;
+}
+
+.md-typeset p.home-lead {
+  max-width: 40rem;
+  margin: 1.2rem 0 0;
+  font-size: .9rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset p.home-lead strong {
+  color: var(--wasp-heading);
+  font-weight: 600;
 }
 
 .md-typeset .grid.cards.home-cards {
