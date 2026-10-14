@@ -193,11 +193,26 @@ def workloads(client: ClientFactory) -> list[ToolSpec]:
     and saturation over the window (minutes or hours, as 5m or 1h, at most 6h)."""
     return client().workload_signals(checked(environment), checked(instance), window)
 
+  def workloads_deploy(environment: str, component: str, branch: str | None = None, version: str | None = None, instance: str | None = None) -> dict[str, Any]:
+    """Deploy a version of a component to an environment: a new revision of the instance. Give exactly one of
+    branch (the newest version built from it) or version (from builds_versions_list); the instance defaults to the
+    component name, another name runs an extra instance next to it.
+
+    The platform answers right away with the revision, open=true; call workloads_history for the instance until
+    that revision closes (open=false): status Succeeded, or a failure reason. workloads_get then shows its URL.
+    """
+    if (branch is None) == (version is None):
+      raise ToolError("give exactly one of branch or version")
+    # Always named: the API refuses (409) a component other than the one the instance already runs.
+    body = {"component": component, **({"branch": branch} if branch is not None else {"version": version})}
+    return client().deploy_workload(checked(environment), checked(instance or component), body)
+
   return [
     ToolSpec("workloads_list", workloads_list),
     ToolSpec("workloads_get", workloads_get),
     ToolSpec("workloads_history", workloads_history),
     ToolSpec("workloads_signals", workloads_signals),
+    ToolSpec("workloads_deploy", workloads_deploy, write=True, idempotent=False),
   ]
 
 

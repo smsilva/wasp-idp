@@ -8,7 +8,7 @@
 | `environments` | list and read environments; create one, with an expiration, and delete an ephemeral one, only with `--allow-writes` |
 | `catalog` | read domains, systems, resources, components and templates |
 | `builds` | read builds and versions; build a branch only with `--allow-writes` |
-| `workloads` | read what runs in an environment: instances, revisions and golden signals |
+| `workloads` | read what runs in an environment: instances, revisions and golden signals; deploy a version only with `--allow-writes` |
 
 ## Set it up
 
