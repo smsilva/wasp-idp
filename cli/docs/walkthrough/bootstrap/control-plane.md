@@ -7,52 +7,74 @@ time platform init \
 ```
 
 ``` { .text .output title="output" }
-creating cluster platform-local …
-applying CRDs …
-deploying Keycloak …
-waiting for Keycloak …
-applying the realm platform …
-applying the admin permissions of the Platform API …
-enabling fine-grained admin permissions …
-building 6 images …
+▶ cluster
+▶ build images
+✓ build images  2.3s
+✓ cluster  39.1s
+▶ CRDs
+▶ import images
 importing 6 image(s) into platform-local …
-deploying the Platform API …
-deploying the environment provider (local_vcluster) …
-applying the pod policy of the environments (baseline) …
-deploying the environments' entry point (Traefik on 127.0.0.1:7080) …
-deploying the SCM provider (scm_github) …
-deploying the workload provider (workload) …
-deploying the Forager (resources of each workload) …
-deploying shared-pg (postgres in mode compose) …
-deploying the registry provider (OCI registries) …
-creating the binding policies of the profiles …
-deploying Prometheus (golden signals of each workload) …
-registering 1 template(s) at c729a17 …
+✓ CRDs  3.8s
+▶ keycloak
+▶ traefik
+▶ pod policy
+▶ shared-pg
+▶ templates
+▶ prometheus
+▶ profile policies
+registering 1 template(s) at f000824 …
+✓ profile policies  0.3s
+✓ pod policy  0.4s
+✓ templates  1.4s
+✓ prometheus  13.9s
+✓ shared-pg  22.1s
+✓ traefik  1m40s
+✓ import images  1m57s
+▶ workload-provider
+▶ local-vcluster-provider
+▶ forager-provider
+▶ aws-account-provider
+▶ scm-github-provider
+▶ registry-provider
+✓ aws-account-provider  0.6s
+✓ scm-github-provider  3.4s
+✓ forager-provider  3.4s
+✓ registry-provider  3.4s
+✓ local-vcluster-provider  3.5s
+✓ workload-provider  3.5s
+✓ keycloak  2m00s
+▶ keycloak realm
+✓ keycloak realm  31.4s
+▶ keycloak admin permissions
+enabling fine-grained admin permissions …
+✓ keycloak admin permissions  1.0s
+▶ platform-api
+✓ platform-api  17.0s
 
 timings:
-  cluster                          45.0s
-  cluster ports                     0.4s
-  CRDs                              2.8s
-  rollout keycloak                 1m26s
-  keycloak realm import            28.6s
-  keycloak admin permissions        0.9s
-  build images (6)                 1m07s
-  check images in the cluster       1.8s
-  import images (6)                2m27s
-  rollout platform-api             16.4s
-  platform-api healthy              2.1s
-  rollout local-vcluster-provider   1.6s
-  traefik                          1m32s
-  rollout scm-github-provider       1.4s
-  rollout workload-provider         1.9s
-  rollout forager-provider          1.6s
-  shared-pg                        16.4s
-  rollout registry-provider         2.3s
-  prometheus                       10.1s
-  templates                         2.1s
-  total                            9m03s
+  build images                 2.3s
+  cluster                     39.1s
+  CRDs                         3.8s
+  profile policies             0.3s
+  pod policy                   0.4s
+  templates                    1.4s
+  prometheus                  13.9s
+  shared-pg                   22.1s
+  traefik                     1m40s
+  import images               1m57s
+  aws-account-provider         0.6s
+  scm-github-provider          3.4s
+  forager-provider             3.4s
+  registry-provider            3.4s
+  local-vcluster-provider      3.5s
+  workload-provider            3.5s
+  keycloak                    2m00s
+  keycloak realm              31.4s
+  keycloak admin permissions   1.0s
+  platform-api                17.0s
+  total                       3m32s
 ✓ Platform API at http://127.0.0.1:9090 · config in ~/.config/platform/config.yaml
 ✓ Keycloak issuer http://localhost:8180/realms/platform
 
-real    9m04s
+real    3m33s
 ```

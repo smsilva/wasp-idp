@@ -25,9 +25,13 @@ export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
 export GOOGLE_CLIENT_SECRET=<secret>
 ```
 
+## Steps
+
+`init` runs its steps side by side, each one as soon as what it needs is done: the image builds and the cluster first; then, once the CRDs are applied, Keycloak, Traefik, shared-pg and Prometheus together; each provider once its image is in the cluster (providers need neither Keycloak nor the API); the Platform API last, once Keycloak's realm is imported. With `--with-crossplane`, Crossplane comes up beside them, after the `aws_account` provider stores the base credential. Each step prints one line when it starts (`▶`) and one when it ends (`✓`, with its time). The first step that fails (`✗`) stops the others and is the only error reported.
+
 ## Images
 
-`init` builds every image (the Platform API and each provider) in parallel, then imports into `platform-local`, in one `k3d image import`, only the ones its nodes lack. Each image is tagged by its image id, so an unchanged project is neither imported nor rolled out again: a re-run with nothing changed takes well under a minute.
+`init` builds every image (the Platform API and each provider) in parallel, while the cluster comes up, then imports into `platform-local`, in one `k3d image import`, only the ones its nodes lack. Each image is tagged by its image id, so an unchanged project is neither imported nor rolled out again: a re-run with nothing changed takes well under a minute.
 
 ## Timings
 

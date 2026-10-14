@@ -5,6 +5,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -14,6 +15,7 @@ import yaml
 
 from .. import config
 from .admin_permissions import AdminPermissions
+from .tasks import Task, locked, run_tasks
 from .timings import Timings
 
 CLUSTER = "platform-local"
@@ -50,14 +52,14 @@ ENV_PORTS = "7100-7119"
 INGRESS_PORT = "7080"
 INGRESS_NAMESPACE = "platform-ingress"
 PROVIDER_IMAGE = "local-vcluster-provider"
-# Cloud accounts (ADR 0029): the base credential the aws_account controller assumes roles from.
-AWS_PROVIDER_IMAGE = "aws-account-provider"
-AWS_BASE_SECRET = "aws-base-credential"
 # Environments in a cloud account (#436, ADR 0032): Crossplane and the provider that writes its resources.
 # The base credential is copied to CROSSPLANE_NAMESPACE under the same name, in the INI form Crossplane reads.
 CROSSPLANE_NAMESPACE = "crossplane-system"
 CROSSPLANE_PROVIDER_IMAGE = "crossplane-aws-provider"
 CROSSPLANE_PROVIDER_PACKAGE = "upbound-provider-aws-ec2"
+# Cloud accounts (ADR 0029): the base credential the aws_account controller assumes roles from.
+AWS_PROVIDER_IMAGE = "aws-account-provider"
+AWS_BASE_SECRET = "aws-base-credential"
 
 SCM_PROVIDER_IMAGE = "scm-github-provider"
 # Workload Instances (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment.
@@ -86,14 +88,49 @@ def repo_root() -> Path:
   return root
 
 
+# The steps of init run side by side (#444): the first one to fail calls stop(), which ends the commands
+# the others are running, and every later command or wait refuses to start.
+_processes: set[subprocess.Popen] = set()
+_processes_lock = threading.Lock()
+_stopping = threading.Event()
+
+
+class Stopped(BootstrapError):
+  pass
+
+
+def stop() -> None:
+  _stopping.set()
+  with _processes_lock:
+    for process in _processes:
+      process.terminate()
+
+
+def _pause(seconds: float) -> None:
+  if _stopping.wait(seconds):
+    raise Stopped("stopped: another step failed")
+
+
 def _run(*command: str, input: str | None = None, capture: bool = True) -> str:
+  if _stopping.is_set():
+    raise Stopped("stopped: another step failed")
+  pipe = subprocess.PIPE if capture else None
   try:
-    result = subprocess.run(command, check=True, text=True, input=input, capture_output=capture)
+    process = subprocess.Popen(command, text=True, stdin=subprocess.PIPE if input is not None else None, stdout=pipe, stderr=pipe)
   except FileNotFoundError as error:
     raise BootstrapError(f"'{command[0]}' not found in PATH") from error
-  except subprocess.CalledProcessError as error:
-    raise BootstrapError(f"{' '.join(command[:3])} … failed:\n{(error.stderr or error.stdout or '').strip()}") from error
-  return result.stdout if capture else ""
+  with _processes_lock:
+    _processes.add(process)
+  try:
+    stdout, stderr = process.communicate(input)
+  finally:
+    with _processes_lock:
+      _processes.discard(process)
+  if process.returncode != 0:
+    if _stopping.is_set():
+      raise Stopped("stopped: another step failed")
+    raise BootstrapError(f"{' '.join(command[:3])} … failed:\n{(stderr or stdout or '').strip()}")
+  return stdout if capture else ""
 
 
 def _kubectl(*args: str, input: str | None = None) -> str:
@@ -138,28 +175,28 @@ def _cluster_images() -> set[str]:
   return set.intersection(*listed) if listed else set()
 
 
-def prepare_images(builds: dict[str, tuple[Path, Path | None]], log, timings: Timings) -> dict[str, str]:
-  """Builds every image in parallel, then imports only the ones the cluster lacks, in one k3d call:
-  each `k3d image import` costs ~20 s even for a small image (#443). Returns name -> image."""
-  log(f"building {len(builds)} images …")
-  with timings.step(f"build images ({len(builds)})"), ThreadPoolExecutor(max_workers=len(builds)) as pool:
+def build_images(builds: dict[str, tuple[Path, Path | None]]) -> dict[str, str]:
+  """Builds every image in parallel; it needs no cluster, so it starts with init. Returns name -> image."""
+  with ThreadPoolExecutor(max_workers=len(builds)) as pool:
     futures = {name: pool.submit(_build, name, context, dockerfile) for name, (context, dockerfile) in builds.items()}
     try:
-      images = {name: future.result() for name, future in futures.items()}
+      return {name: future.result() for name, future in futures.items()}
     except BootstrapError:
       for future in futures.values():
         future.cancel()
       raise
-  with timings.step("check images in the cluster"):
-    present = _cluster_images()
+
+
+def import_images(images: dict[str, str], log) -> None:
+  """Imports only the images the cluster lacks, in one k3d call: each `k3d image import` costs ~20 s
+  even for a small image (#443)."""
+  present = _cluster_images()
   missing = [image for image in images.values() if f"docker.io/library/{image}" not in present]
   if not missing:
     log("images already in the cluster, nothing to import")
-    return images
+    return
   log(f"importing {len(missing)} image(s) into {CLUSTER} …")
-  with timings.step(f"import images ({len(missing)})"):
-    _run("k3d", "image", "import", *missing, "--cluster", CLUSTER)
-  return images
+  _run("k3d", "image", "import", *missing, "--cluster", CLUSTER)
 
 
 def _deploy(manifest_path: Path, name: str, image: str) -> None:
@@ -167,9 +204,8 @@ def _deploy(manifest_path: Path, name: str, image: str) -> None:
   _kubectl("apply", "--filename", "-", input=manifest)
 
 
-def _rollout(deployment: str, timings: Timings, namespace: str = NAMESPACE) -> None:
-  with timings.step(f"rollout {deployment}"):
-    _kubectl("rollout", "status", f"deployment/{deployment}", "--namespace", namespace, "--timeout", "180s")
+def _rollout(deployment: str, namespace: str = NAMESPACE) -> None:
+  _kubectl("rollout", "status", f"deployment/{deployment}", "--namespace", namespace, "--timeout", "180s")
 
 
 def _secret_value(namespace: str, name: str, key: str) -> str | None:
@@ -216,7 +252,7 @@ def render_realm(realm: dict, google: bool, admin: bool, smoke: dict | None = No
   return realm
 
 
-def install_keycloak(root: Path, admin_email: str | None, log, timings: Timings) -> dict:
+def deploy_keycloak(root: Path, admin_email: str | None, log) -> dict:
   keycloak_dir = root / "platform" / "keycloak"
   _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "keycloak.yaml"))
 
@@ -260,36 +296,36 @@ def install_keycloak(root: Path, admin_email: str | None, log, timings: Timings)
   _kubectl("apply", "--filename", "-", input=json.dumps(configmap))
 
   _apply_theme(keycloak_dir / "theme" / "platform")
+  _kubectl("rollout", "status", "deployment/keycloak", "--namespace", AUTH_NAMESPACE, "--timeout", "300s")
+  return {"issuer": ISSUER, "google": google, "admin": admin_email or None}
 
-  log("waiting for Keycloak …")
-  with timings.step("rollout keycloak"):
-    _kubectl("rollout", "status", "deployment/keycloak", "--namespace", AUTH_NAMESPACE, "--timeout", "300s")
 
-  log("applying the realm platform …")
-  with timings.step("keycloak realm import"):
-    _kubectl("delete", "job", "keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--ignore-not-found")
-    _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "realm-import.yaml"))
-    try:
-      _kubectl("wait", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--for", "condition=Complete", "--timeout", "300s")
-    except BootstrapError as error:
-      logs = _kubectl("logs", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--tail", "30")
-      raise BootstrapError(f"realm import did not complete:\n{logs}") from error
-    wait_issuer(ISSUER)
+def import_realm(root: Path, google: bool) -> None:
+  keycloak_dir = root / "platform" / "keycloak"
+  _kubectl("delete", "job", "keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--ignore-not-found")
+  _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "realm-import.yaml"))
+  try:
+    _kubectl("wait", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--for", "condition=Complete", "--timeout", "300s")
+  except Stopped:
+    raise
+  except BootstrapError as error:
+    logs = _kubectl("logs", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--tail", "30")
+    raise BootstrapError(f"realm import did not complete:\n{logs}") from error
+  wait_issuer(ISSUER)
   # What `platform status` shows for identity (ADR 0039): the API reads Deployments, never this Secret.
   # On the Deployment, not its template: changing it restarts nothing.
   _kubectl("annotate", "deployment", "keycloak", "--namespace", AUTH_NAMESPACE, "--overwrite", f"{IDENTITY_PROVIDERS_ANNOTATION}={'google' if google else ''}")
 
-  log("applying the admin permissions of the Platform API …")
+
+def apply_admin_permissions(log) -> None:
   try:
-    with timings.step("keycloak admin permissions"):
-      AdminPermissions(
-        KEYCLOAK_URL,
-        _secret_value(AUTH_NAMESPACE, "keycloak-admin", "username"),
-        _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"),
-      ).apply(log)
+    AdminPermissions(
+      KEYCLOAK_URL,
+      _secret_value(AUTH_NAMESPACE, "keycloak-admin", "username"),
+      _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"),
+    ).apply(log)
   except httpx.HTTPError as error:
     raise BootstrapError(f"admin permissions of {API_ADMIN_SECRET} not applied: {error}") from error
-  return {"issuer": ISSUER, "google": google, "admin": admin_email or None}
 
 
 def theme_configmap(theme_dir: Path) -> dict:
@@ -321,7 +357,7 @@ def wait_issuer(issuer: str, timeout: int = 60) -> None:
       pass
     if time.monotonic() > deadline:
       raise BootstrapError(f"Keycloak issuer {issuer} not reachable after {timeout}s")
-    time.sleep(2)
+    _pause(2)
 
 
 def aws_base_credential(profile: str) -> dict:
@@ -349,16 +385,21 @@ def store_aws_credential(aws_profile: str | None, log) -> tuple[dict, str | None
   return (values if values["AWS_ACCESS_KEY_ID"] else {}), expiration
 
 
-def install_aws_account(provider_dir: Path, image: str, values: dict, expiration: str | None, log, timings: Timings) -> dict:
-  """The aws_account controller, with the stored base credential as its environment."""
-  log("deploying the cloud account provider (aws_account) …")
+def install_aws_account(provider_dir: Path, aws_profile: str | None, log) -> dict:
+  """The aws_account controller, with the stored base credential as its environment. Its image is built
+  here, not with the others: it exists only when a credential is stored."""
+  values, expiration = store_aws_credential(aws_profile, log)
+  if not values:
+    return {"cloud_account": False, "values": {}}
+  image = _build(AWS_PROVIDER_IMAGE, provider_dir)
+  import_images({AWS_PROVIDER_IMAGE: image}, log)
   _deploy(provider_dir / "deploy" / "aws-account-provider.yaml", AWS_PROVIDER_IMAGE, image)
   # The credential reaches the pod as environment: a new one needs a new pod, an unchanged one keeps it.
   digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()[:16]
   patch = {"spec": {"template": {"metadata": {"annotations": {"platform.wasp.silvios.me/credential": digest}}}}}
   _kubectl("patch", "deployment", AWS_PROVIDER_IMAGE, "--namespace", NAMESPACE, "--type", "merge", "--patch", json.dumps(patch))
-  _rollout(AWS_PROVIDER_IMAGE, timings)
-  return {"cloud_account": True, "aws_base_expires": expiration}
+  _rollout(AWS_PROVIDER_IMAGE)
+  return {"cloud_account": True, "aws_base_expires": expiration, "values": values}
 
 
 def crossplane_credential(values: dict[str, str | None]) -> str:
@@ -386,33 +427,120 @@ def _wait_for(description: str, check, timeout: int, hint: str) -> None:
   while not check():
     if time.monotonic() > deadline:
       raise BootstrapError(f"{description} not there after {timeout}s: {hint}")
-    time.sleep(3)
+    _pause(3)
 
 
-def install_crossplane(provider_dir: Path, image: str, values: dict, log, timings: Timings) -> dict:
-  """Crossplane, provider-aws-ec2, the base credential in crossplane-system and the crossplane_aws provider."""
-  log("deploying Crossplane …")
-  with timings.step("crossplane"):
-    _kubectl("apply", "--filename", str(provider_dir / "deploy" / "crossplane.yaml"))
-    # The CRDs exist only once the helm-controller's install job ran.
-    _wait_for(
-      "Crossplane", lambda: bool(_kubectl("get", "crd", "providers.pkg.crossplane.io", "--ignore-not-found", "--output", "name").strip()), 300,
-      f"kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-crossplane",
-    )
-    _kubectl("wait", "crd", "providers.pkg.crossplane.io", "--for", "condition=Established", "--timeout", "60s")
-    _kubectl("rollout", "status", "deployment/crossplane", "--namespace", CROSSPLANE_NAMESPACE, "--timeout", "180s")
+def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool, log) -> dict:
+  """Crossplane, provider-aws-ec2, the base credential in crossplane-system and the crossplane_aws provider.
+  Its image is built here, like the aws_account one: it exists only with Crossplane."""
+  if not wants_crossplane(with_crossplane, values):
+    return {"crossplane": False}
+  image = _build(CROSSPLANE_PROVIDER_IMAGE, provider_dir)
+  import_images({CROSSPLANE_PROVIDER_IMAGE: image}, log)
+  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "crossplane.yaml"))
+  # The CRDs exist only once the helm-controller's install job ran.
+  _wait_for(
+    "Crossplane", lambda: bool(_kubectl("get", "crd", "providers.pkg.crossplane.io", "--ignore-not-found", "--output", "name").strip()), 300,
+    f"kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-crossplane",
+  )
+  _kubectl("wait", "crd", "providers.pkg.crossplane.io", "--for", "condition=Established", "--timeout", "60s")
+  _kubectl("rollout", "status", "deployment/crossplane", "--namespace", CROSSPLANE_NAMESPACE, "--timeout", "180s")
   # Replaced whole, as in platform-system: a long-lived key must not keep the session token of a temporary one.
   _kubectl("delete", "secret", AWS_BASE_SECRET, "--namespace", CROSSPLANE_NAMESPACE, "--ignore-not-found")
   _apply_secret(CROSSPLANE_NAMESPACE, AWS_BASE_SECRET, {"creds": crossplane_credential(values)})
   log("installing the Crossplane provider for AWS EC2 (pulls its package, a few minutes the first time) …")
-  with timings.step("crossplane provider-aws-ec2"):
-    _kubectl("apply", "--filename", str(provider_dir / "deploy" / "provider-aws-ec2.yaml"))
-    _kubectl("wait", f"provider.pkg.crossplane.io/{CROSSPLANE_PROVIDER_PACKAGE}", "--for", "condition=Healthy", "--timeout", "600s")
-    _kubectl("wait", "crd", "vpcs.ec2.aws.upbound.io", "providerconfigs.aws.upbound.io", "--for", "condition=Established", "--timeout", "120s")
-  log("deploying the cloud environment provider (crossplane_aws) …")
+  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "provider-aws-ec2.yaml"))
+  _kubectl("wait", f"provider.pkg.crossplane.io/{CROSSPLANE_PROVIDER_PACKAGE}", "--for", "condition=Healthy", "--timeout", "600s")
+  _kubectl("wait", "crd", "vpcs.ec2.aws.upbound.io", "providerconfigs.aws.upbound.io", "--for", "condition=Established", "--timeout", "120s")
   _deploy(provider_dir / "deploy" / "crossplane-aws-provider.yaml", CROSSPLANE_PROVIDER_IMAGE, image)
-  _rollout(CROSSPLANE_PROVIDER_IMAGE, timings)
+  _rollout(CROSSPLANE_PROVIDER_IMAGE)
   return {"crossplane": True}
+
+
+def ensure_cluster(root: Path, log) -> None:
+  if cluster_exists():
+    log(f"cluster {CLUSTER} already exists, reusing it")
+  else:
+    _run(
+      str(root / "scripts" / "cluster-zero" / "cluster-create"),
+      "--name", CLUSTER,
+      "--api-port", API_PORT,
+      "--app-port", f"127.0.0.1:{APP_PORT}",
+      "--extra-port", f"127.0.0.1:{KEYCLOAK_PORT}:{KEYCLOAK_PORT}",
+      "--extra-port", f"127.0.0.1:{ENV_PORTS}:{ENV_PORTS}",
+      "--extra-port", f"127.0.0.1:{INGRESS_PORT}:{INGRESS_PORT}",
+    )
+  _ensure_port(KEYCLOAK_PORT, log)
+  _ensure_port(ENV_PORTS, log)
+  _ensure_port(INGRESS_PORT, log)
+
+
+def apply_crds(root: Path) -> None:
+  """The CRDs and the namespaces every later step writes into, so no step waits on another's manifest."""
+  _kubectl("apply", "--filename", str(root / "platform" / "crds"))
+  _kubectl("wait", "crd", "--all", "--for", "condition=Established", "--timeout", "60s")
+  for namespace in (NAMESPACE, AUTH_NAMESPACE, SHARED_PG_NAMESPACE):
+    _ensure_namespace(namespace)
+
+
+def deploy_provider(provider_dir: Path, manifest: str, name: str, image: str) -> None:
+  _deploy(provider_dir / "deploy" / manifest, name, image)
+  _rollout(name)
+
+
+def init_tasks(root: Path, admin_email: str | None, aws_profile: str | None, log, with_crossplane: bool = False) -> list[Task]:
+  """The steps of init and what each one needs (#444). Providers need only the CRDs and their image,
+  never Keycloak or the API; the API needs Keycloak's realm (its admin client) and its image."""
+  api_dir = root / "platform" / "api"
+  providers = root / "platform" / "providers"
+  vcluster_dir, forager_dir = providers / "local_vcluster", providers / "forager"
+  # Context platform/ for the API and scm_github: they depend on platform/libs/templates and platform/libs/score by path.
+  builds = {
+    IMAGE: (api_dir.parent, api_dir / "Dockerfile"),
+    PROVIDER_IMAGE: (vcluster_dir, None),
+    SCM_PROVIDER_IMAGE: (providers.parent, providers / "scm_github" / "Dockerfile"),
+    WORKLOAD_PROVIDER_IMAGE: (providers / "workload", None),
+    FORAGER_PROVIDER_IMAGE: (forager_dir, None),
+    REGISTRY_PROVIDER_IMAGE: (providers / "registry", None),
+  }
+  provider_manifests = {
+    PROVIDER_IMAGE: (vcluster_dir, "local-vcluster-provider.yaml"),
+    SCM_PROVIDER_IMAGE: (providers / "scm_github", "scm-github-provider.yaml"),
+    WORKLOAD_PROVIDER_IMAGE: (providers / "workload", "workload-provider.yaml"),
+    FORAGER_PROVIDER_IMAGE: (forager_dir, "forager-provider.yaml"),
+    REGISTRY_PROVIDER_IMAGE: (providers / "registry", "registry-provider.yaml"),
+  }
+
+  def api(results):
+    _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, results["build images"][IMAGE])
+    _rollout("platform-api")
+    wait_healthy(API_URL)
+
+  def provider(name, directory, manifest):
+    return Task(name, lambda results: deploy_provider(directory, manifest, name, results["build images"][name]), needs=("CRDs", "import images"))
+
+  return [
+    Task("cluster", lambda results: ensure_cluster(root, log)),
+    Task("build images", lambda results: build_images(builds)),
+    Task("CRDs", lambda results: apply_crds(root), needs=("cluster",)),
+    Task("import images", lambda results: import_images(results["build images"], log), needs=("cluster", "build images")),
+    Task("keycloak", lambda results: deploy_keycloak(root, admin_email, log), needs=("CRDs",)),
+    Task("keycloak realm", lambda results: import_realm(root, results["keycloak"]["google"]), needs=("keycloak",)),
+    Task("keycloak admin permissions", lambda results: apply_admin_permissions(log), needs=("keycloak realm",)),
+    Task(IMAGE, api, needs=("keycloak admin permissions", "import images")),
+    *(provider(name, directory, manifest) for name, (directory, manifest) in provider_manifests.items()),
+    # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
+    Task("pod policy", lambda results: _kubectl("apply", "--filename", str(vcluster_dir / "deploy" / "pod-security.yaml")), needs=("CRDs",)),
+    Task("traefik", lambda results: install_ingress(vcluster_dir), needs=("CRDs",)),
+    Task("shared-pg", lambda results: install_shared_pg(forager_dir), needs=("CRDs",)),
+    Task("profile policies", lambda results: install_profile_policies(forager_dir), needs=("CRDs",)),
+    Task("prometheus", lambda results: install_observability(root / "platform" / "observability"), needs=("CRDs",)),
+    Task("templates", lambda results: install_templates(root, log), needs=("CRDs",)),
+    # After the shared import: two `k3d image import` at once would race for the same tools node.
+    Task("aws-account-provider", lambda results: install_aws_account(providers / "aws_account", aws_profile, log), needs=("CRDs", "import images")),
+    # After aws-account-provider: it stores the base credential and imports its own image (one k3d import at a time).
+    Task("crossplane", lambda results: install_crossplane(providers / "crossplane_aws", results["aws-account-provider"]["values"], with_crossplane, log), needs=("aws-account-provider",)),
+  ]
 
 
 def install(admin_email: str | None = None, log=None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
@@ -423,134 +551,48 @@ def install(admin_email: str | None = None, log=None, aws_profile: str | None = 
     if not shutil.which(tool):
       raise BootstrapError(f"'{tool}' not found in PATH")
   root = repo_root()
+  _stopping.clear()
+  # Steps log from their own threads: one lock keeps every line whole.
+  log = locked(log)
+  results = run_tasks(init_tasks(root, admin_email, aws_profile, log, with_crossplane), log, timings, on_failure=stop)
 
-  if cluster_exists():
-    log(f"cluster {CLUSTER} already exists, reusing it")
-  else:
-    log(f"creating cluster {CLUSTER} …")
-    with timings.step("cluster"):
-      _run(
-        str(root / "scripts" / "cluster-zero" / "cluster-create"),
-        "--name", CLUSTER,
-        "--api-port", API_PORT,
-        "--app-port", f"127.0.0.1:{APP_PORT}",
-        "--extra-port", f"127.0.0.1:{KEYCLOAK_PORT}:{KEYCLOAK_PORT}",
-        "--extra-port", f"127.0.0.1:{ENV_PORTS}:{ENV_PORTS}",
-        "--extra-port", f"127.0.0.1:{INGRESS_PORT}:{INGRESS_PORT}",
-      )
-  with timings.step("cluster ports"):
-    _ensure_port(KEYCLOAK_PORT, log)
-    _ensure_port(ENV_PORTS, log)
-    _ensure_port(INGRESS_PORT, log)
-
-  log("applying CRDs …")
-  with timings.step("CRDs"):
-    _kubectl("apply", "--filename", str(root / "platform" / "crds"))
-    _kubectl("wait", "crd", "--all", "--for", "condition=Established", "--timeout", "60s")
-
-  # Keycloak first: the Platform API validates tokens against its keys.
-  log("deploying Keycloak …")
-  identity = install_keycloak(root, admin_email, log, timings)
-
-  api_dir = root / "platform" / "api"
-  provider_dir = root / "platform" / "providers" / "local_vcluster"
-  scm_dir = root / "platform" / "providers" / "scm_github"
-  workload_dir = root / "platform" / "providers" / "workload"
-  forager_dir = root / "platform" / "providers" / "forager"
-  registry_dir = root / "platform" / "providers" / "registry"
-  aws_dir = root / "platform" / "providers" / "aws_account"
-  crossplane_dir = root / "platform" / "providers" / "crossplane_aws"
-  aws_values, aws_expiration = store_aws_credential(aws_profile, log)
-  crossplane = wants_crossplane(with_crossplane, aws_values)
-  # Context platform/ for the API and scm_github: they depend on platform/libs/templates and platform/libs/score by path.
-  builds = {
-    IMAGE: (api_dir.parent, api_dir / "Dockerfile"),
-    PROVIDER_IMAGE: (provider_dir, None),
-    SCM_PROVIDER_IMAGE: (scm_dir.parent.parent, scm_dir / "Dockerfile"),
-    WORKLOAD_PROVIDER_IMAGE: (workload_dir, None),
-    FORAGER_PROVIDER_IMAGE: (forager_dir, None),
-    REGISTRY_PROVIDER_IMAGE: (registry_dir, None),
-    **({AWS_PROVIDER_IMAGE: (aws_dir, None)} if aws_values else {}),
-    **({CROSSPLANE_PROVIDER_IMAGE: (crossplane_dir, None)} if crossplane else {}),
-  }
-  images = prepare_images(builds, log, timings)
-
-  log("deploying the Platform API …")
-  _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, images[IMAGE])
-  _rollout("platform-api", timings)
-  with timings.step("platform-api healthy"):
-    wait_healthy(API_URL)
-
-  log("deploying the environment provider (local_vcluster) …")
-  _deploy(provider_dir / "deploy" / "local-vcluster-provider.yaml", PROVIDER_IMAGE, images[PROVIDER_IMAGE])
-  _rollout(PROVIDER_IMAGE, timings)
-  # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
-  log("applying the pod policy of the environments (baseline) …")
-  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "pod-security.yaml"))
-  with timings.step("traefik"):
-    install_ingress(provider_dir, log)
-
-  log("deploying the SCM provider (scm_github) …")
-  _deploy(scm_dir / "deploy" / "scm-github-provider.yaml", SCM_PROVIDER_IMAGE, images[SCM_PROVIDER_IMAGE])
-  _rollout(SCM_PROVIDER_IMAGE, timings)
-
-  log("deploying the workload provider (workload) …")
-  _deploy(workload_dir / "deploy" / "workload-provider.yaml", WORKLOAD_PROVIDER_IMAGE, images[WORKLOAD_PROVIDER_IMAGE])
-  _rollout(WORKLOAD_PROVIDER_IMAGE, timings)
-
-  log("deploying the Forager (resources of each workload) …")
-  _deploy(forager_dir / "deploy" / "forager-provider.yaml", FORAGER_PROVIDER_IMAGE, images[FORAGER_PROVIDER_IMAGE])
-  _rollout(FORAGER_PROVIDER_IMAGE, timings)
-  with timings.step("shared-pg"):
-    install_shared_pg(forager_dir, log)
-
-  log("deploying the registry provider (OCI registries) …")
-  _deploy(registry_dir / "deploy" / "registry-provider.yaml", REGISTRY_PROVIDER_IMAGE, images[REGISTRY_PROVIDER_IMAGE])
-  _rollout(REGISTRY_PROVIDER_IMAGE, timings)
-  install_profile_policies(forager_dir, log)
-  with timings.step("prometheus"):
-    install_observability(root / "platform" / "observability", log)
-
-  cloud = install_aws_account(aws_dir, images[AWS_PROVIDER_IMAGE], aws_values, aws_expiration, log, timings) if aws_values else {"cloud_account": False}
-  cloud.update(install_crossplane(crossplane_dir, images[CROSSPLANE_PROVIDER_IMAGE], aws_values, log, timings) if crossplane else {"crossplane": False})
-  with timings.step("templates"):
-    install_templates(root, log)
-
+  identity = results["keycloak"]
   path = config.save({
     **config.load(),
     "target": "local", "api_url": API_URL, "context": CONTEXT,
     "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
   })
-  return {"target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": images[IMAGE], "config": str(path), **identity, **cloud, "timings": timings.as_dict()}
+  return {
+    "target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": results["build images"][IMAGE], "config": str(path),
+    **identity, **{key: value for key, value in results["aws-account-provider"].items() if key != "values"},
+    **results["crossplane"], "timings": timings.as_dict(),
+  }
 
 
-def install_ingress(provider_dir: Path, log) -> None:
+def install_ingress(provider_dir: Path) -> None:
   """The shared Traefik of the environments (ADR 0036), through the helm-controller of k3s."""
-  log(f"deploying the environments' entry point (Traefik on 127.0.0.1:{INGRESS_PORT}) …")
   _kubectl("apply", "--filename", str(provider_dir / "deploy" / "traefik.yaml"))
   deadline = time.monotonic() + 300
   # The Deployment exists only once the helm-controller's install job ran.
   while not _kubectl("get", "deployment", "--namespace", INGRESS_NAMESPACE, "--selector", "app.kubernetes.io/name=traefik", "--output", "name").strip():
     if time.monotonic() > deadline:
       raise BootstrapError(f"Traefik not installed in {INGRESS_NAMESPACE} after 300s: kubectl --context {CONTEXT} logs --namespace kube-system job/helm-install-platform-ingress")
-    time.sleep(3)
+    _pause(3)
   _kubectl("rollout", "status", "deployment", "--selector", "app.kubernetes.io/name=traefik", "--namespace", INGRESS_NAMESPACE, "--timeout", "180s")
 
 
-def install_observability(observability_dir: Path, log) -> None:
+def install_observability(observability_dir: Path) -> None:
   """The Prometheus of the observability subsystem (ADR 0040): an upstream image, nothing to build.
   The hash of the manifest goes on the pod template, so a changed scrape config rolls the pod."""
-  log("deploying Prometheus (golden signals of each workload) …")
   manifest = (observability_dir / "deploy" / "prometheus.yaml").read_text()
   checksum = hashlib.sha256(manifest.encode()).hexdigest()[:12]
   _kubectl("apply", "--filename", "-", input=manifest.replace("config-hash: dev", f"config-hash: {checksum}"))
   _kubectl("rollout", "status", "deployment/prometheus", "--namespace", NAMESPACE, "--timeout", "180s")
 
 
-def install_profile_policies(forager_dir: Path, log) -> None:
+def install_profile_policies(forager_dir: Path) -> None:
   """The binding policy of each profile (#329): created when missing, never applied over, since
   platform-admins change it through the API."""
-  log("creating the binding policies of the profiles …")
   try:
     _kubectl("create", "--filename", str(forager_dir / "deploy" / "profile-policies.yaml"))
   except BootstrapError as error:
@@ -559,10 +601,9 @@ def install_profile_policies(forager_dir: Path, log) -> None:
       raise
 
 
-def install_shared_pg(forager_dir: Path, log) -> None:
+def install_shared_pg(forager_dir: Path) -> None:
   """The shared Postgres compose writes into (#305), in the namespace of the Forager's credentials.
   The admin password is generated once and kept across runs: a new one would lock the Forager out."""
-  log("deploying shared-pg (postgres in mode compose) …")
   password = _secret_value(SHARED_PG_NAMESPACE, SHARED_PG_SECRET, "password") or secrets.token_urlsafe(24)
   _apply_secret(SHARED_PG_NAMESPACE, SHARED_PG_SECRET, {"password": password})
   _kubectl("apply", "--filename", str(forager_dir / "deploy" / "shared-pg.yaml"))
@@ -626,4 +667,4 @@ def wait_healthy(url: str, timeout: int = 90) -> None:
       pass
     if time.monotonic() > deadline:
       raise BootstrapError(f"Platform API not healthy at {url}/healthz after {timeout}s")
-    time.sleep(2)
+    _pause(2)
