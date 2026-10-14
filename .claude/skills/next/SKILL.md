@@ -1,6 +1,6 @@
 ---
 name: next
-description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. With "local" ("next local"), runs the session prompt in .claude/next.local.md instead.
+description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. With "local" ("next local"), runs the session prompt in .claude/PROMPT.local.md instead.
 argument-hint: "[issue-number|local]"
 ---
 
@@ -10,13 +10,13 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 
 ## With `local`
 
-`.claude/next.local.md` (gitignored) is a session prompt: the instructions the user gave in an earlier session, so a `/clear` followed by `/next local` resumes the same way of working. It carries no memory of what was done: the work itself is in the repo.
+`.claude/PROMPT.local.md` (gitignored) is a session prompt: the instructions the user gave in an earlier session, so a `/clear` followed by `/next local` resumes the same way of working. It carries no memory of what was done: the work itself is in the repo.
 
 - **The file exists:** read it and follow it in place of the steps below. Skip the board.
 - **The file is missing:** write it from the current session.
   1. Draft it in English, as an imperative prompt to a fresh agent: the context (what the user is doing, where), each standing instruction the user gave in this session (how to look, what to report, how to commit), and the start (what to do on the first message). Keep instructions, drop what was done (fixes, commits): the repo has that.
   2. Show the draft in full and ask the user to confirm or correct it. Write nothing before they confirm.
-  3. Write `.claude/next.local.md`, show its absolute path, and tell the user they can run `/clear` and then `/next local`.
+  3. Write `.claude/PROMPT.local.md`, show its absolute path, and tell the user they can run `/clear` and then `/next local`.
 
 ## Steps
 
