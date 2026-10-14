@@ -21,6 +21,8 @@ from .github import GitHubApp, GitHubError
 from .reconciler import BACKOFF_MAX, BACKOFF_START, format_time, parse_time
 from .store import CATALOG_GROUP, VERSION, AlreadyExists
 
+# STEPS, FINAL and RETENTION have a copy in platform/api/src/platform_api/components.py (a separate uv
+# project, which frees a stopped creation's name): a test fails when they differ.
 STEPS = ("Validated", "Rendered", "RepoCreated", "Pushed", "Protected", "Registered")
 # Protected=False with this reason is a warning, not a failure: Ready does not wait for it.
 UNPROTECTED = "ProtectionUnavailable"

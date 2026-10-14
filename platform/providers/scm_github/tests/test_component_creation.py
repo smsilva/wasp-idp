@@ -436,3 +436,16 @@ def test_ready_since_is_the_transition_time(world):
   status = world.run()
   ready = next(item for item in status["conditions"] if item["type"] == "Ready")
   assert ready["lastTransitionTime"] == format_time(NOW)
+
+
+def test_steps_final_and_retention_match_the_api():
+  """The API keeps a copy (platform_api/components.py): it reads them to free a stopped creation's name."""
+  import ast
+
+  from scm_github_provider import component_creation
+
+  source = (Path(__file__).parents[3] / "api" / "src" / "platform_api" / "components.py").read_text()
+  values = {n.targets[0].id: n.value for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
+  assert ast.literal_eval(values["STEPS"]) == component_creation.STEPS
+  assert ast.literal_eval(values["FINAL"]) == component_creation.FINAL
+  assert eval(compile(ast.Expression(values["RETENTION"]), "components.py", "eval"), {"timedelta": timedelta}) == component_creation.RETENTION

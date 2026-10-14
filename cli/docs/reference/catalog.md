@@ -24,10 +24,13 @@ An entity with dependents is not deleted: the API answers `409` naming them, so 
 platform catalog component create <name> --system <system> \
   [--owner <team>] [--type service|website|library | --template <template>] \
   [--param key=value]... [--description <text>] [--scm <connection>] \
-  [--visibility public|private] [--prd <file>|-] [--wait] [--timeout <seconds>]
+  [--visibility public|private] [--prd <file>|-] [--replace] [--wait] [--timeout <seconds>]
 platform catalog component list [--system <system>] [--owner <team>]
 platform catalog component get <name>
 platform catalog component clone <name> [--directory <dir>] [--https]
+platform catalog component creation list
+platform catalog component creation get <name>
+platform catalog component creation delete <name>
 ```
 
 `create` creates the repo on the org of the SCM connection from a template ([Templates](templates.md)), pushes the rendered content as a single first commit and registers the component (`lifecycle: experimental`). Any authenticated user creates; the creation steps are visible to whoever requested it and to `platform-admins`.
@@ -39,6 +42,7 @@ platform catalog component clone <name> [--directory <dir>] [--https]
 | `--scm` | the default connection (`409` without one) |
 | `--visibility` | the connection's `defaultVisibility` (`public`) |
 | `--prd` | the template's `docs/prd.md` skeleton; the journal keeps only the hash of the text (at most 64 KiB) |
+| `--replace` | off: a stopped creation with the same name answers `409` |
 
 `list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component and a `running in` line: the environments where a Workload Instance of it runs, with version and status ([Workloads](workloads.md#workload-instances)), only those you can use (JSON: `runningIn`). While the component is not in the index yet, `get` shows the creation steps.
 
@@ -68,7 +72,21 @@ A GitHub failure in any step is one of:
 | `GitHubRejected` | any other 4xx, with GitHub's message | no: the creation stops |
 | `StepFailed` | the cluster unavailable, or an unexpected error | with backoff |
 
-The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` shows only the index, and a stopped name is free to request again. The index is a read mirror of the repo's `catalog-info.yaml`: no command changes or deletes a component, and deleting the repo is done on GitHub.
+The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` shows only the index, and a stopped name is free to request again. Until then, `create` with that name answers `409` with the reason it stopped; `--wait` ends with the same way out ([A refused creation](../walkthrough/components/refused.md)).
+
+### Creation requests
+
+`component creation` reads and frees the requests behind `create`. Each person sees the creations they requested; `platform-admins` see all.
+
+| Command | Does |
+|---|---|
+| `creation list` | NAME, STATUS (the `Ready` reason, `pending` or `ready`), STEP (the first step not done), REQUESTED BY, AGE and FREES IN (time left until the 24 h removal; `—` while running) |
+| `creation get <name>` | the steps of a creation, the same view `component get` shows before the index has it |
+| `creation delete <name>` | deletes a stopped or `Ready` creation and frees its name; `409` while it runs (the half-made repo would be left behind), `404` without one |
+
+`create --replace` deletes a stopped creation and requests the name again in one call; on a running or `Ready` creation it answers `409` like `create`. Replace and delete are for whoever requested the creation and `platform-admins` (`403` for others), and both are journaled. The provider never adopts a repo it did not create, so a new request never reuses the old one's repo or content.
+
+The index is a read mirror of the repo's `catalog-info.yaml`: no command changes or deletes a component, and deleting the repo is done on GitHub.
 
 ## Import from Backstage
 
