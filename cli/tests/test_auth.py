@@ -357,7 +357,12 @@ def test_login_refresh_falls_back_to_the_browser(idp, local_target, monkeypatch,
   if credentials:
     auth.save_credentials(credentials)
   real = idp.handler
-  refused = lambda request: httpx.Response(400, json={"error": "invalid_grant"}) if b"grant_type=refresh_token" in request.content else real(request)
+
+  def refused(request):
+    if b"grant_type=refresh_token" in request.content:
+      return httpx.Response(400, json={"error": "invalid_grant"})
+    return real(request)
+
   browser = _ORIGINAL_OIDC(issuer=ISSUER, client_id="platform-cli", transport=httpx.MockTransport(refused))
   browser.login_browser = lambda: {"access_token": "access-browser", "refresh_token": "r", "expires_in": 300}
   monkeypatch.setattr(auth, "Oidc", lambda issuer=None, client_id=None, transport=None: browser)

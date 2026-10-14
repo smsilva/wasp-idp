@@ -24,6 +24,10 @@ export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
 export GOOGLE_CLIENT_SECRET=<secret>
 ```
 
+## Timings
+
+`init` ends with the wall time of each step (cluster, CRDs, each image build and `k3d image import`, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`).
+
 ## What `init` remembers
 
 `--admin`, the Google credentials and the AWS base credential are stored in the cluster, so later runs do not repeat them. Running `init` again is safe: the cluster is reused.
