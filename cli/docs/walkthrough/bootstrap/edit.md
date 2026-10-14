@@ -6,10 +6,14 @@ Open the file in an editor:
 platform init --edit
 ```
 
-The editor is the first one set:
+The editor is the first one set, from left to right:
 
-- `PLATFORM_EDITOR`
-- `VISUAL`
-- `EDITOR`
-- VS Code (`code --wait`), when it is on the `PATH`
-- `vi`
+<div class="fallback" markdown>
+
+1. `PLATFORM_EDITOR`
+2. `VISUAL`
+3. `EDITOR`
+4. `code --wait` <small>if on `PATH`</small>
+5. `vi`
+
+</div>

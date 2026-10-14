@@ -420,3 +420,58 @@
 .forager-figure .edge.dash { stroke-dasharray: 5 4; }
 .forager-figure .head { fill: var(--fg-muted); }
 .forager-figure .head.hot { fill: var(--fg-accent); }
+
+/* A fallback order (`<div class="fallback" markdown>` around a numbered list): chips in a row, joined by
+   arrows, read left to right; the list stays a list for screen readers and wraps on narrow screens. */
+.md-typeset p:has(+ .fallback) {
+  margin-bottom: 0;
+}
+
+.md-typeset .fallback > ol {
+  font-size: .75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5em .4em;
+  margin: .6em 0 2em;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .fallback > ol > li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .4em;
+  margin: 0;
+  padding: .2em .7em;
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--wasp-term-border);
+  border-radius: 999px;
+}
+
+.md-typeset .fallback > ol > li + li {
+  position: relative;
+  margin-left: 1.4em;
+}
+
+.md-typeset .fallback > ol > li + li::before {
+  content: "→";
+  position: absolute;
+  left: -1.3em;
+  color: var(--t-op);
+}
+
+.md-typeset .fallback > ol > li code {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.md-typeset .fallback > ol > li small {
+  color: var(--wasp-out-fg);
+  font-size: .8em;
+}
+
+.md-typeset .fallback > ol > li small code {
+  color: inherit;
+}
