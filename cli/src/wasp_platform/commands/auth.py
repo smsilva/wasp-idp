@@ -5,7 +5,7 @@ import typer
 from .. import auth, config
 from ..bootstrap import local
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, success
+from ..output import Format, OutputOption, fail, print_data, success
 
 
 def login(
@@ -90,8 +90,8 @@ def whoami(output: OutputOption = Format.table):
     me = PlatformClient().me()
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(me)
+  if output.data:
+    print_data(me, output)
   else:
     typer.echo(_who(me))
 

@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, fail, print_json, print_table, success
+from ..output import Format, OutputOption, fail, print_data, print_table, success
 
 ACTIVE, NO_PROVIDER = "Active", "NoProviderForCapability"
 
@@ -121,8 +121,8 @@ def status(
     items = [client.get_capability(capability)] if capability else client.list_capabilities()
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items[0] if capability else {"items": items})
+  if output.data:
+    print_data(items[0] if capability else {"items": items}, output)
   elif capability or verbose:
     for index, item in enumerate(items):
       if index:

@@ -9,7 +9,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 
 app = typer.Typer(help="Builds: a branch of a component becomes a version in the registry.", no_args_is_help=True)
 
@@ -96,11 +96,11 @@ def create(
   try:
     build = client.create_build({key: value for key, value in body.items() if value is not None})
     if wait:
-      build = _wait(client, build, timeout, quiet=output == Format.json)
+      build = _wait(client, build, timeout, quiet=output.data)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(build)
+  if output.data:
+    print_data(build, output)
   elif wait:
     for line in summary(build):
       success(line)
@@ -122,8 +122,8 @@ def list_(
     items = _client().list_versions(component)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   print_table(
     ["NAME", "VERSION", "BRANCH", "REGISTRY", "CREATED"],
@@ -164,8 +164,8 @@ def get(
     build = _build_of(_client(), name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(build)
+  if output.data:
+    print_data(build, output)
     return
   result = build.get("result") or {}
   typer.echo(f"build/{build['name']} ({build['status']})")

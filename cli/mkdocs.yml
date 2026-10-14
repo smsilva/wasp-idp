@@ -138,7 +138,7 @@ nav:
       - Workloads: reference/workloads.md
       - The Forager: reference/forager.md
       - MCP server: reference/mcp.md
-      - JSON output: reference/json-output.md
+      - Output formats: reference/output.md
       - Smoke and e2e tests: reference/cli-smoke.md
       - Under the hood: reference/under-the-hood.md
       - Tear down: reference/teardown.md

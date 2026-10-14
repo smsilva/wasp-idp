@@ -17,7 +17,7 @@ import typer
 import yaml
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 
 # The kube API keeps the spec as JSON with sorted keys: the top level goes back to the order of a Score.
 SCORE_ORDER = ("apiVersion", "metadata", "resources", "containers", "service")
@@ -53,8 +53,8 @@ def validate(
     result = _client().validate_workload_spec(content)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
   elif result["valid"]:
     resources = _resources(result["resources"])
     success(f"{file.name} valid · {resources}" if resources else f"{file.name} valid")
@@ -62,7 +62,7 @@ def validate(
     for error in result["errors"]:
       typer.secho(f"  {error['field']}: {error['reason']}", fg=typer.colors.RED, err=True)
   if not result["valid"]:
-    if output == Format.json:
+    if output.data:
       raise typer.Exit(1)
     fail(f"{file.name}: {len(result['errors'])} error(s)")
 
@@ -81,8 +81,8 @@ def get(
     spec = _client().get_workload_spec(component, version, branch)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(spec)
+  if output.data:
+    print_data(spec, output)
     return
   # A YAML comment: the output stays a valid app-spec.yaml.
   typer.echo(f"# {spec['component']} {spec['version']} · {spec['branch']} @ {(spec.get('commit') or '')[:7]}")
@@ -175,8 +175,8 @@ def _flag(item: dict) -> str:
 def _report(client: PlatformClient, revision: dict, wait: bool, output: Format, started: str) -> None:
   """The revision a command wrote: started, or with --wait how it ended."""
   name = f"{revision['instance']}@{revision['environment']}"
-  if output == Format.json:
-    print_json(revision)
+  if output.data:
+    print_data(revision, output)
     if wait and revision["status"] != "Succeeded":
       raise typer.Exit(1)
     return
@@ -329,8 +329,8 @@ def apply(
   except ApiError as error:
     fail(str(error))
   failed = [revision for revision in ended if revision["status"] != "Succeeded"]
-  if output == Format.json:
-    print_json({**plan, "revisions": ended} if ended else plan)
+  if output.data:
+    print_data({**plan, "revisions": ended} if ended else plan, output)
     if failed:
       raise typer.Exit(1)
     return
@@ -367,8 +367,8 @@ def list_(
     items = _client().list_workloads(environment)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   print_table(
     ["WORKLOAD", "COMPONENT", "VERSION", "STATUS", "REPLICAS", "REVISION", "TRAFFIC", "URL"],
@@ -389,8 +389,8 @@ def get_(
     item = client.get_workload(environment, _instance(client, environment, component, instance))
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(item)
+  if output.data:
+    print_data(item, output)
     return
   latest = item["latestRevision"]
   typer.echo(f"{item['name']} ({item['status']})")
@@ -443,8 +443,8 @@ def signals(
     item = client.workload_signals(environment, _instance(client, environment, component, instance), window)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(item)
+  if output.data:
+    print_data(item, output)
     return
   typer.echo(signals_line(item))
   if item.get("message"):
@@ -463,8 +463,8 @@ def history(
     items = _client().workload_history(environment, instance, component)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   print_table(
     ["WORKLOAD", "REVISION", "ACTION", "VERSION", "STATUS", "BY", "CREATED"],
@@ -549,8 +549,8 @@ def route(
       result = client.delete_workload_route(environment, component)
     except ApiError as error:
       fail(str(error))
-    if output == Format.json:
-      print_json(result)
+    if output.data:
+      print_data(result, output)
     else:
       success(f"route of {component} in {environment} cleared: every request goes to {component}")
     return
@@ -568,8 +568,8 @@ def route(
     result = client.put_workload_route(environment, component, rules) if rules else client.delete_workload_route(environment, component)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
     return
   if not rules:
     success(f"route of {component} in {environment} cleared: every request goes to {component}")

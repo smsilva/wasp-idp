@@ -10,7 +10,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 
 app = typer.Typer(help="OCI registries: where builds push images (and, later, Helm charts and other OCI artifacts).", no_args_is_help=True)
 
@@ -52,8 +52,8 @@ def add(
   """Register an OCI registry (platform-admins only)."""
   body = {"name": name, "scmConnection": scm_connection, "vendor": vendor.value if vendor else None, "namespace": namespace, "host": host, "default": default}
   registry = _call(lambda client: client.add_registry({key: value for key, value in body.items() if value is not None}))
-  if output == Format.json:
-    print_json(registry)
+  if output.data:
+    print_data(registry, output)
     return
   success(f"registry {name} added{' (default)' if registry['default'] else ''} · {registry['address']}, pushed by the CI of {registry['namespace']} repos")
 
@@ -62,8 +62,8 @@ def add(
 def list_(output: OutputOption = Format.table):
   """List the registries: NAME, VENDOR, ADDRESS, DEFAULT, STATUS."""
   items = _call(lambda client: client.list_registries())
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   print_table(["NAME", "VENDOR", "ADDRESS", "DEFAULT", "STATUS"], [[item["name"], item["vendor"], item["address"], "yes" if item["default"] else "—", item["status"]] for item in items])
 
@@ -72,8 +72,8 @@ def list_(output: OutputOption = Format.table):
 def get(name: RegistryName, output: OutputOption = Format.table):
   """Show a registry and whether the platform reaches it."""
   registry = _call(lambda client: client.get_registry(name))
-  if output == Format.json:
-    print_json(registry)
+  if output.data:
+    print_data(registry, output)
     return
   _print(registry)
 
@@ -82,8 +82,8 @@ def get(name: RegistryName, output: OutputOption = Format.table):
 def set_default(name: RegistryName, output: OutputOption = Format.table):
   """Make a registry the default (platform-admins only)."""
   registry = _call(lambda client: client.set_default_registry(name))
-  if output == Format.json:
-    print_json(registry)
+  if output.data:
+    print_data(registry, output)
     return
   success(f"{name} is the default registry ({registry['address']})")
 

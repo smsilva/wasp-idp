@@ -13,7 +13,7 @@ from wasp_templates.render import RenderError, annotate_origin, load_template, r
 from wasp_templates.source import SourceError, coerce, fetch
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 from .catalog_import import ImportFileError, Ref, Repo, origin, read_documents, run_import
 
 app = typer.Typer(help="Templates a component is created from; one default per type.", no_args_is_help=True)
@@ -48,8 +48,8 @@ def list_(output: OutputOption = Format.table):
     items = _client().list_templates()
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   rows = [
     [item["name"], item["type"], (item.get("source") or {}).get("ref", "—"), "yes" if item.get("default") else "—", _location(item.get("source"))]
@@ -84,8 +84,8 @@ def get(name: Annotated[str, typer.Argument(help="Template name (platform catalo
     template = _client().get_template(name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(template)
+  if output.data:
+    print_data(template, output)
     return
   source = template.get("source") or {}
   typer.echo(f"template/{template['name']}")
@@ -124,8 +124,8 @@ def create(
     template = _client().create_template(body)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(template)
+  if output.data:
+    print_data(template, output)
   else:
     success(f"template {template['name']} created" + (f", default for {template['type']}" if template.get("default") else ""))
 
@@ -137,8 +137,8 @@ def make_default(name: Annotated[str, typer.Argument(help="Template name (platfo
     template = _client().make_default_template(name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(template)
+  if output.data:
+    print_data(template, output)
   else:
     success(f"template {name} is the default for {template['type']}")
 
@@ -150,8 +150,8 @@ def delete(name: Annotated[str, typer.Argument(help="Template name (platform cat
     _client().delete_template(name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json({"kind": "template", "name": name, "status": "deleted"})
+  if output.data:
+    print_data({"kind": "template", "name": name, "status": "deleted"}, output)
   else:
     success(f"template {name} deleted")
 

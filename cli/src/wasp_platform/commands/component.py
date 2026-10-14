@@ -15,7 +15,7 @@ import typer
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 from .environment import remaining
 from .template import _params
 
@@ -170,11 +170,11 @@ def create(
   try:
     creation = client.create_component({key: value for key, value in body.items() if value is not None})
     if wait:
-      creation = _wait(client, creation, timeout, quiet=output == Format.json)
+      creation = _wait(client, creation, timeout, quiet=output.data)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(creation)
+  if output.data:
+    print_data(creation, output)
   elif wait:
     for line in summary(creation, None if template else (type_ or "service")):
       success(line)
@@ -199,8 +199,8 @@ def list_(
     items = _client().list_components(system, owner)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   rows = [[item["name"], item.get("system") or "—", item.get("owner") or "—", item.get("lifecycle") or "—", item.get("template") or "—"] for item in items]
   print_table(["NAME", "SYSTEM", "OWNER", "LIFECYCLE", "TEMPLATE"], rows)
@@ -220,14 +220,14 @@ def get(name: Annotated[str, typer.Argument(help="Component name (platform catal
       creation = client.component_creation(name)
     except ApiError:
       fail(str(error))
-    if output == Format.json:
-      print_json(creation)
+    if output.data:
+      print_data(creation, output)
       return
     typer.echo(f"component/{name} (creating: {creation['status']})")
     _steps(creation)
     return
-  if output == Format.json:
-    print_json(component)
+  if output.data:
+    print_data(component, output)
     return
   typer.echo(f"component/{component['name']}")
   for field in ("system", "owner", "type", "lifecycle", "repo", "template", "description"):
@@ -276,8 +276,8 @@ def creation_list(output: OutputOption = Format.table):
     items = _client().list_component_creations()
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   rows = [[item["name"], item["status"], item.get("step") or "—", item.get("requestedBy") or "—", age(item.get("createdAt")), remaining(item.get("freesAt"), utcnow())] for item in items]
   print_table(["NAME", "STATUS", "STEP", "REQUESTED BY", "AGE", "FREES IN"], rows)
@@ -290,8 +290,8 @@ def creation_get(name: Annotated[str, typer.Argument(help="Component name (platf
     creation = _client().component_creation(name)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(creation)
+  if output.data:
+    print_data(creation, output)
     return
   typer.echo(f"componentcreation/{name} ({creation['status']})")
   _steps(creation)

@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 from .catalog_import import import_catalog
 from .component import app as component_app
 from .template import app as template_app
@@ -50,8 +50,8 @@ def _create(plural: str, singular: str, body: dict, output: Format) -> None:
     entity = _client().create_catalog_entity(plural, {key: value for key, value in body.items() if value is not None})
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(entity)
+  if output.data:
+    print_data(entity, output)
   else:
     success(f"{singular} {entity['name']} created")
 
@@ -67,8 +67,8 @@ def _kind_app(plural: str, singular: str, help_text: str) -> typer.Typer:
       items = _client().list_catalog(plural)
     except ApiError as error:
       fail(str(error))
-    if output == Format.json:
-      print_json(items)
+    if output.data:
+      print_data(items, output)
       return
     headers = ["NAME", *[header for header, _ in COLUMNS[plural]]]
     rows = [[item["name"], *[_cell(item.get(field)) for _, field in COLUMNS[plural]]] for item in items]
@@ -80,8 +80,8 @@ def _kind_app(plural: str, singular: str, help_text: str) -> typer.Typer:
       entity = _client().get_catalog_entity(plural, name)
     except ApiError as error:
       fail(str(error))
-    if output == Format.json:
-      print_json(entity)
+    if output.data:
+      print_data(entity, output)
       return
     typer.echo(f"{singular}/{entity['name']}")
     fields = [field for _, field in COLUMNS[plural]] + ["description"]
@@ -95,8 +95,8 @@ def _kind_app(plural: str, singular: str, help_text: str) -> typer.Typer:
       _client().delete_catalog_entity(plural, name)
     except ApiError as error:
       fail(str(error))
-    if output == Format.json:
-      print_json({"kind": singular, "name": name, "status": "deleted"})
+    if output.data:
+      print_data({"kind": singular, "name": name, "status": "deleted"}, output)
     else:
       success(f"{singular} {name} deleted")
 
@@ -166,8 +166,8 @@ def list_all(
     items = _client().list_catalog_entities(kind.value if kind else None, owner)
   except ApiError as error:
     fail(str(error))
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   print_table(["KIND", "NAME", "PARENT", "OWNER"], [[item["kind"], item["name"], _cell(item.get("parent")), item["owner"]] for item in items])
 

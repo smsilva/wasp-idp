@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_table, success
+from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
 
 app = typer.Typer(help="Cloud resources the platform provisions into.", no_args_is_help=True)
 account_app = typer.Typer(help="Cloud accounts: AWS accounts the platform assumes a role in.", no_args_is_help=True)
@@ -73,8 +73,8 @@ def add(
 ):
   """Register an account and print the trust policy to apply to its role."""
   account = _call(_client().add_cloud_account, name, vendor.value, role_arn, region)
-  if output == Format.json:
-    print_json(account)
+  if output.data:
+    print_data(account, output)
     return
   success(f"cloud account {name} added ({account['status']})")
   _print_trust_policy(account)
@@ -85,8 +85,8 @@ def add(
 def list_(output: OutputOption = Format.table):
   """List your cloud accounts and the ones shared with your teams (platform-admins see every one)."""
   items = _call(_client().list_cloud_accounts)
-  if output == Format.json:
-    print_json(items)
+  if output.data:
+    print_data(items, output)
     return
   headers = ["NAME", "VENDOR", "ACCOUNT", "STATUS", "VALIDATED", "OWNER", "SHARED"]
   rows = [
@@ -100,8 +100,8 @@ def list_(output: OutputOption = Format.table):
 def get(name: AccountName, output: OutputOption = Format.table):
   """Show a cloud account with its trust policy."""
   account = _call(_client().get_cloud_account, name)
-  if output == Format.json:
-    print_json(account)
+  if output.data:
+    print_data(account, output)
     return
   _print_account(account)
   _print_trust_policy(account)
@@ -123,8 +123,8 @@ def verify(
       fail(f"{name}: no answer from the cloud account provider after {timeout}s")
     time.sleep(2)
     account = _call(client.get_cloud_account, name)
-  if output == Format.json:
-    print_json(account)
+  if output.data:
+    print_data(account, output)
   elif account["status"] == "ready":
     success(f"{name} ready (account {account['accountId']})")
   elif wait:
@@ -137,8 +137,8 @@ def verify(
 def share(name: AccountName, team: Team, output: OutputOption = Format.table):
   """Share an account with a team you belong to, so its members can use it (owner or platform-admins)."""
   account = _call(_client().share_cloud_account, name, team)
-  if output == Format.json:
-    print_json(account)
+  if output.data:
+    print_data(account, output)
   else:
     success(f"{name} shared with {team}")
 
@@ -147,8 +147,8 @@ def share(name: AccountName, team: Team, output: OutputOption = Format.table):
 def unshare(name: AccountName, team: Team, output: OutputOption = Format.table):
   """Stop sharing an account with a team (owner or platform-admins)."""
   account = _call(_client().unshare_cloud_account, name, team)
-  if output == Format.json:
-    print_json(account)
+  if output.data:
+    print_data(account, output)
   else:
     success(f"{name} no longer shared with {team}")
 
@@ -157,7 +157,7 @@ def unshare(name: AccountName, team: Team, output: OutputOption = Format.table):
 def remove(name: AccountName, output: OutputOption = Format.table):
   """Remove a cloud account from the platform (the role stays in the account)."""
   result = _call(_client().remove_cloud_account, name)
-  if output == Format.json:
-    print_json(result)
+  if output.data:
+    print_data(result, output)
   else:
     success(f"cloud account {name} removed")
