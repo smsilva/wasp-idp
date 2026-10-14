@@ -25,28 +25,39 @@
   color-scheme: dark;
 }
 html.login-pf, body.platform { background: var(--platform-bg) !important; color: var(--platform-fg); }
-body.platform { margin: 0; font-family: var(--platform-sans); }
+body.platform {
+  margin: 0; font-family: var(--platform-sans); min-height: 100vh; display: grid; place-items: center; padding: 56px 24px; box-sizing: border-box;
+  background:
+    radial-gradient(900px 480px at 20% 10%, rgba(74, 158, 244, .10), transparent 70%),
+    radial-gradient(800px 420px at 85% 95%, rgba(124, 92, 255, .08), transparent 70%),
+    var(--platform-bg) !important;
+}
 
-.platform-split { display: grid; grid-template-columns: 1.05fr 1fr; min-height: 100vh; }
+/* One panel sized by its content, centred in the viewport: no empty half-screens on wide monitors */
+.platform-split {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); width: 100%; max-width: 1040px; min-height: 540px;
+  border: 1px solid var(--platform-line); border-radius: 18px; overflow: hidden; background: var(--platform-panel-2);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .7);
+}
 
 /* Left: context column */
 .platform-ctx {
-  padding: 48px 56px; border-right: 1px solid var(--platform-line); display: flex; flex-direction: column; gap: 22px;
+  padding: 40px 44px; border-right: 1px solid var(--platform-line); display: flex; flex-direction: column; gap: 18px;
   background:
-    radial-gradient(700px 360px at 0% 0%, rgba(74, 158, 244, .14), transparent 70%),
-    radial-gradient(600px 300px at 100% 100%, rgba(124, 92, 255, .10), transparent 70%),
+    radial-gradient(520px 300px at 0% 0%, rgba(74, 158, 244, .16), transparent 70%),
+    radial-gradient(420px 260px at 100% 100%, rgba(124, 92, 255, .12), transparent 70%),
     #080c17;
 }
 .platform-brand { display: flex; align-items: center; gap: 10px; }
 .platform-brand .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, var(--platform-accent), #7c5cff); color: #050912; font-weight: 700; }
 .platform-brand .name { font-weight: 600; letter-spacing: .02em; }
 .platform-brand .name span { color: var(--platform-fg-3); font-weight: 400; }
-.platform-ctx h2 { font-size: 30px; line-height: 1.2; margin: 24px 0 0; max-width: 18ch; font-weight: 700; }
+.platform-ctx h2 { font-size: 30px; line-height: 1.2; margin: 20px 0 0; max-width: 22ch; font-weight: 700; text-wrap: balance; }
 .platform-ctx h2 em { font-style: normal; color: var(--platform-accent); }
 .platform-ctx p { color: var(--platform-fg-2); margin: 0; max-width: 46ch; }
 .platform-planes { display: flex; flex-wrap: wrap; gap: 6px; }
 .platform-planes span { border: 1px solid var(--platform-line-2); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--platform-fg-3); }
-.platform-term { background: #05080f; border: 1px solid var(--platform-line-2); border-radius: 10px; overflow: hidden; margin-top: auto; max-width: 560px; }
+.platform-term { background: #05080f; border: 1px solid var(--platform-line-2); border-radius: 10px; overflow: hidden; margin-top: auto; }
 .platform-term .tb { display: flex; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--platform-line); }
 .platform-term .tb i { width: 9px; height: 9px; border-radius: 50%; display: block; background: #2b3648; }
 .platform-term pre { margin: 0; padding: 12px 14px; font: 12.5px/1.7 var(--platform-mono); color: var(--platform-fg-2); white-space: pre-wrap; background: none; border: 0; }
@@ -62,10 +73,11 @@ body.platform { margin: 0; font-family: var(--platform-sans); }
 .platform-steps li.now::before { border-color: var(--platform-accent); color: var(--platform-accent); }
 
 /* Right: the stock keycloak.v2 card, flattened into the column */
-.platform-form.pf-v5-c-login { background: none !important; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 48px 32px; }
+.platform-form.pf-v5-c-login { background: none !important; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 40px 40px; }
 .platform-form .pf-v5-c-login__container { display: block; width: 100%; max-width: 420px; padding: 0; grid-template-columns: none; }
 .platform-form .pf-v5-c-login__main { background: none; box-shadow: none; margin: 0; }
-.platform-form .pf-v5-c-login__main-header { padding: 0 0 6px; }
+.platform-form .pf-v5-c-login__main-header { padding: 0 0 6px; row-gap: 0; }
+.platform-form .pf-v5-c-login__main-body { padding-top: 12px; }
 .platform-form .pf-v5-c-login__main-body, .platform-form .pf-v5-c-login__main-footer { padding-left: 0; padding-right: 0; }
 .platform-form .pf-v5-c-title, #kc-page-title { font-size: 22px !important; font-weight: 700; color: var(--platform-fg); }
 .platform-form .pf-v5-c-form-control { background: var(--platform-panel-2); border-radius: 8px; }
@@ -80,7 +92,7 @@ body.platform { margin: 0; font-family: var(--platform-sans); }
 #social-google svg { width: 18px; height: 18px; }
 #social-google span { margin: 0 !important; font-weight: 600; }
 /* "Use your Google account." reads as the subtitle above the Google button */
-.platform-form .pf-v5-c-login__main-footer-band { border: 0; padding: 0 0 14px; text-align: left; }
+.platform-form .pf-v5-c-login__main-footer-band { border: 0; padding: 0 0 14px; margin-top: 0; text-align: left; }
 .platform-form .pf-v5-c-login__main-footer-band-item { color: var(--platform-fg-2); }
 
 /* Local account: hidden behind a link (js/platform.js), still there for emergencies */
@@ -102,7 +114,8 @@ body.platform[data-page-id="login-login"] #kc-form.platform-collapsed { display:
 
 /* Phone: the context column collapses into a short band above the form */
 @media (max-width: 860px) {
-  .platform-split { grid-template-columns: 1fr; min-height: 0; }
+  body.platform { padding: 0; place-items: stretch; }
+  .platform-split { grid-template-columns: 1fr; min-height: 100vh; align-content: start; border: 0; border-radius: 0; box-shadow: none; }
   .platform-ctx { padding: 20px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--platform-line); }
   .platform-ctx h2 { font-size: 20px; margin-top: 8px; max-width: none; }
   .platform-ctx p, .platform-planes, .platform-term, .platform-steps { display: none; }
@@ -116,7 +129,7 @@ body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-bo
 body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-body > .pf-v5-c-login__main-footer { order: -1; }
 
 /* Language: follows the browser (pt-BR or en); the switcher sits small at the top right */
-.platform-form .pf-v5-c-login__main-header-utilities { position: fixed; top: 16px; right: 20px; width: auto; }
+.platform-form .pf-v5-c-login__main-header-utilities { position: fixed; top: 16px; right: 20px; width: auto; max-width: 160px; }
 .platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control { width: auto; min-height: 0; background: transparent !important; border: 1px solid var(--platform-line-2); border-radius: 999px; font-size: 12px; }
 .platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::before,
 .platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::after { border: 0 !important; }
