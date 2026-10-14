@@ -11,9 +11,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 COPY libs/templates /app/libs/templates
 COPY libs/score /app/libs/score
 COPY providers/scm_github/pyproject.toml providers/scm_github/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# The uv cache outlives the layer: a lock change downloads only the wheels that changed (#443).
+RUN --mount=type=cache,target=/root/.cache/uv \
+  UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
 COPY providers/scm_github/src ./src
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+  UV_LINK_MODE=copy uv sync --frozen --no-dev
 ENV PATH="/app/providers/scm_github/.venv/bin:${PATH}" HOME=/tmp
 USER 65532
 ENTRYPOINT ["scm-github-provider"]

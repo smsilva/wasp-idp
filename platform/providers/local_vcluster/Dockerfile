@@ -19,9 +19,12 @@ RUN helm pull base --repo https://istio-release.storage.googleapis.com/charts --
   && mkdir -p /manifests
 ADD --chmod=644 https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml /manifests/gateway-api.yaml
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# The uv cache outlives the layer: a lock change downloads only the wheels that changed (#443).
+RUN --mount=type=cache,target=/root/.cache/uv \
+  UV_LINK_MODE=copy uv sync --frozen --no-dev --no-install-project
 COPY src ./src
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+  UV_LINK_MODE=copy uv sync --frozen --no-dev
 # The pod policy of every vcluster (ADR 0041), the same file platform init applies on the host.
 COPY --chmod=644 deploy/pod-security.yaml /manifests/pod-security.yaml
 ENV PATH="/app/.venv/bin:${PATH}" HOME=/tmp ISTIO_VERSION=${ISTIO_VERSION} GATEWAY_API_VERSION=${GATEWAY_API_VERSION}

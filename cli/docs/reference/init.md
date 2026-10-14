@@ -24,9 +24,13 @@ export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
 export GOOGLE_CLIENT_SECRET=<secret>
 ```
 
+## Images
+
+`init` builds every image (the Platform API and each provider) in parallel, then imports into `platform-local`, in one `k3d image import`, only the ones its nodes lack. Each image is tagged by its image id, so an unchanged project is neither imported nor rolled out again: a re-run with nothing changed takes well under a minute.
+
 ## Timings
 
-`init` ends with the wall time of each step (cluster, CRDs, each image build and `k3d image import`, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`).
+`init` ends with the wall time of each step (cluster, CRDs, Keycloak, the image builds, the image import, each rollout, Traefik, shared-pg, Prometheus, templates) and the total, so a slower build or provider shows up from one run to the next. When a step fails, the summary shows the steps run so far, the failing one included. With `--output json`, the same numbers come in `timings` (`steps[].step`, `steps[].seconds`, `total_seconds`).
 
 ## What `init` remembers
 
