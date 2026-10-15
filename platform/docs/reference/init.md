@@ -11,7 +11,7 @@ platform init \
 | Flag | Meaning |
 |---|---|
 | `--target local` | the only target today, and the default |
-| `--admin <email>` | joins `platform-admins` on its first Google sign-in; repeat it for more than one; other users land only in `platform-users`; a value that is not an e-mail stops `init` before any step |
+| `--admin <email>` | joins `platform-admins` on its first Google sign-in, or on this run when the user already exists (nobody is ever removed); repeat it for more than one; other users land only in `platform-users`; a value that is not an e-mail stops `init` before any step |
 | `--aws-profile <profile>` | the credential of that `~/.aws` profile becomes the platform base credential for [cloud accounts](cloud-accounts.md) |
 | `--file <path>` | the settings file to read, to write with `--generate-file` or to open with `--edit`; default `~/.config/platform/init.yaml` |
 | `--generate-file` | writes the settings (flags, then the file, then what the cluster remembers) to the file and installs nothing; refuses an existing file without `--force` |
@@ -169,7 +169,7 @@ less ~/.local/state/platform/init/latest/09-keycloak.log
 
 ## What `init` remembers
 
-The `--admin` e-mails (all of them: a later `--admin` replaces the list), the Google credentials, the AWS base credential and `--with-crossplane` are stored in the cluster, so later runs do not repeat them; each run copies the base credential to Crossplane again. Running `init` again is safe: the cluster is reused.
+The `--admin` e-mails (all of them: a later `--admin` replaces the list), the Google credentials, the AWS base credential and `--with-crossplane` are stored in the cluster, so later runs do not repeat them; each run copies the base credential to Crossplane again, and puts each remembered admin that already signed in back in `platform-admins`. Running `init` again is safe: the cluster is reused.
 
 If the AWS credential is temporary (SSO or an assumed role), `init` warns when it expires and must be run again. Prefer a dedicated IAM user with permission only for `sts:AssumeRole` and `sts:GetCallerIdentity`.
 

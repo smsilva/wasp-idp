@@ -356,13 +356,13 @@ def import_realm(root: Path, google: bool) -> None:
   _kubectl("annotate", "deployment", "keycloak", "--namespace", AUTH_NAMESPACE, "--overwrite", f"{IDENTITY_PROVIDERS_ANNOTATION}={'google' if google else ''}")
 
 
-def apply_admin_permissions() -> None:
+def apply_admin_permissions(admins: list[str]) -> None:
   try:
     AdminPermissions(
       KEYCLOAK_URL,
       _secret_value(AUTH_NAMESPACE, "keycloak-admin", "username"),
       _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"),
-    ).apply(note)
+    ).apply(note, admins)
   except httpx.HTTPError as error:
     raise BootstrapError(f"admin permissions of {API_ADMIN_SECRET} not applied: {error}") from error
 
@@ -596,7 +596,7 @@ def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, wit
     Task("import images", lambda results: import_images(results["build images"]), needs=("cluster", "build images")),
     Task("keycloak", lambda results: deploy_keycloak(root, admin_emails), needs=("CRDs",)),
     Task("keycloak realm", lambda results: import_realm(root, results["keycloak"]["google"]), needs=("keycloak",)),
-    Task("keycloak admin permissions", lambda results: apply_admin_permissions(), needs=("keycloak realm",)),
+    Task("keycloak admin permissions", lambda results: apply_admin_permissions(results["keycloak"]["admins"]), needs=("keycloak realm",)),
     Task(IMAGE, api, needs=("keycloak admin permissions", "import images")),
     *(provider(name, directory, manifest) for name, (directory, manifest) in provider_manifests.items()),
     # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
