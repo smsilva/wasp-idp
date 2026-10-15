@@ -915,13 +915,15 @@
 .md-typeset .context > ul {
   margin-top: 0;
   margin-bottom: 0;
-  margin-left: 1.6rem;
+  margin-left: 0;
   font-size: .75rem;
 }
 
+/* The bullet hangs in the indent: the item text lines up with the paragraphs. */
 .md-typeset .validated li,
 .md-typeset .context li {
   margin-bottom: 0;
+  margin-left: .8rem;
 }
 
 .md-typeset .validated li::marker,
