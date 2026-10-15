@@ -214,23 +214,22 @@ def test_logout_revokes_refresh_token(idp, oidc, monkeypatch):
 def test_callback_page_success_in_portuguese():
   page = auth.callback_page(True, None, "pt-BR,pt;q=0.9,en;q=0.8")
   assert '<html lang="pt-BR">' in page
-  assert "Deu certo." in page and "Pode fechar esta aba." in page
-  assert '<button class="cp" data-cmd="platform whoami">' in page
-  assert '<button class="cp" data-cmd="platform environment list">' in page
+  assert "Você entrou" in page and "Volte para o terminal." in page
+  assert '<div class="badge ok"' in page
 
 
-def test_callback_page_links_to_the_guide_and_the_repo():
+def test_callback_page_links_to_the_guide():
   page = auth.callback_page(True, None, "en")
   assert f'href="{auth.DOCS_URL}"' in page
-  assert 'href="https://github.com/smsilva/wasp-idp"' in page
+  assert "You're signed in" in page
 
 
 def test_callback_page_failure_escapes_error():
   page = auth.callback_page(False, "<script>alert(1)</script>", "en-US")
   assert "<script>alert(1)</script>" not in page
   assert "&lt;script&gt;" in page
-  assert "That didn't work." in page
-  assert 'class="cp"' not in page
+  assert "That didn't work" in page
+  assert '<div class="badge fail"' in page
 
 
 def test_browser_login_serves_themed_page(idp, oidc):
@@ -244,7 +243,7 @@ def test_browser_login_serves_themed_page(idp, oidc):
     return True
   oidc.login_browser(open_browser=open_browser, timeout=10)
   time.sleep(0.2)
-  assert "That worked." in pages[0]
+  assert "You're signed in" in pages[0]
 
 
 def test_password_login_saves_the_issuing_client(idp):

@@ -12,10 +12,10 @@ Broker de identidade da plataforma (ADR 0021): o Google autentica, o Keycloak gu
 
 ## Tema
 
-O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado no mockup `docs/idp/design/keycloak-theme/b-split.html` (variante B — Split): coluna de contexto à esquerda, formulário à direita, em janela estreita, uma coluna só, centrada entre a barra do topo (marca `platform-api`) e a do rodapé (guia e repo), o mesmo quadro da página de callback do `platform login`.
+O realm usa o tema de login `platform` (`theme/platform/login/`, #173, simplificado na #537), aprovado no mockup `docs/idp/design/keycloak-theme/c-card.html` (variante D — Card + trilha): fundo escuro liso, o símbolo acima de um card único e centralizado em qualquer janela, uma frase sob o título e, no device flow, uma trilha de três pontos (código → Google → autorizar) sob o card. A página de callback do `platform login` usa o mesmo card.
 
-- Herda o `keycloak.v2`. Só três peças são nossas: `template.ftl` (cópia do `keycloak.v2` 26.5.5 com o layout em duas colunas, trechos marcados `platform:`), `context.ftl` (título, texto e terminal de cada tela) e `resources/css/platform.css` (tokens do PatternFly v5 apontados para a paleta do deck). Os formulários continuam os do `keycloak.v2`.
-- Textos em pt-BR e en (`messages/`), escolhidos pelo idioma do navegador ou pelo seletor no canto. As chaves `platform.*` são da coluna de contexto; as demais substituem textos do Keycloak.
+- Herda o `keycloak.v2`. Só três peças são nossas: `template.ftl` (cópia do `keycloak.v2` 26.5.5 com o card centralizado, trechos marcados `platform:`), `card.ftl` (a frase, o selo de erro/concluído e a trilha do device flow de cada tela) e `resources/css/platform.css` (tokens do PatternFly v5 apontados para a paleta do deck). Os formulários continuam os do `keycloak.v2`.
+- Textos em pt-BR e en (`messages/`), escolhidos pelo idioma do navegador ou pelo seletor no canto. As chaves `platform.*` são a frase sob cada título e a trilha; as demais substituem textos do Keycloak.
 - O `platform init` empacota o tema num ConfigMap (`keycloak-theme`, caminhos com `__` no lugar de `/`), e um init container remonta a árvore em `/opt/keycloak/themes`. Um hash do conteúdo na anotação do Deployment reinicia o Keycloak só quando o tema muda.
 - **Upgrade do Keycloak:** compare `template.ftl` com o do `keycloak.v2` da versão nova e reaplique os trechos `platform:`.
 - **Não reinicie o Keycloak com alguém no meio de um login:** a sessão de autenticação vive na memória do pod, e o retorno do Google cai num servidor que a esqueceu (`ERR_EMPTY_RESPONSE` no navegador, `identity provider unreachable` na CLI).

@@ -1,8 +1,8 @@
-<#-- Copied from keycloak.v2 26.5.5 login/template.ftl. Changes (#173, variant B — Split), all marked
-     "platform:": the context column (context.ftl) wraps the stock card; the stock header is dropped;
-     a header and a footer bar frame the page.
+<#-- Copied from keycloak.v2 26.5.5 login/template.ftl. Changes (#537, variant D — Card + trail), all marked
+     "platform:": the symbol above, the stock card centred alone with one sentence under its title (card.ftl),
+     the device-flow trail under it; the stock header is dropped.
      On upgrade, diff this file against the new keycloak.v2 template. -->
-<#import "context.ftl" as context>
+<#import "card.ftl" as card>
 <#import "field.ftl" as field>
 <#import "footer.ftl" as loginFooter>
 <#macro username>
@@ -141,18 +141,18 @@
 </head>
 
 <body id="keycloak-bg" class="${properties.kcBodyClass!} platform" data-page-id="login-${pageId}">
-<#-- platform: the callback page's frame (cli/src/wasp_platform/assets/callback.html): a glass header with the
-     brand, the split in the middle, a footer with the guide and the repo; the wordmark as the wall behind. -->
-<div class="platform-ghost" aria-hidden="true">platform-api</div>
-<header class="platform-bar platform-head"><@context.symbol /><div><b>platform-api<span>/v1</span></b><small>${msg("platform.tagline")}</small></div></header>
-<#-- platform: two columns, context on the left, the stock keycloak.v2 card on the right. -->
-<div class="platform-split">
-<@context.column pageId=pageId?remove_ending(".ftl") />
+<#-- platform: a plain dark page, the symbol above one centred card, the device-flow trail under it. -->
+<#assign platformKey = card.key(pageId?remove_ending(".ftl"))>
+<div class="platform-page">
+<div class="platform-symbol"><@card.symbol /></div>
 <div class="${properties.kcLogin!} platform-form">
   <div class="${properties.kcLoginContainer!}">
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">
-        <h1 class="${properties.kcLoginMainTitle!}" id="kc-page-title"><#nested "header"></h1>
+        <@card.badge key=platformKey />
+        <#-- platform: the device flow's sign-in says what it is for. -->
+        <h1 class="${properties.kcLoginMainTitle!}" id="kc-page-title"><#if platformKey == "deviceLogin">${msg("platform.title.deviceLogin")}<#else><#nested "header"></#if></h1>
+        <@card.text key=platformKey />
         <#if realm.internationalizationEnabled  && locale.supported?size gt 1>
         <div class="${properties.kcLoginMainHeaderUtilities!}">
           <div class="${properties.kcInputClass!}">
@@ -269,12 +269,8 @@
     </main>
   </div>
 </div>
+<@card.steps key=platformKey />
 </div>
-<footer class="platform-bar platform-foot">
-  <a href="https://smsilva.github.io/wasp-idp/platform/" target="_blank" rel="noopener"><b>${msg("platform.foot.docs")}</b><small>${msg("platform.foot.docsNote")}</small></a>
-  <a href="https://github.com/smsilva/wasp-idp" target="_blank" rel="noopener"><b>GitHub</b><small>smsilva/wasp-idp</small></a>
-  <span class="platform-note">${msg("platform.foot.note")}</span>
-</footer>
 </body>
 </html>
 </#macro>

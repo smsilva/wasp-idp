@@ -50,3 +50,17 @@ No celular, o caminho é sempre o device code: o `platform login` padrão devolv
 ## Escolha
 
 **B — Split**, aprovada na #173 em 2026-10-10.
+
+## #537: um card centralizado
+
+A #537 simplifica as telas na direção das páginas do device flow do GitHub: um card único sobre fundo escuro liso, o símbolo acima, um título, uma frase e o form. Saem a coluna de contexto, as barras de cabeçalho e rodapé e o nome ao fundo. Arquivo: [`c-card.html`](c-card.html), com cada tela nas três variantes lado a lado e um seletor pt-BR/en.
+
+| Variante | Ideia |
+|---|---|
+| C — Card | Só o card. O mais perto do GitHub. |
+| D — Card + trilha | C com uma linha de três pontos sob o card (código → Google → autorizar), só no device flow. |
+| E — Card + terminal | C com o comando que pediu o login dentro do card, abaixo da frase; na tela do código, a linha com o código para comparar. |
+
+A página de callback da CLI (telas 7 e 7a) segue o mesmo card. Nas três variantes ela perde os comandos copiáveis; fica um link para a documentação sob o card.
+
+**Escolha:** D — Card + trilha, aprovada na #537 em 2026-10-15. A trilha aparece só nas telas do device flow (código, Google, autorizar); a tela de conclusão mostra o selo ✓ no lugar dela, porque o Keycloak já não sabe o client ali.
