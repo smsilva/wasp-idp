@@ -1,0 +1,246 @@
+# Tailwind Air, a fictional airline (#528): the company is the top-level Domain and each
+# business area is a subdomain. Its teams are declared here, so this folder imports alone
+# (`platform catalog import idp/catalog/airline/tailwind/`, `platform init --catalog tailwind`, #531).
+# The resources are descriptive only and cloud-agnostic: nothing here provisions them.
+# The Components live in their own repos and point back here via spec.system.
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-group
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-tailwind-architecture
+  description: Tailwind Air architecture team, owner of the company domain
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-booking
+  description: Tailwind Air booking team (flight search, reservations, fares)
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-airport
+  description: Tailwind Air airport team (check-in, boarding, baggage)
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-flight-ops
+  description: Tailwind Air flight operations team (schedules, live flight status)
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-loyalty
+  description: Tailwind Air loyalty team (miles and tiers)
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: team-crew
+  description: Tailwind Air crew team (pilot and cabin crew rostering)
+spec:
+  type: team
+  children: []
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-domain
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: tailwind
+  description: Tailwind Air, an airline — from searching a flight to landing with your bags
+spec:
+  owner: group:default/team-tailwind-architecture
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: booking
+  description: Finding a flight, pricing it and holding the reservation
+spec:
+  owner: group:default/team-booking
+  subdomainOf: tailwind
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: airport
+  description: Everything at the airport — check-in, seats, boarding and bags
+spec:
+  owner: group:default/team-airport
+  subdomainOf: tailwind
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: flight-ops
+  description: The flight schedule and what happens to each flight on the day
+spec:
+  owner: group:default/team-flight-ops
+  subdomainOf: tailwind
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: loyalty
+  description: The frequent flyer program — miles earned per flight and member tiers
+spec:
+  owner: group:default/team-loyalty
+  subdomainOf: tailwind
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: crew
+  description: Who flies each flight — pilots and cabin crew
+spec:
+  owner: group:default/team-crew
+  subdomainOf: tailwind
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-system
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: flight-search
+  description: Searches flights by route and date, with seats left per fare
+spec:
+  owner: group:default/team-booking
+  domain: booking
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: reservations
+  description: Holds a booking and its passengers until the flight departs
+spec:
+  owner: group:default/team-booking
+  domain: booking
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: fares
+  description: Prices each flight per fare class, changing with demand
+spec:
+  owner: group:default/team-booking
+  domain: booking
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: seat-map
+  description: Shows the cabin layout and lets the passenger pick a seat at check-in
+spec:
+  owner: group:default/team-airport
+  domain: airport
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: boarding-pass
+  description: Issues the boarding pass and updates it when the gate changes
+spec:
+  owner: group:default/team-airport
+  domain: airport
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: bag-tracking
+  description: Follows each checked bag from the counter to the destination belt
+spec:
+  owner: group:default/team-airport
+  domain: airport
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: schedules
+  description: The planned flights of each season — routes, times and aircraft
+spec:
+  owner: group:default/team-flight-ops
+  domain: flight-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: flight-status
+  description: Live status of each flight — delays, gate changes, cancellations
+spec:
+  owner: group:default/team-flight-ops
+  domain: flight-ops
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: miles
+  description: Credits miles per flown segment and redeems them for tickets
+spec:
+  owner: group:default/team-loyalty
+  domain: loyalty
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: tiers
+  description: Member tiers and their benefits, recomputed from the miles of the year
+spec:
+  owner: group:default/team-loyalty
+  domain: loyalty
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: rostering
+  description: Assigns pilots and cabin crew to flights within duty-time limits
+spec:
+  owner: group:default/team-crew
+  domain: crew
+---
+# Shared resources: each one belongs to one System and is used by others, which is what
+# `platform catalog ... dependents` shows.
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-resource
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: flight-events
+  description: Pub/sub topic with one event per flight change (delay, gate, cancellation), read by boarding-pass, bag-tracking, miles and rostering
+spec:
+  type: topic
+  owner: group:default/team-flight-ops
+  system: flight-status
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: passengers-db
+  description: Relational database with bookings and their passengers, read by seat-map, boarding-pass and miles
+spec:
+  type: database
+  owner: group:default/team-booking
+  system: reservations
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: fares-cache
+  description: Cache of the current price per flight and fare class, read by flight-search
+spec:
+  type: cache
+  owner: group:default/team-booking
+  system: fares
