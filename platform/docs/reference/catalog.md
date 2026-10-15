@@ -85,7 +85,7 @@ A GitHub failure in any step is one of:
 | `GitHubRejected` | any other 4xx, with GitHub's message | no: the creation stops |
 | `StepFailed` | the cluster unavailable, or an unexpected error | with backoff |
 
-The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` shows only the index, and a stopped name is free to request again. Until then, `create` with that name answers `409` with the reason it stopped; `--wait` ends with the same way out ([A refused creation](../walkthrough/components/refused.md)).
+The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` no longer shows its `creation` line, and a stopped name is free to request again. Until then, `create` with that name answers `409` with the reason it stopped; `--wait` ends with the same way out ([A refused creation](../walkthrough/components/refused.md)).
 
 ### Creation requests
 

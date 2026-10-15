@@ -31,7 +31,7 @@ building from feat/bad-spec @ 9590d3e …
 ✗ hello-api-8757ff: InvalidSpec: app-spec.yaml at 9590d3e: 2 error(s)
 ```
 
-The image is in the registry, but `build list` does not show the version. `build get` keeps the steps for 24 h:
+The image is in the registry, but `build list` does not show the version. `platform catalog component get hello-api` still lists the build on its `builds` line, as `hello-api-8757ff (InvalidSpec, 0.1.0-bad-spec.9590d3e, …)`, and `build get` keeps the steps for 24 h:
 
 ```bash
 platform build get hello-api-8757ff

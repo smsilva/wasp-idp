@@ -17,5 +17,5 @@ How was hello-api created?
 | `catalog_list` | systems of `team-alpha` |
 | `catalog_get` | `greeter` with its dependents |
 | `catalog_components_list` | components of `greeter` |
-| `catalog_components_get` | `hello-api`, with where it runs |
+| `catalog_components_get` | `hello-api`, with its newest builds and versions and where it runs |
 | `catalog_components_creation_get` | the steps that created `hello-api` |
