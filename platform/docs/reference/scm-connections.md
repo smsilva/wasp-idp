@@ -13,6 +13,8 @@ A connection tells the platform which org to create repos in and with which cred
 | `platform scm connection default <name>` | the connection used when none is named |
 | `platform scm connection remove <name>` | deletes the connection and the key; the App stays on GitHub, and the output says where to delete it |
 
+`get` takes `--hide-empty` (the table never shows empty fields, so it changes only a data output). Its `next:` footer is `verify --wait` until the connection is `ready`; then `registry add` for the org's GHCR while no registry has it, `default` when it is not the default, and `component create` ([After a `get`](output.md#after-a-get)).
+
 ## Manifest flow
 
 - Whoever confirms on GitHub must be an owner of the org.

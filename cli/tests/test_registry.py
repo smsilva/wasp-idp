@@ -77,3 +77,24 @@ def test_refusal(api):
   result = run("add", "x", "--vendor", "ghcr", "--namespace", "acme")
   assert result.exit_code == 1
   assert "403: adding a registry requires group 'platform-admins'" in result.output
+
+
+def test_get_suggests_a_build_and_set_default_when_not_the_default(api, monkeypatch):
+  assert run("get", "ghcr-wasp-foundry").stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform build create \\",
+    "    --component <component> \\",
+    "    --branch <branch> \\",
+    "    --registry ghcr-wasp-foundry",
+  ]
+  monkeypatch.setitem(GHCR, "default", False)
+  assert "  platform registry set-default ghcr-wasp-foundry" in run("get", "ghcr-wasp-foundry").stderr.splitlines()
+
+
+def test_get_hide_empty(api, monkeypatch):
+  monkeypatch.setitem(GHCR, "pullMode", None)
+  assert "  pull      —" in run("get", "ghcr-wasp-foundry").stdout.splitlines()
+  assert "pull" not in run("get", "ghcr-wasp-foundry", "--hide-empty").stdout
+  assert "pullMode" not in json.loads(run("get", "ghcr-wasp-foundry", "--hide-empty", "--output", "json").stdout)

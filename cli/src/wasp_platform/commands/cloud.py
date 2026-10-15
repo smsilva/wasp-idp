@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 
 app = typer.Typer(help="Cloud resources the platform provisions into.", no_args_is_help=True)
 account_app = typer.Typer(help="Cloud accounts: AWS accounts the platform assumes a role in.", no_args_is_help=True)
@@ -49,18 +49,16 @@ def _print_trust_policy(account: dict) -> None:
   typer.echo(json.dumps(policy, indent=2))
 
 
-def _print_account(account: dict) -> None:
+def _print_account(account: dict, hide_empty: bool = False) -> None:
   typer.echo(f"{account['name']}: {account['status']}" + (f" — {account['message']}" if account.get("message") else ""))
-  typer.echo(f"  vendor     {account['vendor']}")
-  typer.echo(f"  role       {account['roleArn']}")
-  typer.echo(f"  account    {account.get('accountId') or '—'}")
-  if account.get("regions"):
-    typer.echo(f"  regions    {', '.join(account['regions'])}")
-  if account.get("callerArn"):
-    typer.echo(f"  caller     {account['callerArn']}")
-  typer.echo(f"  validated  {account.get('lastValidated') or '—'}")
-  typer.echo(f"  owner      {account.get('owner') or '—'}")
-  typer.echo(f"  shared     {', '.join(account.get('sharedWith') or []) or '—'}")
+  print_fields([("vendor", account["vendor"]), ("role", account["roleArn"]), ("account", account.get("accountId"))], hide_empty, width=10)
+  # regions and caller have never had a — line.
+  print_fields([("regions", ", ".join(account.get("regions") or [])), ("caller", account.get("callerArn"))], True, width=10)
+  print_fields([
+    ("validated", account.get("lastValidated")),
+    ("owner", account.get("owner")),
+    ("shared", ", ".join(account.get("sharedWith") or [])),
+  ], hide_empty, width=10)
 
 
 @account_app.command("add", epilog=examples("platform cloud account add sandbox --role-arn arn:aws:iam::123456789012:role/platform", "platform cloud account add sandbox --role-arn arn:aws:iam::123456789012:role/platform --region us-east-1 --region sa-east-1"))
@@ -96,15 +94,28 @@ def list_(output: OutputOption = Format.table):
   print_table(headers, rows)
 
 
-@account_app.command("get", epilog=examples("platform cloud account get sandbox"))
-def get(name: AccountName, output: OutputOption = Format.table):
+@account_app.command("get", epilog=examples("platform cloud account get sandbox", "platform cloud account get sandbox --hide-empty --output json"))
+def get(name: AccountName, hide_empty: HideEmptyOption = None, output: OutputOption = Format.table):
   """Show a cloud account with its trust policy."""
+  hide_empty = hiding(hide_empty)
   account = _call(_client().get_cloud_account, name)
   if output.data:
-    print_data(account, output)
+    print_data(account, output, hide_empty)
     return
-  _print_account(account)
+  _print_account(account, hide_empty)
   _print_trust_policy(account)
+  _next(account)
+
+
+def _next(account: dict) -> None:
+  name = (account["name"], "key")
+  if account["status"] != "ready":
+    next_steps([("platform cloud account verify", name, {"--wait": ("", None)})])
+    return
+  next_steps([
+    ("platform environment create", ("<environment>", "environment"), {"--profile": ("<profile>", None), "--cloud-account": name}),
+    ("platform cloud account share", name, {"--team": ("<team>", None)}),
+  ])
 
 
 @account_app.command("verify", epilog=examples("platform cloud account verify sandbox", "platform cloud account verify sandbox --wait --timeout 300"))

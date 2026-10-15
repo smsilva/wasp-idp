@@ -10,6 +10,8 @@ Domains, systems and shared resources that the platform stores (ADR 0023). The `
 | `platform catalog list [--kind domain\|system\|resource] [--owner <team>]` | KIND, NAME, PARENT, OWNER |
 | `platform catalog <kind> list\|get\|delete <name>` | per kind; `get` shows the dependents |
 
+`get` takes `--hide-empty`, and its `next:` footer is the `get` of the parent and of the first three dependents ([After a `get`](output.md#after-a-get)).
+
 | Action | Who |
 |---|---|
 | create or delete a domain | `platform-admins` |
@@ -53,9 +55,9 @@ platform catalog component creation delete <name>
 | `versions` | the newest version of the index: version, commit, branch, age | any signed-in user | `versions`, the 5 newest |
 | `running in` | the environments where a Workload Instance of it runs, with version and status ([Workloads](workloads.md#workload-instances)) | only the environments you can use | `runningIn` |
 
-`builds` and `versions` end with `+N more (--verbose)` when the API carries more than one; `--verbose` lists the 5 of each and the creation steps. More than 5 is `platform build list --component <name>` (versions) and `platform build get <build>`. `--hide-empty` leaves out the `—` lines, and in `--output json|yaml` the keys that are null or empty; without it the JSON keeps every key.
+`builds` and `versions` end with `+N more (--verbose)` when the API carries more than one; `--verbose` lists the 5 of each and the creation steps. More than 5 is `platform build list --component <name>` (versions) and `platform build get <build>`. `--hide-empty` leaves out the empty lines and keys ([After a `get`](output.md#after-a-get)).
 
-After the table, `get` prints on stderr the ready-made commands for the component (`next:`): the newest build, its versions, its instances, the creation while you can see it, and `clone`. Each option goes on its own line, in the colors of the commands of this guide; with `NO_COLOR`, or when stderr is not a terminal, the text is plain. A data output (`--output json|yaml`) prints no footer.
+The `next:` footer of `get` is the newest build, its versions, its instances, the creation while you can see it, and `clone`.
 
 While the component is not in the index yet, `get` shows the creation steps.
 

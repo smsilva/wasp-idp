@@ -15,7 +15,8 @@ the catalog import of idp/catalog/ (then read over MCP), a team with two test us
 the token (member add of yourself renews it, login --refresh drops a team you left), the
 Keycloak client of the API unable to promote anyone to platform-admins, the templates (list,
 render, import plan), an SCM connection up to the GitHub manifest page (creating the App needs a
-browser and an org owner, so it stays out), the refusals of component create (unknown system, a
+browser and an org owner, so it stays out), the next: footer on stderr and --hide-empty of team get
+and scm connection get (#520), the refusals of component create (unknown system, a
 --param outside the schema, a name already in the index, a connection that is not ready), component
 get of an indexed component with nothing generated (empty sections, the next: footer, --hide-empty),
 creation list and delete without a creation, component clone --https of a public repo in the
@@ -193,6 +194,8 @@ platform team member add "${team}" platform-smoke-member@platform.local
 output="$(platform team get "${team}")"
 expect_output "platform-smoke@platform.local" "${output}"
 expect_output "platform-smoke-member@platform.local" "${output}"
+footer="$(platform team get "${team}" 2>&1 >/dev/null)"
+expect_output "platform team member add ${team} <email>" "${footer}"
 
 step "member add of yourself renews the token; login --refresh drops a team you left (#426)"
 output="$(platform team member add "${team}" platform-smoke-admin@platform.local 2>&1)"
@@ -293,6 +296,17 @@ if [[ "${status}" != "400" ]]; then
 fi
 output="$(platform scm connection get "${connection}")"
 expect_output "AppNotCreated" "${output}"
+
+step "scm connection get: the next: footer on stderr, --hide-empty in json (#520)"
+footer="$(platform scm connection get "${connection}" 2>&1 >/dev/null)"
+expect_output "platform scm connection verify ${connection}" "${footer}"
+output="$(platform scm connection get "${connection}" --output json)"
+expect_output '"appId": null' "${output}"
+output="$(platform scm connection get "${connection}" --hide-empty --output json)"
+if grep --quiet 'null' <<<"${output}"; then
+  echo "--hide-empty left null keys: ${output}" >&2
+  exit 1
+fi
 
 step "component create: every refusal happens before GitHub (#279)"
 # The happy path needs a ready connection, so it stays in the manual walkthrough (Components).

@@ -173,3 +173,30 @@ def test_render_needs_a_name_or_from(api, tmp_path):
   result = run("render", "--name", "demo", "--output", str(tmp_path / "o"))
   assert result.exit_code == 1
   assert "give a template name or --from" in result.output
+
+
+def test_get_suggests_render_and_create(api):
+  result = run("get", "python-service")
+  assert result.stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform catalog template render python-service \\",
+    "    --name <component> \\",
+    "    --output <folder>",
+    "",
+    "  platform catalog component create <component> \\",
+    "    --system <system> \\",
+    "    --template python-service",
+  ]
+
+
+def test_get_hide_empty(api, monkeypatch):
+  monkeypatch.setitem(TEMPLATE, "description", None)
+  monkeypatch.setitem(TEMPLATE, "parameters", {})
+  lines = run("get", "python-service").stdout.splitlines()
+  assert "  description  —" in lines and "  parameters   none" in lines
+  lines = run("get", "python-service", "--hide-empty").stdout.splitlines()
+  assert not any(line.startswith(("  description", "  parameters")) for line in lines)
+  data = json.loads(run("get", "python-service", "--hide-empty", "--output", "json").stdout)
+  assert "description" not in data and "parameters" not in data

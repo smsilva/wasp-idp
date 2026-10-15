@@ -10,7 +10,7 @@ import typer
 
 from .. import auth
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_table, success
 
 app = typer.Typer(help="Teams: who shares environments and owns catalog entities.", no_args_is_help=True)
 member_app = typer.Typer(help="Members of a team (platform-admins only).", no_args_is_help=True)
@@ -55,16 +55,18 @@ def list_(output: OutputOption = Format.table):
   print_table(["NAME"], [[item["name"]] for item in items])
 
 
-@app.command("get", epilog=examples("platform team get team-a", "platform team get team-a --output json"))
-def get(name: TeamName, output: OutputOption = Format.table):
+@app.command("get", epilog=examples("platform team get team-a", "platform team get team-a --hide-empty --output json"))
+def get(name: TeamName, hide_empty: HideEmptyOption = None, output: OutputOption = Format.table):
   """Show a team and its members."""
+  hide_empty = hiding(hide_empty)
   team = _call(_client().get_team, name)
   if output.data:
-    print_data(team, output)
+    print_data(team, output, hide_empty)
     return
   typer.echo(f"{team['name']}: {len(team['members'])} member(s)")
   if team["members"]:
     print_table(["EMAIL", "USERNAME"], [[member["email"] or "—", member["username"]] for member in team["members"]])
+  next_steps([("platform team member add", [(team["name"], "key"), ("<email>", "val")], {})])
 
 
 @app.command("delete", epilog=examples("platform team delete team-a"))

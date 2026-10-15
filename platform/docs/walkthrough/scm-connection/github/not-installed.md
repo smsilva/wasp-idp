@@ -13,4 +13,9 @@ wasp-foundry (default): NotInstalled
   org:          wasp-foundry
   app:          wasp-foundry-platform (id 5274859)
   install:      https://github.com/apps/wasp-foundry-platform/installations/new
+
+next:
+
+  platform scm connection verify wasp-foundry \
+    --wait
 ```

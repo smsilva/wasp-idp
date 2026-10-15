@@ -15,7 +15,7 @@ import typer
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, drop_empty, examples, fail, next_steps, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 from .environment import remaining
 from .template import _params
 
@@ -249,10 +249,11 @@ def _next(component: dict) -> None:
 def get(
   name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")],
   verbose: Annotated[bool, typer.Option("--verbose", help="Every build and version it carries, and the creation steps.")] = False,
-  hide_empty: Annotated[bool, typer.Option("--hide-empty", help="Leave out empty fields: the — lines, and null or empty keys in data output.")] = False,
+  hide_empty: HideEmptyOption = None,
   output: OutputOption = Format.table,
 ):
   """Show a component and what it generated: its creation, newest builds and versions, where it runs."""
+  hide_empty = hiding(hide_empty)
   client = _client()
   try:
     component = client.get_component(name)
@@ -262,18 +263,16 @@ def get(
     except ApiError:
       fail(str(error))
     if output.data:
-      print_data(drop_empty(creation) if hide_empty else creation, output)
+      print_data(creation, output, hide_empty)
       return
     typer.echo(f"component/{name} (creating: {creation['status']})")
     _steps(creation)
     return
   if output.data:
-    print_data(drop_empty(component) if hide_empty else component, output)
+    print_data(component, output, hide_empty)
     return
   typer.echo(f"component/{component['name']}")
-  for field in ("system", "owner", "type", "lifecycle", "repo", "template", "description"):
-    if component.get(field) or not hide_empty:
-      typer.echo(f"  {field.ljust(12)} {component.get(field) or '—'}")
+  print_fields([(field, component.get(field)) for field in ("system", "owner", "type", "lifecycle", "repo", "template", "description")], hide_empty)
   # Only who requested the creation and platform-admins see it; for anyone else the line is left out.
   creation = component.get("creation")
   if creation:
@@ -284,8 +283,7 @@ def get(
   _section("versions", [_version_line(item) for item in component.get("versions") or []], verbose, hide_empty)
   # Only the environments you can use (ADR 0033).
   running = ", ".join(f"{_where(component['name'], item)} ({item.get('version') or '—'}, {item['status']})" for item in component.get("runningIn") or [])
-  if running or not hide_empty:
-    typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")
+  print_fields([("running in", running)], hide_empty)
   _next(component)
 
 

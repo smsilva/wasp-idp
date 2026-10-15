@@ -16,4 +16,15 @@ wasp-foundry (default): ready
   repositories: all
   permissions:  actions:write, administration:write, contents:write, metadata:read, pull_requests:write, workflows:write
   validated:    2026-10-11T14:52:26Z
+
+next:
+
+  platform registry add ghcr-wasp-foundry \
+    --scm-connection wasp-foundry \
+    --default
+
+  platform catalog component create <component> \
+    --system <system>
 ```
+
+`next:` suggests the GHCR of the org until a registry has it: the [next step](../../registry/ghcr/register.md).

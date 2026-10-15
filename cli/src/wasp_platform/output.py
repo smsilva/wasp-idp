@@ -9,6 +9,8 @@ import yaml
 from rich.console import Console
 from rich.syntax import Syntax
 
+from . import config
+
 
 class Format(str, Enum):
   table = "table"
@@ -51,7 +53,9 @@ def print_json(value) -> None:
   typer.echo(json.dumps(value, indent=2))
 
 
-def print_data(value, output: Format) -> None:
+def print_data(value, output: Format, hide_empty: bool = False) -> None:
+  if hide_empty:
+    value = drop_empty(value)
   if output == Format.jsonc:
     _console().print_json(data=value, indent=2)
   elif output == Format.yaml:
@@ -107,20 +111,24 @@ def _colored() -> bool:
   return sys.stderr.isatty() and not os.environ.get("NO_COLOR")
 
 
-def next_steps(commands: list[tuple[str, Term | None, dict[str, Term]]]) -> None:
-  """The ready-made commands for what was just shown (#454), on stderr so a pipe gets only the data: each
-  is (command, argument, options), one option per line as in the scripts, a blank line between them."""
+def next_steps(commands: list[tuple[str, Term | list[Term] | None, dict[str, Term]]]) -> None:
+  """The ready-made commands for what was just shown (#454, #498), on stderr so a pipe gets only the data:
+  each is (command, argument or arguments, options), one option per line as in the scripts, a blank line
+  between them."""
+  if not commands:
+    return
   color = _colored()
   lines = ["", _paint("next:", "comment", color)]
   for command, argument, options in commands:
     program, *words = command.split()
     head = " ".join([program, *(_paint(word, "key", color) for word in words)])
-    if argument:
-      head += " " + _paint(argument[0], argument[1], color)
+    for value, role in argument if isinstance(argument, list) else [argument] if argument else []:
+      head += " " + _paint(value, role, color)
     lines += ["", f"  {head}"]
     for option, (value, role) in options.items():
       lines[-1] += " " + _paint("\\", "op", color)
-      lines.append(f"    {_paint(option, 'opt', color)} {_paint(value, role or 'val', color)}")
+      # A flag (--default) has no value.
+      lines.append(f"    {_paint(option, 'opt', color)}" + (f" {_paint(value, role or 'val', color)}" if value else ""))
   for line in lines:
     typer.echo(line, err=True)
 
@@ -132,3 +140,26 @@ def drop_empty(value):
   if isinstance(value, list):
     return [drop_empty(item) for item in value]
   return value
+
+
+HideEmptyOption = Annotated[bool | None, typer.Option(
+  "--hide-empty/--show-empty", show_default=False,
+  help="Leave out empty fields: the — lines, and null or empty keys in data output. Defaults to hide_empty in the config.",
+)]
+
+
+def hiding(flag: bool | None) -> bool:
+  """--hide-empty or --show-empty when given, else hide_empty in the config (#498): a personal default."""
+  if flag is not None:
+    return flag
+  value = config.load().get("hide_empty", False)
+  if not isinstance(value, bool):
+    fail(f"hide_empty takes true or false, got '{value}' (in {config.config_path()})")
+  return value
+
+
+def print_fields(fields: list[tuple[str, object]], hide_empty: bool, width: int = 12) -> None:
+  """The `label value` lines of a get: — for an empty value, or no line at all with --hide-empty."""
+  for label, value in fields:
+    if value or not hide_empty:
+      typer.echo(f"  {label.ljust(width)} {value or '—'}")
