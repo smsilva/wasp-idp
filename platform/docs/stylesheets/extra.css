@@ -913,6 +913,7 @@
 
 .md-typeset .validated > ul,
 .md-typeset .context > ul {
+  margin-top: 0;
   margin-bottom: 0;
   margin-left: 1.6rem;
   font-size: .75rem;

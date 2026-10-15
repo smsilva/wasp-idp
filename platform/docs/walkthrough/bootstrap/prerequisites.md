@@ -1,8 +1,6 @@
 # Prerequisites
 
 !!! validated "Validated on"
-    This walkthrough was run on the operating systems below.
-
     - Ubuntu 24.04.5 LTS
 
 <div class="checks" markdown>
