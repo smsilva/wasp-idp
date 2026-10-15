@@ -252,8 +252,10 @@ fi
 
 step "catalog template: the seed is the default for service"
 output="$(platform catalog template list)"
-expect_output "python-service  service" "${output}"
-expect_output "yes" "${output}"
+# The row of python-service, whatever the width of the NAME column: the demo-only template is longer.
+row="$(awk '$1 == "python-service"' <<< "${output}")"
+expect_output "service" "${row}"
+expect_output "yes" "${row}"
 
 step "catalog template render python-service (fetched at the registered ref)"
 platform catalog template render python-service \
@@ -573,6 +575,9 @@ step "workload spec validate|get: the Score gate and the spec of a version (#291
 sed \
   --expression 's/\${{ values.name }}/'"${workload_component}"'/' \
   --expression 's/\${{ values.port }}/8000/' \
+  --expression 's/\${{ values.title | default(values.name) | dump }}/"'"${workload_component}"'"/' \
+  --expression 's/\${{ values.theme }}/indigo/' \
+  --expression 's/\${{ (values.description or "") | dump }}/""/' \
   platform/templates/python-service/content/app-spec.yaml > "${workload_directory}/app-spec.yaml"
 sed 's/^    type: postgres$/    type: redis/' "${workload_directory}/app-spec.yaml" > "${workload_directory}/invalid.yaml"
 # Open to any signed-in user, before any build.

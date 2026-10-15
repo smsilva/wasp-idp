@@ -39,7 +39,7 @@ The URL answers from your machine, with no `port-forward`:
 platform workload get hello-api \
   --environment demo
 
-curl --include http://hello-api.demo.localhost:7080/
+curl --include http://hello-api.demo.localhost:7080/api/db
 ```
 
 ``` { .text .output title="output" }
@@ -71,8 +71,10 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 Server: istio-envoy
 
-{"app":"hello-api","message":"hello"}
+{"status":"connected","latencyMs":14.8,"checkedAt":"2026-10-15T10:36:43.148058Z","details":false}
 ```
+
+`/api/db` is the check of the app's home page (`http://hello-api.demo.localhost:7080/` in the browser): the `db` of the `resource` line, reached from inside the pod. It answers `503` when the database is unreachable, and the pod's log has the error. The host, user and error stay off the page and the answer (`details: false`) unless `SHOW_DATABASE_DETAILS` is `"true"` in `app-spec.yaml`, as in the demo template `python-service-with-postgresql-for-demo-only`.
 
 The image is pinned by digest: a new push under the same tag does not change what runs. The `internal url` is the address the other workloads of the environment use.
 

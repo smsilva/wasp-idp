@@ -147,3 +147,28 @@ def test_runtime_errors_are_render_errors_and_clean_up(tmp_path):
   with pytest.raises(RenderError, match="b.txt"):
     render(source, tmp_path / "out", {"port": 1})
   assert not (tmp_path / "out").exists()
+
+
+DEMO = REPO / "platform" / "templates" / "python-service-with-postgresql-for-demo-only"
+
+
+def test_the_demo_template_is_python_service_with_database_details():
+  """The demo template is a copy of python-service: only its name, its description, the template name in
+  README/AGENTS and SHOW_DATABASE_DETAILS may differ. A change to python-service goes to both."""
+  base_files = {path.relative_to(SEED / "content").as_posix() for path in (SEED / "content").rglob("*") if path.is_file() and "__pycache__" not in path.parts}
+  demo_files = {path.relative_to(DEMO / "content").as_posix() for path in (DEMO / "content").rglob("*") if path.is_file() and "__pycache__" not in path.parts}
+  assert base_files == demo_files
+  for relative in sorted(base_files):
+    base = (SEED / "content" / relative).read_bytes()
+    demo = (DEMO / "content" / relative).read_bytes()
+    if relative in ("README.md", "AGENTS.md"):
+      demo = demo.replace(b"`python-service-with-postgresql-for-demo-only`", b"`python-service`")
+    if relative == "app-spec.yaml":
+      assert b'SHOW_DATABASE_DETAILS: "false"' in base
+      demo = demo.replace(b'SHOW_DATABASE_DETAILS: "true"', b'SHOW_DATABASE_DETAILS: "false"')
+    assert demo == base, f"{relative} differs between python-service and the demo template"
+  base_definition = yaml.safe_load((SEED / "template.yaml").read_text())
+  demo_definition = yaml.safe_load((DEMO / "template.yaml").read_text())
+  assert base_definition.get("default") is True and "default" not in demo_definition
+  for key in ("type", "owner", "parameters", "copyWithoutRendering"):
+    assert demo_definition[key] == base_definition[key], key

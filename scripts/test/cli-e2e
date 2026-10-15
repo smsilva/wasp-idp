@@ -217,6 +217,9 @@ step "workload deploy|list|get|history|rollback|remove: a version from the index
 sed \
   --expression 's/\${{ values.name }}/'"${workload_component}"'/' \
   --expression 's/\${{ values.port }}/8000/' \
+  --expression 's/\${{ values.title | default(values.name) | dump }}/"'"${workload_component}"'"/' \
+  --expression 's/\${{ values.theme }}/indigo/' \
+  --expression 's/\${{ (values.description or "") | dump }}/""/' \
   platform/templates/python-service/content/app-spec.yaml > "${workload_directory}/app-spec.yaml"
 kubectl --context k3d-platform-local apply --filename - <<MANIFEST
 apiVersion: catalog.platform.wasp.silvios.me/v1alpha1

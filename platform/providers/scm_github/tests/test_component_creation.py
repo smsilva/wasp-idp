@@ -15,12 +15,15 @@ from scm_github_provider.component_creation import TRAILER, CreationReconciler, 
 from scm_github_provider.reconciler import format_time
 from scm_github_provider.github import GitHubApp
 from scm_github_provider.store import AlreadyExists
+from wasp_templates.source import coerce
 
 NOW = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
 # A throwaway key generated per run: the repo is public, no real App, installation or key here.
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 PEM = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
 SEED = Path(__file__).parents[3] / "templates" / "python-service" / "content"
+# What platform init registers from the seed's template.yaml, and the params the API fills from it.
+SEED_DEFINITION = yaml.safe_load((SEED.parent / "template.yaml").read_text())
 WRITES = ("POST", "PATCH", "PUT", "DELETE")
 
 
@@ -153,9 +156,9 @@ def connection(ready=True):
 def creation(prd="# Problem\nGreet people.\n", visibility="public"):
   spec = {
     "system": "greeter", "owner": "team-alpha", "type": "service", "description": "Says hello",
-    "template": {"name": "python-service", "default": True, "copyWithoutRendering": [".github/workflows/*"],
+    "template": {"name": "python-service", "default": True, "copyWithoutRendering": SEED_DEFINITION["copyWithoutRendering"],
                  "source": {"repo": "https://github.com/smsilva/wasp-idp", "path": "platform/templates/python-service/content", "ref": "abc123"}},
-    "params": {"port": 9000}, "scmConnection": "wasp-foundry", "visibility": visibility,
+    "params": coerce(SEED_DEFINITION["parameters"], {"port": 9000}, "python-service"), "scmConnection": "wasp-foundry", "visibility": visibility,
   }
   if prd is not None:
     spec["prd"] = prd

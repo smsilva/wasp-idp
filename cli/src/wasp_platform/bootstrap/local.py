@@ -679,13 +679,17 @@ def install_shared_pg(forager_dir: Path) -> None:
 
 
 def seed_templates(root: Path, ref: str, existing: list[dict]) -> list[dict]:
-  """Template manifests for platform/templates/*, at ref. The first of each type is the default only
-  while no other template of that type is: an admin's `template default` survives a new init."""
+  """Template manifests for platform/templates/*, at ref. The one marked `default: true` in its
+  template.yaml (else the first in name order) is the default of its type only while no other template
+  of that type is: an admin's `template default` survives a new init."""
   current = {obj["metadata"]["name"]: obj.get("spec") or {} for obj in existing}
   taken = {spec.get("type") for spec in current.values() if spec.get("default")}
+  definitions = [(definition, yaml.safe_load(definition.read_text(encoding="utf-8"))) for definition in sorted((root / SEED_FOLDER).glob("*/template.yaml"))]
+  preferred = {}
+  for _, data in sorted(definitions, key=lambda item: not item[1].get("default")):
+    preferred.setdefault(data["type"], data["name"])
   manifests = []
-  for definition in sorted((root / SEED_FOLDER).glob("*/template.yaml")):
-    data = yaml.safe_load(definition.read_text(encoding="utf-8"))
+  for definition, data in definitions:
     name, type_ = data["name"], data["type"]
     spec = {
       "type": type_,
@@ -696,7 +700,7 @@ def seed_templates(root: Path, ref: str, existing: list[dict]) -> list[dict]:
     }
     if data.get("description"):
       spec["description"] = data["description"]
-    if current.get(name, {}).get("default") or type_ not in taken:
+    if current.get(name, {}).get("default") or (type_ not in taken and preferred[type_] == name):
       spec["default"] = True
       taken.add(type_)
     manifests.append({

@@ -2,8 +2,10 @@
 # platform; parameters declares only the extras, as JSON Schema. owner here is the template's owner.
 name: python-service
 type: service
+# The default template of its type on a fresh platform init (otherwise the first folder in name order).
+default: true
 owner: team-platform
-description: FastAPI service with CI to GHCR, Dockerfile and app-spec.yaml
+description: FastAPI service with a home page, Swagger, a PostgreSQL check, CI to GHCR, Dockerfile and app-spec.yaml
 parameters:
   type: object
   properties:
@@ -11,5 +13,15 @@ parameters:
       type: integer
       description: Port the container listens on.
       default: 8000
+    title:
+      type: string
+      description: Headline of the home page; the component name when not given.
+    theme:
+      type: string
+      description: Accent color of the home page.
+      enum: [indigo, teal, amber, rose]
+      default: indigo
+# The workflows carry GitHub's ${{ }} and the page carries Jinja blocks of its own: both stay as written.
 copyWithoutRendering:
   - .github/workflows/*
+  - app/templates/*

@@ -20,10 +20,16 @@ containers:
     image: .
     variables:
       APP_NAME: ${{ values.name }}
+      APP_TITLE: ${{ values.title | default(values.name) | dump }}
+      APP_THEME: ${{ values.theme }}
+      APP_DESCRIPTION: ${{ (values.description or "") | dump }}
       DATABASE_HOST: ${resources.db.host}
+      DATABASE_PORT: ${resources.db.port}
       DATABASE_NAME: ${resources.db.name}
       DATABASE_USER: ${resources.db.username}
       DATABASE_PASSWORD: ${resources.db.password}
+      # true shows the host, user and the driver's errors on the home page and in /api/db: demos only.
+      SHOW_DATABASE_DETAILS: "false"
     # The denominator of saturation in platform workload signals (ADR 0040).
     resources:
       limits:
