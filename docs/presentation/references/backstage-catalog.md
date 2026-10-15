@@ -48,9 +48,9 @@ Fonte: `idp/catalog/airline/tailwind/catalog-info.yaml` — uma companhia aérea
 ```
 Domain tailwind                          owner team-tailwind-architecture
 ├─ Domain airport   (subdomainOf: tailwind)   owner team-airport
-│  ├─ System seat-map                    checkin-web, seat-api, seats
-│  │  ├─ Component seat-api     type service   providesApis seats   dependsOn resource:passengers-db
-│  │  ├─ Component checkin-web  type website   consumesApis seats
+│  ├─ System seat-map                    web-checkin, seat-selection, seats
+│  │  ├─ Component seat-selection     type service   providesApis seats   dependsOn resource:passengers-db
+│  │  ├─ Component web-checkin  type website   consumesApis seats
 │  │  └─ API seats              type openapi
 │  ├─ System boarding-pass
 │  └─ System bag-tracking

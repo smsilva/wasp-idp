@@ -285,7 +285,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: checkin-web
+  name: web-checkin
   description: Check-in website where the passenger confirms the trip and picks a seat
 spec:
   type: website
@@ -298,7 +298,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: seat-api
+  name: seat-selection
   description: Serves the seat map and holds the seat a passenger picks
 spec:
   type: service
@@ -313,7 +313,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: boarding-pass-api
+  name: boarding-pass-issuer
   description: Issues boarding passes and reissues them when the gate changes
 spec:
   type: service
@@ -340,7 +340,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: flight-search-api
+  name: flight-finder
   description: Searches flights by route and date, priced from the fares cache
 spec:
   type: service
@@ -353,7 +353,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: reservations-api
+  name: reservation-desk
   description: Creates and changes bookings and their passengers
 spec:
   type: service
@@ -379,7 +379,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: flight-status-api
+  name: flight-tracker
   description: Takes delays, gate changes and cancellations from operations and publishes them as flight events
 spec:
   type: service
@@ -392,7 +392,7 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: miles-api
+  name: miles-ledger
   description: Credits miles per flown segment and takes them back when a flight is cancelled
 spec:
   type: service

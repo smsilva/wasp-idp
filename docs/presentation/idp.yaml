@@ -536,12 +536,12 @@ slides:
     parent: entity-component
     topic: "Software Catalog"
     audiences: [engineering, platform]
-    label: "Component example"
-    message: "O seat-api, do catálogo de exemplo da Tailwind Air, é um Component."
+    label: "Component example from Tailwind Air"
+    message: "O seat-selection, do catálogo de exemplo da Tailwind Air, é um Component."
     animations: none
-    screen: ["The `seat-api` _holds_ the seat a passenger picks"]
+    screen: ["`seat-selection` (service) _holds_ the seat a passenger picks"]
     notes: |-
-      `seat-api`, o serviço que mostra o mapa de assentos e reserva o assento que o passageiro escolhe. Vem do **catálogo de exemplo deste repo** (`idp/catalog/airline/tailwind/`), que modela a **Tailwind Air**, uma companhia aérea fictícia.
+      `seat-selection`, o serviço que mostra o mapa de assentos e reserva o assento que o passageiro escolhe. Vem do **catálogo de exemplo deste repo** (`idp/catalog/airline/tailwind/`), que modela a **Tailwind Air**, uma companhia aérea fictícia.
 
     dependsOn: [entity-component]
 
@@ -569,12 +569,14 @@ slides:
     parent: entity-api
     topic: "Software Catalog"
     audiences: [engineering, platform]
-    label: "API example"
-    message: "O site checkin-web consome a API seats do seat-api."
+    label: "API example from Tailwind Air"
+    message: "O Component web-checkin consome a API seats, fornecida pelo Component seat-selection."
     animations: none
-    screen: ["`checkin-web` site _consumes_ the `seats` API of `seat-api`"]
+    screen: ["`web-checkin` (website) _consumes_ `seats` (API)", "`seats` (API) _provided by_ `seat-selection` (service)"]
     notes: |-
-      O site de check-in `checkin-web` (`type: website`) consome a API `seats` (`consumesApis`), que o microsserviço `seat-api` (`type: service`) expõe (`providesApis`). O tipo vem do campo `spec.type` de cada Component no catálogo da Tailwind Air.
+      O site de check-in `web-checkin` (`type: website`) consome a API `seats` (`consumesApis`), que o microsserviço `seat-selection` (`type: service`) expõe (`providesApis`). O tipo vem do campo `spec.type` de cada Component no catálogo da Tailwind Air.
+
+      `seat-selection` é o **Component** (`type: service`), o serviço que roda; a **API** é `seats`, o contrato que ele fornece e que o `web-checkin` consome. O nome diz o que a peça faz, e o tipo fica no `spec.type`, por onde o catálogo filtra: um Component chamado `*-api` confunde o serviço com o contrato, e um `*-service` repete o tipo.
 
     dependsOn: [entity-api]
 
@@ -599,12 +601,12 @@ slides:
     parent: entity-resource
     topic: "Software Catalog"
     audiences: [engineering, platform]
-    label: "Resource example"
-    message: "O seat-api depende do banco passengers-db."
+    label: "Resource example from Tailwind Air"
+    message: "O seat-selection depende do banco passengers-db."
     animations: none
-    screen: ["The `passengers-db` database _used by_ `seat-api`"]
+    screen: ["`passengers-db` (database) _used by_ `seat-selection` (service)"]
     notes: |-
-      O microsserviço `seat-api` (`type: service`) depende de `passengers-db` (`type: database`), que guarda as reservas e os seus passageiros.
+      O microsserviço `seat-selection` (`type: service`) depende de `passengers-db` (`type: database`), que guarda as reservas e os seus passageiros.
 
     dependsOn: [entity-resource]
 
@@ -631,14 +633,14 @@ slides:
     parent: entity-system
     topic: "Software Catalog"
     audiences: [engineering, platform]
-    label: "System example"
+    label: "System example from Tailwind Air"
     message: "O System seat-map junta as peças anteriores."
     animations: none
-    screen: ["The `seat-map` system _groups_:", "`checkin-web` site", "`seat-api` service", "`seats` API"]
+    screen: ["`seat-map` (System) _groups_:", "`web-checkin` (website)", "`seat-selection` (service)", "`seats` (API)"]
     notes: |-
-      O System `seat-map` reúne o site `checkin-web`, o microsserviço `seat-api` e a API `seats` entre eles — as peças dos slides anteriores. Um System junta **Components, APIs e Resources**.
+      O System `seat-map` reúne o site `web-checkin`, o microsserviço `seat-selection` e a API `seats` entre eles — as peças dos slides anteriores. Um System junta **Components, APIs e Resources**.
 
-      O banco `passengers-db` é um Resource **compartilhado**: pertence ao System `reservations` e é usado também por `boarding-pass` e `miles`. O `seat-api` declara a dependência (`dependsOn`) sem que o banco mude de dono.
+      O banco `passengers-db` é um Resource **compartilhado**: pertence ao System `reservations` e é usado também por `boarding-pass` e `miles`. O `seat-selection` declara a dependência (`dependsOn`) sem que o banco mude de dono.
 
     dependsOn: [entity-system]
 
@@ -681,11 +683,11 @@ slides:
     message: "Juntando: do negócio ao banco de dados, uma árvore só."
     align: true
     heading: "Tailwind Air catalog"
-    screen: ["**Domain:** `tailwind`", "**Subdomain:** `airport`", "**System:** `seat-map`", "**Component:** `seat-api`"]
+    screen: ["**Domain:** `tailwind`", "**Subdomain:** `airport`", "**System:** `seat-map`", "**Component:** `seat-selection`"]
     notes: |-
       O que queremos dizer: **do negócio ao código, o catálogo é uma árvore só.**
 
-      **Árvore:** Domain `tailwind` → subdomínio `airport` → System `seat-map` → Component `seat-api`. Vem de `idp/catalog/airline/tailwind/catalog-info.yaml`, o catálogo de exemplo de uma companhia aérea fictícia.
+      **Árvore:** Domain `tailwind` → subdomínio `airport` → System `seat-map` → Component `seat-selection`. Vem de `idp/catalog/airline/tailwind/catalog-info.yaml`, o catálogo de exemplo de uma companhia aérea fictícia.
 
       Para o público executive, este slide **substitui os cinco anteriores**: o exemplo sem a teoria.
 
@@ -851,11 +853,11 @@ slides:
     parent: no-versions
     topic: "Software Catalog"
     label: "What the catalog stores example"
-    message: "seat-api é um Component, com várias versões rodando."
+    message: "seat-selection é um Component, com várias versões rodando."
     animations: none
-    screen: ["`seat-api` _is_ 1 component, N versions running"]
+    screen: ["`seat-selection` _is_ 1 component, N versions running"]
     notes: |-
-      Recomendação explícita da documentação do Backstage (FAQ do catálogo). O `seat-api`, o serviço de assentos da Tailwind Air, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
+      Recomendação explícita da documentação do Backstage (FAQ do catálogo). O `seat-selection`, o serviço de assentos da Tailwind Air, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
 
     dependsOn: [no-versions]
 
