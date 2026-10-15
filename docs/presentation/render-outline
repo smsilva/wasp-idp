@@ -723,6 +723,9 @@ def slide_steps(outline, slide, act, section):
     if heading and slide.get("kind") in KINDS:
       first, _, rest = heading.partition(" ")
       heading = f"{{{slide['kind']}:{first}}} {rest}".rstrip()
+    # The example company of the catalog slides is named in bold in their headings.
+    if heading and slide.get("parent"):
+      heading = heading.replace("Tailwind Air", "**Tailwind Air**")
     if heading:
       steps.append({"slide": slide, "act": act, "section": section,
                     "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
