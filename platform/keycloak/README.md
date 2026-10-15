@@ -12,7 +12,7 @@ Broker de identidade da plataforma (ADR 0021): o Google autentica, o Keycloak gu
 
 ## Tema
 
-O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado no mockup `docs/idp/design/keycloak-theme/b-split.html` (variante B — Split): coluna de contexto à esquerda, formulário à direita, faixa curta no topo em telas estreitas.
+O realm usa o tema de login `platform` (`theme/platform/login/`, #173), aprovado no mockup `docs/idp/design/keycloak-theme/b-split.html` (variante B — Split): coluna de contexto à esquerda, formulário à direita, em janela estreita, uma coluna só, centrada entre a barra do topo (marca `platform-api`) e a do rodapé (guia e repo), o mesmo quadro da página de callback do `platform login`.
 
 - Herda o `keycloak.v2`. Só três peças são nossas: `template.ftl` (cópia do `keycloak.v2` 26.5.5 com o layout em duas colunas, trechos marcados `platform:`), `context.ftl` (título, texto e terminal de cada tela) e `resources/css/platform.css` (tokens do PatternFly v5 apontados para a paleta do deck). Os formulários continuam os do `keycloak.v2`.
 - Textos em pt-BR e en (`messages/`), escolhidos pelo idioma do navegador ou pelo seletor no canto. As chaves `platform.*` são da coluna de contexto; as demais substituem textos do Keycloak.

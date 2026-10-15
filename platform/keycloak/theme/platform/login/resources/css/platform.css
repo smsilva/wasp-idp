@@ -1,11 +1,12 @@
 /* platform theme (#173, variant B — Split). Mockup: docs/idp/design/keycloak-theme/b-split.html.
-   Loaded after keycloak.v2 styles.css: re-points the PatternFly v5 tokens to the deck palette and
-   lays the stock card out as the right column. Always dark (theme.properties darkMode=false). */
+   Loaded after keycloak.v2 styles.css: re-points the PatternFly v5 tokens to the platform palette and
+   lays the stock card out as the right column. Always dark (theme.properties darkMode=false).
+   Palette, bars, wordmark and dot grid match the CLI's callback page (cli/src/wasp_platform/assets/callback.html). */
 :root {
-  --platform-bg: #0a0e1a; --platform-panel: #111827; --platform-panel-2: #0d1322;
-  --platform-line: #1f2937; --platform-line-2: #2b3648;
-  --platform-fg: #e6edf6; --platform-fg-2: #9fb3c8; --platform-fg-3: #6b7a8d;
-  --platform-accent: #4a9ef4; --platform-ok: #7ee787; --platform-err: #ff7b72; --platform-amber: #e5c07b;
+  --platform-bg: #0a0b0e; --platform-panel: #121418; --platform-panel-2: #121418;
+  --platform-line: #23262d; --platform-line-2: #2e323b;
+  --platform-fg: #e8eaee; --platform-fg-2: #a4abb8; --platform-fg-3: #707785; --platform-fg-4: #4f5562;
+  --platform-accent: #5aa9ff; --platform-ok: #7ee787; --platform-err: #ff7b72; --platform-amber: #e5c07b;
   --platform-mono: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace;
   --platform-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
@@ -25,42 +26,62 @@
   color-scheme: dark;
 }
 html.login-pf, body.platform { background: var(--platform-bg) !important; color: var(--platform-fg); }
+/* The page: header bar, the split centred in the space left, footer bar */
 body.platform {
-  margin: 0; font-family: var(--platform-sans); min-height: 100vh; display: grid; place-items: center; padding: 56px 24px; box-sizing: border-box;
-  background:
-    radial-gradient(900px 480px at 20% 10%, rgba(74, 158, 244, .10), transparent 70%),
-    radial-gradient(800px 420px at 85% 95%, rgba(124, 92, 255, .08), transparent 70%),
-    var(--platform-bg) !important;
+  margin: 0; font-family: var(--platform-sans); min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; align-items: center;
+  padding: 0 24px; box-sizing: border-box; position: relative; overflow-x: hidden; background: var(--platform-bg) !important;
 }
+/* The name as the wall the page stands on, and a faint dot grid around the panel */
+.platform-ghost {
+  position: absolute; left: 50%; bottom: -0.18em; transform: translateX(-50%); font: 800 clamp(96px, 22vw, 300px)/1 var(--platform-sans); letter-spacing: -.06em;
+  color: transparent; -webkit-text-stroke: 1px rgba(90, 169, 255, .07); background: linear-gradient(180deg, rgba(90, 169, 255, .06), transparent 70%);
+  -webkit-background-clip: text; background-clip: text; white-space: nowrap; pointer-events: none; user-select: none;
+}
+body.platform::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, .055) 1px, transparent 1.2px); background-size: 14px 14px;
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 55%, #000, transparent); mask-image: radial-gradient(70% 60% at 50% 55%, #000, transparent);
+}
+/* Header and footer: glass bars edge to edge */
+.platform-bar {
+  position: relative; z-index: 1; display: flex; align-items: center; align-self: stretch; width: calc(100% + 48px); margin: 0 -24px; box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .018)); border: solid rgba(255, 255, 255, .07);
+  -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+}
+.platform-head { border-width: 0 0 1px; gap: 12px; padding: 14px 28px; }
+.platform-head b { font: 700 18px var(--platform-mono); letter-spacing: -.02em; color: var(--platform-fg); }
+.platform-head b span { color: var(--platform-fg-3); font-weight: 400; }
+.platform-head small { display: block; font-size: 12.5px; color: var(--platform-fg-3); }
+.platform-foot { border-width: 1px 0 0; align-self: end; }
+.platform-foot a { display: flex; flex-direction: column; gap: 2px; padding: 16px 28px; color: inherit; text-decoration: none; box-shadow: 1px 0 0 rgba(255, 255, 255, .06); transition: background-color .2s; }
+.platform-foot a b { font-weight: 600; font-size: 14.5px; color: var(--platform-fg-2); transition: color .2s; }
+.platform-foot a small { font-size: 12.5px; color: var(--platform-fg-4); }
+.platform-foot a:hover { background: rgba(255, 255, 255, .03); }
+.platform-foot a:hover b { color: var(--platform-fg); }
+.platform-foot a:focus-visible { outline: 2px solid var(--platform-accent); outline-offset: -2px; }
+.platform-note { margin-left: auto; padding: 0 28px; font-size: 12.5px; color: var(--platform-fg-4); }
 
 /* One panel sized by its content, centred in the viewport: no empty half-screens on wide monitors */
 .platform-split {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); width: 100%; max-width: 1040px; min-height: 540px;
-  border: 1px solid var(--platform-line); border-radius: 18px; overflow: hidden; background: var(--platform-panel-2);
+  position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); width: 100%; max-width: 1040px; min-height: 540px;
+  margin: 32px 0; border: 1px solid var(--platform-line); border-radius: 16px; overflow: hidden; background: var(--platform-panel);
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .7);
 }
 
 /* Left: context column */
 .platform-ctx {
   padding: 40px 44px; border-right: 1px solid var(--platform-line); display: flex; flex-direction: column; gap: 18px;
-  background:
-    radial-gradient(520px 300px at 0% 0%, rgba(74, 158, 244, .16), transparent 70%),
-    radial-gradient(420px 260px at 100% 100%, rgba(124, 92, 255, .12), transparent 70%),
-    #080c17;
+  background: #0d0f12;
 }
-.platform-brand { display: flex; align-items: center; gap: 10px; }
-.platform-brand .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, var(--platform-accent), #7c5cff); color: #050912; font-weight: 700; }
-.platform-brand .name { font-weight: 600; letter-spacing: .02em; }
-.platform-brand .name span { color: var(--platform-fg-3); font-weight: 400; }
-.platform-ctx h2 { font-size: 30px; line-height: 1.2; margin: 20px 0 0; max-width: 22ch; font-weight: 700; text-wrap: balance; }
+.platform-ctx h2 { font-size: 30px; line-height: 1.2; margin: 0; max-width: 22ch; font-weight: 700; text-wrap: balance; }
 .platform-ctx h2 em { font-style: normal; color: var(--platform-accent); }
 .platform-ctx p { color: var(--platform-fg-2); margin: 0; max-width: 46ch; }
 .platform-planes { display: flex; flex-wrap: wrap; gap: 6px; }
 .platform-planes span { border: 1px solid var(--platform-line-2); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--platform-fg-3); }
-.platform-term { background: #05080f; border: 1px solid var(--platform-line-2); border-radius: 10px; overflow: hidden; margin-top: auto; }
-.platform-term .tb { display: flex; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--platform-line); }
-.platform-term .tb i { width: 9px; height: 9px; border-radius: 50%; display: block; background: #2b3648; }
-.platform-term pre { margin: 0; padding: 12px 14px; font: 12.5px/1.7 var(--platform-mono); color: var(--platform-fg-2); white-space: pre-wrap; background: none; border: 0; }
+.platform-term { background: #08090b; border: 1px solid var(--platform-line-2); border-radius: 10px; overflow: hidden; margin-top: auto; }
+.platform-term .tb { display: flex; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--platform-line); }
+.platform-term .tb i { width: 10px; height: 10px; border-radius: 50%; display: block; background: var(--platform-line-2); }
+.platform-term pre { margin: 0; padding: 14px 16px; font: 15px/1.75 var(--platform-mono); color: var(--platform-fg-2); white-space: pre-wrap; background: none; border: 0; }
 .platform-term .p { color: var(--platform-accent); }
 .platform-term .hl { color: var(--platform-amber); font-weight: 600; }
 .platform-term .cur { display: inline-block; width: 8px; height: 14px; background: var(--platform-fg-2); vertical-align: -2px; animation: platform-blink 1.1s steps(1) infinite; }
@@ -85,6 +106,7 @@ body.platform {
 .platform-form .pf-v5-c-button { border-radius: 9px; min-height: 44px; font-weight: 600; }
 .platform-form .pf-v5-c-button.pf-m-primary { --pf-v5-c-button--m-primary--Color: #04101f; --pf-v5-c-button--m-primary--hover--Color: #04101f; }
 .platform-form .pf-v5-c-alert { border-radius: 6px; border-left: 3px solid var(--platform-err); background: rgba(255, 123, 114, .1); }
+.platform-form .pf-v5-c-alert__title, .platform-form .kc-feedback-text { color: #ffc2bc; font-weight: 500; }
 
 /* Google button: white, as the Google brand guidelines ask */
 #social-google { background: #f8fafc !important; color: #1f2937 !important; border-color: #f8fafc !important; justify-content: center !important; gap: 10px; min-height: 44px; }
@@ -112,16 +134,26 @@ body.platform[data-page-id="login-login"] #kc-form.platform-collapsed { display:
 #kc-oauth #kc-login { order: 2; }
 #kc-oauth #kc-cancel { order: 1; }
 
-/* Phone: the context column collapses into a short band above the form */
+/* Narrow window: one column centred between the bars. The context keeps its title and, where the user compares
+   something with the terminal (device code), the terminal line; the form follows in the same panel. */
 @media (max-width: 860px) {
-  body.platform { padding: 0; place-items: stretch; }
-  .platform-split { grid-template-columns: 1fr; min-height: 100vh; align-content: start; border: 0; border-radius: 0; box-shadow: none; }
-  .platform-ctx { padding: 20px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--platform-line); }
-  .platform-ctx h2 { font-size: 20px; margin-top: 8px; max-width: none; }
+  .platform-split { grid-template-columns: 1fr; min-height: 0; max-width: 480px; margin: 24px 0; }
+  .platform-ctx { padding: 24px 22px 18px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--platform-line); }
+  .platform-ctx h2 { font-size: 24px; max-width: none; }
   .platform-ctx p, .platform-planes, .platform-term, .platform-steps { display: none; }
   .platform-ctx.keep-term .platform-term { display: block; margin-top: 6px; }
   .platform-ctx.keep-term .platform-term .tb { display: none; }
-  .platform-form.pf-v5-c-login { padding: 24px 20px 32px; align-items: flex-start; }
+  .platform-form.pf-v5-c-login { padding: 22px 22px 26px; }
+}
+@media (max-width: 520px) {
+  body.platform { padding: 0 14px; }
+  .platform-bar { width: calc(100% + 28px); margin: 0 -14px; }
+  .platform-head { padding: 12px 16px; } .platform-head b { font-size: 16px; }
+  /* The language switcher sits at the right of the header: the tagline gives it the room. */
+  .platform-head small { display: none; }
+  .platform-foot a { padding: 14px 16px; } .platform-note { display: none; }
+  .platform-ctx { padding: 20px 16px 16px; } .platform-ctx h2 { font-size: 21px; }
+  .platform-form.pf-v5-c-login { padding: 20px 16px 22px; }
 }
 
 /* Login page: Google first, local account below (keycloak.v2 renders the form first) */
@@ -129,7 +161,7 @@ body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-bo
 body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-body > .pf-v5-c-login__main-footer { order: -1; }
 
 /* Language: follows the browser (pt-BR or en); the switcher sits small at the top right */
-.platform-form .pf-v5-c-login__main-header-utilities { position: fixed; top: 16px; right: 20px; width: auto; max-width: 160px; }
+.platform-form .pf-v5-c-login__main-header-utilities { position: fixed; top: 20px; right: 24px; z-index: 2; width: auto; max-width: 160px; }
 .platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control { width: auto; min-height: 0; background: transparent !important; border: 1px solid var(--platform-line-2); border-radius: 999px; font-size: 12px; }
 .platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::before,
 .platform-form .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control::after { border: 0 !important; }

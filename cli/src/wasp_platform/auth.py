@@ -205,34 +205,50 @@ def _oauth_error(response: httpx.Response) -> str:
     return str(response.status_code)
 
 
+# The guide and the repo the page's footer links to.
+DOCS_URL = "https://smsilva.github.io/wasp-idp/platform/"
+REPO = "smsilva/wasp-idp"
+NEXT_COMMANDS = ("platform whoami", "platform environment list")
+
 CALLBACK_TEXT = {
   "en": {
-    "ok": ("All set.", "Back to the terminal.", "login complete", "You can close this tab", "Next, in the terminal:"),
-    "fail": ("Something went wrong", "along the way.", "login failed", "Login not completed", "Run platform login again."),
+    "ok": ("That worked.", "You can close this tab now.", "login complete"),
+    "fail": ("That didn't work.", "Run platform login again.", "login failed"),
+    "page": {
+      "tagline": "the API behind the platform CLI", "docs": "Documentation", "docs_note": "Walkthrough and demos",
+      "note": "platform login · signed in with Keycloak", "copy": "copy", "copied": "copied",
+    },
   },
   "pt-BR": {
-    "ok": ("Pronto.", "Volte ao terminal.", "login concluído", "Pode fechar esta aba", "Próximos passos no terminal:"),
-    "fail": ("Algo deu errado", "no caminho.", "login não concluído", "Login não concluído", "Rode platform login de novo."),
+    "ok": ("Deu certo.", "Pode fechar esta aba.", "login concluído"),
+    "fail": ("Não deu certo.", "Rode platform login de novo.", "login não concluído"),
+    "page": {
+      "tagline": "a API por trás da platform CLI", "docs": "Documentação", "docs_note": "Walkthrough e demos",
+      "note": "platform login · entrou com Keycloak", "copy": "copiar", "copied": "copiado",
+    },
   },
 }
 
 
 def callback_page(ok: bool, error: str | None, accept_language: str = "") -> str:
-  """The browser page at the end of `platform login`, in the look of the Keycloak theme (#173)."""
+  """The browser page at the end of `platform login` (#173): the session as a terminal, and the next
+  commands, which copy themselves on click."""
   lang = "pt-BR" if accept_language.lower().startswith("pt") else "en"
-  heading, heading_em, status, title, message = CALLBACK_TEXT[lang]["ok" if ok else "fail"]
+  text = CALLBACK_TEXT[lang]
+  heading, message, status = text["ok" if ok else "fail"]
   if ok:
     term = '<span class="okc">✓</span> Logged in'
-    extra = '<div class="cmds">platform whoami<br>platform environment list</div>'
+    commands = "".join(
+      f'<button class="cp" data-cmd="{command}"><span class="p">$</span> {command}<span class="tag"></span></button>' for command in NEXT_COMMANDS
+    )
   else:
-    term = "✗ login failed"
     # The error comes from the redirect query string: escape it, an attacker controls it.
-    message = f"{html.escape(error)}. {message}" if error else message
-    extra = ""
+    term = f'<span class="errc">✗</span> {html.escape(error) if error else "login failed"}'
+    commands = ""
   template = (Path(__file__).parent / "assets" / "callback.html").read_text()
   return template.format(
-    lang=lang, title=title, heading=heading, heading_em=heading_em, status=status, message=message,
-    term=term, extra=extra, dot="var(--ok)" if ok else "var(--err)",
+    lang=lang, title=heading, heading=heading, message=message, status=status, term=term, commands=commands,
+    dot="var(--ok)" if ok else "var(--err)", docs_url=DOCS_URL, repo_url=f"https://github.com/{REPO}", repo=REPO, **text["page"],
   )
 
 
