@@ -94,7 +94,7 @@ The agent calls `environments_list` and `environments_get`. It never sees a kube
 Which systems does team-alpha own, which components belong to greeter, and where does hello-api run?
 ```
 
-The agent calls `catalog_list` with `kind: system` and `owner: team-alpha`, `catalog_components_list` with `system: greeter`, then `catalog_components_get` for `hello-api`, whose `runningIn` lists only the environments you can use.
+The agent calls `catalog_list` with `kind: system` and `owner: team-alpha`, `catalog_components_list` with `system: greeter`, then `catalog_components_get` for `hello-api`: its newest builds and versions, and a `runningIn` that lists only the environments you can use.
 
 ## Let the agent create an environment
 

@@ -336,3 +336,62 @@ def test_delete_a_creation_is_for_who_requested_it_and_admins(client, state, tok
   assert client.delete(f"{ROUTE}/greeting-api/creation", headers=bearer(tokens, sub="user-2")).status_code == 403
   assert client.delete(f"{ROUTE}/greeting-api/creation", headers=admin_of(tokens)).status_code == 204
   assert client.delete(f"{ROUTE}/greeting-api/creation", headers=user).status_code == 404
+
+
+def indexed(state, name="greeting-api"):
+  return state.create("components", {"metadata": {"name": name}, "spec": {"system": "greeter", "owner": "team-alpha", "source": {"repo": f"wasp-foundry/{name}"}}})
+
+
+def build(state, name, created, component="greeting-api", ready=True, version="0.1.0"):
+  status = {"conditions": [{"type": "Ready", "status": "True" if ready else "False", "reason": "Registered" if ready else "InvalidSpec"}],
+            "run": {"headSha": "c" * 40}, "runUrl": f"https://github.com/wasp-foundry/{component}/actions/runs/1"}
+  if ready:
+    status["result"] = {"version": version, "commit": "d" * 40}
+  state.create("builds", {"metadata": {"name": name}, "spec": {"component": component, "branch": "main"}, "status": status})
+  state.stores["builds"][name]["metadata"]["creationTimestamp"] = created
+
+
+def registered(state, number, created, component="greeting-api"):
+  return state.create("versions", {"metadata": {"name": f"{component}.{number}"}, "spec": {
+    "component": component, "version": number, "commit": "e" * 40, "branch": "main", "createdAt": created, "build": f"{component}-abc123",
+  }})
+
+
+def test_get_shows_what_the_component_generated(client, state, user):
+  indexed(state)
+  indexed(state, "other-api")
+  creation(state, ready=True)
+  for day in range(1, 8):
+    build(state, f"greeting-api-{day:06d}", f"2026-10-0{day}T00:00:00Z", version=f"0.{day}.0")
+    registered(state, f"0.{day}.0", f"2026-10-0{day}T00:00:00Z")
+  build(state, "other-api-000001", "2026-10-09T00:00:00Z", component="other-api")
+  registered(state, "9.9.9", "2026-10-09T00:00:00Z", component="other-api")
+  body = client.get(f"{ROUTE}/greeting-api", headers=user).json()
+  assert body["creation"]["status"] == "ready"
+  assert [item["name"] for item in body["builds"]] == [f"greeting-api-{day:06d}" for day in (7, 6, 5, 4, 3)]
+  assert body["builds"][0] == {
+    "name": "greeting-api-000007", "branch": "main", "status": "ready", "version": "0.7.0", "commit": "d" * 40,
+    "runUrl": "https://github.com/wasp-foundry/greeting-api/actions/runs/1", "createdAt": "2026-10-07T00:00:00Z",
+  }
+  assert [item["version"] for item in body["versions"]] == ["0.7.0", "0.6.0", "0.5.0", "0.4.0", "0.3.0"]
+  assert body["runningIn"] == []
+
+
+def test_get_omits_a_creation_the_caller_cannot_see(client, state, tokens, user):
+  indexed(state)
+  creation(state, reason="ComponentExists")
+  assert client.get(f"{ROUTE}/greeting-api", headers=bearer(tokens, sub="user-2")).json()["creation"] is None
+  assert client.get(f"{ROUTE}/greeting-api", headers=admin_of(tokens)).json()["creation"]["status"] == "ComponentExists"
+
+
+def test_get_without_creation_builds_or_versions(client, state, user):
+  indexed(state)
+  body = client.get(f"{ROUTE}/greeting-api", headers=user).json()
+  assert (body["creation"], body["builds"], body["versions"]) == (None, [], [])
+
+
+def test_get_a_pending_build_has_no_version(client, state, user):
+  indexed(state)
+  build(state, "greeting-api-000001", "2026-10-01T00:00:00Z", ready=False)
+  item = client.get(f"{ROUTE}/greeting-api", headers=user).json()["builds"][0]
+  assert (item["status"], item["version"], item["commit"]) == ("InvalidSpec", None, "c" * 40)

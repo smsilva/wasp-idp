@@ -1,4 +1,6 @@
 import json
+import os
+import sys
 from enum import Enum
 from typing import Annotated
 
@@ -78,3 +80,55 @@ def success(message: str) -> None:
 def fail(message: str) -> None:
   typer.secho(f"✗ {message}", fg=typer.colors.RED, err=True)
   raise typer.Exit(1)
+
+
+# The roles of the MkDocs terminal blocks (--t-* in platform/docs/stylesheets/extra.css, dark palette):
+# change both together. Commands and plain arguments keep the terminal's own color, which reads on a
+# light background too.
+TERM_COLORS = {
+  "opt": {"fg": (0x7C, 0xC4, 0xFF)},
+  "val": {"fg": (0xE5, 0xC0, 0x7B)},
+  "op": {"fg": (0x6B, 0x7A, 0x8D)},
+  "comment": {"fg": (0x6B, 0x7A, 0x8D), "italic": True},
+  "key": {"bold": True},
+  "component": {"fg": (0x5E, 0xEA, 0xD4), "bold": True},
+  "environment": {"fg": (0xF4, 0x72, 0xB6), "bold": True},
+}
+
+# A value and its role: a key of TERM_COLORS, or None for a plain argument.
+Term = tuple[str, str | None]
+
+
+def _paint(text: str, role: str | None, color: bool) -> str:
+  return typer.style(text, **TERM_COLORS[role]) if color and role else text
+
+
+def _colored() -> bool:
+  return sys.stderr.isatty() and not os.environ.get("NO_COLOR")
+
+
+def next_steps(commands: list[tuple[str, Term | None, dict[str, Term]]]) -> None:
+  """The ready-made commands for what was just shown (#454), on stderr so a pipe gets only the data: each
+  is (command, argument, options), one option per line as in the scripts, a blank line between them."""
+  color = _colored()
+  lines = ["", _paint("next:", "comment", color)]
+  for command, argument, options in commands:
+    program, *words = command.split()
+    head = " ".join([program, *(_paint(word, "key", color) for word in words)])
+    if argument:
+      head += " " + _paint(argument[0], argument[1], color)
+    lines += ["", f"  {head}"]
+    for option, (value, role) in options.items():
+      lines[-1] += " " + _paint("\\", "op", color)
+      lines.append(f"    {_paint(option, 'opt', color)} {_paint(value, role or 'val', color)}")
+  for line in lines:
+    typer.echo(line, err=True)
+
+
+def drop_empty(value):
+  """--hide-empty on data output: keys whose value is null, an empty string or an empty list go away."""
+  if isinstance(value, dict):
+    return {key: drop_empty(item) for key, item in value.items() if item not in (None, "", [], {})}
+  if isinstance(value, list):
+    return [drop_empty(item) for item in value]
+  return value

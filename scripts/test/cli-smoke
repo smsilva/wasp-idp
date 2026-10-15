@@ -16,7 +16,8 @@ the token (member add of yourself renews it, login --refresh drops a team you le
 Keycloak client of the API unable to promote anyone to platform-admins, the templates (list,
 render, import plan), an SCM connection up to the GitHub manifest page (creating the App needs a
 browser and an org owner, so it stays out), the refusals of component create (unknown system, a
---param outside the schema, a name already in the index, a connection that is not ready),
+--param outside the schema, a name already in the index, a connection that is not ready), component
+get of an indexed component with nothing generated (empty sections, the next: footer, --hide-empty),
 creation list and delete without a creation, component clone --https of a public repo in the
 index, and of a name outside it, the OCI
 registries (add refused to a non-admin, NoDefaultRegistry when the cluster has no default, add
@@ -326,6 +327,16 @@ expect_failure "component '${taken_component}' already exists" \
     --scm "${connection}"
 output="$(platform catalog component list --system platform)"
 expect_output "${taken_component}" "${output}"
+# What it generated (#454): nothing yet, and the next commands on stderr.
+output="$(platform catalog component get "${taken_component}" 2>&1)"
+expect_output "builds       —" "${output}"
+expect_output "versions     —" "${output}"
+expect_output "--component ${taken_component}" "${output}"
+output="$(platform catalog component get "${taken_component}" --hide-empty 2>/dev/null)"
+if grep --quiet -- "—" <<< "${output}"; then
+  echo "expected no empty line with --hide-empty" >&2
+  exit 1
+fi
 kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}"
 expect_failure "is not ready (AppNotCreated)" \
   platform catalog component create "${component}" \

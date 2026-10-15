@@ -115,7 +115,7 @@ def catalog(client: ClientFactory) -> list[ToolSpec]:
     return {"items": client().list_components(system, owner)}
 
   def catalog_components_get(name: str) -> dict[str, Any]:
-    """One component, with where it runs (runningIn) in the environments the caller can use."""
+    """One component and what it generated: its creation (only to who requested it), the 5 newest builds and versions, and where it runs (runningIn) in the environments the caller can use."""
     return client().get_component(checked(name))
 
   def catalog_components_creation_get(name: str) -> dict[str, Any]:

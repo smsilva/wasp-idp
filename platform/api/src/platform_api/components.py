@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from wasp_templates.source import SourceError, coerce
 
 from .auth import Principal, current_principal
+from .builds import BUILDS, VERSIONS, build_view, version_view
 from .catalog import CREATED_BY_ANNOTATION, DESCRIPTION_MAX, LABEL
 from .durations import format_time
 from .environments import ADMIN_GROUP, can_use, is_owner_or_admin
@@ -35,6 +36,8 @@ STEPS = ("Validated", "Rendered", "RepoCreated", "Pushed", "Protected", "Registe
 # the provider retries: those creations are still running.
 FINAL = {"RepoAlreadyExists", "RepoGone", "ComponentExists", "GitHubRejected"}
 RETENTION = timedelta(hours=24)
+# How many builds and versions `GET /components/{name}` carries; build list and get show the rest.
+RECENT = 5
 
 
 class ComponentRequest(BaseModel):
@@ -110,6 +113,20 @@ def creation_row(obj: dict) -> dict:
     "createdAt": obj["metadata"].get("creationTimestamp"),
     "freesAt": frees_at,
   }
+
+
+def build_row(obj: dict) -> dict:
+  """A build in the component view: what it became, not its steps (build get shows them)."""
+  view = build_view(obj)
+  return {
+    "name": view["name"], "branch": view["branch"], "status": view["status"],
+    "version": (view["result"] or {}).get("version") or view["requestedVersion"], "commit": view["commit"],
+    "runUrl": view["runUrl"], "createdAt": view["createdAt"],
+  }
+
+
+def newest(items: list[dict]) -> list[dict]:
+  return sorted(items, key=lambda item: (item["createdAt"] or "", item["name"]), reverse=True)[:RECENT]
 
 
 def creation_view(obj: dict) -> dict:
@@ -311,7 +328,19 @@ def router(state, journal: Journal, teams=None) -> APIRouter:
       component = component_view(state.get(COMPONENTS, name))
     except NotFound:
       raise HTTPException(404, f"component '{name}' not found")
-    return {**component, "runningIn": running_in(name, principal)}
+    # What the component generated (#454), each part under the read rule of its own kind: a creation the
+    # caller cannot see is null, never a 403; builds and versions are open to any signed-in user.
+    try:
+      creation = visible_creation(name, principal)
+    except HTTPException:
+      creation = None
+    return {
+      **component,
+      "creation": creation_view(creation) if creation else None,
+      "builds": newest([build_row(obj) for obj in state.list(BUILDS) if (obj.get("spec") or {}).get("component") == name]),
+      "versions": newest([version_view(obj) for obj in state.list(VERSIONS) if (obj.get("spec") or {}).get("component") == name]),
+      "runningIn": running_in(name, principal),
+    }
 
   def visible_creation(name: str, principal: Principal) -> dict:
     try:

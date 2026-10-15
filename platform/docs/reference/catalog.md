@@ -26,7 +26,7 @@ platform catalog component create <name> --system <system> \
   [--param key=value]... [--description <text>] [--scm <connection>] \
   [--visibility public|private] [--prd <file>|-] [--replace] [--wait] [--timeout <seconds>]
 platform catalog component list [--system <system>] [--owner <team>]
-platform catalog component get <name>
+platform catalog component get <name> [--verbose] [--hide-empty]
 platform catalog component clone <name> [--directory <dir>] [--https]
 platform catalog component creation list
 platform catalog component creation get <name>
@@ -44,7 +44,20 @@ platform catalog component creation delete <name>
 | `--prd` | the template's `docs/prd.md` skeleton; the journal keeps only the hash of the text (at most 64 KiB) |
 | `--replace` | off: a stopped creation with the same name answers `409` |
 
-`list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component and a `running in` line: the environments where a Workload Instance of it runs, with version and status ([Workloads](workloads.md#workload-instances)), only those you can use (JSON: `runningIn`). While the component is not in the index yet, `get` shows the creation steps.
+`list` shows NAME, SYSTEM, OWNER, LIFECYCLE and TEMPLATE. `get` shows the component and what it generated, each part under the read rule of its own kind:
+
+| Line | What it shows | Who sees it | JSON |
+|---|---|---|---|
+| `creation` | the status of its `ComponentCreation`, while it is kept (24 h after it ends) | who requested it and `platform-admins`; for anyone else the line is left out | `creation` (`null` when hidden or gone) |
+| `builds` | the newest build: name, status, version, age | any signed-in user | `builds`, the 5 newest |
+| `versions` | the newest version of the index: version, commit, branch, age | any signed-in user | `versions`, the 5 newest |
+| `running in` | the environments where a Workload Instance of it runs, with version and status ([Workloads](workloads.md#workload-instances)) | only the environments you can use | `runningIn` |
+
+`builds` and `versions` end with `+N more (--verbose)` when the API carries more than one; `--verbose` lists the 5 of each and the creation steps. More than 5 is `platform build list --component <name>` (versions) and `platform build get <build>`. `--hide-empty` leaves out the `—` lines, and in `--output json|yaml` the keys that are null or empty; without it the JSON keeps every key.
+
+After the table, `get` prints on stderr the ready-made commands for the component (`next:`): the newest build, its versions, its instances, the creation while you can see it, and `clone`. Each option goes on its own line, in the colors of the commands of this guide; with `NO_COLOR`, or when stderr is not a terminal, the text is plain. A data output (`--output json|yaml`) prints no footer.
+
+While the component is not in the index yet, `get` shows the creation steps.
 
 `clone` runs `git clone` of the component's repo with your own Git credentials, printing the command first and exiting with the code of `git`. The URL is SSH (`git@github.com:<org>/<repo>.git`) unless `--https` is given or `~/.config/platform/config.yaml` has `git_protocol: https`; `--https` wins over the config. A component not in the index is refused before `git` runs ([Clone the component](../walkthrough/components/clone.md)).
 
@@ -72,7 +85,7 @@ A GitHub failure in any step is one of:
 | `GitHubRejected` | any other 4xx, with GitHub's message | no: the creation stops |
 | `StepFailed` | the cluster unavailable, or an unexpected error | with backoff |
 
-The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` shows only the index, and a stopped name is free to request again. Until then, `create` with that name answers `409` with the reason it stopped; `--wait` ends with the same way out ([A refused creation](../walkthrough/components/refused.md)).
+The connection reasons are retried with backoff too, but `--wait` stops at them, at `GitHubRejected` and at the step reasons above; it keeps waiting on the others. A creation is removed 24 h after it ends `Ready`, or after it stops on `RepoAlreadyExists`, `RepoGone`, `ComponentExists` or `GitHubRejected`: then `component get` no longer shows its `creation` line, and a stopped name is free to request again. Until then, `create` with that name answers `409` with the reason it stopped; `--wait` ends with the same way out ([A refused creation](../walkthrough/components/refused.md)).
 
 ### Creation requests
 

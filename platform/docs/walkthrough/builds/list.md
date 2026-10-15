@@ -22,6 +22,8 @@ hello-api.1.0.0-rc.1               1.0.0-rc.1               feat/greetings  ghcr
 hello-api.0.1.0-greetings.b5f9569  0.1.0-greetings.b5f9569  feat/greetings  ghcr-wasp-foundry  2026-10-12T18:37:33Z
 ```
 
+`platform catalog component get hello-api` shows the newest of both on its `builds` and `versions` lines, and the 5 newest with `--verbose` ([Components](../../reference/catalog.md#components)).
+
 `NAME` is the version itself, and `build get` takes it too: it shows the build that produced the version, while that build lasts.
 
 ```bash

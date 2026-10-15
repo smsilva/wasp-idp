@@ -200,6 +200,96 @@ def test_get_shows_an_extra_instance_with_its_name(api):
   assert "running in   demo (1.0.0, Available), greeting-api-pr-1@demo (1.1.0, Progressing)" in result.stdout
 
 
+GENERATED = {
+  "name": "greeting-api", "system": "greeter", "owner": "team-alpha", "type": "service", "lifecycle": "experimental",
+  "repo": "wasp-foundry/greeting-api", "template": "python-service@abc123", "description": None,
+  "creation": DONE | {"createdAt": "2026-10-10T00:00:00Z"},
+  "builds": [
+    {"name": f"greeting-api-00000{n}", "branch": "main", "status": "ready", "version": f"0.{n}.0", "commit": "d" * 40, "runUrl": None, "createdAt": "2026-10-10T00:00:00Z"}
+    for n in (3, 2, 1)
+  ],
+  "versions": [
+    {"name": f"greeting-api.0.{n}.0", "version": f"0.{n}.0", "commit": "e" * 40, "branch": "main", "createdAt": "2026-10-10T00:00:00Z"}
+    for n in (3, 2)
+  ],
+  "runningIn": [],
+}
+
+
+def test_get_shows_the_newest_of_each_section(api):
+  api["component"] = GENERATED
+  result = run("get", "greeting-api")
+  assert result.exit_code == 0, result.output
+  lines = result.stdout.splitlines()
+  assert any(line.startswith("  creation     ready, ") for line in lines)
+  assert any(line.startswith("  builds       greeting-api-000003 (ready, 0.3.0, ") and line.endswith(" +2 more (--verbose)") for line in lines)
+  assert any(line.startswith("  versions     0.3.0 (eeeeeee, main, ") and line.endswith(" +1 more (--verbose)") for line in lines)
+  assert "  running in   —" in lines
+  assert "  description  —" in lines
+  assert "Validated" not in result.stdout
+
+
+def test_get_verbose_shows_every_item_and_the_creation_steps(api):
+  api["component"] = GENERATED
+  result = run("get", "greeting-api", "--verbose")
+  assert result.exit_code == 0, result.output
+  for name in ("greeting-api-000003", "greeting-api-000002", "greeting-api-000001"):
+    assert name in result.stdout
+  assert "0.2.0" in result.stdout
+  assert "✓ Validated" in result.stdout
+  assert "more (--verbose)" not in result.stdout
+
+
+def test_get_omits_a_creation_it_cannot_see(api):
+  api["component"] = GENERATED | {"creation": None, "builds": [], "versions": []}
+  result = run("get", "greeting-api")
+  assert "creation" not in result.stdout
+  assert "  builds       —" in result.stdout.splitlines()
+  assert "  versions     —" in result.stdout.splitlines()
+
+
+def test_get_hide_empty_drops_the_empty_lines_and_keys(api):
+  api["component"] = GENERATED | {"builds": []}
+  lines = run("get", "greeting-api", "--hide-empty").stdout.splitlines()
+  assert not any(line.endswith("—") for line in lines)
+  assert not any(line.startswith("  builds") for line in lines)
+  data = json.loads(run("get", "greeting-api", "--hide-empty", "--output", "json").stdout)
+  assert "builds" not in data and "description" not in data and "runningIn" not in data
+  assert data["versions"][0]["version"] == "0.3.0"
+  data = json.loads(run("get", "greeting-api", "--output", "json").stdout)
+  assert data["builds"] == [] and data["description"] is None
+
+
+def test_get_suggests_the_next_commands_on_stderr(api):
+  api["component"] = GENERATED
+  result = run("get", "greeting-api")
+  assert "next:" not in result.stdout
+  assert result.stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform build get greeting-api-000003",
+    "",
+    "  platform build list \\",
+    "    --component greeting-api",
+    "",
+    "  platform workload list \\",
+    "    --component greeting-api",
+    "",
+    "  platform catalog component creation get greeting-api",
+    "",
+    "  platform catalog component clone greeting-api",
+  ]
+  assert "next:" not in run("get", "greeting-api", "--output", "json").stderr
+
+
+def test_get_suggests_only_what_exists(api):
+  api["component"] = GENERATED | {"creation": None, "builds": []}
+  stderr = run("get", "greeting-api").stderr
+  assert "build get" not in stderr and "creation get" not in stderr
+  assert "platform build list" in stderr
+
+
 INDEXED = {"name": "greeting-api", "system": "greeter", "owner": "team-alpha", "repo": "wasp-foundry/greeting-api"}
 
 

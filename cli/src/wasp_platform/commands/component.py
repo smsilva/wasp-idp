@@ -15,7 +15,7 @@ import typer
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, OutputOption, drop_empty, examples, fail, next_steps, print_data, print_table, success
 from .environment import remaining
 from .template import _params
 
@@ -108,9 +108,9 @@ def _where(component: str, item: dict) -> str:
   return item["environment"] if instance in (None, component) else f"{instance}@{item['environment']}"
 
 
-def _steps(creation: dict) -> None:
+def _steps(creation: dict, indent: int = 2) -> None:
   for condition in creation.get("conditions") or []:
-    typer.echo(f"  {_mark(condition, '✗')} {condition['type'].ljust(12)} {condition.get('message') or condition.get('reason')}")
+    typer.echo(f"{' ' * indent}{_mark(condition, '✗')} {condition['type'].ljust(12)} {condition.get('message') or condition.get('reason')}")
 
 
 def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> dict:
@@ -206,12 +206,53 @@ def list_(
   print_table(["NAME", "SYSTEM", "OWNER", "LIFECYCLE", "TEMPLATE"], rows)
 
 
+def _build_line(item: dict) -> str:
+  parts = [item["status"], item.get("version"), age(item.get("createdAt"))]
+  return f"{item['name']} ({', '.join(part for part in parts if part)})"
+
+
+def _version_line(item: dict) -> str:
+  parts = [(item.get("commit") or "")[:7], item.get("branch"), age(item.get("createdAt"))]
+  return f"{item['version']} ({', '.join(part for part in parts if part)})"
+
+
+def _section(label: str, lines: list[str], verbose: bool, hide_empty: bool) -> None:
+  """One line with the newest item, and how many more --verbose shows; every item with --verbose."""
+  if not lines:
+    if not hide_empty:
+      typer.echo(f"  {label.ljust(12)} —")
+    return
+  shown = lines if verbose else [lines[0] + (f"  +{len(lines) - 1} more (--verbose)" if len(lines) > 1 else "")]
+  typer.echo(f"  {label.ljust(12)} {shown[0]}")
+  for line in shown[1:]:
+    typer.echo(f"  {''.ljust(12)} {line}")
+
+
+def _next(component: dict) -> None:
+  name = (component["name"], "component")
+  steps = []
+  if component.get("builds"):
+    steps.append(("platform build get", (component["builds"][0]["name"], "key"), {}))
+  steps.append(("platform build list", None, {"--component": name}))
+  steps.append(("platform workload list", None, {"--component": name}))
+  if component.get("creation"):
+    steps.append(("platform catalog component creation get", name, {}))
+  steps.append(("platform catalog component clone", name, {}))
+  next_steps(steps)
+
+
 @app.command("get", epilog=examples(
   "platform catalog component get hello-api",
-  "platform catalog component get hello-api --output json",
+  "platform catalog component get hello-api --verbose",
+  "platform catalog component get hello-api --hide-empty --output json",
 ))
-def get(name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")], output: OutputOption = Format.table):
-  """Show a component; while its creation runs, show the creation steps instead."""
+def get(
+  name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")],
+  verbose: Annotated[bool, typer.Option("--verbose", help="Every build and version it carries, and the creation steps.")] = False,
+  hide_empty: Annotated[bool, typer.Option("--hide-empty", help="Leave out empty fields: the — lines, and null or empty keys in data output.")] = False,
+  output: OutputOption = Format.table,
+):
+  """Show a component and what it generated: its creation, newest builds and versions, where it runs."""
   client = _client()
   try:
     component = client.get_component(name)
@@ -221,20 +262,31 @@ def get(name: Annotated[str, typer.Argument(help="Component name (platform catal
     except ApiError:
       fail(str(error))
     if output.data:
-      print_data(creation, output)
+      print_data(drop_empty(creation) if hide_empty else creation, output)
       return
     typer.echo(f"component/{name} (creating: {creation['status']})")
     _steps(creation)
     return
   if output.data:
-    print_data(component, output)
+    print_data(drop_empty(component) if hide_empty else component, output)
     return
   typer.echo(f"component/{component['name']}")
   for field in ("system", "owner", "type", "lifecycle", "repo", "template", "description"):
-    typer.echo(f"  {field.ljust(12)} {component.get(field) or '—'}")
+    if component.get(field) or not hide_empty:
+      typer.echo(f"  {field.ljust(12)} {component.get(field) or '—'}")
+  # Only who requested the creation and platform-admins see it; for anyone else the line is left out.
+  creation = component.get("creation")
+  if creation:
+    typer.echo(f"  {'creation'.ljust(12)} {creation['status']}, {age(creation.get('createdAt'))} ago")
+    if verbose:
+      _steps(creation, indent=15)
+  _section("builds", [_build_line(item) for item in component.get("builds") or []], verbose, hide_empty)
+  _section("versions", [_version_line(item) for item in component.get("versions") or []], verbose, hide_empty)
   # Only the environments you can use (ADR 0033).
   running = ", ".join(f"{_where(component['name'], item)} ({item.get('version') or '—'}, {item['status']})" for item in component.get("runningIn") or [])
-  typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")
+  if running or not hide_empty:
+    typer.echo(f"  {'running in'.ljust(12)} {running or '—'}")
+  _next(component)
 
 
 @app.command("clone", epilog=examples(
