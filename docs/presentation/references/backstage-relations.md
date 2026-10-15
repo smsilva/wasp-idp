@@ -83,4 +83,4 @@ Ideias para quando a curadoria pedir; nenhuma está no outline.
 - Uma tela com os três eixos (pertencimento, uso, responsabilidade) sobre a árvore do `greeter`.
 - "Declara um lado, o catálogo gera os dois": o trecho `owner` + `system` do `catalog-info.yaml` ao lado das relações geradas na página da entidade.
 - O par `greeting-api` → `greeting-http` (com um consumidor via `consumesApis`) como exemplo de API como fronteira.
-- Encaixe provável: entre `entity-domain` e `spotify-tree` (depois das entidades, antes da árvore), ou dentro do tópico "Declaring an app", junto de `declare-ownership`/`declare-apis`/`declare-dependencies`.
+- Encaixe provável: entre `entity-domain` e `tailwind-tree` (depois das entidades, antes da árvore), ou dentro do tópico "Declaring an app", junto de `declare-ownership`/`declare-apis`/`declare-dependencies`.
