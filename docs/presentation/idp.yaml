@@ -512,7 +512,7 @@ slides:
     topic: "Software Catalog"
     message: "A visão de negócio agrupa o software por área e por capacidade."
     heading: "Business view"
-    screen: ["**Domain:** a business area", "**System:** a capability with public APIs"]
+    screen: ["**{domain:Domain}:** a business area", "**{system:System}:** a capability with public APIs"]
     notes: |-
       O que queremos dizer: a visão de negócio **agrupa o software por área e por capacidade**.
 
@@ -529,7 +529,7 @@ slides:
     topic: "Software Catalog"
     message: "A visão de engenharia mostra o que se constrói, como as peças conversam e do que dependem."
     heading: "Engineering view"
-    screen: ["**Component:** what you _build_ and _deploy_", "**API:** the _boundary_ between components", "**Resource:** what it _needs_ at runtime"]
+    screen: ["**{component:Component}:** what you _build_ and _deploy_", "**{api:API}:** the _boundary_ between components", "**{resource:Resource}:** what it _needs_ at runtime"]
     notes: |-
       O que queremos dizer: **a visão de engenharia mostra o que se constrói**, como as peças conversam e do que dependem.
 
@@ -554,6 +554,7 @@ slides:
     audiences: [engineering, platform]
     message: "Component é uma peça de software que alguém mantém e entrega."
     heading: "Component"
+    kind: component
     screen: ["**What:** software you build and deploy"]
     notes: |-
       O que queremos dizer: **Component é o software que um time mantém e entrega** — serviço, site, biblioteca, pipeline de dados.
@@ -567,6 +568,7 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Component example from Tailwind Air"
+    kind: component
     message: "O seat-selection, do catálogo de exemplo da Tailwind Air, é um Component."
     screen: ["**{component:seat-selection service}**\n- _shows_ the free seats of a flight\n- _holds_ the seat a passenger picks"]
     notes: |-
@@ -581,6 +583,7 @@ slides:
     audiences: [engineering, platform]
     message: "API é o contrato entre Components."
     heading: "API"
+    kind: api
     screen: ["**What:** the contract between components"]
     notes: |-
       O que queremos dizer: **API é o contrato**; quem consome depende dele, não da implementação.
@@ -599,6 +602,7 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "API example from Tailwind Air"
+    kind: api
     message: "O Component web-checkin consome a API seats, fornecida pelo Component seat-selection."
     screen: ["**{api:seats rest api}**\n- _provided by_ {component:seat-selection service}\n- _consumed by_ {component:web-checkin website}"]
     notes: |-
@@ -615,6 +619,7 @@ slides:
     audiences: [engineering, platform]
     message: "Resource é a infraestrutura de que o Component precisa para rodar."
     heading: "Resource"
+    kind: resource
     screen: ["**What:** infrastructure needed at runtime"]
     notes: |-
       O que queremos dizer: **Resource é a infraestrutura de que o Component precisa para rodar** — banco, fila, bucket.
@@ -630,6 +635,7 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Resource example from Tailwind Air"
+    kind: resource
     message: "O seat-selection depende do banco passengers-db."
     screen: ["**{resource:passengers-db database}**\n- _owned by_ {system:reservations system}\n- _used by_ {component:seat-selection service}"]
     notes: |-
@@ -644,6 +650,7 @@ slides:
     audiences: [engineering, platform]
     message: "System junta Components, APIs e Resources que entregam uma capacidade — e esconde o resto."
     heading: "System"
+    kind: system
     screen: ["**What:** components that deliver a capability"]
     notes: |-
       O que queremos dizer: **System junta as peças que entregam uma capacidade** e esconde o que há dentro.
@@ -661,6 +668,7 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "System example from Tailwind Air"
+    kind: system
     message: "O System seat-map junta as peças anteriores."
     screen: ["**{system:seat-map system}**\n- _groups_ {component:web-checkin website}\n- _groups_ {component:seat-selection service}\n- _groups_ {api:seats rest api}"]
     notes: |-
@@ -677,6 +685,7 @@ slides:
     audiences: [engineering, platform]
     message: "Domain agrupa Systems da mesma área de negócio."
     heading: "Domain"
+    kind: domain
     screen: ["**What:** systems of one business area"]
     notes: |-
       O que queremos dizer: **Domain agrupa Systems da mesma área de negócio.**
@@ -694,6 +703,7 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Domain example from Tailwind Air"
+    kind: domain
     message: "O Domain tailwind tem um subdomínio por área de negócio."
     screen: ["**{domain:tailwind domain}**\n- _contains_ {domain:airport subdomain}\n- _contains_ {domain:booking subdomain}\n- _owned by_ {group:team-tailwind-architecture team}"]
     notes: |-

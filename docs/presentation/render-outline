@@ -75,6 +75,11 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
    monospace for both, its lowercase matched to the text's so the line reads at one size. */
 .stage .entity { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size-adjust: ex-height 0.53; letter-spacing: -0.02em; font-weight: 400; white-space: nowrap; color: var(--kind); }
 .stage .entity .t { opacity: 0.42; margin-left: 0.5em; }
+/* A kind word in a heading (`kind` on the slide): only the color, in the heading's own font. */
+.stage .item.heading .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: inherit; }
+.stage .item.heading.dim .entity { opacity: 0.75; }
+/* A kind word as an inline label (`**{domain:Domain}:** …`): the color, in the label's own font. */
+.stage .item strong:not(.lbl) .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: inherit; }
 .stage .k-domain { --kind: var(--domain); }
 .stage .k-system { --kind: var(--system); }
 .stage .k-group { --kind: var(--group); }
@@ -712,6 +717,10 @@ def slide_steps(outline, slide, act, section):
     # Optional `heading`: shown alone first, then stays on top, dimmed, while the items are revealed.
     # A detail slide without a `heading` uses its `label` the same way.
     heading = slide.get("heading") or (slide.get("label") if slide.get("parent") else None)
+    # `kind` on the slide: the heading's first word ("Component example…") takes that kind's color.
+    if heading and slide.get("kind") in KINDS:
+      first, _, rest = heading.partition(" ")
+      heading = f"{{{slide['kind']}:{first}}} {rest}".rstrip()
     if heading:
       steps.append({"slide": slide, "act": act, "section": section,
                     "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
