@@ -244,3 +244,174 @@ spec:
   type: cache
   owner: group:default/team-booking
   system: fares
+---
+# Example Components and API, so the graph shows who uses each shared resource. They stand for
+# the catalog-info.yaml of each app repo: `platform catalog import` skips them until discovery
+# indexes Components and APIs (#205); Backstage reads them from here.
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-api
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: seats
+  description: Seat map of a flight and seat selection for a passenger
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:default/team-airport
+  system: seat-map
+  definition: |
+    openapi: 3.0.3
+    info:
+      title: Seats
+      version: 1.0.0
+    paths:
+      /flights/{flight}/seats:
+        get:
+          summary: Seat map of a flight, with the free seats
+          parameters:
+            - { name: flight, in: path, required: true, schema: { type: string } }
+          responses:
+            "200": { description: The seat map }
+      /bookings/{booking}/passengers/{passenger}/seat:
+        put:
+          summary: Picks a seat for a passenger at check-in
+          parameters:
+            - { name: booking, in: path, required: true, schema: { type: string } }
+            - { name: passenger, in: path, required: true, schema: { type: string } }
+          responses:
+            "200": { description: The seat is held for the passenger }
+---
+# https://backstage.io/docs/features/software-catalog/descriptor-format#kind-component
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: checkin-web
+  description: Check-in website where the passenger confirms the trip and picks a seat
+spec:
+  type: website
+  lifecycle: production
+  owner: group:default/team-airport
+  system: seat-map
+  consumesApis:
+    - api:default/seats
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: seat-api
+  description: Serves the seat map and holds the seat a passenger picks
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-airport
+  system: seat-map
+  providesApis:
+    - api:default/seats
+  dependsOn:
+    - resource:default/passengers-db
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: boarding-pass-api
+  description: Issues boarding passes and reissues them when the gate changes
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-airport
+  system: boarding-pass
+  dependsOn:
+    - resource:default/passengers-db
+    - resource:default/flight-events
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: bag-tracker
+  description: Records each scan of a checked bag and reroutes it when its flight changes
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-airport
+  system: bag-tracking
+  dependsOn:
+    - resource:default/flight-events
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: flight-search-api
+  description: Searches flights by route and date, priced from the fares cache
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-booking
+  system: flight-search
+  dependsOn:
+    - resource:default/fares-cache
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: reservations-api
+  description: Creates and changes bookings and their passengers
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-booking
+  system: reservations
+  dependsOn:
+    - resource:default/passengers-db
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: fares-engine
+  description: Recomputes the price per flight and fare class and writes it to the fares cache
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-booking
+  system: fares
+  dependsOn:
+    - resource:default/fares-cache
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: flight-status-api
+  description: Takes delays, gate changes and cancellations from operations and publishes them as flight events
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-flight-ops
+  system: flight-status
+  dependsOn:
+    - resource:default/flight-events
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: miles-api
+  description: Credits miles per flown segment and takes them back when a flight is cancelled
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-loyalty
+  system: miles
+  dependsOn:
+    - resource:default/passengers-db
+    - resource:default/flight-events
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: roster-planner
+  description: Reassigns crew when a flight is delayed past their duty-time limit
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-crew
+  system: rostering
+  dependsOn:
+    - resource:default/flight-events

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Starts the Backstage of this repo (idp/) with the Tailwind Air catalog only (#528), for the demo,
+# until the Platform API serves the catalog itself. Runs in the foreground; Ctrl+C stops it.
+set -e
+
+this_script_path="$(realpath "${0}")"
+repo_directory="${this_script_path%/scripts/demo/*}"
+idp_directory="${repo_directory}/idp"
+credentials_file="github-app-wasp-foundry-backstage-credentials.yaml"
+yarn_release=".yarn/releases/yarn-4.4.1.cjs"
+
+show_usage() {
+  cat <<EOF
+Usage: ${0##*/} [--help]
+
+Starts Backstage (frontend http://localhost:3000, backend :7007) with the Tailwind Air
+catalog (idp/catalog/airline/tailwind/), loaded by idp/app-config.tailwind.yaml.
+Sign in as Guest, then open http://localhost:3000/catalog/default/domain/tailwind
+
+Options:
+  --help  Show this help
+EOF
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --help) show_usage; exit 0 ;;
+    *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+  esac
+done
+
+cd "${idp_directory}"
+
+# app-config.yaml includes it, so Backstage does not start without it (docs/idp/CLAUDE.md, GitHub integration).
+if [[ ! -f "${credentials_file}" ]]; then
+  echo "Missing idp/${credentials_file}: see docs/idp/CLAUDE.md (GitHub integration)" >&2
+  exit 1
+fi
+
+for port in 3000 7007; do
+  if ss --listening --tcp --numeric | grep --quiet ":${port}\b"; then
+    echo "Port ${port} is in use: stop the Backstage already running first" >&2
+    exit 1
+  fi
+done
+
+if [[ ! -d node_modules ]]; then
+  node "${yarn_release}" install
+fi
+
+# Absolute paths: each package resolves a relative --config from its own folder.
+node "${yarn_release}" start \
+  --config "${idp_directory}/app-config.yaml" \
+  --config "${idp_directory}/app-config.tailwind.yaml"
