@@ -1,11 +1,41 @@
 # Google credentials
 
-The **Google OAuth client** is configured once (see `platform/keycloak/README.md`). Store the id and secret in a secrets vault and load them into the shell before `init`; on screen, **show only the prefix**:
+!!! context "Optional"
+    Without it, sign-in works with a password.
+
+    The OAuth client is created once with [Keycloak](https://github.com/smsilva/wasp-idp/blob/main/platform/keycloak/README.md).
+
+Create `google.env` at the root of the checkout and fill in the values:
 
 ```bash
+cat > google.env <<'EOF'
 export GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
-
 export GOOGLE_CLIENT_SECRET=<secret>
+EOF
+```
 
+Make sure git ignores it:
+
+```bash
+git check-ignore google.env
+```
+
+``` { .text .output title="output" }
+google.env
+```
+
+Load it:
+
+```bash
+source google.env
+```
+
+Check, showing only the prefix:
+
+```bash
 echo "${GOOGLE_CLIENT_ID:0:12}… ${GOOGLE_CLIENT_SECRET:0:3}…"
+```
+
+``` { .text .output title="output" }
+123456789012… GOC…
 ```

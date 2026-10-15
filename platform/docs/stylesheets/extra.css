@@ -869,46 +869,70 @@
   }
 }
 
-/* Validated-on callout (`!!! validated "Validated on"`): small amber title, a short line, the list of systems.
+/* Validated-on callout (`!!! validated "Validated on"`) and context notes (`!!! context "title"`): a bold amber
+   title above the body size, the paragraphs and lists indented under it in the body color, space below.
    Amber is the --wasp-strong of each theme. */
-.md-typeset .admonition.validated {
+.md-typeset .admonition.validated,
+.md-typeset .admonition.context {
+  margin-bottom: 2rem;
+  padding: .6rem .9rem;
   border: 0;
   border-left: 3px solid var(--wasp-strong);
   border-radius: 0 6px 6px 0;
   background: color-mix(in srgb, var(--wasp-strong) 8%, transparent);
   box-shadow: none;
-  padding: .7rem .9rem;
 }
 
-.md-typeset .validated > .admonition-title {
-  margin: 0 0 .3rem;
+.md-typeset .validated > .admonition-title,
+.md-typeset .context > .admonition-title {
+  margin: 0 0 .25rem;
   padding: 0;
   background: transparent;
   border: 0;
   color: var(--wasp-strong);
-  font-size: .65rem;
-  font-weight: 600;
+  font-size: .85rem;
+  font-weight: 700;
 }
 
-.md-typeset .validated > .admonition-title::before {
+.md-typeset .validated > .admonition-title::before,
+.md-typeset .context > .admonition-title::before {
   display: none;
 }
 
-.md-typeset .validated > p {
-  margin: 0 0 .5rem;
-  color: var(--md-default-fg-color--light);
-  font-size: .65rem;
+.md-typeset .validated > p:not(.admonition-title),
+.md-typeset .context > p:not(.admonition-title) {
+  margin: 0 0 0 .8rem;
+  color: var(--md-typeset-color);
+  font-size: .75rem;
 }
 
-.md-typeset .validated > ul {
-  margin: 0;
+.md-typeset .validated > p:not(.admonition-title) + *,
+.md-typeset .context > p:not(.admonition-title) + * {
+  margin-top: .2rem;
 }
 
-.md-typeset .validated li {
+.md-typeset .validated > ul,
+.md-typeset .context > ul {
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-left: 0;
+  font-size: .75rem;
+}
+
+/* The bullet lines up with the paragraphs, the item text a step further in. `[dir]` outweighs Material's
+   `[dir="ltr"] .md-typeset ul li`. */
+.md-typeset .validated li,
+.md-typeset .context li {
   margin-bottom: 0;
 }
 
-.md-typeset .validated li::marker {
+[dir] .md-typeset .validated > ul > li,
+[dir] .md-typeset .context > ul > li {
+  margin-left: 1.6rem;
+}
+
+.md-typeset .validated li::marker,
+.md-typeset .context li::marker {
   color: var(--wasp-strong);
 }
 
@@ -1058,3 +1082,4 @@
   color: #5fd39a;
   border-color: #5fd39a;
 }
+
