@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 from .catalog_import import import_catalog
 from .component import app as component_app
 from .template import app as template_app
@@ -56,6 +56,20 @@ def _create(plural: str, singular: str, body: dict, output: Format) -> None:
     success(f"{singular} {entity['name']} created")
 
 
+# The field of each kind that names its parent, and the parent's kind.
+PARENTS = {"domains": ("parent", "domain"), "systems": ("domain", "domain"), "resources": ("system", "system")}
+
+
+def _next(plural: str, entity: dict) -> None:
+  """Up to the parent, down to the first dependents (`kind/name`, parents' kinds first)."""
+  field, kind = PARENTS[plural]
+  steps = [(f"platform catalog {kind} get", (entity[field], "key"), {})] if entity.get(field) else []
+  for dependent in (entity.get("dependents") or [])[:3]:
+    kind, _, name = dependent.partition("/")
+    steps.append((f"platform catalog {kind} get", (name, "key"), {}))
+  next_steps(steps)
+
+
 def _kind_app(plural: str, singular: str, help_text: str) -> typer.Typer:
   """list, get and delete are the same for every kind; create differs and is added per kind."""
   sub = typer.Typer(help=help_text, no_args_is_help=True)
@@ -74,20 +88,22 @@ def _kind_app(plural: str, singular: str, help_text: str) -> typer.Typer:
     rows = [[item["name"], *[_cell(item.get(field)) for _, field in COLUMNS[plural]]] for item in items]
     print_table(headers, rows)
 
-  @sub.command("get", help=f"Show a {singular} and what depends on it.", epilog=examples(f"platform catalog {singular} get {SAMPLES[singular]}", f"platform catalog {singular} get {SAMPLES[singular]} --output json"))
-  def get(name: Annotated[str, typer.Argument(help=name_help)], output: OutputOption = Format.table):
+  @sub.command("get", help=f"Show a {singular} and what depends on it.", epilog=examples(f"platform catalog {singular} get {SAMPLES[singular]}", f"platform catalog {singular} get {SAMPLES[singular]} --hide-empty --output json"))
+  def get(name: Annotated[str, typer.Argument(help=name_help)], hide_empty: HideEmptyOption = None, output: OutputOption = Format.table):
+    hide_empty = hiding(hide_empty)
     try:
       entity = _client().get_catalog_entity(plural, name)
     except ApiError as error:
       fail(str(error))
     if output.data:
-      print_data(entity, output)
+      print_data(entity, output, hide_empty)
       return
     typer.echo(f"{singular}/{entity['name']}")
-    fields = [field for _, field in COLUMNS[plural]] + ["description"]
-    for field in fields:
-      typer.echo(f"  {field.ljust(12)} {_cell(entity.get(field))}")
-    typer.echo(f"  {'dependents'.ljust(12)} {', '.join(entity.get('dependents') or []) or 'none'}")
+    print_fields([(field, entity.get(field)) for _, field in COLUMNS[plural]] + [("description", entity.get("description"))], hide_empty)
+    dependents = entity.get("dependents") or []
+    if dependents or not hide_empty:
+      typer.echo(f"  {'dependents'.ljust(12)} {', '.join(dependents) or 'none'}")
+    _next(plural, entity)
 
   @sub.command("delete", help=f"Delete a {singular}; refused while something depends on it.", epilog=examples(f"platform catalog {singular} delete {SAMPLES[singular]}"))
   def delete(name: Annotated[str, typer.Argument(help=name_help)], output: OutputOption = Format.table):

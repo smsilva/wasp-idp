@@ -13,7 +13,7 @@ from wasp_templates.render import RenderError, annotate_origin, load_template, r
 from wasp_templates.source import SourceError, coerce, fetch
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 from .catalog_import import ImportFileError, Ref, Repo, origin, read_documents, run_import
 
 app = typer.Typer(help="Templates a component is created from; one default per type.", no_args_is_help=True)
@@ -76,29 +76,39 @@ def _parameter_lines(parameters: dict) -> list[str]:
 
 @app.command("get", epilog=examples(
   "platform catalog template get python-service",
-  "platform catalog template get python-service --output json",
+  "platform catalog template get python-service --hide-empty --output json",
 ))
-def get(name: Annotated[str, typer.Argument(help="Template name (platform catalog template list).")], output: OutputOption = Format.table):
+def get(
+  name: Annotated[str, typer.Argument(help="Template name (platform catalog template list).")],
+  hide_empty: HideEmptyOption = None,
+  output: OutputOption = Format.table,
+):
   """Show a template and the extra parameters it takes."""
+  hide_empty = hiding(hide_empty)
   try:
     template = _client().get_template(name)
   except ApiError as error:
     fail(str(error))
   if output.data:
-    print_data(template, output)
+    print_data(template, output, hide_empty)
     return
   source = template.get("source") or {}
   typer.echo(f"template/{template['name']}")
-  for label, value in [
+  print_fields([
     ("type", template["type"]), ("default", "yes" if template.get("default") else "no"),
     ("repo", source.get("repo")), ("path", source.get("path")), ("ref", source.get("ref")),
     ("owner", template.get("owner")), ("description", template.get("description")),
-  ]:
-    typer.echo(f"  {label.ljust(12)} {value or '—'}")
+  ], hide_empty)
   lines = _parameter_lines(template.get("parameters") or {})
-  typer.echo(f"  {'parameters'.ljust(12)} {'none' if not lines else ''}".rstrip())
+  if lines or not hide_empty:
+    typer.echo(f"  {'parameters'.ljust(12)} {'none' if not lines else ''}".rstrip())
   for line in lines:
     typer.echo(f"    {line}")
+  name = (template["name"], "key")
+  next_steps([
+    ("platform catalog template render", name, {"--name": ("<component>", None), "--output": ("<folder>", None)}),
+    ("platform catalog component create", ("<component>", "component"), {"--system": ("<system>", None), "--template": name}),
+  ])
 
 
 @app.command("create", epilog=examples(

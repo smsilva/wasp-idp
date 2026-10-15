@@ -18,6 +18,8 @@ An **OCI registry** is where a build pushes (ADR 0037): images today, Helm chart
 | `set-default` | `platform-admins` | the registry of every `build create` without `--registry` |
 | `remove` | `platform-admins` | refused (`409`) while a version of the index is in it |
 
+`get` takes `--hide-empty`; its `next:` footer is `set-default` when it is not the default, and `build create --registry` with it ([After a `get`](output.md#after-a-get)).
+
 ## Vendors
 
 | Vendor | Host | Push | Pull |

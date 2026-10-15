@@ -16,4 +16,8 @@ platform team get team-alpha
 team-alpha: 1 member(s)
 EMAIL            USERNAME
 you@example.com   you@example.com
+
+next:
+
+  platform team member add team-alpha <email>
 ```

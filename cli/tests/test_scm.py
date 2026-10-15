@@ -184,3 +184,39 @@ def test_list_get_default_remove(api, browser):
   assert "connection acme removed" in result.output
   assert "https://github.com/organizations/acme/settings/apps/acme-platform" in result.output
   assert run("get", "acme").exit_code == 1
+
+
+def test_get_suggests_verify_until_ready(api):
+  api.connections["acme"] = {
+    "name": "acme", "vendor": "github", "org": "acme", "default": True, "status": "NotInstalled", "message": None,
+    "appId": 123456, "appSlug": "acme-platform", "installationId": None, "permissions": {}, "repositorySelection": None,
+    "lastValidated": None, "verifying": False, "installUrl": "https://github.com/apps/acme-platform/installations/new",
+  }
+  assert run("get", "acme").stderr.splitlines() == ["", "next:", "", "  platform scm connection verify acme \\", "    --wait"]
+
+
+def test_get_when_ready_suggests_the_registry_the_default_and_a_component(api):
+  api.connections["acme"] = {
+    "name": "acme", "vendor": "github", "org": "Acme", "default": False, "status": "ready", "message": None,
+    "appId": 123456, "appSlug": "acme-platform", "installationId": 99, "permissions": {"contents": "write"},
+    "repositorySelection": "all", "lastValidated": None, "verifying": False,
+  }
+  assert run("get", "acme").stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform registry add ghcr-acme \\",
+    "    --scm-connection acme \\",
+    "    --default",
+    "",
+    "  platform scm connection default acme",
+    "",
+    "  platform catalog component create <component> \\",
+    "    --system <system> \\",
+    "    --scm acme",
+  ]
+  api.registries = [{"name": "ghcr-acme", "address": "ghcr.io/acme", "default": True}]
+  api.connections["acme"]["default"] = True
+  assert run("get", "acme").stderr.splitlines() == ["", "next:", "", "  platform catalog component create <component> \\", "    --system <system>"]
+  data = json.loads(run("get", "acme", "--hide-empty", "--output", "json").stdout)
+  assert "lastValidated" not in data and "message" not in data and data["installationId"] == 99

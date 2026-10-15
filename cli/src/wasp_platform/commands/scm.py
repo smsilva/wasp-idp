@@ -12,7 +12,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_table, success
 
 app = typer.Typer(help="Connections with code platforms (platform-admins only).", no_args_is_help=True)
 connection_app = typer.Typer(help="Connections with code platforms, such as a GitHub org.", no_args_is_help=True)
@@ -138,16 +138,25 @@ def _next_steps(connection: dict, client: PlatformClient | None = None) -> None:
 
 def _suggest_registry(connection: dict, client: PlatformClient | None) -> None:
   """The GHCR of the org, where its repos' CI pushes (ADR 0037): a hint when no registry has it yet."""
+  missing = _missing_registry(connection, client)
+  if missing:
+    registry, default = missing
+    flag = " --default" if default else ""
+    typer.echo(f"→ register its GHCR, where builds of {connection['org'].lower()} repos push: platform registry add {registry} --scm-connection {connection['name']}{flag}")
+
+
+def _missing_registry(connection: dict, client: PlatformClient | None) -> tuple[str, bool] | None:
+  """The registry to add for the org's GHCR, and whether it would be the first (so the default)."""
   org = (connection.get("org") or "").lower()
   if client is None or connection.get("vendor") != "github" or not org:
-    return
+    return None
   try:
     registries = client.list_registries()
   except ApiError:
-    return  # a hint, never a failure
-  if not any(item.get("address") == f"ghcr.io/{org}" for item in registries):
-    default = "" if any(item.get("default") for item in registries) else " --default"
-    typer.echo(f"→ register its GHCR, where builds of {org} repos push: platform registry add ghcr-{org} --scm-connection {connection['name']}{default}")
+    return None  # a hint, never a failure
+  if any(item.get("address") == f"ghcr.io/{org}" for item in registries):
+    return None
+  return f"ghcr-{org}", not any(item.get("default") for item in registries)
 
 
 @connection_app.command("list", epilog=examples("platform scm connection list", "platform scm connection list --output json"))
@@ -164,12 +173,14 @@ def list_(output: OutputOption = Format.table):
   print_table(["NAME", "VENDOR", "ORG", "STATUS", "DEFAULT", "VALIDATED"], rows)
 
 
-@connection_app.command("get", epilog=examples("platform scm connection get wasp-foundry"))
-def get(name: ConnectionName, output: OutputOption = Format.table):
+@connection_app.command("get", epilog=examples("platform scm connection get wasp-foundry", "platform scm connection get wasp-foundry --hide-empty --output json"))
+def get(name: ConnectionName, hide_empty: HideEmptyOption = None, output: OutputOption = Format.table):
   """Show a connection; never its credential."""
-  connection = _call(_client().get_scm_connection, name)
+  hide_empty = hiding(hide_empty)
+  client = _client()
+  connection = _call(client.get_scm_connection, name)
   if output.data:
-    print_data(connection, output)
+    print_data(connection, output, hide_empty)
     return
   default = " (default)" if connection["default"] else ""
   typer.echo(f"{connection['name']}{default}: {connection['status']}")
@@ -185,9 +196,29 @@ def get(name: ConnectionName, output: OutputOption = Format.table):
     ("validated", connection.get("lastValidated")),
     ("install", connection.get("installUrl")),
   ]
+  # Empty fields never had a line here: --hide-empty changes only the data output.
   for label, value in fields:
     if value is not None:
       typer.echo(f"  {label + ':':<14}{value}")
+  _next(connection, client)
+
+
+def _next(connection: dict, client: PlatformClient) -> None:
+  name = (connection["name"], "key")
+  if connection["status"] != "ready":
+    next_steps([("platform scm connection verify", name, {"--wait": ("", None)})])
+    return
+  steps = []
+  missing = _missing_registry(connection, client)
+  if missing:
+    registry, default = missing
+    steps.append(("platform registry add", (registry, "key"), {"--scm-connection": name} | ({"--default": ("", None)} if default else {})))
+  options = {"--system": ("<system>", None)}
+  if not connection["default"]:
+    steps.append(("platform scm connection default", name, {}))
+    options["--scm"] = name
+  steps.append(("platform catalog component create", ("<component>", "component"), options))
+  next_steps(steps)
 
 
 @connection_app.command("verify", epilog=examples("platform scm connection verify wasp-foundry", "platform scm connection verify wasp-foundry --wait --timeout 600"))

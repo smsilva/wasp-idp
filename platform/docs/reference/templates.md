@@ -12,6 +12,8 @@ A template is the golden path for a type of component (`service`, `website`, `li
 | `platform catalog template default <name>` | makes it the default of its type, unmarking the previous one | `platform-admins` |
 | `platform catalog template delete <name>` | deletes it; the default of a type with others is `409` until another one is the default | `platform-admins` |
 
+`get` takes `--hide-empty`; its `next:` footer is `render` and `component create --template` with the template ([After a `get`](output.md#after-a-get)).
+
 ## Render
 
 `render` fetches the content at the registered ref with git on your machine (or reads `--from`), renders with the Backstage delimiters (`${{ values.x }}`, `dump` filter), copies the `copyWithoutRendering` files as they are and records the origin in `catalog-info.yaml`:

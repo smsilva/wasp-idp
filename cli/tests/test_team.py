@@ -147,3 +147,28 @@ def test_member_add_of_yourself_survives_a_failed_refresh(api, me):
   assert result.exit_code == 0, result.output
   assert "✓ dev@example.com added to team-alpha" in result.output
   assert "platform login --refresh" in result.output
+
+
+def test_get_suggests_adding_a_member(api):
+  run("create", "team-alpha")
+  result = run("get", "team-alpha")
+  assert "next:" not in result.stdout
+  assert result.stderr.splitlines() == ["", "next:", "", "  platform team member add team-alpha <email>"]
+  assert run("get", "team-alpha", "--output", "json").stderr == ""
+
+
+def test_hide_empty_from_the_flag_or_the_config(api, tmp_path, monkeypatch):
+  run("create", "team-alpha")
+  run("member", "add", "team-alpha", "dev@example.com")
+  assert json.loads(run("get", "team-alpha", "--hide-empty", "--output", "json").stdout) == {"name": "team-alpha", "members": [{"email": "dev@example.com", "username": "dev"}]}
+  run("member", "remove", "team-alpha", "dev@example.com")
+  assert json.loads(run("get", "team-alpha", "--hide-empty", "--output", "json").stdout) == {"name": "team-alpha"}
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  (tmp_path / "platform").mkdir()
+  (tmp_path / "platform" / "config.yaml").write_text("hide_empty: true\n")
+  assert json.loads(run("get", "team-alpha", "--output", "json").stdout) == {"name": "team-alpha"}
+  assert json.loads(run("get", "team-alpha", "--show-empty", "--output", "json").stdout) == {"name": "team-alpha", "members": []}
+  (tmp_path / "platform" / "config.yaml").write_text("hide_empty: sometimes\n")
+  result = run("get", "team-alpha")
+  assert result.exit_code == 1
+  assert "hide_empty takes true or false, got 'sometimes'" in result.stderr

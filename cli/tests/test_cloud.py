@@ -184,3 +184,31 @@ def test_with_crossplane_needs_the_base_credential(monkeypatch):
   # Remembered: installed by an earlier init.
   monkeypatch.setattr(local, "crossplane_installed", lambda: True)
   assert (local.wants_crossplane(False, credential), local.wants_crossplane(False, {})) == (True, False)
+
+
+def test_get_suggests_verify_until_ready_then_an_environment(api):
+  run("add", "sandbox", "--role-arn", ROLE)
+  assert run("get", "sandbox").stderr.splitlines() == ["", "next:", "", "  platform cloud account verify sandbox \\", "    --wait"]
+  api.accounts["sandbox"]["status"] = "ready"
+  assert run("get", "sandbox").stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform environment create <environment> \\",
+    "    --profile <profile> \\",
+    "    --cloud-account sandbox",
+    "",
+    "  platform cloud account share sandbox \\",
+    "    --team <team>",
+  ]
+
+
+def test_get_hide_empty(api):
+  run("add", "sandbox", "--role-arn", ROLE)
+  lines = run("get", "sandbox").stdout.splitlines()
+  assert "  validated  —" in lines and "  shared     —" in lines
+  lines = run("get", "sandbox", "--hide-empty").stdout.splitlines()
+  assert not any(line.endswith("—") for line in lines)
+  assert "  owner      dev@example.com" in lines
+  data = json.loads(run("get", "sandbox", "--hide-empty", "--output", "json").stdout)
+  assert "lastValidated" not in data and "sharedWith" not in data and data["owner"] == "dev@example.com"

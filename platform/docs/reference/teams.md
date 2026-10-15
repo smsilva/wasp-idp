@@ -10,6 +10,7 @@ A team is a Keycloak group that the Platform API maintains (ADR 0026). It owns c
 | `platform team delete <team>` | deletes a team; a team in use (owning catalog entities or with shared environments) is `409` | `platform-admins` |
 | `platform team member add\|remove <team> <email>` | changes members | `platform-admins` |
 
+- `get` takes `--hide-empty`; its `next:` footer is `team member add` ([After a `get`](output.md#after-a-get)).
 - The member must have signed in to the platform once, with a verified e-mail; before that, the API answers `404`.
 - The team reaches the token on the next refresh. Adding yourself renews your token at once (`✓ … · token renewed, <team> is in it`); anyone else runs `platform login --refresh`, and `platform whoami` then shows it.
 

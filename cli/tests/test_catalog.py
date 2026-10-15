@@ -41,7 +41,9 @@ def api(monkeypatch):
     if name not in store[plural]:
       return httpx.Response(404, json={"error": {"code": "not_found", "message": f"{KINDS[plural].lower()} '{name}' not found"}})
     if request.method == "GET":
-      return httpx.Response(200, json={**store[plural][name], "dependents": []})
+      children = {"domains": ("domains", "systems"), "systems": ("resources",), "resources": ()}[plural]
+      dependents = [f"{KINDS[child].lower()}/{item}" for child in children for item, entity in store[child].items() if entity.get(PARENTS[child]) == name]
+      return httpx.Response(200, json={**store[plural][name], "dependents": dependents})
     del store[plural][name]
     return httpx.Response(204)
 
@@ -121,3 +123,34 @@ def test_api_errors_pass_through(api):
   result = run("domain", "create", "communication", "--owner", "team-alpha")
   assert result.exit_code == 1
   assert "already exists" in result.output
+
+
+def test_get_suggests_the_parent_and_the_dependents(api):
+  run("domain", "create", "communication", "--owner", "team-alpha")
+  run("system", "create", "messaging", "--domain", "communication", "--owner", "team-alpha")
+  for name in ("a-db", "b-db", "c-db", "d-db"):
+    run("resource", "create", name, "--type", "postgres", "--system", "messaging", "--owner", "team-alpha")
+  assert run("system", "get", "messaging").stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform catalog domain get communication",
+    "",
+    "  platform catalog resource get a-db",
+    "",
+    "  platform catalog resource get b-db",
+    "",
+    "  platform catalog resource get c-db",
+  ]
+  assert run("domain", "create", "lonely", "--owner", "team-alpha").exit_code == 0
+  assert run("domain", "get", "lonely").stderr == ""
+
+
+def test_get_hide_empty(api):
+  run("domain", "create", "lonely", "--owner", "team-alpha")
+  lines = run("domain", "get", "lonely").stdout.splitlines()
+  assert "  parent       —" in lines and "  dependents   none" in lines
+  lines = run("domain", "get", "lonely", "--hide-empty").stdout.splitlines()
+  assert lines == ["domain/lonely", "  owner        team-alpha"]
+  data = json.loads(run("domain", "get", "lonely", "--hide-empty", "--output", "json").stdout)
+  assert data == {"kind": "Domain", "name": "lonely", "owner": "team-alpha"}

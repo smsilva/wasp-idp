@@ -21,6 +21,15 @@ demo-aws: ready
   shared     team-alpha
 Trust policy of arn:aws:iam::<account>:role/platform:
 [...]
+
+next:
+
+  platform environment create <environment> \
+    --profile <profile> \
+    --cloud-account demo-aws
+
+  platform cloud account share demo-aws \
+    --team <team>
 ```
 
 - A member of `team-alpha` sees the account in `list` and `get`, **without the trust policy**: it carries the ExternalId, which stays with you and `platform-admins`.

@@ -21,4 +21,14 @@ template/python-service
   description  FastAPI service with CI to GHCR, Dockerfile and app-spec.yaml
   parameters
     port (integer, default 8000): Port the container listens on.
+
+next:
+
+  platform catalog template render python-service \
+    --name <component> \
+    --output <folder>
+
+  platform catalog component create <component> \
+    --system <system> \
+    --template python-service
 ```

@@ -12,6 +12,8 @@ A cloud account is an AWS account where the platform can create things (ADR 0029
 | `platform cloud account unshare <name> --team <team>` | takes that access away |
 | `platform cloud account remove <name>` | removes the registration; the role stays in the AWS account; `409` while an environment is in it |
 
+`get` takes `--hide-empty`; its `next:` footer is `verify --wait` until the account is `ready`, then `environment create --cloud-account` and `share` ([After a `get`](output.md#after-a-get)).
+
 ## Trust policy
 
 The policy trusts the platform base credential, with a condition on `sts:ExternalId`. The API generates the ExternalId, one per account, never accepts it from the client and keeps it out of the journal: it prevents someone from registering another person's role.

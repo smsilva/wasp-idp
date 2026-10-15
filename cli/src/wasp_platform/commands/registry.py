@@ -10,7 +10,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 
 app = typer.Typer(help="OCI registries: where builds push images (and, later, Helm charts and other OCI artifacts).", no_args_is_help=True)
 
@@ -28,15 +28,14 @@ def _call(function, *args):
     fail(str(error))
 
 
-def _print(registry: dict) -> None:
+def _print(registry: dict, hide_empty: bool = False) -> None:
   typer.echo(f"{registry['name']}: {registry['status']}" + (f" — {registry['message']}" if registry.get("message") else ""))
-  for field, value in (
+  print_fields([
     ("vendor", registry.get("vendor")),
     ("address", registry.get("address")),
     ("default", "yes" if registry.get("default") else "no"),
     ("pull", registry.get("pullMode")),
-  ):
-    typer.echo(f"  {field.ljust(9)} {value or '—'}")
+  ], hide_empty, width=9)
 
 
 @app.command("add", epilog=examples("platform registry add ghcr-wasp-foundry --scm-connection wasp-foundry --default", "platform registry add ghcr-wasp-foundry --vendor ghcr --namespace wasp-foundry"))
@@ -68,14 +67,18 @@ def list_(output: OutputOption = Format.table):
   print_table(["NAME", "VENDOR", "ADDRESS", "DEFAULT", "STATUS"], [[item["name"], item["vendor"], item["address"], "yes" if item["default"] else "—", item["status"]] for item in items])
 
 
-@app.command("get", epilog=examples("platform registry get ghcr-wasp-foundry"))
-def get(name: RegistryName, output: OutputOption = Format.table):
+@app.command("get", epilog=examples("platform registry get ghcr-wasp-foundry", "platform registry get ghcr-wasp-foundry --hide-empty --output json"))
+def get(name: RegistryName, hide_empty: HideEmptyOption = None, output: OutputOption = Format.table):
   """Show a registry and whether the platform reaches it."""
+  hide_empty = hiding(hide_empty)
   registry = _call(lambda client: client.get_registry(name))
   if output.data:
-    print_data(registry, output)
+    print_data(registry, output, hide_empty)
     return
-  _print(registry)
+  _print(registry, hide_empty)
+  steps = [] if registry.get("default") else [("platform registry set-default", (registry["name"], "key"), {})]
+  steps.append(("platform build create", None, {"--component": ("<component>", "component"), "--branch": ("<branch>", None), "--registry": (registry["name"], "key")}))
+  next_steps(steps)
 
 
 @app.command("set-default", epilog=examples("platform registry set-default ghcr-wasp-foundry"))
