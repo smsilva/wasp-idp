@@ -9,8 +9,20 @@ Reads and orders the work queue of board #6 (smsilva/wasp-idp). The order is the
 position of each item on the board: the top of a column comes first.
 
 Commands:
-  next                         the items In Progress, else the top of Todo; an issue with
-                               open sub-issues is skipped (its sub-issues are the work)
+  next [--new] [--track <t>] [--theme <t>]
+                               my In Progress items (the active gh account is "me"); with
+                               none, or with --new, the top of Todo that has no assignee,
+                               no open sub-issues and no branch feat/<n>-* on origin. An
+                               issue with open sub-issues is skipped (its sub-issues are
+                               the work). Read only: use claim to take it
+  claim <issue>                assign me and set In Progress; refuses an issue that someone
+                               else holds, and loses a simultaneous claim by login order
+  release <issue>              remove me as assignee and send the issue back to Todo
+  mine                         my In Progress items
+  team                         In Progress items by assignee, with each person's count
+  doctor [--days <n>]          board health: In Progress without assignee or already closed,
+                               Todo/Backlog with an assignee, In Progress not updated for
+                               n days (default 7). Exits 1 when it finds something
   list [--status <status>]     open items in board order, all columns or one
   move <issue> --top           move the issue to the top of the board
   move <issue> --after <issue> move the issue right after another one
@@ -18,6 +30,7 @@ Commands:
 
 Examples:
   ${0##*/} next
+  ${0##*/} claim 204
   ${0##*/} list --status Todo
   ${0##*/} move 206 --after 204
   ${0##*/} status 204 Todo
@@ -44,8 +57,18 @@ items_json() {
                 status: fieldValueByName(name: "Status") {
                   ... on ProjectV2ItemFieldSingleSelectValue { name }
                 }
+                track: fieldValueByName(name: "Track") {
+                  ... on ProjectV2ItemFieldSingleSelectValue { name }
+                }
+                theme: fieldValueByName(name: "Theme") {
+                  ... on ProjectV2ItemFieldSingleSelectValue { name }
+                }
                 content {
-                  ... on Issue { number title state subIssuesSummary { total completed } }
+                  ... on Issue {
+                    number title state updatedAt
+                    subIssuesSummary { total completed }
+                    assignees(first: 10) { nodes { login } }
+                  }
                   ... on PullRequest { number title state }
                 }
               }
@@ -56,6 +79,9 @@ items_json() {
     --jq '.data.user.projectV2.items.nodes[]
       | {id, status: (.status.name // "No Status"), number: .content.number,
          title: .content.title, state: .content.state,
+         track: (.track.name // ""), theme: (.theme.name // ""),
+         updated: .content.updatedAt,
+         assignees: [(.content.assignees.nodes // [])[].login],
          open_sub_issues: ((.content.subIssuesSummary.total // 0) - (.content.subIssuesSummary.completed // 0))}' \
     | jq --slurp '.'
 }
@@ -88,19 +114,194 @@ list_items() {
     | print_items
 }
 
-next_items() {
-  local items
-  local in_progress
+REPO="smsilva/wasp-idp"
 
-  # A parent with open sub-issues is a container: the work is its sub-issues, which are on the board too.
-  items="$(items_json | jq '[.[] | select(.state == "OPEN") | select(.open_sub_issues == 0)]')"
-  in_progress="$(jq '[.[] | select(.status == "In Progress")]' <<< "${items}")"
+me() {
+  gh api user --jq .login
+}
 
-  if [[ "$(jq 'length' <<< "${in_progress}")" -gt 0 ]]; then
-    print_items <<< "${in_progress}"
-  else
-    jq '[.[] | select(.status == "Todo")] | .[:1]' <<< "${items}" | print_items
+# A parent with open sub-issues is a container: the work is its sub-issues, which are on the board too.
+open_leaf_items() {
+  items_json | jq '[.[] | select(.state == "OPEN") | select(.open_sub_issues == 0)]'
+}
+
+has_foreign_branch() {
+  local issue="${1?}"
+
+  [[ -n "$(git ls-remote --heads origin "feat/${issue}-*" 2>/dev/null)" ]]
+}
+
+warn_orphans() {
+  local items="${1?}"
+  local orphans
+
+  orphans="$(jq '[.[] | select(.state == "OPEN") | select(.status == "In Progress") | select(.assignees == [])] | length' <<< "${items}")"
+
+  if [[ "${orphans}" -gt 0 ]]; then
+    echo "warning: ${orphans} In Progress without assignee: run '${0##*/} doctor'" >&2
   fi
+}
+
+next_items() {
+  local new="false"
+  local track=""
+  local theme=""
+  local login
+  local field
+  local value
+  local all_items
+  local items
+  local mine
+  local candidates
+  local number
+
+  while [[ "$#" -gt 0 ]]; do
+    case "${1}" in
+      --new) new="true"; shift ;;
+      --track) track="${2?}"; shift 2 ;;
+      --theme) theme="${2?}"; shift 2 ;;
+      *) echo "Unknown option: ${1}" >&2; exit 1 ;;
+    esac
+  done
+
+  login="$(me)"
+  all_items="$(items_json)"
+
+  # A typo in a filter would otherwise look like an empty queue.
+  for field in track theme; do
+    value="${!field}"
+
+    if [[ -n "${value}" ]] && ! jq --exit-status --arg f "${field}" --arg v "${value}" 'any(.[]; .[$f] == $v)' <<< "${all_items}" > /dev/null; then
+      echo "queue: no item on the board has ${field} '${value}'. Values in use:" >&2
+      jq --raw-output --arg f "${field}" '[.[][$f] | select(. != "")] | unique[]' <<< "${all_items}" | sed 's/^/  /' >&2
+      exit 1
+    fi
+  done
+
+  warn_orphans "${all_items}"
+  items="$(jq '[.[] | select(.state == "OPEN") | select(.open_sub_issues == 0)]' <<< "${all_items}")"
+
+  mine="$(jq --arg me "${login}" '[.[] | select(.status == "In Progress") | select(.assignees | index($me))]' <<< "${items}")"
+
+  if [[ "${new}" == "false" && "$(jq 'length' <<< "${mine}")" -gt 0 ]]; then
+    print_items <<< "${mine}"
+    return
+  fi
+
+  candidates="$(jq --arg track "${track}" --arg theme "${theme}" \
+    '[.[] | select(.status == "Todo") | select(.assignees == [])
+        | select($track == "" or .track == $track)
+        | select($theme == "" or .theme == $theme)]' <<< "${items}")"
+
+  for number in $(jq --raw-output '.[].number' <<< "${candidates}"); do
+    if ! has_foreign_branch "${number}"; then
+      jq --argjson n "${number}" '[.[] | select(.number == $n)]' <<< "${candidates}" | print_items
+      return
+    fi
+  done
+}
+
+claim_item() {
+  local issue="${1?}"
+  local login
+  local holders
+  local first
+  local id
+
+  login="$(me)"
+  id="$(item_id "${issue}")"
+  holders="$(gh api "repos/${REPO}/issues/${issue}" --jq '[.assignees[].login]')"
+
+  if [[ "$(jq --arg me "${login}" '[.[] | select(. != $me)] | length' <<< "${holders}")" -gt 0 ]]; then
+    echo "#${issue} is held by $(jq --raw-output 'join(", ")' <<< "${holders}")" >&2
+    exit 1
+  fi
+
+  gh api --method POST "repos/${REPO}/issues/${issue}/assignees" --raw-field "assignees[]=${login}" > /dev/null
+
+  # Two simultaneous claims both succeed on GitHub: the smaller login keeps it, the other backs off.
+  holders="$(gh api "repos/${REPO}/issues/${issue}" --jq '[.assignees[].login] | sort')"
+  first="$(jq --raw-output '.[0]' <<< "${holders}")"
+
+  if [[ "${first}" != "${login}" ]]; then
+    gh api --method DELETE "repos/${REPO}/issues/${issue}/assignees" --raw-field "assignees[]=${login}" > /dev/null
+    echo "#${issue} was claimed at the same time by ${first}" >&2
+    exit 1
+  fi
+
+  set_status "${issue}" "In Progress" > /dev/null
+  echo "#${issue} is yours (In Progress, assignee ${login})"
+}
+
+release_item() {
+  local issue="${1?}"
+  local login
+
+  login="$(me)"
+  gh api --method DELETE "repos/${REPO}/issues/${issue}/assignees" --raw-field "assignees[]=${login}" > /dev/null
+  set_status "${issue}" "Todo" > /dev/null
+  echo "#${issue} released (Todo, ${login} removed)"
+}
+
+mine_items() {
+  local login
+
+  login="$(me)"
+  open_leaf_items \
+    | jq --arg me "${login}" '[.[] | select(.status == "In Progress") | select(.assignees | index($me))]' \
+    | print_items
+}
+
+team_items() {
+  local items
+
+  items="$(items_json | jq '[.[] | select(.state == "OPEN") | select(.status == "In Progress")]')"
+
+  jq --raw-output '
+    [.[] | . as $i | (if .assignees == [] then ["(nobody)"] else .assignees end)[] | {who: ., item: $i}]
+    | group_by(.who)[]
+    | "\(.[0].who) (\(length))\t" + ([.[] | "#\(.item.number) [\(.item.theme)]"] | join(", "))' <<< "${items}" \
+    | column -t -s $'\t'
+}
+
+doctor() {
+  local days=7
+  local items
+  local findings
+
+  while [[ "$#" -gt 0 ]]; do
+    case "${1}" in
+      --days) days="${2?}"; shift 2 ;;
+      *) echo "Unknown option: ${1}" >&2; exit 1 ;;
+    esac
+  done
+
+  items="$(items_json)"
+
+  findings="$(jq --raw-output '
+    .[]
+    | select(.status == "In Progress" and .state == "OPEN" and .assignees == [])
+    | "In Progress without assignee: #\(.number) \(.title)"' <<< "${items}"
+    jq --raw-output '
+    .[]
+    | select(.status == "In Progress" and .state != "OPEN")
+    | "In Progress but closed: #\(.number) \(.title)"' <<< "${items}"
+    jq --raw-output '
+    .[]
+    | select((.status == "Todo" or .status == "Backlog") and .state == "OPEN" and .assignees != [])
+    | "\(.status) with assignee (forgotten claim?): #\(.number) \(.assignees | join(","))"' <<< "${items}"
+    jq --raw-output --argjson days "${days}" '
+    .[]
+    | select(.status == "In Progress" and .state == "OPEN" and .assignees != [])
+    | select((now - (.updated | fromdateiso8601)) > ($days * 86400))
+    | "In Progress stale for more than \($days) days: #\(.number) \(.assignees | join(","))"' <<< "${items}")"
+
+  if [[ -n "${findings}" ]]; then
+    printf '%s\n' "${findings}"
+    exit 1
+  fi
+
+  echo "board healthy"
 }
 
 move_item() {
@@ -162,12 +363,66 @@ set_status() {
   echo "#${issue} is ${status}"
 }
 
+# Fails early with the fix instead of the raw GraphQL scope error, or a "board not found" that really means the wrong account.
+check_auth() {
+  local response
+  local login
+  local scopes
+  local visible
+
+  response="$(gh api -i user 2>&1)" || {
+    echo "queue: gh is not authenticated: run 'gh auth login'" >&2
+    exit 1
+  }
+
+  login="$(sed -n '/^{/,$p' <<< "${response}" | jq --raw-output '.login')"
+  scopes="$(grep -i '^x-oauth-scopes:' <<< "${response}" | cut -d: -f2- | tr -d ' \r')" || true
+
+  # Fine-grained tokens send no X-OAuth-Scopes header: skip the scope check, the board check below still applies.
+  if [[ -n "${scopes}" ]] && ! [[ ",${scopes}," == *",project,"* ]]; then
+    echo "queue: the gh token of ${login} lacks the 'project' scope (has: ${scopes})." >&2
+    echo "Run: gh auth refresh -h github.com -s project" >&2
+    exit 1
+  fi
+
+  visible="$(gh api graphql \
+    --field owner="${OWNER}" --field number="${PROJECT_NUMBER}" \
+    --raw-field query='query($owner: String!, $number: Int!) { user(login: $owner) { projectV2(number: $number) { id } } }' \
+    --jq '.data.user.projectV2.id // empty' 2>/dev/null || true)"
+
+  if [[ -z "${visible}" ]]; then
+    echo "queue: ${login} cannot see board #${PROJECT_NUMBER} of ${OWNER}." >&2
+    echo "Check the active account ('gh auth switch') and that ${login} was added to the board." >&2
+    exit 1
+  fi
+}
+
 command="${1}"
 shift || true
 
 case "${command}" in
+  --help | help | "") ;;
+  *) check_auth ;;
+esac
+
+case "${command}" in
   next)
-    next_items
+    next_items "$@"
+    ;;
+  claim)
+    claim_item "${1?}"
+    ;;
+  release)
+    release_item "${1?}"
+    ;;
+  mine)
+    mine_items
+    ;;
+  team)
+    team_items
+    ;;
+  doctor)
+    doctor "$@"
     ;;
   list)
     status=""

@@ -1,12 +1,12 @@
 ---
 name: next
-description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board"), or names an issue number to work on. Loads the issue context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" archives it to ~/.claude/prompts/ and removes it.
-argument-hint: "[issue-number|save|clear]"
+description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board", "pega uma nova", "quero algo de AWS", "o que o time está fazendo"), or names an issue number to work on. The user speaks natural language, not flags. Claims the issue (assignee + In Progress), loads its context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" archives it to ~/.claude/prompts/ and removes it.
+argument-hint: "[issue number | what you want, in your own words | save | clear]"
 ---
 
 # Next issue from the board
 
-The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is the item position, top first. This skill loads one issue and stops at a design for the user to approve.
+The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue, shared by a team working in parallel. Its order is the item position, top first. "Me" is the active `gh` account (`gh api user --jq .login`). An issue someone else holds is never mine. This skill loads one issue and stops at a design for the user to approve.
 
 ## Session prompt
 
@@ -19,7 +19,19 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 
 ## Steps
 
-1. **Pick the issue.** With an issue number, use it. Without one, run `scripts/board/queue next`: an `In Progress` item wins over the top of `Todo`, and an issue with open sub-issues is skipped (the parent stays `In Progress` while its sub-issues are the work). If both are empty, show `scripts/board/queue list --status Backlog | head` and ask which one to promote.
+1. **Pick the issue.**
+
+   - **With an issue number:** use it, unless `gh issue view <n> --json assignees` shows someone else. Then refuse and say who holds it; go on only if the user says it is a takeover.
+   - **Without one:** run `scripts/board/queue next`. It lists my own `In Progress` items; with none, it shows the top of `Todo` that has no assignee, no open sub-issues and no `feat/<n>-*` branch on origin. An issue with open sub-issues is skipped (the parent stays `In Progress` while its sub-issues are the work). With two or more of my own items, list them and ask which one to resume.
+   - **The user speaks natural language; you translate it to the script's flags** (the user never types them):
+     - wants a new item although one is open ("pega uma nova", "outra issue") → `queue next --new`. There is no WIP limit, so it is the user's call;
+     - wants an area ("algo de AWS", "coisa de docs") → `--track <t>` or `--theme <t>`, from the board's own values (`Track`, `Theme`). Never guess a value: when the words do not match one exactly, run `queue next --theme x` to get the list of values in use (the script prints it on an unknown value) and ask which one;
+     - asks what the team is doing → `queue team`, no claim.
+   - With several candidates and no filter, prefer the `Theme` of the last issue I closed.
+   - **Claim before anything else:** for a `Todo` candidate run `scripts/board/queue claim <n>`. It assigns me and sets `In Progress`; if it refuses (someone else holds it or claimed at the same moment), run `queue next` again. A resumed item of mine needs no claim.
+   - If any `queue` command fails with `the gh token of <login> lacks the 'project' scope` or `<login> cannot see board #6`, relay the message and its fix to the user and stop: do not try to work around it (no other account, no direct GraphQL).
+   - If `queue next` prints a `warning: N In Progress without assignee` line, pass it on to the user and mention `scripts/board/queue doctor`. Do not take an orphan.
+   - If both are empty, show `scripts/board/queue list --status Backlog | head` and ask which one to promote.
 
 2. **Read the whole issue.** `gh issue view <n> --comments` omits the body, so run both:
 
@@ -47,6 +59,7 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 
 6. **Present the design and stop.** Reply in pt-BR with:
    - one line on the issue and its state (new, resuming, blocked);
+   - the team panel from `scripts/board/queue team` (who is on what, with the `Theme` of each): flag a `Theme` shared with someone else as a merge-conflict risk, without skipping the issue;
    - the cut: one PR, or sub-issues (one per deliverable) when the scope spans several;
    - per deliverable: CRDs, API routes, controller, CLI, docs (`platform/docs/walkthrough/`, `platform/docs/reference/`) and its step in `scripts/test/cli-smoke` (control plane) or `scripts/test/cli-e2e` (needs an environment);
    - open decisions, each with a recommendation.
@@ -56,7 +69,7 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue. Its order is th
 ## After approval
 
 - Create sub-issues when the design splits the work, and put each on the board with `Status` set (see `CLAUDE.md`).
-- Set the issue to `In Progress` with `scripts/board/queue status <n> "In Progress"`.
+- The issue is already assigned to me and `In Progress` from the claim. To give it up, run `scripts/board/queue release <n>`.
 - Branch from `main`: `feat/<n>-<short-description>`.
 - Before stopping mid-task, leave a handoff comment on the issue (last step, next step, open decision).
 - When the issue closes, move the next item to `Todo` (`scripts/board/queue status <next> Todo`).
