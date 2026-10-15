@@ -919,11 +919,16 @@
   font-size: .75rem;
 }
 
-/* The bullet hangs in the indent: the item text lines up with the paragraphs. */
+/* The bullet lines up with the paragraphs, the item text a step further in. `[dir]` outweighs Material's
+   `[dir="ltr"] .md-typeset ul li`. */
 .md-typeset .validated li,
 .md-typeset .context li {
   margin-bottom: 0;
-  margin-left: .8rem;
+}
+
+[dir] .md-typeset .validated > ul > li,
+[dir] .md-typeset .context > ul > li {
+  margin-left: 1.6rem;
 }
 
 .md-typeset .validated li::marker,
