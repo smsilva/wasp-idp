@@ -760,9 +760,10 @@
    act is neutral; the acts of the run take the demo's color, the same as its card on the demo index. */
 .md-typeset .acts { display: grid; grid-template-columns: 1.3fr 2fr 2fr; gap: 1rem; margin: 2rem 0; }
 .md-typeset .acts section { display: flex; flex-direction: column; gap: .5em; padding: .8rem 1rem 1rem; border-top: 3px solid var(--run-accent); border-radius: 0 0 6px 6px; background: color-mix(in srgb, var(--run-accent) 7%, transparent); }
-.md-typeset .acts section:first-child { background: color-mix(in srgb, var(--wasp-term-border) 25%, transparent); }
-.md-typeset .acts section:first-child { border-top-color: var(--wasp-term-border); }
-.md-typeset .acts h4 { display: flex; justify-content: space-between; align-items: baseline; gap: .6em; margin: 0 0 .4em; font-size: 1rem; color: var(--wasp-heading); }
+.md-typeset .acts:not(.acts--even) section:first-child { background: color-mix(in srgb, var(--wasp-term-border) 25%, transparent); border-top-color: var(--wasp-term-border); }
+/* All acts on the clock (`.acts--even`): equal columns, none of them neutral. */
+.md-typeset .acts--even { grid-template-columns: repeat(3, 1fr); }
+.md-typeset .acts h4 { display: flex; justify-content: space-between; align-items: baseline; gap: .6em; margin: 0 0 .4em; font-size: 1rem; line-height: 1.3; color: var(--wasp-heading); }
 .md-typeset .acts h4 span { white-space: nowrap; font-weight: 400; font-size: .75rem; color: var(--wasp-out-fg); }
 .md-typeset .acts a { font-size: .8rem; }
 @media screen and (max-width: 44.984375em) {
