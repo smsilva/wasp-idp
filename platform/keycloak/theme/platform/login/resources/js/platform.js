@@ -13,10 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
   form.classList.add("platform-collapsed");
   const toggle = document.createElement("div");
   toggle.className = "platform-local-toggle";
-  const label = pt ? ["Conta de emergência?", "Entrar com usuário e senha"] : ["Emergency account?", "Sign in with username and password"];
-  toggle.append(label[0] + " ");
   const link = document.createElement("a");
-  link.textContent = label[1];
+  link.textContent = pt ? "Entrar com usuário e senha" : "Sign in with username and password";
   link.addEventListener("click", () => { form.classList.remove("platform-collapsed"); toggle.remove(); });
   toggle.append(link);
   form.before(toggle);
