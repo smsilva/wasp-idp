@@ -10,8 +10,8 @@ nav:
   - Walkthrough:
       - walkthrough/index.md
       - Bootstrap:
-          - From scratch: walkthrough/bootstrap/from-scratch.md
           - Prerequisites: walkthrough/bootstrap/prerequisites.md
+          - From scratch: walkthrough/bootstrap/from-scratch.md
           - Install the CLI: walkthrough/bootstrap/install.md
           - Google credentials: walkthrough/bootstrap/google-credentials.md
           - Write the settings: walkthrough/bootstrap/settings.md

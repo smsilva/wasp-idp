@@ -2,12 +2,12 @@
 
 ## Prerequisites
 
-| Tool | Check |
-|---|---|
-| Docker | `docker version --format '{{.Server.Version}}'` |
-| k3d | `k3d version` |
-| kubectl | `kubectl version --client` |
-| uv | `uv --version` |
+| Tool | Tested with | Check |
+|---|---|---|
+| Docker | 29.9.1 | `docker version --format '{{.Server.Version}}'` |
+| k3d | v5.9.0 (k3s v1.35.5-k3s1) | `k3d version` |
+| kubectl | v1.34.8 | `kubectl version --client` |
+| uv | 0.11.7 | `uv --version` |
 
 ## Install
 
