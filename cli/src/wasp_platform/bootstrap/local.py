@@ -3,6 +3,7 @@ import contextvars
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -25,6 +26,8 @@ NAMESPACE = "platform-system"
 API_PORT = "6560"
 APP_PORT = "9090"
 API_URL = f"http://127.0.0.1:{APP_PORT}"
+# k3d 5.9.0 ships k3s v1.35; the platform needs k3s >= 1.31, which an older k3d does not default to (#571).
+MIN_K3D = (5, 9, 0)
 IMAGE = "platform-api"
 AUTH_NAMESPACE = "platform-auth"
 # Language of the sign-in pages written to a config that names none (#537, #545 makes it an init setting).
@@ -615,6 +618,20 @@ def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, wit
   ]
 
 
+def k3d_version(output: str) -> tuple[int, ...] | None:
+  """The version in the first line of `k3d version` (`k3d version v5.9.0`), or None when it has none."""
+  found = re.search(r"v(\d+)\.(\d+)\.(\d+)", output.splitlines()[0] if output else "")
+  return tuple(int(part) for part in found.groups()) if found else None
+
+
+def check_k3d() -> None:
+  output = subprocess.run(["k3d", "version"], capture_output=True, text=True).stdout
+  found = k3d_version(output)
+  if found is None or found < MIN_K3D:
+    shown = ".".join(map(str, found)) if found else "unknown"
+    raise BootstrapError(f"k3d {shown} found, {'.'.join(map(str, MIN_K3D))} or newer required (its default k3s image must be v1.31 or newer): https://k3d.io/#installation")
+
+
 def install(admin_emails: list[str] | None = None, reporter: Reporter | None = None, aws_profile: str | None = None, with_crossplane: bool = False, timings: Timings | None = None) -> dict:
   """timings: passed by the caller so the steps run so far can be shown when init fails."""
   reporter = reporter or Reporter()
@@ -622,6 +639,7 @@ def install(admin_emails: list[str] | None = None, reporter: Reporter | None = N
   for tool in ("docker", "k3d", "kubectl", *(("aws",) if aws_profile else ())):
     if not shutil.which(tool):
       raise BootstrapError(f"'{tool}' not found in PATH")
+  check_k3d()
   root = repo_root()
   _stopping.clear()
   results = run_tasks(init_tasks(root, admin_emails or [], aws_profile, with_crossplane), reporter, timings, on_failure=stop)

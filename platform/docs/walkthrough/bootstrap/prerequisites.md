@@ -4,6 +4,8 @@
     - Ubuntu 24.04.5 LTS, Docker Engine
     - macOS 26.5.2 on Apple Silicon, Colima 0.10.1
 
+The k3d version is a minimum: `platform init` stops before doing anything when k3d is older than `5.9.0` (its default k3s image must be `v1.31` or newer). The other versions are the ones validated.
+
 === "Ubuntu"
 
     <div class="checks" markdown>

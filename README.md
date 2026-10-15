@@ -26,7 +26,7 @@ Subsystems and their dependencies: [ADR 0034](docs/adr/0034-platform-subsystems.
 
 ## Quickstart
 
-Everything runs locally in `platform-local` (k3d). Check the [prerequisites](https://smsilva.github.io/wasp-idp/platform/walkthrough/bootstrap/prerequisites/) (Docker, k3d, kubectl, uv), then, from the root of this checkout:
+Everything runs locally in `platform-local` (k3d). Check the [prerequisites](https://smsilva.github.io/wasp-idp/platform/walkthrough/bootstrap/prerequisites/) (Docker, k3d 5.9.0 or newer, kubectl, uv), then, from the root of this checkout:
 
 ```bash
 make all

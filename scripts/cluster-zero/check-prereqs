@@ -6,10 +6,14 @@
 
 required_tools="k3d kubectl helm docker"
 minimum_inotify_instances=1024
+# k3d 5.9.0 ships k3s v1.35; the platform needs k3s >= 1.31 (#571). Keep in step with MIN_K3D in
+# cli/src/wasp_platform/bootstrap/local.py.
+minimum_k3d="5.9.0"
 inotify_file="${INOTIFY_MAX_INSTANCES_FILE:-/proc/sys/fs/inotify/max_user_instances}"
 
 missing=""
 low_inotify="false"
+old_k3d=""
 
 version_for() {
   local tool="${1?}"
@@ -35,6 +39,15 @@ echo ""
 for tool in ${required_tools}; do
   if command -v "${tool}" &> /dev/null; then
     version="$(version_for "${tool}")"
+    if [ "${tool}" = "k3d" ]; then
+      k3d_number="$(printf '%s' "${version}" | sed -n 's/.*v\([0-9][0-9.]*\).*/\1/p')"
+      lowest="$(printf '%s\n%s\n' "${minimum_k3d}" "${k3d_number:-0}" | sort --version-sort | head --lines 1)"
+      if [ "${lowest}" != "${minimum_k3d}" ]; then
+        printf '  OLD     %-8s %s (need >= %s)\n' "${tool}" "${version}" "${minimum_k3d}"
+        old_k3d="true"
+        continue
+      fi
+    fi
     printf '  ok      %-8s %s\n' "${tool}" "${version}"
   else
     printf '  MISSING %-8s\n' "${tool}"
@@ -53,6 +66,12 @@ else
 fi
 
 echo ""
+
+if [ -n "${old_k3d}" ]; then
+  echo "k3d ${minimum_k3d} or newer is required: its default k3s image must be v1.31 or newer."
+  echo "Upgrade it: https://k3d.io/#installation"
+  exit 1
+fi
 
 if [ "${low_inotify}" = "true" ]; then
   echo "Raise it before creating clusters:"
