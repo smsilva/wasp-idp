@@ -1,7 +1,7 @@
-/* platform theme (#173, variant B — Split). Mockup: docs/idp/design/keycloak-theme/b-split.html.
+/* platform theme (#537, variant D — Card + trail). Mockup: docs/idp/design/keycloak-theme/c-card.html.
    Loaded after keycloak.v2 styles.css: re-points the PatternFly v5 tokens to the platform palette and
-   lays the stock card out as the right column. Always dark (theme.properties darkMode=false).
-   Palette, bars, wordmark and dot grid match the CLI's callback page (cli/src/wasp_platform/assets/callback.html). */
+   centres the stock card alone on a plain dark page. Always dark (theme.properties darkMode=false).
+   Palette and card match the CLI's callback page (cli/src/wasp_platform/assets/callback.html). */
 :root {
   --platform-bg: #0a0b0e; --platform-panel: #121418; --platform-panel-2: #121418;
   --platform-line: #23262d; --platform-line-2: #2e323b;
@@ -26,81 +26,46 @@
   color-scheme: dark;
 }
 html.login-pf, body.platform { background: var(--platform-bg) !important; color: var(--platform-fg); }
-/* The page: header bar, the split centred in the space left, footer bar */
-body.platform {
-  margin: 0; font-family: var(--platform-sans); min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; align-items: center;
-  padding: 0 24px; box-sizing: border-box; position: relative; overflow-x: hidden; background: var(--platform-bg) !important;
-}
-/* The name as the wall the page stands on, and a faint dot grid around the panel */
-.platform-ghost {
-  position: absolute; left: 50%; bottom: -0.18em; transform: translateX(-50%); font: 800 clamp(96px, 22vw, 300px)/1 var(--platform-sans); letter-spacing: -.06em;
-  color: transparent; -webkit-text-stroke: 1px rgba(90, 169, 255, .07); background: linear-gradient(180deg, rgba(90, 169, 255, .06), transparent 70%);
-  -webkit-background-clip: text; background-clip: text; white-space: nowrap; pointer-events: none; user-select: none;
-}
-body.platform::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background-image: radial-gradient(rgba(255, 255, 255, .055) 1px, transparent 1.2px); background-size: 14px 14px;
-  -webkit-mask-image: radial-gradient(70% 60% at 50% 55%, #000, transparent); mask-image: radial-gradient(70% 60% at 50% 55%, #000, transparent);
-}
-/* Header and footer: glass bars edge to edge */
-.platform-bar {
-  position: relative; z-index: 1; display: flex; align-items: center; align-self: stretch; width: calc(100% + 48px); margin: 0 -24px; box-sizing: border-box;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .018)); border: solid rgba(255, 255, 255, .07);
-  -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
-}
-.platform-head { border-width: 0 0 1px; gap: 12px; padding: 14px 28px; }
-.platform-head b { font: 700 18px var(--platform-mono); letter-spacing: -.02em; color: var(--platform-fg); }
-.platform-head b span { color: var(--platform-fg-3); font-weight: 400; }
-.platform-head small { display: block; font-size: 12.5px; color: var(--platform-fg-3); }
-.platform-foot { border-width: 1px 0 0; align-self: end; }
-.platform-foot a { display: flex; flex-direction: column; gap: 2px; padding: 16px 28px; color: inherit; text-decoration: none; box-shadow: 1px 0 0 rgba(255, 255, 255, .06); transition: background-color .2s; }
-.platform-foot a b { font-weight: 600; font-size: 14.5px; color: var(--platform-fg-2); transition: color .2s; }
-.platform-foot a small { font-size: 12.5px; color: var(--platform-fg-4); }
-.platform-foot a:hover { background: rgba(255, 255, 255, .03); }
-.platform-foot a:hover b { color: var(--platform-fg); }
-.platform-foot a:focus-visible { outline: 2px solid var(--platform-accent); outline-offset: -2px; }
-.platform-note { margin-left: auto; padding: 0 28px; font-size: 12.5px; color: var(--platform-fg-4); }
+body.platform { margin: 0; font-family: var(--platform-sans); }
 
-/* One panel sized by its content, centred in the viewport: no empty half-screens on wide monitors */
-.platform-split {
-  position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); width: 100%; max-width: 1040px; min-height: 540px;
-  margin: 32px 0; border: 1px solid var(--platform-line); border-radius: 16px; overflow: hidden; background: var(--platform-panel);
-  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .7);
+/* The page: plain dark, the symbol above one card centred in any window, the device-flow trail under it */
+.platform-page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; box-sizing: border-box; }
+.platform-symbol { margin-bottom: 22px; line-height: 0; }
+.platform-form.pf-v5-c-login { background: none !important; min-height: 0; display: block; width: 100%; max-width: 380px; padding: 0; }
+.platform-form .pf-v5-c-login__container { display: block; width: 100%; padding: 0; grid-template-columns: none; }
+.platform-form .pf-v5-c-login__main {
+  background: var(--platform-panel) !important; border: 1px solid var(--platform-line); border-radius: 12px; padding: 28px 26px 24px; box-shadow: none; margin: 0;
 }
+.platform-text { margin: 8px 0 0; color: var(--platform-fg-2); font-size: 14px; line-height: 1.5; text-wrap: pretty; }
 
-/* Left: context column */
-.platform-ctx {
-  padding: 40px 44px; border-right: 1px solid var(--platform-line); display: flex; flex-direction: column; gap: 18px;
-  background: #0d0f12;
-}
-.platform-ctx h2 { font-size: 30px; line-height: 1.2; margin: 0; max-width: 22ch; font-weight: 700; text-wrap: balance; }
-.platform-ctx h2 em { font-style: normal; color: var(--platform-accent); }
-.platform-ctx p { color: var(--platform-fg-2); margin: 0; max-width: 46ch; }
-.platform-planes { display: flex; flex-wrap: wrap; gap: 6px; }
-.platform-planes span { border: 1px solid var(--platform-line-2); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--platform-fg-3); }
-.platform-term { background: #08090b; border: 1px solid var(--platform-line-2); border-radius: 10px; overflow: hidden; margin-top: auto; }
-.platform-term .tb { display: flex; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--platform-line); }
-.platform-term .tb i { width: 10px; height: 10px; border-radius: 50%; display: block; background: var(--platform-line-2); }
-.platform-term pre { margin: 0; padding: 14px 16px; font: 15px/1.75 var(--platform-mono); color: var(--platform-fg-2); white-space: pre-wrap; background: none; border: 0; }
-.platform-term .p { color: var(--platform-accent); }
-.platform-term .hl { color: var(--platform-amber); font-weight: 600; }
-.platform-term .cur { display: inline-block; width: 8px; height: 14px; background: var(--platform-fg-2); vertical-align: -2px; animation: platform-blink 1.1s steps(1) infinite; }
-@keyframes platform-blink { 50% { opacity: 0; } }
-.platform-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; counter-reset: s; }
-.platform-steps li { display: flex; gap: 10px; color: var(--platform-fg-2); font-size: 13px; }
-.platform-steps li::before { counter-increment: s; content: counter(s); width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--platform-line-2); display: grid; place-items: center; font-size: 11px; color: var(--platform-fg-3); flex: none; }
-.platform-steps li.done::before { content: "✓"; border-color: var(--platform-ok); color: var(--platform-ok); }
+/* Error and done pages: a round mark above the title */
+.platform-badge { width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; }
+.platform-badge.ok { color: var(--platform-ok); border: 1.5px solid rgba(126, 231, 135, .45); background: rgba(126, 231, 135, .08); }
+.platform-badge.err { color: var(--platform-err); border: 1.5px solid rgba(255, 123, 114, .45); background: rgba(255, 123, 114, .08); }
+
+/* Device flow: code → Google → authorize, three dots under the card */
+.platform-steps { list-style: none; display: flex; justify-content: center; gap: 18px; margin: 18px 0 0; padding: 0; font-size: 12px; color: var(--platform-fg-4); }
+.platform-steps li { display: flex; align-items: center; gap: 6px; }
+.platform-steps li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--platform-fg-4); }
+.platform-steps li.done { color: var(--platform-fg-3); }
+.platform-steps li.done::before { background: var(--platform-ok); border-color: var(--platform-ok); }
 .platform-steps li.now { color: var(--platform-fg); }
-.platform-steps li.now::before { border-color: var(--platform-accent); color: var(--platform-accent); }
+.platform-steps li.now::before { background: var(--platform-accent); border-color: var(--platform-accent); }
 
-/* Right: the stock keycloak.v2 card, flattened into the column */
-.platform-form.pf-v5-c-login { background: none !important; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 40px 40px; }
-.platform-form .pf-v5-c-login__container { display: block; width: 100%; max-width: 420px; padding: 0; grid-template-columns: none; }
+@media (max-width: 520px) {
+  .platform-page { padding: 64px 14px 32px; justify-content: flex-start; }
+  .platform-form .pf-v5-c-login__main-header-utilities { top: 14px; right: 14px; }
+  .platform-form .pf-v5-c-login__main { padding: 22px 18px 20px; }
+}
+
+/* The stock keycloak.v2 card, flattened into ours */
 .platform-form .pf-v5-c-login__main { background: none; box-shadow: none; margin: 0; }
-.platform-form .pf-v5-c-login__main-header { padding: 0 0 6px; row-gap: 0; }
-.platform-form .pf-v5-c-login__main-body { padding-top: 12px; }
+.platform-form .pf-v5-c-login__main-header { padding: 0 0 6px; row-gap: 0; display: block; text-align: center; }
+.platform-form .pf-v5-c-login__main-body { padding-top: 18px; padding-bottom: 0; }
+.platform-form .pf-v5-c-login__main-footer:empty { display: none; }
+.platform-form .pf-v5-c-login__main-footer { padding-bottom: 0; }
 .platform-form .pf-v5-c-login__main-body, .platform-form .pf-v5-c-login__main-footer { padding-left: 0; padding-right: 0; }
-.platform-form .pf-v5-c-title, #kc-page-title { font-size: 22px !important; font-weight: 700; color: var(--platform-fg); }
+.platform-form .pf-v5-c-title, #kc-page-title { font-size: 21px !important; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; color: var(--platform-fg); text-wrap: balance; }
 .platform-form .pf-v5-c-form-control { background: var(--platform-panel-2); border-radius: 8px; }
 .platform-form .pf-v5-c-form-control > input { color: var(--platform-fg); }
 .platform-form .pf-v5-c-button { border-radius: 9px; min-height: 44px; font-weight: 600; }
@@ -113,9 +78,8 @@ body.platform::before {
 #social-google::after { border: 0 !important; }
 #social-google svg { width: 18px; height: 18px; }
 #social-google span { margin: 0 !important; font-weight: 600; }
-/* "Use your Google account." reads as the subtitle above the Google button */
-.platform-form .pf-v5-c-login__main-footer-band { border: 0; padding: 0 0 14px; margin-top: 0; text-align: left; }
-.platform-form .pf-v5-c-login__main-footer-band-item { color: var(--platform-fg-2); }
+/* The sentence under the title already says it: the stock "Use your Google account." band goes */
+body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-footer-band { display: none; }
 
 /* Local account: hidden behind a link (js/platform.js), still there for emergencies */
 body.platform[data-page-id="login-login"] #kc-form.platform-collapsed { display: none; }
@@ -124,37 +88,19 @@ body.platform[data-page-id="login-login"] #kc-form.platform-collapsed { display:
 
 /* Device code: one wide monospace field that reads like the eight boxes of the mockup */
 #device-user-code { font: 600 24px var(--platform-mono) !important; letter-spacing: .3em; text-align: center; text-transform: uppercase; height: 56px; }
-.platform-form #kc-user-verify-device-user-code-form label { color: var(--platform-fg-2); font-weight: 400; }
+/* The sentence under the title already asks it: the field's label stays for screen readers only */
+#kc-user-verify-device-user-code-form .pf-v5-c-form__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Grant: scopes as a checked list */
-#kc-oauth ul { list-style: none; padding: 12px 14px; margin: 0 0 18px; border: 1px solid var(--platform-line-2); border-radius: 10px; background: var(--platform-panel-2); display: grid; gap: 8px; }
+#kc-oauth ul { list-style: none; padding: 12px 14px; margin: 0 0 18px; border: 1px solid var(--platform-line-2); border-radius: 10px; background: var(--platform-panel-2); display: grid; gap: 7px; font-size: 13.5px; color: var(--platform-fg-2); }
+#kc-oauth ul li { margin: 0; padding: 0; line-height: 1.5; }
 #kc-oauth ul li::before { content: "✓ "; color: var(--platform-ok); }
-#kc-oauth h3 { font-size: 14px; color: var(--platform-fg-2); font-weight: 400; margin: 0 0 10px; }
-#kc-oauth #kc-form-buttons .pf-v5-c-form__actions, #kc-oauth .form-actions #kc-form-buttons > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#kc-oauth h3 { display: none; }
+#kc-oauth .pf-v5-c-form__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+#kc-oauth .pf-v5-c-form__actions .pf-v5-c-button { width: 100%; margin: 0; }
+#kc-oauth #kc-cancel { --pf-v5-c-button--m-secondary--Color: var(--platform-fg-2); --pf-v5-c-button--m-secondary--after--BorderColor: var(--platform-line-2); }
 #kc-oauth #kc-login { order: 2; }
 #kc-oauth #kc-cancel { order: 1; }
-
-/* Narrow window: one column centred between the bars. The context keeps its title and, where the user compares
-   something with the terminal (device code), the terminal line; the form follows in the same panel. */
-@media (max-width: 860px) {
-  .platform-split { grid-template-columns: 1fr; min-height: 0; max-width: 480px; margin: 24px 0; }
-  .platform-ctx { padding: 24px 22px 18px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--platform-line); }
-  .platform-ctx h2 { font-size: 24px; max-width: none; }
-  .platform-ctx p, .platform-planes, .platform-term, .platform-steps { display: none; }
-  .platform-ctx.keep-term .platform-term { display: block; margin-top: 6px; }
-  .platform-ctx.keep-term .platform-term .tb { display: none; }
-  .platform-form.pf-v5-c-login { padding: 22px 22px 26px; }
-}
-@media (max-width: 520px) {
-  body.platform { padding: 0 14px; }
-  .platform-bar { width: calc(100% + 28px); margin: 0 -14px; }
-  .platform-head { padding: 12px 16px; } .platform-head b { font-size: 16px; }
-  /* The language switcher sits at the right of the header: the tagline gives it the room. */
-  .platform-head small { display: none; }
-  .platform-foot a { padding: 14px 16px; } .platform-note { display: none; }
-  .platform-ctx { padding: 20px 16px 16px; } .platform-ctx h2 { font-size: 21px; }
-  .platform-form.pf-v5-c-login { padding: 20px 16px 22px; }
-}
 
 /* Login page: Google first, local account below (keycloak.v2 renders the form first) */
 body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-body { display: flex; flex-direction: column; }
@@ -175,3 +121,44 @@ body.platform[data-page-id="login-login"] .platform-form .pf-v5-c-login__main-bo
 .platform-form #kc-form-buttons, .platform-form #kc-form-buttons .pf-v5-c-form__actions { width: 100%; }
 .platform-form #kc-form-buttons input[type="submit"], .platform-form #kc-form-buttons button { width: 100%; }
 #device-user-code { width: 100%; }
+
+/* Info pages (device flow done, page expired…): the stock message reads as the sentence under the title */
+#kc-info-message { text-align: center; }
+#kc-info-message .instruction { margin: 0; color: var(--platform-fg-2); font-size: 14px; line-height: 1.5; }
+body.platform[data-page-id="login-info"] .platform-form .pf-v5-c-login__main-body { padding-top: 8px; }
+/* Error page: Keycloak's reason as a small mono line under the sentence, what an admin looks for in the log */
+#kc-error-message { text-align: center; }
+#kc-error-message .instruction { margin: 0; font: 12px var(--platform-mono); color: var(--platform-fg-3); overflow-wrap: anywhere; }
+body.platform[data-page-id="login-error"] .platform-form .pf-v5-c-login__main-body { padding-top: 10px; }
+
+/* Device code: eight boxes in two groups of four (js/platform.js), sized to fill the card's column */
+.platform-code { display: grid; grid-template-columns: repeat(4, 1fr) auto repeat(4, 1fr); align-items: center; gap: 6px; margin: 2px 0 4px; }
+.platform-code input {
+  width: 100%; min-width: 0; height: 48px; padding: 0; box-sizing: border-box; text-align: center; font: 600 22px var(--platform-mono); text-transform: uppercase;
+  color: var(--platform-fg); background: #0e1013; border: 1px solid var(--platform-line-2); border-radius: 8px; caret-color: var(--platform-accent); outline: none;
+}
+.platform-code input:focus { border-color: var(--platform-accent); box-shadow: 0 0 0 3px rgba(90, 169, 255, .18); }
+.platform-code.complete input { border-color: rgba(126, 231, 135, .45); }
+.platform-code input::selection { background: rgba(90, 169, 255, .35); color: var(--platform-fg); }
+.platform-code .dash { color: var(--platform-fg-3); font: 600 22px var(--platform-mono); padding: 0 2px; }
+@media (max-width: 400px) { .platform-code { gap: 4px; } .platform-code input { height: 42px; font-size: 19px; } }
+
+/* Busy buttons (js/platform.js): a spinner and the label, no more clicks until the next page */
+.platform-busy { pointer-events: none; cursor: progress; opacity: .85; }
+.platform-busy .platform-spinner {
+  width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block;
+  animation: platform-spin .7s linear infinite; flex: none;
+}
+#social-google.platform-busy { gap: 10px; }
+@keyframes platform-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .platform-busy .platform-spinner { animation-duration: 2s; } }
+/* While Google loads, the local account link would only distract */
+.pf-v5-c-login__main-body:has(.platform-busy) .platform-local-toggle { visibility: hidden; }
+/* A submit <input> holds no element: the spinner is an animated SVG background, and the button keeps its colour */
+input.platform-busy[type=submit], input.platform-busy[type=submit]:disabled {
+  opacity: 1; color: #04101f !important; background-color: var(--platform-accent) !important; padding-left: 28px;
+  background-repeat: no-repeat; background-position: calc(50% - 46px) 50%; background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.5' fill='none' stroke='%2304101f' stroke-width='2' stroke-dasharray='30 11'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 8 8' to='360 8 8' dur='.7s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E");
+}
+#kc-oauth input.platform-busy#kc-cancel { color: var(--platform-fg-2) !important; background-color: transparent !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.5' fill='none' stroke='%23a4abb8' stroke-width='2' stroke-dasharray='30 11'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 8 8' to='360 8 8' dur='.7s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E"); }

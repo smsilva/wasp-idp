@@ -66,6 +66,8 @@ class Oidc:
     settings = config.load()
     self.issuer = issuer or settings.get("issuer")
     self.client_id = client_id or settings.get("client_id")
+    # `locale` in the config (en or pt-BR) picks the language of the sign-in pages; without it, the browser's.
+    self.locale = settings.get("locale")
     if not (self.issuer and self.client_id):
       raise AuthError("no identity provider configured: run 'platform init --target local' first")
     self.http = httpx.Client(timeout=30, transport=transport)
@@ -92,7 +94,7 @@ class Oidc:
   def login_browser(self, open_browser=webbrowser.open, idp_hint: str | None = "google", timeout: int = 300) -> dict:
     verifier, challenge = _pkce()
     state = secrets.token_urlsafe(24)
-    callback = _Callback(state)
+    callback = _Callback(state, self.locale)
     redirect_uri = f"http://127.0.0.1:{callback.port}/callback"
     params = {
       "client_id": self.client_id,
@@ -105,8 +107,11 @@ class Oidc:
     }
     if idp_hint:
       params["kc_idp_hint"] = idp_hint  # skip the Keycloak page and go straight to Google
+    if self.locale:
+      params["ui_locales"] = self.locale
     url = f"{self.endpoint('authorization_endpoint')}?{urllib.parse.urlencode(params)}"
-    if not open_browser(url):
+    callback.authorize_url = url
+    if not open_browser(f"http://127.0.0.1:{callback.port}{callback.start_path}"):
       print(f"Open this URL to sign in:\n{url}")
     code = callback.wait(timeout)
     response = self._token({"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri, "code_verifier": verifier})
@@ -126,9 +131,10 @@ class Oidc:
     if response.is_error:
       raise AuthError(f"device authorization failed: {_oauth_error(response)}")
     device = response.json()
-    show(device["user_code"], device.get("verification_uri_complete") or device["verification_uri"])
-    if device.get("verification_uri_complete"):
-      open_browser(device["verification_uri_complete"])
+    # The page without the code (#537): the user types the code from the terminal, which is the check that the
+    # browser confirms this terminal and not one a phishing link started.
+    show(device["user_code"], device["verification_uri"])
+    open_browser(device["verification_uri"])
     interval = int(device.get("interval", 5))
     deadline = time.monotonic() + int(device.get("expires_in", 600))
     while time.monotonic() < deadline:
@@ -205,58 +211,74 @@ def _oauth_error(response: httpx.Response) -> str:
     return str(response.status_code)
 
 
-# The guide and the repo the page's footer links to.
+# The guide the page links to, under the card.
 DOCS_URL = "https://smsilva.github.io/wasp-idp/platform/"
-REPO = "smsilva/wasp-idp"
-NEXT_COMMANDS = ("platform whoami", "platform environment list")
 
 CALLBACK_TEXT = {
   "en": {
-    "ok": ("That worked.", "You can close this tab now.", "login complete"),
-    "fail": ("That didn't work.", "Run platform login again.", "login failed"),
-    "page": {
-      "tagline": "the API behind the platform CLI", "docs": "Documentation", "docs_note": "Walkthrough and demos",
-      "note": "platform login · signed in with Keycloak", "copy": "copy", "copied": "copied",
-    },
+    "ok": ("You're signed in", "Return to the terminal. You can close this tab."),
+    "fail": ("That didn't work", "Run platform login again."),
+    "start": ("Opening sign-in…", "Taking you to the sign-in page.", "Continue"),
+    "docs": "Documentation",
   },
   "pt-BR": {
-    "ok": ("Deu certo.", "Pode fechar esta aba.", "login concluído"),
-    "fail": ("Não deu certo.", "Rode platform login de novo.", "login não concluído"),
-    "page": {
-      "tagline": "a API por trás da platform CLI", "docs": "Documentação", "docs_note": "Walkthrough e demos",
-      "note": "platform login · entrou com Keycloak", "copy": "copiar", "copied": "copiado",
-    },
+    "ok": ("Você entrou", "Volte para o terminal. Pode fechar esta aba."),
+    "fail": ("Não deu certo", "Rode platform login de novo."),
+    "start": ("Abrindo o login…", "Levando você para a página de login.", "Continuar"),
+    "docs": "Documentação",
   },
 }
 
 
-def callback_page(ok: bool, error: str | None, accept_language: str = "") -> str:
-  """The browser page at the end of `platform login` (#173): the session as a terminal, and the next
-  commands, which copy themselves on click."""
-  lang = "pt-BR" if accept_language.lower().startswith("pt") else "en"
-  text = CALLBACK_TEXT[lang]
-  heading, message, status = text["ok" if ok else "fail"]
-  if ok:
-    term = '<span class="okc">✓</span> Logged in'
-    commands = "".join(
-      f'<button class="cp" data-cmd="{command}"><span class="p">$</span> {command}<span class="tag"></span></button>' for command in NEXT_COMMANDS
-    )
-  else:
-    # The error comes from the redirect query string: escape it, an attacker controls it.
-    term = f'<span class="errc">✗</span> {html.escape(error) if error else "login failed"}'
-    commands = ""
+def _language(accept_language: str, locale: str | None = None) -> str:
+  """The configured locale wins over the browser's Accept-Language."""
+  return "pt-BR" if (locale or accept_language).lower().startswith("pt") else "en"
+
+
+def _page(lang: str, state: str, heading: str, message: str, error: str = "", refresh: str = "", under: str = "") -> str:
   template = (Path(__file__).parent / "assets" / "callback.html").read_text()
   return template.format(
-    lang=lang, title=heading, heading=heading, message=message, status=status, term=term, commands=commands,
-    dot="var(--ok)" if ok else "var(--err)", docs_url=DOCS_URL, repo_url=f"https://github.com/{REPO}", repo=REPO, **text["page"],
+    lang=lang, title=heading, heading=heading, message=message, error=error, refresh=refresh, under=under,
+    state=state, mark={"ok": "✓", "fail": "✗"}.get(state, ""),
   )
+
+
+def callback_page(ok: bool, error: str | None, accept_language: str = "", locale: str | None = None) -> str:
+  """The browser page at the end of `platform login` (#537): one card with the outcome, like the Keycloak screens."""
+  lang = _language(accept_language, locale)
+  text = CALLBACK_TEXT[lang]
+  heading, message = text["ok" if ok else "fail"]
+  # The error comes from the redirect query string: escape it, an attacker controls it.
+  detail = "" if ok else html.escape(error) if error else "login failed"
+  under = f'<div class="under"><a href="{DOCS_URL}" target="_blank" rel="noopener">{text["docs"]}</a></div>'
+  return _page(lang, "ok" if ok else "fail", heading, message, error=detail, under=under)
+
+
+def start_page(url: str, accept_language: str = "", locale: str | None = None) -> str:
+  """The first page `platform login` opens (#537): the card, painted at once, while the browser goes on to Keycloak.
+  Without it the tab stays blank until Keycloak and Google answer."""
+  lang = _language(accept_language, locale)
+  heading, message, button = CALLBACK_TEXT[lang]["start"]
+  target = html.escape(url, quote=True)
+  # Two frames first so the card is painted, then on to Keycloak; the browser keeps it on screen until Keycloak
+  # answers. replace() keeps /start out of the history. The meta refresh covers a tab without JavaScript.
+  refresh = f'<meta http-equiv="refresh" content="1;url={target}">\n'
+  under = (
+    f'<div class="under"><a id="go" href="{target}">{button}</a></div>\n'
+    "<script>requestAnimationFrame(() => requestAnimationFrame(() => location.replace(document.getElementById('go').href)));</script>"
+  )
+  return _page(lang, "wait", heading, message, refresh=refresh, under=under)
 
 
 class _Callback:
   """Single-request HTTP listener on a random free port of 127.0.0.1."""
 
-  def __init__(self, state: str):
+  def __init__(self, state: str, locale: str | None = None):
     self.state = state
+    self.locale = locale
+    self.authorize_url = ""  # what the start page sends the browser on to
+    # The start page carries the state: an unguessable path, served once, so a page in another tab can't read it.
+    self.start_path = f"/start/{secrets.token_urlsafe(16)}"
     self.code = None
     self.error = None
     self.done = threading.Event()
@@ -264,7 +286,19 @@ class _Callback:
 
     class Handler(http.server.BaseHTTPRequestHandler):
       def do_GET(self):
-        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        # DNS rebinding: a hostile site resolved to 127.0.0.1 sends its own name as Host.
+        if self.headers.get("Host") != f"127.0.0.1:{owner.port}":
+          self._send(403, "")
+          return
+        url = urllib.parse.urlparse(self.path)
+        if url.path == owner.start_path and owner.authorize_url:
+          authorize_url, owner.authorize_url = owner.authorize_url, ""
+          self._send(200, start_page(authorize_url, self.headers.get("Accept-Language", ""), owner.locale))
+          return
+        if url.path != "/callback":
+          self._send(404, "")
+          return
+        query = urllib.parse.parse_qs(url.query)
         if query.get("state", [None])[0] != owner.state:
           owner.error = "state mismatch"
         elif "error" in query:
@@ -272,12 +306,14 @@ class _Callback:
         else:
           owner.code = query.get("code", [None])[0]
         ok = owner.code is not None
-        body = callback_page(ok, owner.error, self.headers.get("Accept-Language", "")).encode()
-        self.send_response(200 if ok else 400)
+        self._send(200 if ok else 400, callback_page(ok, owner.error, self.headers.get("Accept-Language", ""), owner.locale))
+        owner.done.set()
+
+      def _send(self, status: int, page: str):
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(body)
-        owner.done.set()
+        self.wfile.write(page.encode())
 
       def log_message(self, *args):
         pass  # the query string carries the authorization code

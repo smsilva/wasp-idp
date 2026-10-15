@@ -1,9 +1,12 @@
 import base64
 import hashlib
+import html
 import json
+import re
 import stat
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -93,9 +96,16 @@ def oidc(idp):
   return auth.Oidc(issuer=ISSUER, client_id="platform-cli", transport=httpx.MockTransport(idp.handler))
 
 
+def _authorize_url(start_url):
+  """Follows the CLI's /start page the way the browser does: to the authorization URL in its link."""
+  page = urllib.request.urlopen(start_url).read().decode()
+  return html.unescape(re.search(r'<a id="go" href="([^"]+)"', page).group(1))
+
+
 def browser_that_consents(idp):
   """Plays the user's browser: approves and follows the redirect to the CLI's 127.0.0.1 listener."""
   def open_browser(url):
+    url = _authorize_url(url)
     query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
     assert query["code_challenge_method"] == "S256" and query["kc_idp_hint"] == "google"
     idp.verifiers["code-1"] = query["code_challenge"]
@@ -112,6 +122,7 @@ def test_browser_login_with_pkce(idp, oidc):
 
 def test_browser_login_rejects_wrong_state(oidc):
   def attacker(url):
+    url = _authorize_url(url)
     query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
     callback = f"{query['redirect_uri']}?code=stolen&state=forged"
     threading.Thread(target=lambda: _ignore_http_error(callback), daemon=True).start()
@@ -131,8 +142,14 @@ def test_device_login_handles_pending_and_slow_down(idp, oidc):
   shown, waits = [], []
   tokens = oidc.login_device(lambda code, url: shown.append((code, url)), open_browser=lambda url: False, sleep=waits.append)
   assert tokens["access_token"] == "access-device"
-  assert shown == [("ABCD-EFGH", "http://idp.test/device?user_code=ABCD-EFGH")]
+  assert shown == [("ABCD-EFGH", "http://idp.test/device")]
   assert waits == [1, 1, 6]  # slow_down adds 5 seconds (RFC 8628)
+
+
+def test_device_login_opens_the_page_without_the_code(idp, oidc):
+  opened = []
+  oidc.login_device(lambda code, url: None, open_browser=opened.append, sleep=lambda seconds: None)
+  assert opened == ["http://idp.test/device"]
 
 
 def test_credentials_file_is_private(config_home):
@@ -214,28 +231,28 @@ def test_logout_revokes_refresh_token(idp, oidc, monkeypatch):
 def test_callback_page_success_in_portuguese():
   page = auth.callback_page(True, None, "pt-BR,pt;q=0.9,en;q=0.8")
   assert '<html lang="pt-BR">' in page
-  assert "Deu certo." in page and "Pode fechar esta aba." in page
-  assert '<button class="cp" data-cmd="platform whoami">' in page
-  assert '<button class="cp" data-cmd="platform environment list">' in page
+  assert "Você entrou" in page and "Volte para o terminal." in page
+  assert '<div class="badge ok"' in page
 
 
-def test_callback_page_links_to_the_guide_and_the_repo():
+def test_callback_page_links_to_the_guide():
   page = auth.callback_page(True, None, "en")
   assert f'href="{auth.DOCS_URL}"' in page
-  assert 'href="https://github.com/smsilva/wasp-idp"' in page
+  assert "You're signed in" in page
 
 
 def test_callback_page_failure_escapes_error():
   page = auth.callback_page(False, "<script>alert(1)</script>", "en-US")
   assert "<script>alert(1)</script>" not in page
   assert "&lt;script&gt;" in page
-  assert "That didn't work." in page
-  assert 'class="cp"' not in page
+  assert "That didn't work" in page
+  assert '<div class="badge fail"' in page
 
 
 def test_browser_login_serves_themed_page(idp, oidc):
   pages = []
   def open_browser(url):
+    url = _authorize_url(url)
     query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
     idp.verifiers["code-1"] = query["code_challenge"]
     callback = f"{query['redirect_uri']}?code=code-1&state={query['state']}"
@@ -244,7 +261,72 @@ def test_browser_login_serves_themed_page(idp, oidc):
     return True
   oidc.login_browser(open_browser=open_browser, timeout=10)
   time.sleep(0.2)
-  assert "That worked." in pages[0]
+  assert "You're signed in" in pages[0]
+
+
+def test_browser_login_opens_the_start_page_first(idp, oidc):
+  opened, pages = [], []
+  def open_browser(url):
+    opened.append(url)
+    request = urllib.request.Request(url, headers={"Accept-Language": "pt-BR"})
+    pages.append(urllib.request.urlopen(request).read().decode())
+    authorize = html.unescape(re.search(r'<a id="go" href="([^"]+)"', pages[0]).group(1))
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(authorize).query))
+    idp.verifiers["code-1"] = query["code_challenge"]
+    threading.Thread(target=lambda: urllib.request.urlopen(f"{query['redirect_uri']}?code=code-1&state={query['state']}").read(), daemon=True).start()
+    return True
+  oidc.login_browser(open_browser=open_browser, timeout=10)
+  assert re.fullmatch(r"http://127\.0\.0\.1:\d+/start/[\w-]{20,}", opened[0])
+  assert "Abrindo o login…" in pages[0]
+  assert 'http-equiv="refresh"' in pages[0] and "kc_idp_hint=google" in pages[0]
+
+
+def test_start_page_is_served_once_and_only_on_its_path(idp, oidc):
+  def open_browser(url):
+    with pytest.raises(urllib.error.HTTPError, match="404"):
+      urllib.request.urlopen(url.rsplit("/", 1)[0] + "/guessed")
+    authorize = _authorize_url(url)
+    with pytest.raises(urllib.error.HTTPError, match="404"):
+      urllib.request.urlopen(url)  # a second read finds nothing
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(authorize).query))
+    idp.verifiers["code-1"] = query["code_challenge"]
+    threading.Thread(target=lambda: urllib.request.urlopen(f"{query['redirect_uri']}?code=code-1&state={query['state']}").read(), daemon=True).start()
+    return True
+  assert oidc.login_browser(open_browser=open_browser, timeout=10)["access_token"] == "access-browser"
+
+
+def test_listener_refuses_a_foreign_host(idp, oidc):
+  def open_browser(url):
+    port = urllib.parse.urlparse(url).port
+    request = urllib.request.Request(url, headers={"Host": f"rebind.example:{port}"})
+    with pytest.raises(urllib.error.HTTPError, match="403"):
+      urllib.request.urlopen(request)
+    return browser_that_consents(idp)(url)
+  assert oidc.login_browser(open_browser=open_browser, timeout=10)["access_token"] == "access-browser"
+
+
+def test_configured_locale_reaches_keycloak_and_the_cli_pages(idp, monkeypatch):
+  monkeypatch.setattr(auth.config, "load", lambda: {"issuer": ISSUER, "client_id": "platform-cli", "locale": "en"})
+  oidc = auth.Oidc(transport=httpx.MockTransport(idp.handler))
+  pages = []
+  def open_browser(url):
+    request = urllib.request.Request(url, headers={"Accept-Language": "pt-BR"})
+    pages.append(urllib.request.urlopen(request).read().decode())
+    authorize = html.unescape(re.search(r'<a id="go" href="([^"]+)"', pages[0]).group(1))
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(authorize).query))
+    assert query["ui_locales"] == "en"
+    idp.verifiers["code-1"] = query["code_challenge"]
+    callback = urllib.request.Request(f"{query['redirect_uri']}?code=code-1&state={query['state']}", headers={"Accept-Language": "pt-BR"})
+    threading.Thread(target=lambda: pages.append(urllib.request.urlopen(callback).read().decode()), daemon=True).start()
+    return True
+  oidc.login_browser(open_browser=open_browser, timeout=10)
+  time.sleep(0.2)
+  assert "Opening sign-in…" in pages[0] and "You're signed in" in pages[1]
+
+
+def test_without_locale_the_browser_language_wins():
+  assert '<html lang="pt-BR">' in auth.callback_page(True, None, "pt-BR,pt;q=0.9")
+  assert '<html lang="en">' in auth.callback_page(True, None, "pt-BR,pt;q=0.9", locale="en")
 
 
 def test_password_login_saves_the_issuing_client(idp):

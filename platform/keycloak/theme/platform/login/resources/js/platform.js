@@ -13,11 +13,146 @@ document.addEventListener("DOMContentLoaded", () => {
   form.classList.add("platform-collapsed");
   const toggle = document.createElement("div");
   toggle.className = "platform-local-toggle";
-  const label = pt ? ["Conta de emergência?", "Entrar com usuário e senha"] : ["Emergency account?", "Sign in with username and password"];
-  toggle.append(label[0] + " ");
   const link = document.createElement("a");
-  link.textContent = label[1];
+  link.textContent = pt ? "Entrar com usuário e senha" : "Sign in with username and password";
   link.addEventListener("click", () => { form.classList.remove("platform-collapsed"); toggle.remove(); });
   toggle.append(link);
   form.before(toggle);
+});
+
+// platform theme (#537): the device code as eight boxes, XXXX-XXXX like Keycloak generates it. Pasting the whole
+// code in any box fills them all. The stock field stays in the form, hidden, and receives the joined value, so the
+// POST is unchanged; without JavaScript the stock field is shown.
+document.addEventListener("DOMContentLoaded", () => {
+  const field = document.getElementById("device-user-code");
+  if (!field) return;
+  const size = 4;
+  const clean = (text) => text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const boxes = [];
+  const row = document.createElement("div");
+  row.className = "platform-code";
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", field.labels?.[0]?.textContent.trim() || "Code");
+  for (let index = 0; index < size * 2; index++) {
+    if (index === size) {
+      const dash = document.createElement("span");
+      dash.className = "dash";
+      dash.textContent = "-";
+      dash.setAttribute("aria-hidden", "true");
+      row.append(dash);
+    }
+    const box = document.createElement("input");
+    box.type = "text";
+    box.inputMode = "text";
+    box.autocomplete = index === 0 ? "one-time-code" : "off";
+    box.maxLength = 1;
+    box.setAttribute("autocapitalize", "characters");
+    box.setAttribute("spellcheck", "false");
+    box.setAttribute("aria-label", `${index + 1}`);
+    boxes.push(box);
+    row.append(box);
+  }
+  const sync = () => {
+    const value = boxes.map((box) => box.value).join("");
+    field.value = value.length > size ? `${value.slice(0, size)}-${value.slice(size)}` : value;
+    row.classList.toggle("complete", value.length === boxes.length);
+  };
+  // Writes the characters from box `start` on, and focuses the box after the last one written.
+  const fill = (start, text) => {
+    const chars = clean(text).slice(0, boxes.length - start).split("");
+    chars.forEach((char, offset) => { boxes[start + offset].value = char; });
+    sync();
+    // A complete code moves on to Continue: Enter or Space submits it.
+    const submit = row.closest("form")?.querySelector("[type=submit]");
+    if (row.classList.contains("complete") && submit) submit.focus();
+    else if (chars.length) boxes[Math.min(start + chars.length, boxes.length - 1)].focus();
+    return chars.length;
+  };
+  boxes.forEach((box, index) => {
+    box.addEventListener("input", () => {
+      const typed = box.value;
+      box.value = "";
+      if (!fill(index, typed)) sync();
+    });
+    box.addEventListener("paste", (event) => {
+      event.preventDefault();
+      // A pasted code starts over from the first box, wherever the cursor was.
+      const text = clean(event.clipboardData.getData("text"));
+      if (text.length >= boxes.length) {
+        boxes.forEach((other) => { other.value = ""; });
+        fill(0, text);
+      } else {
+        fill(index, text);
+      }
+    });
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Backspace" && !box.value && index > 0) {
+        boxes[index - 1].value = "";
+        boxes[index - 1].focus();
+        sync();
+        event.preventDefault();
+      } else if (event.key === "ArrowLeft" && index > 0) {
+        boxes[index - 1].focus();
+        event.preventDefault();
+      } else if (event.key === "ArrowRight" && index < boxes.length - 1) {
+        boxes[index + 1].focus();
+        event.preventDefault();
+      }
+    });
+    box.addEventListener("focus", () => box.select());
+  });
+  field.type = "hidden";
+  field.removeAttribute("autofocus");
+  field.after(row);
+  // A code already in the stock field (an error page keeps it) shows up in the boxes.
+  if (field.value) fill(0, field.value);
+  if (!field.value) boxes[0].focus();
+});
+
+// platform theme (#537): feedback while the next page loads. The Google button and the submit buttons turn into a
+// spinner and stop taking clicks; coming back with the browser's Back restores them (pageshow from the bfcache).
+document.addEventListener("DOMContentLoaded", () => {
+  const pt = document.documentElement.lang.startsWith("pt");
+  const busy = (element, text) => {
+    element.classList.add("platform-busy");
+    element.setAttribute("aria-busy", "true");
+    element.dataset.platformLabel = element.tagName === "INPUT" ? element.value : element.innerHTML;
+    const content = `<span class="platform-spinner" aria-hidden="true"></span><span>${text}</span>`;
+    if (element.tagName === "INPUT") element.value = text;
+    else element.innerHTML = content;
+  };
+  document.querySelectorAll("#social-google, a[id^='social-']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      if (button.classList.contains("platform-busy")) { event.preventDefault(); return; }
+      busy(button, pt ? "Redirecionando…" : "Redirecting…");
+    });
+  });
+  document.querySelectorAll("form").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      if (form.dataset.platformSent) { event.preventDefault(); return; }
+      form.dataset.platformSent = "true";
+      const button = event.submitter;
+      // Deny and Authorize post the same form: only the one clicked spins, its name/value still goes in the POST.
+      if (button) {
+        setTimeout(() => {
+          busy(button, pt ? "Aguarde…" : "Working…");
+          form.querySelectorAll("[type=submit]").forEach((other) => { other.disabled = true; });
+        });
+      }
+    });
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    document.querySelectorAll(".platform-busy").forEach((element) => {
+      element.classList.remove("platform-busy");
+      element.removeAttribute("aria-busy");
+      if (element.tagName === "INPUT") element.value = element.dataset.platformLabel;
+      else element.innerHTML = element.dataset.platformLabel;
+      element.disabled = false;
+    });
+    document.querySelectorAll("form").forEach((form) => {
+      delete form.dataset.platformSent;
+      form.querySelectorAll("[type=submit]").forEach((button) => { button.disabled = false; });
+    });
+  });
 });

@@ -185,7 +185,10 @@ api_url: http://127.0.0.1:9090
 context: k3d-platform-local
 issuer: http://localhost:8180/realms/platform
 client_id: platform-cli
+locale: en
 ```
+
+`locale` is the language of the sign-in pages ([Sign-in](login.md#language)): `init` writes `en` when the file names none, and keeps a value already there.
 
 !!! warning
     Do not run `init` with a changed Keycloak theme while someone is mid sign-in: the sign-in session lives in the Keycloak pod memory, and the Google callback hits a server that forgot it.

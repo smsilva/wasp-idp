@@ -27,6 +27,8 @@ APP_PORT = "9090"
 API_URL = f"http://127.0.0.1:{APP_PORT}"
 IMAGE = "platform-api"
 AUTH_NAMESPACE = "platform-auth"
+# Language of the sign-in pages written to a config that names none (#537, #545 makes it an init setting).
+DEFAULT_LOCALE = "en"
 KEYCLOAK_PORT = "8180"
 # Read by the Platform API for `platform status` (platform_api.capabilities, ADR 0039).
 IDENTITY_PROVIDERS_ANNOTATION = "platform.wasp.silvios.me/identity-providers"
@@ -625,15 +627,20 @@ def install(admin_emails: list[str] | None = None, reporter: Reporter | None = N
   results = run_tasks(init_tasks(root, admin_emails or [], aws_profile, with_crossplane), reporter, timings, on_failure=stop)
 
   identity = results["keycloak"]
-  path = config.save({
-    **config.load(),
-    "target": "local", "api_url": API_URL, "context": CONTEXT,
-    "issuer": identity["issuer"], "client_id": CLI_CLIENT_ID,
-  })
+  path = config.save(cli_config(config.load(), identity["issuer"]))
   return {
     "target": "local", "cluster": CLUSTER, "api_url": API_URL, "image": results["build images"][IMAGE], "config": str(path),
     **identity, **{key: value for key, value in results["aws-account-provider"].items() if key != "values"},
     **results["crossplane"], "timings": timings.as_dict(),
+  }
+
+
+def cli_config(current: dict, issuer: str) -> dict:
+  """The CLI config after init: the control plane it points at, and the sign-in pages in English unless the
+  config already names a locale (#537)."""
+  return {
+    "locale": DEFAULT_LOCALE, **current,
+    "target": "local", "api_url": API_URL, "context": CONTEXT, "issuer": issuer, "client_id": CLI_CLIENT_ID,
   }
 
 

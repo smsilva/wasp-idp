@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#537 · Login screens: one centred card</title>
+<style>
+/* Mockups for #537: every login screen as one centred card on a plain dark page (GitHub device flow pages as
+   the reference). Three variants side by side per screen; the frames are 460 px wide windows. */
+:root {
+  --bg: #0a0b0e; --panel: #121418; --term: #08090b; --line: #23262d; --line-2: #2e323b;
+  --fg: #e8eaee; --fg-2: #a4abb8; --fg-3: #707785; --fg-4: #4f5562;
+  --accent: #5aa9ff; --ok: #7ee787; --err: #ff7b72; --amber: #e5c07b;
+  --mono: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #050608; color: var(--fg); font: 15px/1.5 var(--sans); }
+
+/* Mockup chrome (not part of the design) */
+.doc { max-width: 1520px; margin: 0 auto; padding: 32px 28px 80px; }
+.doc > header { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+.doc h1 { margin: 0; font-size: 22px; }
+.doc .lead { color: var(--fg-3); margin: 6px 0 0; max-width: 90ch; }
+.tools { margin-left: auto; display: flex; gap: 6px; }
+.tools button { all: unset; cursor: pointer; padding: 4px 12px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12.5px; color: var(--fg-3); }
+.tools button[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+.legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 26px 0 6px; position: sticky; top: 0; z-index: 5; background: #050608; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.legend div b { display: block; font-size: 15px; }
+.legend div span { color: var(--fg-3); font-size: 13px; }
+section.screen { margin-top: 34px; }
+section.screen > h2 { font-size: 14px; font-weight: 600; color: var(--fg-2); margin: 0 0 12px; letter-spacing: .02em; }
+section.screen > h2 code { color: var(--fg-3); font-weight: 400; font-size: 12.5px; margin-left: 8px; }
+.row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+@media (max-width: 1100px) { .row, .legend { grid-template-columns: 1fr; } .legend { position: static; } }
+
+/* The page itself: plain dark, card centred, symbol above */
+.win { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.win .chrome { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: #0e1013; }
+.win .chrome i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
+.win .chrome span { margin-left: 10px; font: 11.5px var(--mono); color: var(--fg-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.page { min-height: 620px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; position: relative; }
+.lang { position: absolute; top: 14px; right: 16px; font-size: 11.5px; color: var(--fg-4); border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 10px; }
+.symbol { margin-bottom: 22px; }
+.card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 28px 26px 24px; text-align: center; }
+.card h3 { margin: 0; font-size: 21px; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; text-wrap: balance; }
+.card p { margin: 8px 0 0; color: var(--fg-2); font-size: 14px; text-wrap: pretty; }
+.card .body { margin-top: 22px; text-align: left; }
+.badge { width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; }
+.badge.ok { color: var(--ok); border: 1.5px solid rgba(126, 231, 135, .45); background: rgba(126, 231, 135, .08); }
+.badge.err { color: var(--err); border: 1.5px solid rgba(255, 123, 114, .45); background: rgba(255, 123, 114, .08); }
+.under { margin-top: 18px; font-size: 12.5px; color: var(--fg-4); text-align: center; max-width: 360px; }
+.under a { color: var(--fg-3); text-decoration: none; border-bottom: 1px dotted var(--fg-4); }
+
+/* Form bits */
+.btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 42px; border-radius: 8px; font-weight: 600; font-size: 14.5px; border: 1px solid transparent; }
+.btn + .btn { margin-top: 10px; }
+.btn.primary { background: var(--accent); color: #04101f; }
+.btn.google { background: #f8fafc; color: #1f2937; }
+.btn.ghost { background: transparent; border-color: var(--line-2); color: var(--fg-2); }
+.btns2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btns2 .btn + .btn { margin-top: 0; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12.5px; color: var(--fg-3); margin-bottom: 5px; }
+.field div { border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 12px; color: var(--fg); background: #0e1013; font-size: 14px; }
+.code { font: 600 24px var(--mono); letter-spacing: .3em; text-align: center; padding: 12px; border: 1px solid var(--line-2); border-radius: 8px; background: #0e1013; margin-bottom: 14px; }
+.code.bad { border-color: var(--err); }
+.scopes { list-style: none; margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 10px; display: grid; gap: 7px; font-size: 13.5px; color: var(--fg-2); }
+.scopes li::before { content: "✓ "; color: var(--ok); }
+.alert { border-left: 3px solid var(--err); background: rgba(255, 123, 114, .1); color: #ffc2bc; border-radius: 6px; padding: 9px 12px; font-size: 13px; margin-bottom: 14px; text-align: left; }
+.meta { font: 12px var(--mono); color: var(--fg-4); text-align: center; margin-top: 14px; }
+.local { display: block; text-align: center; margin-top: 14px; font-size: 13px; color: var(--fg-3); }
+
+/* Variant D: three dots under the card for the device flow */
+.steps { display: flex; justify-content: center; gap: 18px; margin-top: 18px; font-size: 12px; color: var(--fg-4); }
+.steps span { display: flex; align-items: center; gap: 6px; }
+.steps span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--fg-4); }
+.steps span.done { color: var(--fg-3); } .steps span.done::before { background: var(--ok); border-color: var(--ok); }
+.steps span.now { color: var(--fg); } .steps span.now::before { background: var(--accent); border-color: var(--accent); }
+
+/* Variant E: the terminal inside the card, one command and its last line */
+.term { background: var(--term); border: 1px solid var(--line-2); border-radius: 9px; overflow: hidden; margin-top: 18px; text-align: left; }
+.term .tb { display: flex; gap: 5px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.term .tb i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
+.term pre { margin: 0; padding: 10px 12px; font: 13px/1.7 var(--mono); color: var(--fg-2); white-space: pre-wrap; }
+.term .p { color: var(--accent); } .term .hl { color: var(--amber); font-weight: 600; } .term .okc { color: var(--ok); } .term .errc { color: var(--err); }
+.term .cur { display: inline-block; width: 7px; height: 13px; background: var(--fg-2); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .term .cur { animation: none; } }
+</style>
+</head>
+<body>
+<div class="doc">
+  <header>
+    <div>
+      <h1>#537 · Telas de login: um card centralizado</h1>
+      <p class="lead">Cada tela vira um card único sobre fundo escuro liso, com o símbolo acima, um título, uma frase e o form. Três variantes lado a lado: <b>C</b> sem terminal, <b>D</b> sem terminal e com a trilha do device flow, <b>E</b> com o terminal dentro do card. Os dados são fictícios.</p>
+    </div>
+    <div class="tools" role="group" aria-label="Idioma">
+      <button data-lang="pt" aria-pressed="true">pt-BR</button>
+      <button data-lang="en" aria-pressed="false">en</button>
+    </div>
+  </header>
+  <div class="legend">
+    <div><b>C — Card</b><span>Só o card. O mais perto do GitHub.</span></div>
+    <div><b>D — Card + trilha</b><span>C com uma linha de três pontos sob o card, só no device flow.</span></div>
+    <div><b>E — Card + terminal</b><span>C com o comando que pediu o login dentro do card, abaixo da frase.</span></div>
+  </div>
+  <div id="screens"></div>
+</div>
+
+<template id="symbol"><svg viewBox="0 0 40 32" width="44" height="35" aria-hidden="true"><defs><linearGradient id="platform-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#a48bff"/></linearGradient></defs><path d="M9 3c-3 0-4 1.5-4 4v4.5c0 2-1 3.5-3 4.5 2 1 3 2.5 3 4.5V25c0 2.5 1 4 4 4" fill="none" stroke="#a4abb8" stroke-width="2.4" stroke-linecap="round"/><path d="M31 3c3 0 4 1.5 4 4v4.5c0 2 1 3.5 3 4.5-2 1-3 2.5-3 4.5V25c0 2.5-1 4-4 4" fill="none" stroke="#a4abb8" stroke-width="2.4" stroke-linecap="round"/><path d="M20 7l9 5-9 5-9-5z" fill="url(#platform-g)"/><path d="M11 16.5l9 5 9-5" fill="none" stroke="url(#platform-g)" stroke-width="2.4" stroke-linejoin="round"/><path d="M11 21l9 5 9-5" fill="none" stroke="url(#platform-g)" stroke-width="2.4" stroke-linejoin="round" opacity=".6"/></svg></template>
+
+<script>
+const T = {
+  pt: {
+    google: "Entrar com Google", local: "Usar conta local", cont: "Continuar", yes: "Autorizar", no: "Negar",
+    first: "Nome", last: "Sobrenome", email: "E-mail", lang: "Português",
+    step: ["Código", "Google", "Autorizar"], docs: "Documentação",
+  },
+  en: {
+    google: "Sign in with Google", local: "Use a local account", cont: "Continue", yes: "Authorize", no: "Deny",
+    first: "First name", last: "Last name", email: "Email", lang: "English",
+    step: ["Code", "Google", "Authorize"], docs: "Documentation",
+  },
+};
+
+// Each screen: url, title/text per language, the form body, the device-flow step (D) and the terminal (E).
+const SCREENS = [
+  {
+    id: "login", name: "1 · Login", file: "login.ftl", url: "localhost:8180/realms/platform/protocol/openid-connect/auth",
+    pt: ["Entrar na platform-api", "O mesmo login vale para a CLI, o portal e a API."],
+    en: ["Sign in to platform-api", "One sign-in for the CLI, the portal and the API."],
+    body: (t) => `<div class="btn google">${G}${t.google}</div><a class="local">${t.local}</a>`,
+    term: () => `<span class="p">$</span> platform login\n<span class="cur"></span>`,
+  },
+  {
+    id: "device", name: "2 · Device code", file: "login-oauth2-device-verify-user-code.ftl", url: "localhost:8180/realms/platform/device", step: 0,
+    pt: ["Confirme o código", "É o mesmo que aparece no terminal? Se não for, feche esta aba."],
+    en: ["Confirm the code", "Is it the one shown in your terminal? If not, close this tab."],
+    body: (t) => `<div class="code">WDJB-MJHT</div><div class="btn primary">${t.cont}</div>`,
+    term: () => `<span class="p">$</span> platform login --use-device-code\ncode <span class="hl">WDJB-MJHT</span>\n<span class="cur"></span>`,
+  },
+  {
+    id: "device-bad", name: "2a · Device code inválido", file: "login-oauth2-device-verify-user-code.ftl", url: "localhost:8180/realms/platform/device", step: 0,
+    pt: ["Confirme o código", "É o mesmo que aparece no terminal? Se não for, feche esta aba."],
+    en: ["Confirm the code", "Is it the one shown in your terminal? If not, close this tab."],
+    body: (t, l) => `<div class="alert">${l === "pt" ? "Código inválido, expirado ou já usado. Rode <b>platform login --use-device-code</b> de novo." : "Invalid, expired or already used code. Run <b>platform login --use-device-code</b> again."}</div><div class="code bad">WDJB-MJHX</div><div class="btn primary">${t.cont}</div>`,
+    term: () => `<span class="p">$</span> platform login --use-device-code\ncode <span class="hl">WDJB-MJHT</span>\n<span class="cur"></span>`,
+  },
+  {
+    id: "device-google", name: "2b · Google no device flow", file: "login.ftl (client platform-cli)", url: "localhost:8180/realms/platform/protocol/openid-connect/auth", step: 1,
+    pt: ["Entre para conectar o terminal", "Use a conta que você usa na plataforma."],
+    en: ["Sign in to connect the terminal", "Use the account you use on the platform."],
+    body: (t) => `<div class="btn google">${G}${t.google}</div>`,
+    term: () => `<span class="p">$</span> platform login --use-device-code\ncode <span class="hl">WDJB-MJHT</span>  ✓\n<span class="cur"></span>`,
+  },
+  {
+    id: "grant", name: "3 · Autorizar o terminal", file: "login-oauth-grant.ftl", url: "localhost:8180/realms/platform/login-actions/consent", step: 2,
+    pt: ["Autorizar platform-cli?", "Ele vai agir em seu nome até você rodar platform logout."],
+    en: ["Authorize platform-cli?", "It will act on your behalf until you run platform logout."],
+    body: (t, l) => `<ul class="scopes">${(l === "pt" ? ["Ver seu perfil e e-mail", "Ver seus grupos", "Manter o acesso (offline)"] : ["See your profile and email", "See your groups", "Keep access (offline)"]).map((s) => `<li>${s}</li>`).join("")}</ul><div class="btns2"><div class="btn ghost">${t.no}</div><div class="btn primary">${t.yes}</div></div>`,
+    term: () => `<span class="p">$</span> platform login --use-device-code\ncode <span class="hl">WDJB-MJHT</span>  ✓\n<span class="cur"></span>`,
+  },
+  {
+    id: "profile", name: "4 · Primeiro login (revisar perfil)", file: "idp-review-user-profile.ftl", url: "localhost:8180/realms/platform/login-actions/first-broker-login",
+    pt: ["Que bom ter você aqui", "Confira os dados que vieram do Google."],
+    en: ["Glad you're here", "Check the details that came from Google."],
+    body: (t) => `<div class="field"><label>${t.email}</label><div>voce@example.com</div></div><div class="field"><label>${t.first}</label><div>Ana</div></div><div class="field"><label>${t.last}</label><div>Souza</div></div><div class="btn primary">${t.cont}</div>`,
+  },
+  {
+    id: "error", name: "5 · Erro", file: "error.ftl", url: "localhost:8180/realms/platform/broker/google/endpoint", badge: "err",
+    pt: ["Não foi possível entrar", "O terminal continua esperando. Tente de novo."],
+    en: ["Could not sign in", "Your terminal is still waiting. Try again."],
+    body: () => `<div class="meta">IDENTITY_PROVIDER_LOGIN_ERROR · 14:32:07</div>`,
+    term: () => `<span class="p">$</span> platform login\n<span class="cur"></span>`,
+  },
+  {
+    id: "done", name: "6 · Terminal conectado (device flow)", file: "info.ftl", url: "localhost:8180/realms/platform/device/status", badge: "ok", step: 3,
+    pt: ["Terminal conectado", "Pode fechar esta aba. O terminal continua sozinho."],
+    en: ["Terminal connected", "You can close this tab. The terminal carries on by itself."],
+    body: () => "",
+    term: () => `<span class="p">$</span> platform login --use-device-code\n<span class="okc">✓</span> Logged in as voce@example.com`,
+  },
+  {
+    id: "cb-ok", name: "7 · Callback da CLI: sucesso", file: "cli/src/wasp_platform/assets/callback.html", url: "127.0.0.1:53817/callback?code=…", badge: "ok", cli: true,
+    pt: ["Você entrou", "Volte para o terminal. Pode fechar esta aba."],
+    en: ["You're signed in", "Return to the terminal. You can close this tab."],
+    body: () => "",
+    term: () => `<span class="p">$</span> platform login\n<span class="okc">✓</span> Logged in as voce@example.com`,
+  },
+  {
+    id: "cb-fail", name: "7a · Callback da CLI: falha", file: "cli/src/wasp_platform/assets/callback.html", url: "127.0.0.1:53817/callback?error=access_denied", badge: "err", cli: true,
+    pt: ["Não deu certo", "Rode platform login de novo."],
+    en: ["That didn't work", "Run platform login again."],
+    body: () => `<div class="meta">access_denied</div>`,
+    term: () => `<span class="p">$</span> platform login\n<span class="errc">✗</span> access_denied`,
+  },
+];
+
+const G = `<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>`;
+const SYMBOL = document.getElementById("symbol").innerHTML;
+
+function render(lang) {
+  const t = T[lang];
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
+  document.getElementById("screens").innerHTML = SCREENS.map((s) => {
+    const [title, text] = s[lang];
+    const variant = (v) => {
+      const badge = s.badge ? `<div class="badge ${s.badge}">${s.badge === "ok" ? "✓" : "✗"}</div>` : "";
+      const term = v === "E" && s.term ? `<div class="term"><div class="tb"><i></i><i></i><i></i></div><pre>${s.term()}</pre></div>` : "";
+      const steps = v === "D" && s.step !== undefined
+        ? `<div class="steps">${t.step.map((name, i) => `<span class="${i < s.step ? "done" : i === s.step ? "now" : ""}">${name}</span>`).join("")}</div>` : "";
+      const body = s.body(t, lang);
+      const under = s.cli ? `<div class="under"><a>${t.docs}</a></div>` : "";
+      return `<div class="win"><div class="chrome"><i></i><i></i><i></i><span>${s.url}</span></div>
+        <div class="page">${s.cli ? "" : `<span class="lang">${t.lang} ▾</span>`}<div class="symbol">${SYMBOL}</div>
+          <div class="card">${badge}<h3>${title}</h3><p>${text}</p>${term}${body ? `<div class="body">${body}</div>` : ""}</div>${steps}${under}
+        </div></div>`;
+    };
+    return `<section class="screen"><h2>${s.name}<code>${s.file}</code></h2><div class="row">${["C", "D", "E"].map(variant).join("")}</div></section>`;
+  }).join("");
+}
+
+document.querySelectorAll(".tools button").forEach((button) => button.addEventListener("click", () => {
+  document.querySelectorAll(".tools button").forEach((other) => other.setAttribute("aria-pressed", other === button));
+  render(button.dataset.lang);
+}));
+render("pt");
+</script>
+</body>
+</html>
