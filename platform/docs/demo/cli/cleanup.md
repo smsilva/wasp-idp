@@ -22,4 +22,4 @@ gh api \
 rm -rf /tmp/hello-api
 ```
 
-The component stays in the catalog index. `gh` needs the `delete_repo` and `delete:packages` scopes, which the script checks before deleting anything: `gh auth refresh --scopes delete_repo,delete:packages`.
+The component stays in the catalog index. `gh` needs the `delete_repo` and `delete:packages` scopes, which the script checks before deleting anything: `gh auth refresh --hostname github.com --scopes delete_repo,delete:packages`.

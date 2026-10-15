@@ -13,7 +13,7 @@ gh api \
 Deleting the package takes every version (tag) of the image at once.
 
 !!! note
-    `gh repo delete` needs the `delete_repo` scope and the package delete needs `delete:packages`. Without them GitHub answers `403`; add them with `gh auth refresh --scopes delete_repo,delete:packages`.
+    `gh repo delete` needs the `delete_repo` scope and the package delete needs `delete:packages`. Without them GitHub answers `403`; add them with `gh auth refresh --hostname github.com --scopes delete_repo,delete:packages`.
 
 List the container packages left in the org, with the repo each one is linked to (`-` marks one with no repo):
 
