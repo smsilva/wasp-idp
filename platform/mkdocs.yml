@@ -227,6 +227,7 @@ extra_css:
 extra_javascript:
   - javascripts/diagram-zoom.js
   - javascripts/terminal.js
+  - javascripts/copy-checks.js
 markdown_extensions:
   - admonition
   - attr_list

@@ -2,14 +2,21 @@
 
 ## Prerequisites
 
-Tested on Ubuntu 24.04 with these versions:
+!!! validated "Validated on"
+    Tested on the operating systems below.
 
-| Tool | Tested with | Check |
-|---|---|---|
-| Docker | 29.9.1 | `docker version --format '{{.Server.Version}}'` |
-| k3d | v5.9.0 (k3s v1.35.5-k3s1) | `k3d version` |
-| kubectl | v1.34.8 | `kubectl version --client` |
-| uv | 0.11.7 | `uv --version` |
+    - Ubuntu 24.04.5 LTS
+
+<div class="checks" markdown>
+
+| Tool | Version | Needed for | Check |
+|---|---|---|---|
+| Docker | 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
+| k3d | 5.9.0 | init | `k3d version` |
+| kubectl | 1.34.8 | init | `kubectl version --client` |
+| uv | 0.11.7 | install | `uv --version` |
+
+</div>
 
 ## Install
 

@@ -1,28 +1,19 @@
 # Prerequisites
 
-`platform init` needs Docker, k3d and kubectl on the `PATH`, and the CLI is installed with uv. Versions this walkthrough was last run with, on Ubuntu 24.04:
+!!! validated "Validated on"
+    This walkthrough was run on the operating systems below.
 
-| Tool | Version | Check |
-|---|---|---|
-| Docker | 29.9.1 | `docker version --format '{{.Server.Version}}'` |
-| k3d | v5.9.0 (k3s v1.35.5-k3s1) | `k3d version` |
-| kubectl | v1.34.8 | `kubectl version --client` |
-| uv | 0.11.7 | `uv --version` |
-| git | 2.43.0 | `git --version` |
-| gh | 2.45.0 | `gh --version` |
+    - Ubuntu 24.04.5 LTS
 
-```bash
-docker version --format '{{.Server.Version}}'
+<div class="checks" markdown>
 
-k3d version
+| Tool | Version | Needed for | Check |
+|---|---|---|---|
+| Docker | 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
+| k3d | 5.9.0 | init | `k3d version` |
+| kubectl | 1.34.8 | init | `kubectl version --client` |
+| uv | 0.11.7 | install | `uv --version` |
+| git | 2.43.0 | components | `git --version` |
+| gh | 2.45.0 | cleanup | `gh --version` |
 
-kubectl version --client
-
-uv --version
-
-git --version
-
-gh --version
-```
-
-git and gh come in later: the component steps clone the repo the platform creates, and the cleanup deletes it with `gh`.
+</div>
