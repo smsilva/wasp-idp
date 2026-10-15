@@ -13,5 +13,5 @@ Deploy the version you just built to agent-demo and tell me when it runs.
 The API answers right away with an open revision, as `platform workload deploy` without `--wait`. Check it from the CLI:
 
 ```bash
-platform workload get --component hello-api --environment agent-demo
+platform workload get hello-api --environment agent-demo
 ```

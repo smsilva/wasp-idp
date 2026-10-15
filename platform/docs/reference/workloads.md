@@ -5,11 +5,11 @@ platform workload spec validate [--file <app-spec.yaml>]
 platform workload spec get --component <component> [--version <version> | --branch <branch>]
 platform workload deploy --component <component> [--instance <instance>] --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--resource-class <resource>=<class> ...] [--wait] [--timeout <seconds>]
 platform workload list [--environment <environment>] [--component <component>]
-platform workload get (--component <component> | --instance <instance>) --environment <environment>
-platform workload signals (--component <component> | --instance <instance>) --environment <environment> [--window <5m>]
+platform workload get <instance> --environment <environment> | <instance>@<environment>
+platform workload signals <instance> --environment <environment> | <instance>@<environment> [--window <5m>]
 platform workload history --environment <environment> [--component <component> | --instance <instance>]
-platform workload rollback (--component <component> | --instance <instance>) --environment <environment> [--revision <n>] [--wait] [--timeout <seconds>]
-platform workload remove (--component <component> | --instance <instance>) --environment <environment> [--wait] [--timeout <seconds>]
+platform workload rollback <instance> --environment <environment> | <instance>@<environment> [--revision <n>] [--wait] [--timeout <seconds>]
+platform workload remove <instance> --environment <environment> | <instance>@<environment> [--wait] [--timeout <seconds>]
 platform workload apply --file <plan.yaml> [--dry-run] [--prune] [--wait] [--timeout <seconds>]
 ```
 
@@ -57,7 +57,7 @@ Phase 1 accepts a Score with `containers` (`image`, `command`, `args`, `variable
 
 An instance runs one component for as long as its history lives: the first deploy names it, and a deploy or a plan that names another component is refused (`409`). An extra instance cannot take the name of another component of the catalog (`409`): its Service would answer for that component (`http://<component>`) in the environment.
 
-`get`, `rollback` and `remove` take `--component` or `--instance`. With `--component`, the CLI acts on the default instance, the one named after the component; when the component runs any extra instance in the environment it stops with `<component> has N instances in <environment>: …; give --instance`, so `--component` never lands on a sandbox unasked. `deploy` always sends the component: deploying another component to an existing instance is a 409. `history --component` lists the revisions of every instance of the component; `--instance`, only those of one.
+`get`, `signals`, `rollback` and `remove` take the instance as an argument (ADR 0033: an instance is identified by its environment and its name): `<instance>` with `--environment`, or `<instance>@<environment>` alone, the name `list` prints, so a `WORKLOAD` of `list` pastes into them. The default instance is named after its component (`hello-api`), an extra one has its own name (`hello-api-pr-42`). Both forms with different environments is an error, as is neither. `--component` and `--instance` still work on these four commands for one release, hidden and with a warning on stderr, then go. A `remove` of an instance a route still uses is refused by the API (`409`, below). `deploy` always sends the component: deploying another component to an existing instance is a 409. `history --component` lists the revisions of every instance of the component; `--instance`, only those of one.
 
 ## deploy
 

@@ -36,8 +36,7 @@ hello-api@demo  hello-api  0.1.0-greetings.b5f9569  Available  2/2       1      
 The URL answers from your machine, with no `port-forward`:
 
 ```bash
-platform workload get \
-  --component hello-api \
+platform workload get hello-api \
   --environment demo
 
 curl --include http://hello-api.demo.localhost:7080/

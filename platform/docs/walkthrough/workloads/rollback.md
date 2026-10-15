@@ -10,8 +10,7 @@ platform workload deploy \
   --replicas 1 \
   --wait
 
-platform workload rollback \
-  --component hello-api \
+platform workload rollback hello-api \
   --environment demo \
   --wait
 
@@ -43,8 +42,7 @@ component/hello-api
 Remove the workload from the environment:
 
 ```bash
-platform workload remove \
-  --component hello-api \
+platform workload remove hello-api \
   --environment demo \
   --wait
 
