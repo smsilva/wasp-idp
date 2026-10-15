@@ -1,0 +1,40 @@
+# Tests every pull request and every push to main. Images come from platform-build.yaml, which the
+# platform dispatches (`platform build create`).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    # A real PostgreSQL, so test/database.test.js proves the connection instead of skipping it.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_DB: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username app --dbname app"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_NAME: app
+      DATABASE_USER: app
+      DATABASE_PASSWORD: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test

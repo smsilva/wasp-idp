@@ -48,6 +48,7 @@ def test_home_page_shows_title_theme_version_and_features(client):
     assert "<h1>Hello Alpha</h1>" in page
     assert 'data-theme="teal"' in page
     assert "0.2.0-greetings.b5f9569" in page
+    assert "Python 3." in page and "FastAPI " in page
     assert "Checks its database" in page
     assert 'href="/docs"' in page
 

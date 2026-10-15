@@ -1,0 +1,26 @@
+{
+  "name": "${{ values.name }}",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fastify service made from the node-service template",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@fastify/swagger": "9.9.2",
+    "@fastify/swagger-ui": "6.1.2",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/context-async-hooks": "2.12.0",
+    "@opentelemetry/core": "2.12.0",
+    "@opentelemetry/instrumentation": "0.223.0",
+    "@opentelemetry/instrumentation-http": "0.223.0",
+    "@opentelemetry/instrumentation-undici": "0.33.0",
+    "fastify": "5.12.7",
+    "pg": "8.23.1"
+  }
+}

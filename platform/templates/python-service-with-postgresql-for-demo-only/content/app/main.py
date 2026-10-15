@@ -1,7 +1,9 @@
 import os
+import platform
 import socket
 from pathlib import Path
 
+import fastapi
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -19,6 +21,7 @@ APP_THEME = os.environ.get("APP_THEME") if os.environ.get("APP_THEME") in THEMES
 # Baked into the image by platform-build.yaml (Dockerfile ARGs); a local run has neither.
 APP_VERSION = os.environ.get("APP_VERSION", "dev")
 APP_COMMIT = os.environ.get("APP_COMMIT", "unknown")
+RUNTIME = [f"Python {platform.python_version()}", f"FastAPI {fastapi.__version__}"]
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION, description=APP_DESCRIPTION or f"{APP_NAME}, made from the python-service template.")
 instrument(app)
@@ -41,7 +44,7 @@ def info() -> Info:
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def home(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "index.html", {"info": info(), "theme": APP_THEME, "db": database.check()})
+    return templates.TemplateResponse(request, "index.html", {"info": info(), "theme": APP_THEME, "runtime": RUNTIME, "db": database.check()})
 
 
 @app.get("/api/info", tags=["about"], summary="Name, version and commit of this build")

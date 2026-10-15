@@ -90,6 +90,22 @@ def test_seed_renders_clean(tmp_path):
   assert "name: demo" in catalog
   assert "system: greeter" in catalog
   assert "platform.wasp.silvios.me/template: python-service@abc" in catalog
+
+
+def test_node_seed_renders_clean_and_keeps_its_javascript_as_written(tmp_path):
+  seed = REPO / "platform" / "templates" / "node-service"
+  template = load_template(seed)
+  out = tmp_path / "demo"
+  render(template.content, out, {**template.defaults(), "name": "demo", "owner": "team-alpha", "description": "Demo", "system": "greeter"}, template.copy_without_rendering)
+  rendered = [path for path in out.rglob("*") if path.is_file() and not path.match(".github/workflows/*")]
+  assert rendered and not any("${{" in path.read_text() for path in rendered)
+  # The JavaScript carries ${ } of its own: copied byte for byte, never through Jinja2.
+  for source in (seed / "content").glob("src/*.js"):
+    assert (out / "src" / source.name).read_bytes() == source.read_bytes()
+  assert '"name": "demo"' in (out / "package.json").read_text()
+  assert yaml.safe_load((out / "package-lock.json").read_text())["packages"][""]["name"] == "demo"
+  assert "EXPOSE 3000" in (out / "Dockerfile").read_text()
+  assert "APP_THEME: green" in (out / "app-spec.yaml").read_text()
   assert (out / "docs" / "prd.md").read_text().startswith("# demo: product requirements")
   assert (out / "AGENTS.md").is_file()
   app_spec = (out / "app-spec.yaml").read_text()

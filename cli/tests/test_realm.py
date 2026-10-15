@@ -116,11 +116,14 @@ def test_seed_templates_first_install_marks_one_default_per_type(tmp_path):
 
   root = Path(__file__).parents[2]
   manifests = seed_templates(root, "abc1234", existing=[])
-  names = [manifest["metadata"]["name"] for manifest in manifests]
-  assert names == ["python-service", "python-service-with-postgresql-for-demo-only"]
-  # python-service is the default by the `default: true` of its template.yaml, not by name order.
-  assert "default" not in manifests[1]["spec"]
-  spec = manifests[0]["spec"]
+  by_name = {manifest["metadata"]["name"]: manifest for manifest in manifests}
+  assert list(by_name) == ["node-service", "python-service", "python-service-with-postgresql-for-demo-only"]
+  # python-service is the default by the `default: true` of its template.yaml, not by name order:
+  # node-service sorts first.
+  assert "default" not in by_name["node-service"]["spec"]
+  assert "default" not in by_name["python-service-with-postgresql-for-demo-only"]["spec"]
+  assert by_name["node-service"]["spec"]["parameters"]["properties"]["port"]["default"] == 3000
+  spec = by_name["python-service"]["spec"]
   assert spec["source"] == {"repo": SEED_REPO, "path": "platform/templates/python-service/content", "ref": "abc1234"}
   assert (spec["type"], spec["default"], spec["owner"]) == ("service", True, "team-platform")
   assert spec["parameters"]["properties"]["port"]["default"] == 8000
@@ -140,7 +143,8 @@ def test_seed_templates_again_keeps_the_admin_choice_of_default():
   assert not any(spec.get("default") for spec in specs) and specs[0]["source"]["ref"] == "def5678"
   # Still the default from an earlier init: stays the default.
   existing = [{"metadata": {"name": "python-service"}, "spec": {"type": "service", "default": True}}]
-  assert seed_templates(root, "def5678", existing)[0]["spec"]["default"] is True
+  defaults = [manifest["metadata"]["name"] for manifest in seed_templates(root, "def5678", existing) if manifest["spec"].get("default")]
+  assert defaults == ["python-service"]
 
 
 def test_seed_ref_is_the_last_commit_on_the_remote(monkeypatch):
