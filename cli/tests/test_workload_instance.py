@@ -387,3 +387,33 @@ def test_signals_without_prometheus(api):
   result = run("signals", "reviews", "--environment", "demo")
   assert result.exit_code == 1
   assert "observability" in result.output
+
+
+def test_get_suggests_signals_history_and_the_component(api):
+  result = run("get", "reviews@demo")
+  assert "next:" not in result.stdout
+  assert result.stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform workload signals reviews \\",
+    "    --environment demo",
+    "",
+    "  platform workload history \\",
+    "    --environment demo \\",
+    "    --instance reviews",
+    "",
+    "  platform catalog component get reviews",
+  ]
+  assert run("get", "reviews@demo", "--output", "json").stderr == ""
+
+
+def test_get_hide_empty(api):
+  api["instance"] = {**INSTANCE, "traffic": None, "message": None}
+  lines = run("get", "reviews@demo").stdout.splitlines()
+  assert "  traffic       —" in lines and "  message       —" in lines
+  lines = run("get", "reviews@demo", "--hide-empty").stdout.splitlines()
+  assert not any(line.endswith("—") for line in lines)
+  assert "  resource      db (postgres, provision): Ready" in lines
+  data = json.loads(run("get", "reviews@demo", "--hide-empty", "--output", "json").stdout)
+  assert "traffic" not in data and "message" not in data and data["version"] == "2.1.0"

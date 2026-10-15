@@ -19,7 +19,7 @@ import typer
 import yaml
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 
 # The kube API keeps the spec as JSON with sorted keys: the top level goes back to the order of a Score.
 SCORE_ORDER = ("apiVersion", "metadata", "resources", "containers", "service")
@@ -398,42 +398,55 @@ def list_(
   )
 
 
-@app.command("get", epilog=examples("platform workload get hello-api --environment demo", "platform workload get hello-api-canary@demo"))
+@app.command("get", epilog=examples("platform workload get hello-api --environment demo", "platform workload get hello-api-canary@demo", "platform workload get hello-api@demo --hide-empty --output json"))
 def get_(
   target: InstanceArgument = None,
   environment: EnvironmentOption = None,
+  hide_empty: HideEmptyOption = None,
   output: OutputOption = Format.table,
   component: OldComponentOption = None,
   instance: OldInstanceOption = None,
 ):
   """Show a workload in an environment and its newest revision."""
+  hide_empty = hiding(hide_empty)
   name, environment = _instance_of(target, environment, component, instance)
   try:
     item = _client().get_workload(environment, name)
   except ApiError as error:
     fail(str(error))
   if output.data:
-    print_data(item, output)
+    print_data(item, output, hide_empty)
     return
   latest = item["latestRevision"]
   typer.echo(f"{item['name']} ({item['status']})")
-  for field, value in (
+  details = [(field, None if value == "—" else value) for field, value in _details(item)]
+  print_fields([
     ("component", item.get("component")),
     ("version", item.get("version")),
     ("image", item.get("image")),
-    ("replicas", _replicas(item)),
+    ("replicas", None if _replicas(item) == "—" else _replicas(item)),
     ("revision", item.get("revision")),
     ("traffic", item.get("traffic")),
-    _details(item)[0],
+    details[0],
     *((("internal url", item.get("url")),) if item.get("publicUrl") else ()),
     ("message", item.get("message")),
-  ):
-    typer.echo(f"  {field.ljust(13)} {value or '—'}")
-  for field, value in _details(item)[1:]:
-    typer.echo(f"  {field.ljust(13)} {value}")
+    *details[1:],
+  ], hide_empty, width=13)
   if latest["revision"] != item.get("revision"):
     what = " ".join(part for part in (latest["action"], latest.get("version")) if part)
     typer.echo(f"  {'newest'.ljust(13)} revision {latest['revision']} ({what}): {latest['status']}: {latest.get('message') or '—'}")
+  _next(item, name, environment)
+
+
+def _next(item: dict, instance: str, environment: str) -> None:
+  where = (environment, "environment")
+  steps = [
+    ("platform workload signals", (instance, "key"), {"--environment": where}),
+    ("platform workload history", None, {"--environment": where, "--instance": (instance, "key")}),
+  ]
+  if item.get("component"):
+    steps.append(("platform catalog component get", (item["component"], "component"), {}))
+  next_steps(steps)
 
 
 def _number(value: float) -> str:

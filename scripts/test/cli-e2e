@@ -9,12 +9,13 @@ The journey of the CLI through a vcluster (#451), on the local target; scripts/t
 covers the control plane. Run it when a change touches environments, workloads, providers or the
 mesh, and before a walkthrough run.
 
-One environment, owned by the test user: created with the mesh (its gateway answering at
+One environment, owned by the test user: created with the mesh (its get with the next: footer, its gateway answering at
 *.<name>.localhost:7080, read by an agent over MCP without its kubeconfig, a hostNetwork or
 privileged pod refused in the vcluster and on the host), shared with a team of two test users (the
 teammate gets a personal kubeconfig whose token the Platform API issues (ADR 0028), cannot delete
 the environment nor get its admin kubeconfig, and loses access after unshare, in kubectl too), then
-a Workload Instance (deploy of a public image by digest with --wait, list, get, history, rollback
+a Workload Instance (deploy of a public image by digest with --wait, list, get with its next: footer
+and --hide-empty (#521), history, rollback
 to the previous success, runningIn and versions in catalog component get, remove; refused outside the owner
 team, for a version outside the index, a rollback to a failed revision, and ResourcesNotSupported
 for a resource type without provider; a pod in the vcluster reaches the Service of the instance by
@@ -101,6 +102,8 @@ fi
 step "environment get: the entry point of its workloads (ADR 0036, #357)"
 output="$(platform environment get "${environment}")"
 expect_output "workloads at http://*.${environment}.localhost:7080" "${output}"
+footer="$(platform environment get "${environment}" 2>&1 >/dev/null)"
+expect_output "platform environment policy get ${environment}" "${footer}"
 # No route yet: the shared Traefik reaches the environment's Gateway, which answers 404.
 headers="$(curl --silent --output /dev/null --dump-header - "http://smoke.${environment}.localhost:7080/" | tr --delete '\r' || true)"
 server="$(grep --ignore-case '^server:' <<< "${headers}" || true)"
@@ -325,6 +328,13 @@ kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps wait pod/dns-chec
 kubectl --kubeconfig "${workload_kubeconfig}" --namespace apps delete pod dns-check
 output="$(platform workload get "${workload_component}" --environment "${environment}")"
 expect_output "ghcr.io/stefanprodan/podinfo@${workload_digest}" "${output}"
+footer="$(platform workload get "${workload_component}" --environment "${environment}" 2>&1 >/dev/null)"
+expect_output "platform workload signals ${workload_component}" "${footer}"
+output="$(platform workload get "${workload_component}" --environment "${environment}" --hide-empty --output json)"
+if grep --quiet 'null' <<<"${output}"; then
+  echo "--hide-empty left null keys: ${output}" >&2
+  exit 1
+fi
 expect_failure "revision 2: ResourcesNotSupported" \
   platform workload deploy \
     --component "${workload_component}" \

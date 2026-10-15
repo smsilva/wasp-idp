@@ -56,6 +56,17 @@ hello-api@demo (Available)
   resource      db (postgres, provision): Ready
   resource      dns (dns, provision): Ready
   resource      route (route, provision): Ready
+
+next:
+
+  platform workload signals hello-api \
+    --environment demo
+
+  platform workload history \
+    --environment demo \
+    --instance hello-api
+
+  platform catalog component get hello-api
 HTTP/1.1 200 OK
 Content-Type: application/json
 Server: istio-envoy
