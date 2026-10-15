@@ -92,7 +92,7 @@ TERM_COLORS = {
   "comment": {"fg": (0x6B, 0x7A, 0x8D), "italic": True},
   "key": {"bold": True},
   "component": {"fg": (0x5E, 0xEA, 0xD4), "bold": True},
-  "environment": {"fg": (0xC4, 0xA7, 0xFF), "bold": True},
+  "environment": {"fg": (0xF4, 0x72, 0xB6), "bold": True},
 }
 
 # A value and its role: a key of TERM_COLORS, or None for a plain argument.
