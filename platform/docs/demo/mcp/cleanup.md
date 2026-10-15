@@ -1,4 +1,4 @@
-# After the demo
+# Wrap up
 
 Ask the agent to delete what it made:
 
@@ -13,10 +13,14 @@ Delete the agent-demo environment.
 Back to the read-only server:
 
 ```bash
-claude mcp remove --scope user platform
+claude mcp remove \
+  --scope user \
+  platform
 ```
 
 ```bash
-claude mcp add --scope user platform -- platform-mcp \
-  --toolsets core,environments,catalog,builds,workloads
+claude mcp add platform \
+  --scope user -- \
+    platform-mcp \
+      --toolsets core,environments,catalog,builds,workloads
 ```

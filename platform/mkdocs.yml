@@ -120,8 +120,12 @@ nav:
       - demo/index.md
       - MCP:
           - demo/mcp/index.md
-          - Before the demo: demo/mcp/before.md
+          - Get ready:
+              - Install the server: demo/mcp/before.md
+              - Start clean: demo/mcp/clean.md
+              - Signed in, with an app running: demo/mcp/ready.md
           - Connect the agent: demo/mcp/setup.md
+          - Check the connection: demo/mcp/check.md
           - Who am I: demo/mcp/whoami.md
           - The catalog: demo/mcp/catalog.md
           - The golden paths: demo/mcp/templates.md
@@ -130,10 +134,10 @@ nav:
           - Build a branch: demo/mcp/build.md
           - Deploy it: demo/mcp/deploy.md
           - What runs: demo/mcp/signals.md
-          - After the demo: demo/mcp/cleanup.md
+          - Wrap up: demo/mcp/cleanup.md
       - CLI:
           - demo/cli/index.md
-          - Before the demo: demo/cli/before.md
+          - Get ready: demo/cli/before.md
           - Create the app: demo/cli/create.md
           - Clone the app: demo/cli/clone.md
           - A branch and a change: demo/cli/branch.md
@@ -145,7 +149,7 @@ nav:
           - A second environment: demo/cli/second.md
           - Call it there: demo/cli/second-call.md
           - Where the app runs: demo/cli/running-in.md
-          - After the demo: demo/cli/cleanup.md
+          - Wrap up: demo/cli/cleanup.md
   - Architecture: architecture.md
   - Reference:
       - reference/index.md
