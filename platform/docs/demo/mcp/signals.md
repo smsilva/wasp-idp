@@ -1,18 +1,16 @@
 # What runs and how it behaves
 
-```text
-What runs in agent-demo, and how is hello-api doing?
-```
-
-| Tool | |
-|---|---|
-| `workloads_list` | the instances in `agent-demo`, with version and URL |
-| `workloads_signals` | latency p95, traffic, errors and saturation of `hello-api`, from the mesh |
+<div class="turn you" markdown>
+<p class="intent">Retrieves what runs, its signals and its deploy history</p>
 
 ```text
-Which versions of hello-api were deployed in agent-demo?
+What runs in agent-demo, how is hello-api doing, and which versions were deployed there?
 ```
 
-| Tool | |
-|---|---|
-| `workloads_history` | each revision, newest first |
+</div>
+
+<ul class="tool-calls">
+  <li><code class="tool">workloads_list</code><span>the instances in <code>agent-demo</code>, with version and URL</span></li>
+  <li><code class="tool">workloads_signals</code><span>latency p95, traffic, errors and saturation of <code>hello-api</code>, from the mesh</span></li>
+  <li><code class="tool">workloads_history</code><span>each revision, newest first</span></li>
+</ul>

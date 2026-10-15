@@ -1,21 +1,18 @@
 # The catalog
 
-```text
-Which systems does team-alpha own, and what does greeter depend on?
-```
+<div class="turn you" markdown>
+<p class="intent">Retrieves Systems, components and the creation of hello-api</p>
 
 ```text
-Which components belong to greeter, and where does hello-api run?
+Which systems does team-alpha own, which components belong to greeter, and how was hello-api created?
 ```
 
-```text
-How was hello-api created?
-```
+</div>
 
-| Tool | |
-|---|---|
-| `catalog_list` | systems of `team-alpha` |
-| `catalog_get` | `greeter` with its dependents |
-| `catalog_components_list` | components of `greeter` |
-| `catalog_components_get` | `hello-api`, with its newest builds and versions and where it runs |
-| `catalog_components_creation_get` | the steps that created `hello-api` |
+<ul class="tool-calls">
+  <li><code class="tool">catalog_list</code><span>systems of <code>team-alpha</code></span></li>
+  <li><code class="tool">catalog_get</code><span><code>greeter</code> with its dependents</span></li>
+  <li><code class="tool">catalog_components_list</code><span>components of <code>greeter</code></span></li>
+  <li><code class="tool">catalog_components_get</code><span><code>hello-api</code>, with its newest builds and versions and where it runs</span></li>
+  <li><code class="tool">catalog_components_creation_get</code><span>the steps that created <code>hello-api</code></span></li>
+</ul>
