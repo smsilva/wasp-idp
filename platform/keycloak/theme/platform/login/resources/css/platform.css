@@ -142,3 +142,23 @@ body.platform[data-page-id="login-error"] .platform-form .pf-v5-c-login__main-bo
 .platform-code input::selection { background: rgba(90, 169, 255, .35); color: var(--platform-fg); }
 .platform-code .dash { color: var(--platform-fg-3); font: 600 22px var(--platform-mono); padding: 0 2px; }
 @media (max-width: 400px) { .platform-code { gap: 4px; } .platform-code input { height: 42px; font-size: 19px; } }
+
+/* Busy buttons (js/platform.js): a spinner and the label, no more clicks until the next page */
+.platform-busy { pointer-events: none; cursor: progress; opacity: .85; }
+.platform-busy .platform-spinner {
+  width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block;
+  animation: platform-spin .7s linear infinite; flex: none;
+}
+#social-google.platform-busy { gap: 10px; }
+@keyframes platform-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .platform-busy .platform-spinner { animation-duration: 2s; } }
+/* While Google loads, the local account link would only distract */
+.pf-v5-c-login__main-body:has(.platform-busy) .platform-local-toggle { visibility: hidden; }
+/* A submit <input> holds no element: the spinner is an animated SVG background, and the button keeps its colour */
+input.platform-busy[type=submit], input.platform-busy[type=submit]:disabled {
+  opacity: 1; color: #04101f !important; background-color: var(--platform-accent) !important; padding-left: 28px;
+  background-repeat: no-repeat; background-position: calc(50% - 46px) 50%; background-size: 16px 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.5' fill='none' stroke='%2304101f' stroke-width='2' stroke-dasharray='30 11'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 8 8' to='360 8 8' dur='.7s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E");
+}
+#kc-oauth input.platform-busy#kc-cancel { color: var(--platform-fg-2) !important; background-color: transparent !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6.5' fill='none' stroke='%23a4abb8' stroke-width='2' stroke-dasharray='30 11'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 8 8' to='360 8 8' dur='.7s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E"); }

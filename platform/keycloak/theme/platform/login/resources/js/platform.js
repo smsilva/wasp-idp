@@ -108,3 +108,51 @@ document.addEventListener("DOMContentLoaded", () => {
   if (field.value) fill(0, field.value);
   if (!field.value) boxes[0].focus();
 });
+
+// platform theme (#537): feedback while the next page loads. The Google button and the submit buttons turn into a
+// spinner and stop taking clicks; coming back with the browser's Back restores them (pageshow from the bfcache).
+document.addEventListener("DOMContentLoaded", () => {
+  const pt = document.documentElement.lang.startsWith("pt");
+  const busy = (element, text) => {
+    element.classList.add("platform-busy");
+    element.setAttribute("aria-busy", "true");
+    element.dataset.platformLabel = element.tagName === "INPUT" ? element.value : element.innerHTML;
+    const content = `<span class="platform-spinner" aria-hidden="true"></span><span>${text}</span>`;
+    if (element.tagName === "INPUT") element.value = text;
+    else element.innerHTML = content;
+  };
+  document.querySelectorAll("#social-google, a[id^='social-']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      if (button.classList.contains("platform-busy")) { event.preventDefault(); return; }
+      busy(button, pt ? "Redirecionando…" : "Redirecting…");
+    });
+  });
+  document.querySelectorAll("form").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      if (form.dataset.platformSent) { event.preventDefault(); return; }
+      form.dataset.platformSent = "true";
+      const button = event.submitter;
+      // Deny and Authorize post the same form: only the one clicked spins, its name/value still goes in the POST.
+      if (button) {
+        setTimeout(() => {
+          busy(button, pt ? "Aguarde…" : "Working…");
+          form.querySelectorAll("[type=submit]").forEach((other) => { other.disabled = true; });
+        });
+      }
+    });
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    document.querySelectorAll(".platform-busy").forEach((element) => {
+      element.classList.remove("platform-busy");
+      element.removeAttribute("aria-busy");
+      if (element.tagName === "INPUT") element.value = element.dataset.platformLabel;
+      else element.innerHTML = element.dataset.platformLabel;
+      element.disabled = false;
+    });
+    document.querySelectorAll("form").forEach((form) => {
+      delete form.dataset.platformSent;
+      form.querySelectorAll("[type=submit]").forEach((button) => { button.disabled = false; });
+    });
+  });
+});
