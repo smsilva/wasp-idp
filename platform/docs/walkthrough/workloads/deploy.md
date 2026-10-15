@@ -39,7 +39,7 @@ The URL answers from your machine, with no `port-forward`:
 platform workload get hello-api \
   --environment demo
 
-curl --include http://hello-api.demo.localhost:7080/
+curl --include http://hello-api.demo.localhost:7080/api/db
 ```
 
 ``` { .text .output title="output" }
@@ -71,8 +71,10 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 Server: istio-envoy
 
-{"app":"hello-api","message":"hello"}
+{"status":"connected","host":"hello-api-db-6daaa09f.resources","port":5432,"database":"app","user":"app","serverVersion":"17.11","serverAddress":"10.42.0.62:5432","latencyMs":14.7,"error":null,"checkedAt":"2026-10-15T09:37:52.702202Z"}
 ```
+
+`/api/db` is the check of the app's home page (`http://hello-api.demo.localhost:7080/` in the browser): the `db` of the `resource` line, reached from inside the pod. It answers `503` with the error when the database is unreachable.
 
 The image is pinned by digest: a new push under the same tag does not change what runs. The `internal url` is the address the other workloads of the environment use.
 
