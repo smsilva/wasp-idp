@@ -1,0 +1,9 @@
+# Overlay for the Tailwind Air demo (#528), loaded after app-config.yaml by scripts/demo/backstage-tailwind.
+# Config merging replaces arrays, so these locations replace the ones of app-config.yaml: the catalog
+# shows only the fictional airline (plus what the GitHub provider discovers in wasp-foundry).
+catalog:
+  locations:
+    - type: file
+      target: ../../catalog/airline/tailwind/catalog-info.yaml
+      rules:
+        - allow: [Group, Domain, System, Resource, Component, API]
