@@ -869,9 +869,11 @@
   }
 }
 
-/* Validated-on callout (`!!! validated "Validated on"`): small amber title, a short line, the list of systems.
+/* Validated-on callout (`!!! validated "Validated on"`) and context notes (`!!! context "title"`): small amber
+   title, a short line, an optional list.
    Amber is the --wasp-strong of each theme. */
-.md-typeset .admonition.validated {
+.md-typeset .admonition.validated,
+.md-typeset .admonition.context {
   border: 0;
   border-left: 3px solid var(--wasp-strong);
   border-radius: 0 6px 6px 0;
@@ -880,7 +882,8 @@
   padding: .7rem .9rem;
 }
 
-.md-typeset .validated > .admonition-title {
+.md-typeset .validated > .admonition-title,
+.md-typeset .context > .admonition-title {
   margin: 0 0 .3rem;
   padding: 0;
   background: transparent;
@@ -890,26 +893,54 @@
   font-weight: 600;
 }
 
-.md-typeset .validated > .admonition-title::before {
+.md-typeset .validated > .admonition-title::before,
+.md-typeset .context > .admonition-title::before {
   display: none;
 }
 
-.md-typeset .validated > p {
+.md-typeset .validated > p,
+.md-typeset .context > p {
   margin: 0 0 .5rem;
   color: var(--md-default-fg-color--light);
   font-size: .65rem;
 }
 
-.md-typeset .validated > ul {
+.md-typeset .validated > ul,
+.md-typeset .context > ul {
   margin: 0;
 }
 
-.md-typeset .validated li {
+.md-typeset .validated li,
+.md-typeset .context li {
   margin-bottom: 0;
 }
 
-.md-typeset .validated li::marker {
+.md-typeset .validated li::marker,
+.md-typeset .context li::marker {
   color: var(--wasp-strong);
+}
+
+/* Context notes (`!!! context "title"`): the validated callout with a title above the body size and the
+   paragraphs indented under it, in the body color. */
+.md-typeset .admonition.context {
+  margin-bottom: 2rem;
+  padding: .6rem .9rem;
+}
+
+.md-typeset .context > .admonition-title {
+  margin-bottom: .25rem;
+  font-size: .85rem;
+  font-weight: 700;
+}
+
+.md-typeset .context > p:not(.admonition-title) {
+  margin: 0 0 0 .8rem;
+  color: var(--md-typeset-color);
+  font-size: .75rem;
+}
+
+.md-typeset .context > p:not(.admonition-title) + p {
+  margin-top: .2rem;
 }
 
 /* Prerequisite tables (`<div class="checks" markdown>`, javascripts/copy-checks.js): framed, zebra rows,
@@ -1058,3 +1089,4 @@
   color: #5fd39a;
   border-color: #5fd39a;
 }
+
