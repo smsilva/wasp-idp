@@ -1,6 +1,6 @@
 # Templates
 
-A template is the golden path for a type of component (`service`, `website`, `library`; ADR 0024). The content lives in Git; the platform stores the repo, path and ref. `platform init` registers `platform/templates/*` at the last commit of the checkout that exists on GitHub, and the first of each type becomes the default.
+A template is the golden path for a type of component (`service`, `website`, `library`; ADR 0024). The content lives in Git; the platform stores the repo, path and ref. `platform init` registers `platform/templates/*` at the last commit of the checkout that exists on GitHub; the one marked `default: true` in its `template.yaml` (else the first of its type by name) becomes the default.
 
 | Command | What it does | Who |
 |---|---|---|

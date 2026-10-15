@@ -1,6 +1,6 @@
 # List and get
 
-A template is the **golden path** for a component type (ADR 0024). The content **stays in Git**; the platform keeps **only the record** (repo, path and ref). `platform init` registers the templates in `platform/templates/` at the checkout commit, and the first of each type becomes the default.
+A template is the **golden path** for a component type (ADR 0024). The content **stays in Git**; the platform keeps **only the record** (repo, path and ref). `platform init` registers the templates in `platform/templates/` at the checkout commit; the one marked `default: true` in its `template.yaml` (else the first of its type by name) becomes the default.
 
 ```bash
 platform catalog template list
@@ -9,18 +9,21 @@ platform catalog template get python-service
 ```
 
 ``` { .text .output title="output" }
-NAME            TYPE     REF                                       DEFAULT  SOURCE
-python-service  service  0b81690231edcd5920c1f774efc0325c80a4b0a4  yes      https://github.com/smsilva/wasp-idp/platform/templates/python-service/content
+NAME                                          TYPE     REF                                       DEFAULT  SOURCE
+python-service                                service  38cee00afe1e9cbb25a3a4e89691728b4c7fb70c  yes      https://github.com/smsilva/wasp-idp/platform/templates/python-service/content
+python-service-with-postgresql-for-demo-only  service  38cee00afe1e9cbb25a3a4e89691728b4c7fb70c  —        https://github.com/smsilva/wasp-idp/platform/templates/python-service-with-postgresql-for-demo-only/content
 template/python-service
   type         service
   default      yes
   repo         https://github.com/smsilva/wasp-idp
   path         platform/templates/python-service/content
-  ref          0b81690231edcd5920c1f774efc0325c80a4b0a4
+  ref          38cee00afe1e9cbb25a3a4e89691728b4c7fb70c
   owner        team-platform
-  description  FastAPI service with CI to GHCR, Dockerfile and app-spec.yaml
+  description  FastAPI service with a home page, Swagger, a PostgreSQL check, CI to GHCR, Dockerfile and app-spec.yaml
   parameters
     port (integer, default 8000): Port the container listens on.
+    theme (string, default indigo, one of indigo, teal, amber, rose): Accent color of the home page.
+    title (string): Headline of the home page; the component name when not given.
 
 next:
 
@@ -32,3 +35,5 @@ next:
     --system <system> \
     --template python-service
 ```
+
+`python-service-with-postgresql-for-demo-only` is the same template with `SHOW_DATABASE_DETAILS: "true"` in its `app-spec.yaml`: its home page and `/api/db` show the database host, user, server version and the driver's errors, which `python-service` keeps off the page (they go to the pod's log). The demos use it; a service people rely on uses `python-service`.
