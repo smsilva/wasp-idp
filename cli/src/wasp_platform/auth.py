@@ -131,9 +131,10 @@ class Oidc:
     if response.is_error:
       raise AuthError(f"device authorization failed: {_oauth_error(response)}")
     device = response.json()
-    show(device["user_code"], device.get("verification_uri_complete") or device["verification_uri"])
-    if device.get("verification_uri_complete"):
-      open_browser(device["verification_uri_complete"])
+    # The page without the code (#537): the user types the code from the terminal, which is the check that the
+    # browser confirms this terminal and not one a phishing link started.
+    show(device["user_code"], device["verification_uri"])
+    open_browser(device["verification_uri"])
     interval = int(device.get("interval", 5))
     deadline = time.monotonic() + int(device.get("expires_in", 600))
     while time.monotonic() < deadline:

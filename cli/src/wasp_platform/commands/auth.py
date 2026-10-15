@@ -35,7 +35,7 @@ def login(
     if use_device_code:
       def show(user_code: str, url: str) -> None:
         typer.echo(f"Open {url}")
-        typer.echo(f"and confirm the code {user_code}")
+        typer.echo(f"and enter the code {user_code}")
       tokens = oidc.login_device(show)
     else:
       typer.echo("Opening the browser to sign in …")

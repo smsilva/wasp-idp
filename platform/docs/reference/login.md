@@ -6,7 +6,7 @@ Every command but `init` talks to the Platform API, which requires a Keycloak to
 |---|---|
 | `platform login` | opens the browser on the Google screen (Authorization Code with PKCE, code received on a temporary listener at `127.0.0.1`) |
 | `platform login --refresh` | renews the token without the browser, so a team joined since the last login shows at once; signs in again when the session expired |
-| `platform login --use-device-code` | prints a URL and a code to confirm on any device: for SSH, containers, or a browser signed in to another Google account |
+| `platform login --use-device-code` | prints a URL and a code to type there, on any device: for SSH, containers, or a browser signed in to another Google account. The page opens without the code, so typing it is the check that the browser confirms this terminal |
 | `platform whoami` | e-mail and groups, as the API sees them (not read from the local token) |
 | `platform logout` | revokes the session in Keycloak and deletes the credentials |
 
@@ -15,8 +15,8 @@ platform login --use-device-code
 ```
 
 ``` { .text .output title="output" }
-Open http://localhost:8180/realms/platform/device?user_code=ABCD-EFGH
-and confirm the code ABCD-EFGH
+Open http://localhost:8180/realms/platform/device
+and enter the code ABCD-EFGH
 ✓ Logged in as you@example.com (platform-admins, platform-users)
 ```
 

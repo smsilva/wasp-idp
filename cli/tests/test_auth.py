@@ -142,8 +142,14 @@ def test_device_login_handles_pending_and_slow_down(idp, oidc):
   shown, waits = [], []
   tokens = oidc.login_device(lambda code, url: shown.append((code, url)), open_browser=lambda url: False, sleep=waits.append)
   assert tokens["access_token"] == "access-device"
-  assert shown == [("ABCD-EFGH", "http://idp.test/device?user_code=ABCD-EFGH")]
+  assert shown == [("ABCD-EFGH", "http://idp.test/device")]
   assert waits == [1, 1, 6]  # slow_down adds 5 seconds (RFC 8628)
+
+
+def test_device_login_opens_the_page_without_the_code(idp, oidc):
+  opened = []
+  oidc.login_device(lambda code, url: None, open_browser=opened.append, sleep=lambda seconds: None)
+  assert opened == ["http://idp.test/device"]
 
 
 def test_credentials_file_is_private(config_home):
