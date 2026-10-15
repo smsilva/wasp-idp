@@ -1,6 +1,6 @@
 # Prerequisites
 
-`platform init` needs Docker, k3d and kubectl on the `PATH`, and the CLI is installed with uv. Versions this walkthrough was last run with:
+`platform init` needs Docker, k3d and kubectl on the `PATH`, and the CLI is installed with uv. Versions this walkthrough was last run with, on Ubuntu 24.04:
 
 | Tool | Version | Check |
 |---|---|---|

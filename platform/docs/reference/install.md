@@ -2,6 +2,8 @@
 
 ## Prerequisites
 
+Tested on Ubuntu 24.04 with these versions:
+
 | Tool | Tested with | Check |
 |---|---|---|
 | Docker | 29.9.1 | `docker version --format '{{.Server.Version}}'` |
