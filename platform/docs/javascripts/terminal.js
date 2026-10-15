@@ -7,6 +7,9 @@
     "--skip-init", "--force", "--editable", "--quiet", "--admin", "--compact-output", "--include", "--silent",
     "--edit", "--generate-file", "--https"]);
   const OPERATORS = new Set(["|", "||", "&&", ";", ">", ">>", "<", "\\", "--"]);
+  // Reserved words of the shell, where a command would stand (`for`, `do`, `done`, `if`, `then` ...),
+  // in a color no platform concept uses.
+  const KEYWORDS = new Set(["for", "while", "until", "do", "done", "if", "then", "elif", "else", "fi", "case", "esac"]);
   // Verbs of the platform and kubectl commands: the word before one is the concept, the first argument
   // after it is the object; both are shown in bold.
   const VERBS = new Set(["create", "delete", "get", "list", "add", "remove", "share", "unshare", "verify", "default",
@@ -87,6 +90,8 @@
       let expectValue = false;
       let role = null;
       const parts = words(line);
+      // The `in` of `for <name> in`: the word after the loop variable.
+      let loopVariable = false;
       // Concept and object of the command: the word before the verb and the first argument after it.
       const bold = new Set();
       // The object of `component <verb>` / `environment <verb>` takes the color of that concept.
@@ -112,9 +117,21 @@
           return span("op", word);
         }
         if (first) {
+          // After `do`/`then` a command can follow on the same line (`do echo`), so it stays first.
+          if (KEYWORDS.has(word)) {
+            first = word !== "for" && word !== "case";
+            loopVariable = word === "for";
+            return span("kw", word);
+          }
           first = false;
           return span("cmd", word);
         }
+        if (loopVariable) {
+          loopVariable = false;
+          return span("arg", word);
+        }
+        if (word === "in" && parts.slice(0, index).some((w) => w === "for" || w === "case")) return span("kw", word);
+        if (word === "do" || word === "then") return span("kw", word);
         if (word.startsWith("--")) {
           expectValue = !FLAGS.has(word) && !word.includes("=");
           role = ROLES[word] || null;
@@ -139,13 +156,25 @@
     }).join("\n") + "\n";
   }
 
+  // A line of output in `kind` (or plain), with the names the page's commands use in their own colors:
+  // `✓ demo ready` shows `demo` as it shows in `environment create demo`.
+  function outputLine(kind, line) {
+    const paint = (text) => (kind ? span(kind, text) : escape(text));
+    if (!names.size) return paint(line);
+    return line.split(/([a-z0-9-]+)/).map((part) => {
+      if (!part) return "";
+      const role = names.get(part);
+      return role ? span(role, part) : paint(part);
+    }).join("");
+  }
+
   function output(text) {
     return text.replace(/\n$/, "").split("\n").map((line) => {
       const head = line.trimStart();
-      if (head.startsWith("✓")) return span("ok", line);
-      if (head.startsWith("✗")) return span("err", line);
-      if (head.startsWith("→")) return span("info", line);
-      return escape(line);
+      if (head.startsWith("✓")) return outputLine("ok", line);
+      if (head.startsWith("✗")) return outputLine("err", line);
+      if (head.startsWith("→")) return outputLine("info", line);
+      return outputLine(null, line);
     }).join("\n") + "\n";
   }
 
