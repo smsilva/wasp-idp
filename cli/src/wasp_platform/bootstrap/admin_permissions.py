@@ -12,6 +12,9 @@ showed when this was designed:
 
 keycloak-config-cli does not declare these, so init applies them through the admin API, as the
 bootstrap admin, after every realm import. Every step is idempotent.
+
+It also puts the --admin e-mails that already have a user in platform-admins (#466): the realm's group
+mapper runs only when Keycloak creates the user, on the first Google sign-in. Nobody is ever removed.
 """
 import httpx
 
@@ -19,6 +22,8 @@ REALM = "platform"
 CLIENT_ID = "platform-api-admin"
 TEAMS = "teams"
 PLATFORM_GROUPS = ("platform-admins", "platform-users")
+# The identity provider whose e-mail --admin names (realm-platform.yaml).
+GOOGLE = "google"
 # Roles of realm-management the client must not keep (an install from before #238 had manage-users).
 BROAD_ROLES = {"manage-users", "manage-realm", "manage-clients", "manage-authorization", "realm-admin", "impersonation"}
 ALLOW = f"{CLIENT_ID}-client"
@@ -58,7 +63,7 @@ class AdminPermissions:
   def _top_groups(self) -> dict[str, str]:
     return {group["name"]: group["id"] for group in self._call("GET", "/groups", params={"max": "1000"}).json()}
 
-  def apply(self, log) -> None:
+  def apply(self, log, admins=()) -> None:
     if not self._call("GET", "").json().get("adminPermissionsEnabled"):
       log("enabling fine-grained admin permissions …")
       self._call("PUT", "", json={"adminPermissionsEnabled": True})
@@ -87,6 +92,28 @@ class AdminPermissions:
         self._call("PUT", f"{server}/permission/scope/{existing['id']}", json={**body, "id": existing["id"]})
       else:
         self._call("POST", f"{server}/permission/scope", json=body)
+
+    self._add_admins(admins, groups["platform-admins"], log)
+
+  def _add_admins(self, emails, group_id: str, log) -> None:
+    """A user not created yet is left to the mapper, which adds it on its first sign-in.
+
+    The user's email attribute alone is not trusted: the first-login profile review and the account
+    console let a user type any address. Like the mapper, which matches the email claim Google sends,
+    only a user linked to Google under that same e-mail, with it verified, is promoted."""
+    for email in emails:
+      users = self._call("GET", "/users", params={"email": email, "exact": "true"}).json()
+      if not users or not users[0].get("emailVerified"):
+        continue
+      user_id = users[0]["id"]
+      links = self._call("GET", f"/users/{user_id}/federated-identity").json()
+      if not any(link["identityProvider"] == GOOGLE and link.get("userName", "").lower() == email.lower() for link in links):
+        log(f"{email} is not linked to Google under that e-mail: not added to platform-admins")
+        continue
+      if any(group["id"] == group_id for group in self._call("GET", f"/users/{user_id}/groups").json()):
+        continue
+      self._call("PUT", f"/users/{user_id}/groups/{group_id}")
+      log(f"added {email} to platform-admins")
 
   def _named(self, path: str, name: str) -> dict | None:
     return next((item for item in self._call("GET", path, params={"name": name}).json() if item["name"] == name), None)
