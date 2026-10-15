@@ -16,6 +16,8 @@ What the page shows comes from three places:
 - **Code**: the list in `app/features.py`. Add an entry with each endpoint you add (`new=True` while it is the change being shipped) and it shows on the page after the deploy.
 - **Build**: `APP_VERSION` and `APP_COMMIT`, baked into the image by `platform-build.yaml`.
 
+The database panel shows only whether the database answered and how fast. `SHOW_DATABASE_DETAILS: "true"` in `app-spec.yaml` adds the host, the user, the server version and the driver's error to the page and to `/api/db`: anyone who reaches the route sees them, so keep it for demos. The error always goes to the pod's log.
+
 CI tests every pull request and every push to `main`. `platform build create --component ${{ values.name }} --branch <branch>` runs `.github/workflows/platform-build.yaml`, which publishes `<registry>/${{ values.name }}:<version>` to the registry of the build (`platform registry list`): the version comes from the Conventional Commits since the last `v<version>` tag (Commitizen, `.cz.toml`), with the suffix `-<branch>.<sha7>` outside `main`. What the service needs from each environment is declared in `app-spec.yaml`.
 
 Calls to other services go through `httpx`: `app/telemetry.py` passes each request's OpenTelemetry `baggage` and `traceparent` on to them, which keeps the platform's routing by baggage (`platform workload route --baggage`) along the whole chain of calls.

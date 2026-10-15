@@ -54,6 +54,7 @@ def api_info() -> Info:
     tags=["about"],
     summary="Check the connection to the database",
     response_model_by_alias=True,
+    response_model_exclude_none=True,
     responses={503: {"model": database.DatabaseStatus, "description": "The database is unreachable"}},
 )
 def api_db(response: Response) -> database.DatabaseStatus:

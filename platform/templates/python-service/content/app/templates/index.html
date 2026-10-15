@@ -218,7 +218,7 @@
     </aside>
   </header>
 
-  {% set target = (db.host or "") ~ ":" ~ db.port ~ "/" ~ (db.database or "") %}
+  {% set target = ((db.host or "") ~ ":" ~ db.port ~ "/" ~ (db.database or "")) if db.details else "details hidden" %}
   {% if db.status == "connected" %}
   <section class="link" data-state="connected" aria-labelledby="db-title">
     <h2 id="db-title">Connected to PostgreSQL</h2>
@@ -226,14 +226,18 @@
     <div class="wire" role="img" aria-label="{{ info.app }} is connected to the database, {{ db.latency_ms }} ms">
       <div class="node"><b>{{ info.app }}</b><span>this pod</span></div>
       <div class="cable"><em>{{ db.latency_ms | round | int }} ms</em></div>
-      <div class="node"><b>PostgreSQL {{ db.server_version }}</b><span>{{ target }}</span></div>
+      <div class="node"><b>PostgreSQL {{ db.server_version or "" }}</b><span>{{ target }}</span></div>
     </div>
+    {% if db.details %}
     <dl class="facts">
       <div><dt>Host</dt><dd>{{ db.host }}</dd></div>
       <div><dt>Server address</dt><dd>{{ db.server_address or "unknown" }}</dd></div>
       <div><dt>Database</dt><dd>{{ db.database }}</dd></div>
       <div><dt>User</dt><dd>{{ db.user }}</dd></div>
     </dl>
+    {% else %}
+    <p class="hint">The host, user and server version stay off this page: <code>SHOW_DATABASE_DETAILS=true</code> shows them, for demos only.</p>
+    {% endif %}
     <p class="checked">Checked when this page loaded, {{ db.checked_at.strftime("%H:%M:%S") }} UTC. Reload to check again.</p>
   </section>
   {% elif db.status == "failed" %}
@@ -245,6 +249,7 @@
       <div class="cable"><em aria-hidden="true">✕</em></div>
       <div class="node"><b>PostgreSQL</b><span>{{ target }}</span></div>
     </div>
+    {% if db.details %}
     <pre class="error">{{ db.error }}</pre>
     <dl class="facts">
       <div><dt>Tried host</dt><dd>{{ db.host }}</dd></div>
@@ -252,7 +257,8 @@
       <div><dt>Database</dt><dd>{{ db.database or "not set" }}</dd></div>
       <div><dt>User</dt><dd>{{ db.user or "not set" }}</dd></div>
     </dl>
-    <p class="hint">See the state of the <code>db</code> resource with <code>platform workload get {{ info.app }} --environment &lt;environment&gt;</code>. The page checks again on every reload.</p>
+    {% endif %}
+    <p class="hint">See the state of the <code>db</code> resource with <code>platform workload get {{ info.app }} --environment &lt;environment&gt;</code>.{% if not db.details %} The error is in the pod's log; <code>SHOW_DATABASE_DETAILS=true</code> also shows it here, for demos only.{% endif %} The page checks again on every reload.</p>
   </section>
   {% else %}
   <section class="link" data-state="not-configured" aria-labelledby="db-title">
@@ -286,7 +292,7 @@
   <footer>
     <a class="docs" href="/docs">Open the API docs</a>
     <a href="/openapi.json">OpenAPI document</a>
-    <span class="meta">Made from the python-service template</span>
+    <span class="meta">Made from a platform template</span>
   </footer>
 </main>
 </body>

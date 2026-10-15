@@ -1,0 +1,28 @@
+# For demos only: python-service with SHOW_DATABASE_DETAILS=true. Everything else is a copy of
+# platform/templates/python-service, kept equal by a test of platform/libs/templates.
+# Platform format (ADR 0024). The component's name, owner, system and description come from the
+# platform; parameters declares only the extras, as JSON Schema. owner here is the template's owner.
+name: python-service-with-postgresql-for-demo-only
+type: service
+owner: team-platform
+description: For demos only. python-service whose home page shows the PostgreSQL host, user and connection errors (SHOW_DATABASE_DETAILS=true)
+parameters:
+  type: object
+  properties:
+    port:
+      type: integer
+      description: Port the container listens on.
+      default: 8000
+    title:
+      type: string
+      description: Headline of the home page; the component name when empty.
+      default: ""
+    theme:
+      type: string
+      description: Accent color of the home page.
+      enum: [indigo, teal, amber, rose]
+      default: indigo
+# The workflows carry GitHub's ${{ }} and the page carries Jinja blocks of its own: both stay as written.
+copyWithoutRendering:
+  - .github/workflows/*
+  - app/templates/*

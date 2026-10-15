@@ -119,7 +119,10 @@ def test_import_finds_platform_format(api, monkeypatch):
   result = run("import", "templates", "--repo", "https://github.com/smsilva/wasp-idp", "--ref", "main", "--yes")
   assert result.exit_code == 0, result.output
   documents = api[0][2]["documents"]
-  assert [document["path"] for document in documents] == ["platform/templates/python-service/template.yaml"]
+  assert sorted(document["path"] for document in documents) == [
+    "platform/templates/python-service-with-postgresql-for-demo-only/template.yaml",
+    "platform/templates/python-service/template.yaml",
+  ]
 
 
 def test_import_without_templates_fails(api, tmp_path):

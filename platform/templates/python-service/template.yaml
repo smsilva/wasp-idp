@@ -2,6 +2,8 @@
 # platform; parameters declares only the extras, as JSON Schema. owner here is the template's owner.
 name: python-service
 type: service
+# The default template of its type on a fresh platform init (otherwise the first folder in name order).
+default: true
 owner: team-platform
 description: FastAPI service with a home page, Swagger, a PostgreSQL check, CI to GHCR, Dockerfile and app-spec.yaml
 parameters:
