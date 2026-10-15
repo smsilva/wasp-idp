@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# Removes what the CLI demo (platform/docs/demo/cli/) creates, so the next run starts clean (#533):
+# its environments, the GitHub repo of the component, its image package and the local clone.
+# Idempotent: what is already gone is reported and skipped. The component stays in the catalog index.
+
+org="${DEMO_ORG:-wasp-foundry}"
+component="${DEMO_COMPONENT:-hello-api}"
+environments=(demo greetings-test)
+clone_directory="/tmp/${component}"
+wait_timeout_seconds=300
+
+show_usage() {
+  cat <<EOF
+Usage: ${0##*/} [--yes] [--help]
+
+Removes what the CLI demo creates:
+  environments  ${environments[*]}
+  repo          ${org}/${component}
+  package       ghcr.io/${org}/${component}
+  clone         ${clone_directory}
+
+Options:
+  --yes   Delete without asking
+  --help  Show this help
+
+Environment:
+  DEMO_ORG        GitHub org (default: wasp-foundry)
+  DEMO_COMPONENT  Component name (default: hello-api)
+EOF
+}
+
+assume_yes="false"
+
+while [[ "$#" -gt 0 ]]; do
+  case "${1}" in
+    --yes) assume_yes="true"; shift ;;
+    --help) show_usage; exit 0 ;;
+    *) echo "Unknown option: ${1}" >&2; show_usage >&2; exit 1 ;;
+  esac
+done
+
+# gh answers 403 halfway through without these; check them before deleting anything.
+# The header lists the scopes of the token gh uses now (gh auth status lists every account).
+token_scopes="$(gh api --include user 2>/dev/null | grep --ignore-case '^x-oauth-scopes:' | tr --delete ' \r')"
+missing_scopes=()
+for scope in delete_repo delete:packages; do
+  if [[ ",${token_scopes#*:}," != *",${scope},"* ]]; then
+    missing_scopes+=("${scope}")
+  fi
+done
+if [[ "${#missing_scopes[@]}" -gt 0 ]]; then
+  echo "gh token is missing scopes: ${missing_scopes[*]}" >&2
+  echo "Add them with: gh auth refresh --hostname github.com --scopes delete_repo,delete:packages" >&2
+  exit 1
+fi
+
+# 0: exists, 1: gone ('platform' answers "404: environment '<name>' not found"), 2: platform unreachable.
+environment_exists() {
+  local output
+
+  if output="$(platform environment get "${1}" --output json 2>&1)"; then
+    return 0
+  fi
+  if [[ "${output}" == *"not found"* ]]; then
+    return 1
+  fi
+  platform_error="${output}"
+  return 2
+}
+
+repo_exists() {
+  gh repo view "${org}/${component}" --json name > /dev/null 2>&1
+}
+
+package_exists() {
+  gh api "orgs/${org}/packages/container/${component}" > /dev/null 2>&1
+}
+
+planned=()
+
+echo "Checking what the demo left behind..."
+
+# A platform that is down (e.g. the cluster was destroyed) skips the environments, not the rest:
+# the repo and the package outlive the cluster.
+for environment in "${environments[@]}"; do
+  environment_exists "${environment}" && status=0 || status="$?"
+  case "${status}" in
+    0)
+      echo "  environment ${environment}: will be deleted"
+      planned+=("environment:${environment}")
+      ;;
+    1)
+      echo "  environment ${environment}: already gone"
+      ;;
+    *)
+      echo "  environments: skipped, the platform does not answer (${platform_error##*$'\n'})" >&2
+      break
+      ;;
+  esac
+done
+
+if repo_exists; then
+  echo "  repo ${org}/${component}: will be deleted"
+  planned+=("repo")
+else
+  echo "  repo ${org}/${component}: already gone"
+fi
+
+if package_exists; then
+  echo "  package ghcr.io/${org}/${component}: will be deleted"
+  planned+=("package")
+else
+  echo "  package ghcr.io/${org}/${component}: already gone"
+fi
+
+if [[ -e "${clone_directory}" ]]; then
+  echo "  clone ${clone_directory}: will be deleted"
+  planned+=("clone")
+else
+  echo "  clone ${clone_directory}: already gone"
+fi
+
+if [[ "${#planned[@]}" -eq 0 ]]; then
+  echo ""
+  echo "Nothing to delete."
+  exit 0
+fi
+
+if [[ "${assume_yes}" == "false" ]]; then
+  echo ""
+  read -r -p "Delete them? [y/N] " answer
+  if [[ "${answer}" != "y" && "${answer}" != "Y" ]]; then
+    echo "Aborted."
+    exit 1
+  fi
+fi
+
+set -e
+
+echo ""
+
+for item in "${planned[@]}"; do
+  case "${item}" in
+    environment:*)
+      platform environment delete "${item#environment:}"
+      ;;
+    repo)
+      gh repo delete "${org}/${component}" --yes
+      echo "Deleted repo ${org}/${component}"
+      ;;
+    package)
+      gh api \
+        --method DELETE \
+        "orgs/${org}/packages/container/${component}"
+      echo "Deleted package ghcr.io/${org}/${component}"
+      ;;
+    clone)
+      rm -rf "${clone_directory}"
+      echo "Deleted ${clone_directory}"
+      ;;
+  esac
+done
+
+# A rerun right away must not find an environment still being deleted.
+for item in "${planned[@]}"; do
+  if [[ "${item}" != environment:* ]]; then
+    continue
+  fi
+  environment="${item#environment:}"
+  echo "Waiting for environment ${environment} to go away..."
+  deadline="$(( SECONDS + wait_timeout_seconds ))"
+  while environment_exists "${environment}" || [[ "$?" -eq 2 ]]; do
+    if [[ "${SECONDS}" -ge "${deadline}" ]]; then
+      echo "environment ${environment} still exists after ${wait_timeout_seconds}s" >&2
+      exit 1
+    fi
+    sleep 5
+  done
+done
+
+echo ""
+echo "Demo cleaned up. ${component} stays in the catalog index."

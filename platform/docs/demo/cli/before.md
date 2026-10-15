@@ -18,7 +18,7 @@ The system `greeter`, which the app joins, is in the catalog:
 platform catalog system get greeter
 ```
 
-The repo does not exist yet. A repo left by an earlier run stops the create ([Wrap up](cleanup.md)), so `Could not resolve to a Repository` is the expected answer:
+The repo does not exist yet. A repo left by an earlier run stops the create, and `scripts/demo/cleanup` removes it ([Wrap up](cleanup.md)), so `Could not resolve to a Repository` is the expected answer:
 
 ```bash
 gh repo view wasp-foundry/hello-api
