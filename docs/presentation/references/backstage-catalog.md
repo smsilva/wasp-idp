@@ -41,20 +41,26 @@ O modelo do Backstage é usado para **ensinar o dev a declarar sua aplicação n
 4. Como declarar: `catalog-info.yaml` junto do código, mostrado como quadro estilo IDE por partes (mesmo formato do Score): arquivo inteiro → identidade (`kind`, `type`, `lifecycle`) → `owner` + `system` → `providesApis` → `dependsOn`. Arquivo: `snippets/catalog-info.yaml` (`greeting-api` com suas dependências). Depois, descoberta automática pelo portal.
 5. O que **não** se declara ali (versão, ambiente) — ponte para o próximo ato.
 
-## Exemplo conhecido: o catálogo de demonstração do Backstage
+## Exemplo conhecido: o catálogo da Tailwind Air
 
-Fonte: <https://github.com/backstage/backstage/tree/master/packages/catalog-model/examples> — modela um serviço de streaming de áudio (Spotify, onde o Backstage nasceu).
+Fonte: `idp/catalog/airline/tailwind/catalog-info.yaml` — uma companhia aérea fictícia (Tailwind Air), um dos catálogos de exemplo de empresas fictícias (#528). Substitui o catálogo de demonstração do Backstage (`packages/catalog-model/examples`, um Spotify), cujos nomes a plateia não reconhece. `scripts/demo/backstage-tailwind` mostra cada entidade no Backstage.
 
 ```
-Domain audio
-├─ Domain artists   (subdomainOf: audio)
-│  └─ System artist-engagement-portal   owner team-a
-│     ├─ Component artist-lookup   dependsOn resource:artists-db
-│     ├─ Component www-artist      consome artist-lookup
-│     └─ Resource artists-db       type database
-└─ Domain playback  (subdomainOf: audio)
-   ├─ System audio-playback   owner team-c   playback-order, playback-sdk, shuffle-api
-   └─ System podcast          owner team-b   podcast-api, queue-proxy
+Domain tailwind                          owner team-tailwind-architecture
+├─ Domain airport   (subdomainOf: tailwind)   owner team-airport
+│  ├─ System seat-map                    checkin-web, seat-api, seats
+│  │  ├─ Component seat-api     type service   providesApis seats   dependsOn resource:passengers-db
+│  │  ├─ Component checkin-web  type website   consumesApis seats
+│  │  └─ API seats              type openapi
+│  ├─ System boarding-pass
+│  └─ System bag-tracking
+├─ Domain booking   (subdomainOf: tailwind)   owner team-booking
+│  ├─ System flight-search
+│  ├─ System reservations                Resource passengers-db (type database, compartilhado)
+│  └─ System fares
+├─ Domain flight-ops (subdomainOf: tailwind)  Resource flight-events (type topic, compartilhado)
+├─ Domain loyalty   (subdomainOf: tailwind)
+└─ Domain crew      (subdomainOf: tailwind)
 ```
 
 ## Catálogo real deste repo

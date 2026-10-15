@@ -537,11 +537,11 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Component example"
-    message: "O shuffle-api, do catálogo de demonstração, é um Component."
+    message: "O seat-api, do catálogo de exemplo da Tailwind Air, é um Component."
     animations: none
-    screen: ["The `shuffle-api` _shuffles_ the play queue"]
+    screen: ["The `seat-api` _holds_ the seat a passenger picks"]
     notes: |-
-      `shuffle-api`, o serviço que embaralha a fila de reprodução. Vem do **catálogo de demonstração do Backstage**, que modela um Spotify (onde o Backstage nasceu).
+      `seat-api`, o serviço que mostra o mapa de assentos e reserva o assento que o passageiro escolhe. Vem do **catálogo de exemplo deste repo** (`idp/catalog/airline/tailwind/`), que modela a **Tailwind Air**, uma companhia aérea fictícia.
 
     dependsOn: [entity-component]
 
@@ -570,11 +570,11 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "API example"
-    message: "O site www-artist consome a API do artist-lookup."
+    message: "O site checkin-web consome a API seats do seat-api."
     animations: none
-    screen: ["`www-artist` site _consumes_ `artist-lookup` service"]
+    screen: ["`checkin-web` site _consumes_ the `seats` API of `seat-api`"]
     notes: |-
-      O site `www-artist` (`type: website`) consome o que o microsserviço `artist-lookup` (`type: service`, em Java) expõe. O tipo vem do campo `spec.type` de cada Component no catálogo de demonstração.
+      O site de check-in `checkin-web` (`type: website`) consome a API `seats` (`consumesApis`), que o microsserviço `seat-api` (`type: service`) expõe (`providesApis`). O tipo vem do campo `spec.type` de cada Component no catálogo da Tailwind Air.
 
     dependsOn: [entity-api]
 
@@ -600,11 +600,11 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Resource example"
-    message: "O artist-lookup depende do banco artists-db."
+    message: "O seat-api depende do banco passengers-db."
     animations: none
-    screen: ["The `artists-db` database _used by_ `artist-lookup`"]
+    screen: ["The `passengers-db` database _used by_ `seat-api`"]
     notes: |-
-      O microsserviço `artist-lookup` (`type: service`) depende de `artists-db` (`type: database`), que guarda os dados dos artistas.
+      O microsserviço `seat-api` (`type: service`) depende de `passengers-db` (`type: database`), que guarda as reservas e os seus passageiros.
 
     dependsOn: [entity-resource]
 
@@ -632,11 +632,13 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "System example"
-    message: "O System artist-engagement-portal junta as três peças anteriores."
+    message: "O System seat-map junta as peças anteriores."
     animations: none
-    screen: ["The `artist-engagement-portal` system _groups_:", "`www-artist` site", "`artist-lookup` service", "`artists-db` database"]
+    screen: ["The `seat-map` system _groups_:", "`checkin-web` site", "`seat-api` service", "`seats` API"]
     notes: |-
-      O System `artist-engagement-portal` reúne o site `www-artist`, o microsserviço `artist-lookup` e o banco `artists-db` — as três peças dos slides anteriores. Um System junta **Components e Resources**.
+      O System `seat-map` reúne o site `checkin-web`, o microsserviço `seat-api` e a API `seats` entre eles — as peças dos slides anteriores. Um System junta **Components, APIs e Resources**.
+
+      O banco `passengers-db` é um Resource **compartilhado**: pertence ao System `reservations` e é usado também por `boarding-pass` e `miles`. O `seat-api` declara a dependência (`dependsOn`) sem que o banco mude de dono.
 
     dependsOn: [entity-system]
 
@@ -664,30 +666,30 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Domain example"
-    message: "O Domain audio tem dois subdomínios."
+    message: "O Domain tailwind tem um subdomínio por área de negócio."
     animations: none
-    screen: ["The `audio` domain _contains_:", "`artists` subdomain", "`playback` subdomain"]
+    screen: ["The `tailwind` domain _contains_:", "`airport` subdomain", "`booking` subdomain"]
     notes: |-
-      `audio` tem dois subdomínios (`subdomainOf`): `artists` e `playback`.
+      `tailwind`, o Domain da companhia, tem um subdomínio (`subdomainOf`) por área de negócio. Na tela, dois deles: `airport` (check-in, assentos, embarque, bagagem) e `booking` (busca, tarifa, reserva). Os outros são `flight-ops`, `loyalty` e `crew`.
 
     dependsOn: [entity-domain]
 
-  - name: spotify-tree
+  - name: tailwind-tree
     act: developer-control
     parent: detail-catalog
     topic: "Software Catalog"
     message: "Juntando: do negócio ao banco de dados, uma árvore só."
     align: true
-    heading: "Spotify demo catalog"
-    screen: ["**Domain:** `audio`", "**Subdomain:** `playback`", "**System:** `podcast`", "**Component:** `podcast-api`"]
+    heading: "Tailwind Air catalog"
+    screen: ["**Domain:** `tailwind`", "**Subdomain:** `airport`", "**System:** `seat-map`", "**Component:** `seat-api`"]
     notes: |-
       O que queremos dizer: **do negócio ao código, o catálogo é uma árvore só.**
 
-      **Árvore:** Domain `audio` → subdomínio `playback` → System `podcast` → Component `podcast-api`. Vem de `packages/catalog-model/examples`, no repositório do Backstage.
+      **Árvore:** Domain `tailwind` → subdomínio `airport` → System `seat-map` → Component `seat-api`. Vem de `idp/catalog/airline/tailwind/catalog-info.yaml`, o catálogo de exemplo de uma companhia aérea fictícia.
 
       Para o público executive, este slide **substitui os cinco anteriores**: o exemplo sem a teoria.
 
-      Possível demo ao vivo: o mesmo catálogo no Backstage vanilla (`backstage/` na raiz do repo) — não decidido.
+      Demo ao vivo: `scripts/demo/backstage-tailwind` sobe o Backstage deste repo só com o catálogo da Tailwind Air, com cada entidade destes slides.
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-levels]
@@ -706,7 +708,7 @@ slides:
       É a mesma árvore, aplicada ao **catálogo de exemplo deste repo** (`idp/catalog/communication/`): o `greeter` publica saudações e um evento por saudação; o `notifier` consome esse evento e entrega notificações. Os Resources são descritos **pelo papel** (banco, tópico, fila, bucket), não pelo serviço de nuvem.
 
       Fonte: references/backstage-catalog.md.
-    dependsOn: [spotify-tree]
+    dependsOn: [tailwind-tree]
 
   - name: declare-name
     act: developer-control
@@ -849,11 +851,11 @@ slides:
     parent: no-versions
     topic: "Software Catalog"
     label: "What the catalog stores example"
-    message: "playback-order é um Component, com várias versões rodando."
+    message: "seat-api é um Component, com várias versões rodando."
     animations: none
-    screen: ["`playback-order` _is_ 1 component, N versions running"]
+    screen: ["`seat-api` _is_ 1 component, N versions running"]
     notes: |-
-      Recomendação explícita da documentação do Backstage (FAQ do catálogo). `playback-order`, o serviço de ordem de reprodução do catálogo de demonstração, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
+      Recomendação explícita da documentação do Backstage (FAQ do catálogo). O `seat-api`, o serviço de assentos da Tailwind Air, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
 
     dependsOn: [no-versions]
 
