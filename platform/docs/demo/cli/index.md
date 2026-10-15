@@ -1,29 +1,28 @@
-# CLI: a developer in 30 minutes
+# CLI: developer journey
 
-From a new app to two running environments, on a platform already configured.
+The goal: a new app, <span class="t-component">hello-api</span>, running in two environments, <span class="t-environment">demo</span> and <span class="t-environment">greetings-test</span>, made with the CLI.
 
-<p class="cast">
-  <span class="t-component">hello-api</span>
-  <span class="cast-sep">→</span>
-  <span class="t-environment">demo</span>
-  <span class="cast-sep">·</span>
-  <span class="t-environment">greetings-test</span>
-</p>
+<div class="acts acts--even demo-run--cli">
+  <section>
+    <h4>Code<span>6 min</span></h4>
+    <a href="create/">Create the app</a>
+    <a href="clone/">Clone the app</a>
+    <a href="branch/">A branch and a change</a>
+    <a href="push/">Push the branch</a>
+  </section>
+  <section>
+    <h4>Run<span>11 min</span></h4>
+    <a href="build/">Build the branch</a>
+    <a href="environment/">Create an environment</a>
+    <a href="deploy/">Deploy and call it</a>
+    <a href="signals/">Golden signals</a>
+  </section>
+  <section>
+    <h4>Run again<span>6 min</span></h4>
+    <a href="second/">A second environment</a>
+    <a href="second-call/">Call it there</a>
+    <a href="running-in/">Where the app runs</a>
+  </section>
+</div>
 
-<ol class="journey">
-  <li class="prep"><a href="before/">Get ready</a><span>before</span></li>
-  <li><a href="create/">Create the app</a><span>3 min</span></li>
-  <li><a href="clone/">Clone the app</a><span>1 min</span></li>
-  <li><a href="branch/">A branch and a change</a><span>1 min</span></li>
-  <li><a href="push/">Push the branch</a><span>1 min</span></li>
-  <li><a href="build/">Build the branch</a><span>3 min</span></li>
-  <li><a href="environment/">Create an environment</a><span>2 min</span></li>
-  <li><a href="deploy/">Deploy and call it</a><span>3 min</span></li>
-  <li><a href="signals/">Golden signals</a><span>3 min</span></li>
-  <li><a href="second/">A second environment</a><span>4 min</span></li>
-  <li><a href="second-call/">Call it there</a><span>1 min</span></li>
-  <li><a href="running-in/">Where the app runs</a><span>1 min</span></li>
-  <li class="prep">Questions<span>7 min</span></li>
-</ol>
-
-[Wrap up](cleanup.md) removes it all. The [walkthrough](../../walkthrough/index.md) starts from scratch.
+[Get ready](before.md) before the audience arrives. [Wrap up](cleanup.md) removes it all. The [walkthrough](../../walkthrough/index.md) starts from scratch.

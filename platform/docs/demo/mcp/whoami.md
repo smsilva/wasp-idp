@@ -1,17 +1,15 @@
 # Who am I
 
-```text
-Who am I on the platform?
-```
-
-| Tool | |
-|---|---|
-| `whoami` | the same `sub`, e-mail and groups as `platform whoami` |
+<div class="turn you" markdown>
+<p class="intent">Retrieves User identity and platform status</p>
 
 ```text
-Is the platform working?
+Who am I on the platform, and is it working?
 ```
 
-| Tool | |
-|---|---|
-| `status` | each capability and its status, as in `platform status` |
+</div>
+
+<ul class="tool-calls">
+  <li><code class="tool">whoami</code><span>the same <code>sub</code>, e-mail and groups as <code>platform whoami</code></span></li>
+  <li><code class="tool">status</code><span>each capability and its status, as in <code>platform status</code></span></li>
+</ul>
