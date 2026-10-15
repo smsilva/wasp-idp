@@ -70,13 +70,15 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .item.rich strong { font-weight: 700; }
 .stage .item .mono { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-weight: 400; font-size: 0.85em; color: #7cc4ff; background: rgba(74, 158, 244, 0.12); border: 1px solid rgba(74, 158, 244, 0.45); border-radius: 0.4cqw; padding: 0 0.5cqw; }
 .stage .item em { font-style: italic; color: #e5c07b; }
+.stage .item strong.what { color: #e5c07b; }
+.stage .item.dim strong.what { opacity: 0.55; }
 .stage .item.dim .mono, .stage .item.dim em, .stage .item.dim .entity { opacity: 0.55; }
 /* A catalog entity: the name in its kind's color, the type after it in the same color, faded; the same
    monospace for both, its lowercase matched to the text's so the line reads at one size. */
 .stage .entity { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size-adjust: ex-height 0.53; letter-spacing: -0.02em; font-weight: 400; white-space: nowrap; color: var(--kind); }
 .stage .entity .t { opacity: 0.42; margin-left: 0.5em; }
 /* A kind word in a heading (`kind` on the slide): only the color, in the heading's own font. */
-.stage .item.heading .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: inherit; }
+.stage .item.heading .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: 700; }
 .stage .item.heading.dim .entity { opacity: 0.75; }
 /* A kind word as an inline label (`**{domain:Domain}:** …`): the color, in the label's own font. */
 .stage .item strong:not(.lbl) .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: inherit; }
@@ -835,7 +837,9 @@ def rich(text, subs=None):
     head = f"<span class='head{' dim' if subs else ''}'>{head}</span>" if items else head
     value = head + "".join(f"<span class='sub{state(i)}'>{sub}</span>" for i, sub in enumerate(items))
     return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value'>{value}</span>"
-  return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+  out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+  # "What:" opens the definition of a concept: amber, like the relations.
+  return out.replace("<strong>What:</strong>", "<strong class='what'>What:</strong>")
 
 
 INLINE_LABEL = re.compile(r"\*\*([^*\n]+?:)\*\* ")
@@ -849,7 +853,8 @@ def aligned(items):
 
 def rich_aligned(text):
   label = INLINE_LABEL.match(text)
-  return f"<strong class='lbl'>{html.escape(label.group(1))}</strong><span class='value'>{rich(text[label.end():])}</span>"
+  what = " what" if label.group(1) == "What:" else ""
+  return f"<strong class='lbl{what}'>{html.escape(label.group(1))}</strong><span class='value'>{rich(text[label.end():])}</span>"
 
 
 def rich_class(text):
