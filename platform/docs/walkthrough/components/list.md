@@ -20,8 +20,26 @@ component/hello-api
   repo         wasp-foundry/hello-api
   template     python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
   description  —
+  creation     ready, 2m ago
+  builds       —
+  versions     —
   running in   —
+
+next:
+
+  platform build list \
+    --component hello-api
+
+  platform workload list \
+    --component hello-api
+
+  platform catalog component creation get hello-api
+
+  platform catalog component clone hello-api
 ```
+
+- `get` also shows what the component generated: its creation (only to you, who requested it, and to `platform-admins`, for 24 h after it ends), its newest build and version, and where it runs. Nothing is built nor deployed yet, so those lines are `—`; `--hide-empty` leaves them out.
+- `next:` lists the commands that follow from here, with the component's name already in them. It goes to stderr, so `platform catalog component get hello-api | grep repo` gets only the table.
 
 The repo has a single commit (the README of `auto_init` is replaced), and its `catalog-info.yaml` carries where it came from:
 

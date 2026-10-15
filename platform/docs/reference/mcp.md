@@ -28,7 +28,7 @@ The server reads the same configuration as the CLI: `api_url` from `~/.config/pl
 | `catalog` | `catalog_list` | `GET /v1/catalog/entities` (`kind`: `domain`, `system` or `resource`; `owner`) | read-only |
 | `catalog` | `catalog_get` | `GET /v1/catalog/{kind}s/{name}`, with its `dependents` | read-only |
 | `catalog` | `catalog_components_list` | `GET /v1/catalog/components` (`system`, `owner`) | read-only |
-| `catalog` | `catalog_components_get` | `GET /v1/catalog/components/{name}`, with `runningIn` | read-only |
+| `catalog` | `catalog_components_get` | `GET /v1/catalog/components/{name}`, with `creation`, `builds`, `versions` and `runningIn` | read-only |
 | `catalog` | `catalog_components_creation_get` | `GET /v1/catalog/components/{name}/creation` | read-only |
 | `catalog` | `catalog_templates_list` | `GET /v1/catalog/templates` | read-only |
 | `catalog` | `catalog_templates_get` | `GET /v1/catalog/templates/{name}` | read-only |

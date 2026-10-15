@@ -15,7 +15,7 @@ privileged pod refused in the vcluster and on the host), shared with a team of t
 teammate gets a personal kubeconfig whose token the Platform API issues (ADR 0028), cannot delete
 the environment nor get its admin kubeconfig, and loses access after unshare, in kubectl too), then
 a Workload Instance (deploy of a public image by digest with --wait, list, get, history, rollback
-to the previous success, runningIn in catalog component get, remove; refused outside the owner
+to the previous success, runningIn and versions in catalog component get, remove; refused outside the owner
 team, for a version outside the index, a rollback to a failed revision, and ResourcesNotSupported
 for a resource type without provider; a pod in the vcluster reaches the Service of the instance by
 DNS), a second instance of the same component (deploy --instance, list with COMPONENT, get
@@ -356,6 +356,10 @@ expect_failure "revision 2 did not succeed" \
     --revision 2
 output="$(platform catalog component get "${workload_component}")"
 expect_output "running in   ${environment} (0.3.0, Available)" "${output}"
+# The versions of the index, newest first (#454): 0.4.0 on the line, 0.3.0 with --verbose.
+expect_output "versions     0.4.0 (4444444, main, " "${output}"
+output="$(platform catalog component get "${workload_component}" --verbose)"
+expect_output "0.3.0 (3333333, main, " "${output}"
 step "workload deploy --instance: a second instance of the same component, without its traffic (#294)"
 workload_extra="${workload_component}-pr-1"
 output="$(platform workload deploy \
