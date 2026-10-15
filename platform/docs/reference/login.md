@@ -28,7 +28,7 @@ and confirm the code ABCD-EFGH
 
 ## Language
 
-The sign-in pages (Keycloak's and the CLI's own) follow the browser's language, English or Portuguese. To pin one, add `locale: en` (or `locale: pt-BR`) to `~/.config/platform/config.yaml`: `platform login` then asks Keycloak for it (`ui_locales`) and the CLI's pages use it too. With `--use-device-code` the language selector at the top right of the page still applies.
+The sign-in pages (Keycloak's, Google's and the CLI's own) follow the browser's language, English or Portuguese. To pin one, add `locale: en` (or `locale: pt-BR`) to `~/.config/platform/config.yaml`: `platform login` then asks Keycloak for it (`ui_locales`, which Keycloak forwards to Google) and the CLI's pages use it too. With `--use-device-code` the language selector at the top right of the page still applies.
 
 ## Test users
 

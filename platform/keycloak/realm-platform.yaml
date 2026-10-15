@@ -109,6 +109,8 @@ identityProviders:
       clientId: $(env:GOOGLE_CLIENT_ID)
       clientSecret: $(env:GOOGLE_CLIENT_SECRET)
       defaultScope: openid profile email
+      # Forward the sign-in language (ui_locales from platform login, #537) to the Google screen.
+      uiLocales: "true"
       syncMode: IMPORT
 
 identityProviderMappers:
