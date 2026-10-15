@@ -6,7 +6,7 @@ Delete the environments, then the repo and its images, so the next run starts cl
 scripts/demo/cleanup
 ```
 
-It lists what is still there, asks before deleting (`--yes` skips the question) and waits until the environments are gone. What an earlier run already removed is skipped, so it also works as a first step of [Get ready](before.md). By hand, it is:
+It lists what is still there, asks before deleting (`--yes` skips the question) and waits until the environments are gone. What an earlier run already removed is skipped, so it also works as a first step of [Get ready](before.md). With the platform down (the cluster was destroyed) it skips the environments with a warning and still removes the rest. By hand, it is:
 
 ```bash
 platform environment delete demo
