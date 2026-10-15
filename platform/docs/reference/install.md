@@ -18,6 +18,12 @@
 
 </div>
 
+!!! note "macOS without Docker Desktop"
+    See [Prerequisites in the walkthrough](../walkthrough/bootstrap/prerequisites.md#macos-without-docker-desktop)
+    for Colima as the Docker daemon, `docker buildx` (Homebrew's `docker` ships no BuildKit, and
+    `init` builds with the BuildKit-only `--provenance=false`), and the inotify limit k3s needs
+    raised in Colima's VM.
+
 ## Install
 
 From the repo root:

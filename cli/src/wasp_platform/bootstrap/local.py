@@ -203,7 +203,7 @@ def _cluster_images() -> set[str]:
   """Images present on every node of platform-local that runs pods, as docker.io/library/<name>:<tag>."""
   nodes = [
     node["name"] for node in json.loads(_run("k3d", "node", "list", "--output", "json"))
-    if node.get("runtimeLabels", {}).get("k3d.cluster") == CLUSTER and node["role"] in ("server", "agent")
+    if node.get("runtimeLabels", {}).get("k3d.cluster") == CLUSTER and node.get("role") in ("server", "agent")
   ]
   listed = [set(_run("docker", "exec", node, "ctr", "--namespace", "k8s.io", "images", "list", "--quiet").split()) for node in nodes]
   return set.intersection(*listed) if listed else set()
