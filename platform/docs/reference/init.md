@@ -11,7 +11,7 @@ platform init \
 | Flag | Meaning |
 |---|---|
 | `--target local` | the only target today, and the default |
-| `--admin <email>` | joins `platform-admins` on its first Google sign-in, or on this run when the user already exists (nobody is ever removed); repeat it for more than one; other users land only in `platform-users`; a value that is not an e-mail stops `init` before any step |
+| `--admin <email>` | joins `platform-admins` on its first Google sign-in, or on this run when it already signed in with Google under that e-mail (nobody is ever removed); repeat it for more than one; other users land only in `platform-users`; a value that is not an e-mail stops `init` before any step |
 | `--aws-profile <profile>` | the credential of that `~/.aws` profile becomes the platform base credential for [cloud accounts](cloud-accounts.md) |
 | `--file <path>` | the settings file to read, to write with `--generate-file` or to open with `--edit`; default `~/.config/platform/init.yaml` |
 | `--generate-file` | writes the settings (flags, then the file, then what the cluster remembers) to the file and installs nothing; refuses an existing file without `--force` |

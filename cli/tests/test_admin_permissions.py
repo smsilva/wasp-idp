@@ -14,7 +14,7 @@ class FakeKeycloak:
     self.roles = [{"id": "r1", "name": "manage-users"}, {"id": "r2", "name": "view-users"}, {"id": "r3", "name": "query-groups"}]
     self.policies = {}
     self.permissions = {}
-    # Realm users by e-mail and the top-level group ids each one belongs to.
+    # Realm users by e-mail (with their emailVerified and Google link userName) and the group ids each one belongs to.
     self.users = {}
     self.memberships = {}
     self.calls = []
@@ -42,7 +42,11 @@ class FakeKeycloak:
       return httpx.Response(200, json={"id": "sa"})
     if path == "/users":
       email = request.url.params["email"]
-      return httpx.Response(200, json=[{"id": f"u-{email}", "email": email}] if email in self.users else [])
+      user = self.users.get(email)
+      return httpx.Response(200, json=[{"id": f"u-{email}", "email": email, "emailVerified": user["verified"]}] if user else [])
+    if path.startswith("/users/u-") and path.endswith("/federated-identity"):
+      google = self.users[path.split("/")[2].removeprefix("u-")]["google"]
+      return httpx.Response(200, json=[{"identityProvider": "google", "userName": google}] if google else [])
     if path.startswith("/users/u-") and "/groups" in path:
       user_id = path.split("/")[2]
       if method == "PUT":
@@ -105,7 +109,7 @@ def test_the_client_never_manages_members_nor_platform_groups():
 
 def test_an_existing_admin_joins_platform_admins_once():
   keycloak = FakeKeycloak()
-  keycloak.users = {"ana@example.com"}
+  keycloak.users = {"ana@example.com": {"verified": True, "google": "Ana@example.com"}}
   keycloak.memberships = {"u-ana@example.com": {"g-users"}}
   notes = []
   apply(keycloak, ["ana@example.com"], notes.append)
@@ -121,3 +125,14 @@ def test_an_admin_not_yet_signed_in_is_left_to_the_mapper():
   apply(keycloak, ["new@example.com"])
   assert keycloak.memberships == {}
   assert ("GET", "/users") in keycloak.calls
+
+
+def test_a_user_who_only_typed_the_admin_email_is_not_promoted():
+  keycloak = FakeKeycloak()
+  keycloak.users = {
+    "typed@example.com": {"verified": True, "google": "someone-else@gmail.com"},
+    "local@example.com": {"verified": True, "google": None},
+    "unverified@example.com": {"verified": False, "google": "unverified@example.com"},
+  }
+  apply(keycloak, list(keycloak.users))
+  assert keycloak.memberships == {}
