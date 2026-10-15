@@ -16,7 +16,7 @@ user_config="${XDG_CONFIG_HOME:-${HOME}/.config}/platform/config.yaml"
 
 # The test logins replace the credentials file; a private config dir keeps the user's session.
 smoke_config="$(mktemp --directory)"
-mkdir --parents "${smoke_config}/platform"
+mkdir -p "${smoke_config}/platform"
 if [[ -f "${user_config}" ]]; then
   cp "${user_config}" "${smoke_config}/platform/config.yaml"
 fi
