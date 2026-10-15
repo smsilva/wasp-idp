@@ -869,28 +869,29 @@
   }
 }
 
-/* Validated-on callout (`!!! validated "Validated on"`) and context notes (`!!! context "title"`): small amber
-   title, a short line, an optional list.
+/* Validated-on callout (`!!! validated "Validated on"`) and context notes (`!!! context "title"`): a bold amber
+   title above the body size, the paragraphs and lists indented under it in the body color, space below.
    Amber is the --wasp-strong of each theme. */
 .md-typeset .admonition.validated,
 .md-typeset .admonition.context {
+  margin-bottom: 2rem;
+  padding: .6rem .9rem;
   border: 0;
   border-left: 3px solid var(--wasp-strong);
   border-radius: 0 6px 6px 0;
   background: color-mix(in srgb, var(--wasp-strong) 8%, transparent);
   box-shadow: none;
-  padding: .7rem .9rem;
 }
 
 .md-typeset .validated > .admonition-title,
 .md-typeset .context > .admonition-title {
-  margin: 0 0 .3rem;
+  margin: 0 0 .25rem;
   padding: 0;
   background: transparent;
   border: 0;
   color: var(--wasp-strong);
-  font-size: .65rem;
-  font-weight: 600;
+  font-size: .85rem;
+  font-weight: 700;
 }
 
 .md-typeset .validated > .admonition-title::before,
@@ -898,16 +899,23 @@
   display: none;
 }
 
-.md-typeset .validated > p,
-.md-typeset .context > p {
-  margin: 0 0 .5rem;
-  color: var(--md-default-fg-color--light);
-  font-size: .65rem;
+.md-typeset .validated > p:not(.admonition-title),
+.md-typeset .context > p:not(.admonition-title) {
+  margin: 0 0 0 .8rem;
+  color: var(--md-typeset-color);
+  font-size: .75rem;
+}
+
+.md-typeset .validated > p:not(.admonition-title) + *,
+.md-typeset .context > p:not(.admonition-title) + * {
+  margin-top: .2rem;
 }
 
 .md-typeset .validated > ul,
 .md-typeset .context > ul {
-  margin: 0;
+  margin-bottom: 0;
+  margin-left: 1.6rem;
+  font-size: .75rem;
 }
 
 .md-typeset .validated li,
@@ -918,29 +926,6 @@
 .md-typeset .validated li::marker,
 .md-typeset .context li::marker {
   color: var(--wasp-strong);
-}
-
-/* Context notes (`!!! context "title"`): the validated callout with a title above the body size and the
-   paragraphs indented under it, in the body color. */
-.md-typeset .admonition.context {
-  margin-bottom: 2rem;
-  padding: .6rem .9rem;
-}
-
-.md-typeset .context > .admonition-title {
-  margin-bottom: .25rem;
-  font-size: .85rem;
-  font-weight: 700;
-}
-
-.md-typeset .context > p:not(.admonition-title) {
-  margin: 0 0 0 .8rem;
-  color: var(--md-typeset-color);
-  font-size: .75rem;
-}
-
-.md-typeset .context > p:not(.admonition-title) + p {
-  margin-top: .2rem;
 }
 
 /* Prerequisite tables (`<div class="checks" markdown>`, javascripts/copy-checks.js): framed, zebra rows,
