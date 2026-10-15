@@ -112,8 +112,8 @@ def get(
 
 
 @app.command("create", epilog=examples(
-  "platform catalog template create python-service --type service --owner team-a --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service --ref main",
-  "platform catalog template create python-service --type service --owner team-a --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service --ref main --default",
+  "platform catalog template create python-service --type service --owner team-platform --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service --ref main",
+  "platform catalog template create python-service --type service --owner team-platform --repo https://github.com/smsilva/wasp-idp --path platform/templates/python-service --ref main --default",
 ))
 def create(
   name: Annotated[str, typer.Argument(help="Name of the new template.")],

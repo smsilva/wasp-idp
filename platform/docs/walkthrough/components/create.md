@@ -1,6 +1,6 @@
 # Create a component
 
-With the platform configured ([The platform is ready](../ready.md)), a developer starts here. The system `greeter` came with the [Backstage import](../catalog/plan.md). `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays. The idea of this component:
+With the platform configured ([The platform is ready](../ready.md)), a developer starts here. The system `seat-map` came with the [Backstage import](../catalog/plan.md). `component create` creates the repo from the default template of the type, pushes the rendered content as the first commit and registers the component in the catalog. `--prd` seeds `docs/prd.md` with your text (`-` reads stdin); without it, the template's skeleton stays. The idea of this component:
 
 ``` { .markdown title="/tmp/idea.md" }
 # Problem
@@ -18,7 +18,7 @@ People want to be greeted by name.
 IDEA
 
 platform catalog component create hello-api \
-  --system greeter \
+  --system seat-map \
   --prd /tmp/idea.md \
   --wait
 ```

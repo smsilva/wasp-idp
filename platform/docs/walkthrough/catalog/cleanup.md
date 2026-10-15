@@ -1,11 +1,18 @@
 # Clean up
 
 ```bash
-platform catalog resource delete greeting-db
+platform catalog resource delete passengers-db
 
-platform catalog system delete greeter
+platform catalog system delete reservations
 
-platform catalog domain delete messaging
+platform catalog domain delete booking
 
-platform catalog domain delete communication
+platform catalog domain delete tailwind
+```
+
+``` { .text .output title="output" }
+✓ resource passengers-db deleted
+✓ system reservations deleted
+✓ domain booking deleted
+✓ domain tailwind deleted
 ```

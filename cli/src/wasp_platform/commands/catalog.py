@@ -22,9 +22,9 @@ COLUMNS = {
   "resources": [("TYPE", "type"), ("SYSTEM", "system"), ("OWNER", "owner")],
 }
 
-SAMPLES = {"domain": "communication", "system": "messaging", "resource": "messaging-db"}
+SAMPLES = {"domain": "airport", "system": "seat-map", "resource": "passengers-db"}
 
-Owner = Annotated[str, typer.Option(help="Owner team, such as team-alpha.")]
+Owner = Annotated[str, typer.Option(help="Owner team, such as team-airport.")]
 Description = Annotated[str | None, typer.Option(help="One line about it.")]
 
 
@@ -125,8 +125,8 @@ resource_app = _kind_app("resources", "resource", "Infrastructure a system needs
 
 
 @domain_app.command("create", epilog=examples(
-  "platform catalog domain create communication --owner team-a",
-  "platform catalog domain create chat --owner team-a --parent communication",
+  "platform catalog domain create tailwind --owner team-tailwind-architecture",
+  "platform catalog domain create airport --owner team-airport --parent tailwind",
 ))
 def create_domain(
   name: Annotated[str, typer.Argument(help="Name of the new domain.")],
@@ -140,7 +140,7 @@ def create_domain(
 
 
 @system_app.command("create", epilog=examples(
-  "platform catalog system create messaging --domain communication --owner team-a",
+  "platform catalog system create seat-map --domain airport --owner team-airport",
 ))
 def create_system(
   name: Annotated[str, typer.Argument(help="Name of the new system.")],
@@ -154,7 +154,7 @@ def create_system(
 
 
 @resource_app.command("create", epilog=examples(
-  "platform catalog resource create messaging-db --type database --system messaging --owner team-a",
+  "platform catalog resource create flight-events --type topic --system flight-status --owner team-flight-ops",
 ))
 def create_resource(
   name: Annotated[str, typer.Argument(help="Name of the new resource.")],
@@ -170,7 +170,7 @@ def create_resource(
 
 @app.command("list", epilog=examples(
   "platform catalog list",
-  "platform catalog list --kind system --owner team-a",
+  "platform catalog list --kind system --owner team-airport",
 ))
 def list_all(
   kind: Annotated[Kind | None, typer.Option(help="Only this kind.")] = None,
@@ -194,6 +194,6 @@ app.add_typer(resource_app, name="resource")
 app.add_typer(component_app, name="component")
 app.add_typer(template_app, name="template")
 app.command("import", epilog=examples(
-  "platform catalog import catalog/ --dry-run",
-  "platform catalog import catalog/ --yes",
+  "platform catalog import idp/catalog/airline/tailwind/ --dry-run",
+  "platform catalog import idp/catalog/airline/tailwind/ idp/catalog/org.yaml idp/catalog/platform.yaml --yes",
 ))(import_catalog)

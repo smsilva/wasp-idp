@@ -112,7 +112,7 @@ platform catalog import <path>... \
   [--yes]
 ```
 
-Imports Backstage files (a file or a folder, recursive `*.yaml`/`*.yml`). The Platform API computes the plan and nothing is written before the confirmation; `--dry-run` shows only the plan, `--yes` applies without asking.
+Imports Backstage files (a file or a folder, recursive `*.yaml`/`*.yml`). The Platform API computes the plan and nothing is written before the confirmation; `--dry-run` shows only the plan, `--yes` applies without asking. The example catalog of the repo is Tailwind Air, a fictional airline: `platform catalog import idp/catalog/airline/tailwind/ idp/catalog/org.yaml idp/catalog/platform.yaml` ([Backstage import](../walkthrough/catalog/plan.md)).
 
 | Action | Meaning |
 |---|---|

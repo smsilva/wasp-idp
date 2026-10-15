@@ -3,15 +3,18 @@
 Running it again writes nothing:
 
 ```bash
-platform catalog import idp/catalog/
+platform catalog import \
+  idp/catalog/airline/tailwind/ \
+  idp/catalog/org.yaml \
+  idp/catalog/platform.yaml
 ```
 
 ``` { .text .output title="output" }
-KIND      NAME                  ACTION     DETAIL
-Domain    bookstore             unchanged
+KIND       NAME                        ACTION     DETAIL
+Group      team-airport                unchanged
 ...
 
-0 to create, 0 to update, 21 unchanged, 2 skipped.
+0 to create, 0 to update, 34 unchanged, 11 skipped.
 nothing to do
 ```
 
@@ -22,23 +25,30 @@ platform catalog list
 ```
 
 ``` { .text .output title="output" }
-KIND      NAME                  PARENT         OWNER
-Domain    bookstore             —              team-alpha
-Domain    communication         —              team-alpha
-Domain    messaging             communication  team-alpha
-Domain    notifications         communication  team-beta
-Domain    platform              —              team-platform
-System    bookinfo              bookstore      team-alpha
-System    greeter               messaging      team-alpha
-System    notifier              notifications  team-beta
-System    platform              platform       team-platform
-Resource  development           platform       team-platform
-Resource  greeting-avatars      greeter        team-alpha
-Resource  greeting-db           greeter        team-alpha
-Resource  greeting-events       greeter        team-alpha
-Resource  notification-db       notifier       team-beta
-Resource  notification-jobs     notifier       team-beta
-Resource  notification-reports  notifier       team-beta
-Resource  production            platform       team-platform
-Resource  shared-pg             platform       team-platform
+KIND      NAME           PARENT         OWNER
+Domain    airport        tailwind       team-airport
+Domain    booking        tailwind       team-booking
+Domain    crew           tailwind       team-crew
+Domain    flight-ops     tailwind       team-flight-ops
+Domain    loyalty        tailwind       team-loyalty
+Domain    platform       —              team-platform
+Domain    tailwind       —              team-tailwind-architecture
+System    bag-tracking   airport        team-airport
+System    boarding-pass  airport        team-airport
+System    fares          booking        team-booking
+System    flight-search  booking        team-booking
+System    flight-status  flight-ops     team-flight-ops
+System    miles          loyalty        team-loyalty
+System    platform       platform       team-platform
+System    reservations   booking        team-booking
+System    rostering      crew           team-crew
+System    schedules      flight-ops     team-flight-ops
+System    seat-map       airport        team-airport
+System    tiers          loyalty        team-loyalty
+Resource  development    platform       team-platform
+Resource  fares-cache    fares          team-booking
+Resource  flight-events  flight-status  team-flight-ops
+Resource  passengers-db  reservations   team-booking
+Resource  production     platform       team-platform
+Resource  shared-pg      platform       team-platform
 ```

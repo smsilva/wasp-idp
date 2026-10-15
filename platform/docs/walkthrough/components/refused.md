@@ -4,13 +4,13 @@ The API checks everything before it writes the request, so a refused create leav
 
 ```bash
 platform catalog component create hello-api \
-  --system greeter
+  --system seat-map
 
 platform catalog component create other-api \
   --system nope
 
 platform catalog component create other-api \
-  --system greeter \
+  --system seat-map \
   --param colour=blue
 ```
 
@@ -30,7 +30,7 @@ A repo with the same name created outside the platform stops the creation at `Re
 
 ```bash
 platform catalog component create greeting-api \
-  --system greeter \
+  --system seat-map \
   --wait
 ```
 
@@ -78,7 +78,7 @@ Or do both in one step with `--replace`, which takes the place of the stopped cr
 
 ```bash
 platform catalog component create greeting-api \
-  --system greeter \
+  --system seat-map \
   --replace \
   --wait
 ```

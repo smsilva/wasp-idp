@@ -1,9 +1,9 @@
 # Dependents
 
 ```bash
-platform catalog domain delete messaging
+platform catalog domain delete booking
 ```
 
 ``` { .text .output title="output" }
-✗ 409: domain 'messaging' has dependents: system/greeter
+✗ 409: domain 'booking' has dependents: system/reservations
 ```
