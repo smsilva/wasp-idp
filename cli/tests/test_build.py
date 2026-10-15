@@ -188,3 +188,35 @@ def test_get_of_an_unknown_name(api):
   result = run("get", "nope")
   assert result.exit_code == 1
   assert "build 'nope' not found" in result.output
+
+
+def test_get_suggests_a_deploy_of_the_registered_version(api):
+  api["polls"] = [DONE]
+  assert run("get", "greeting-api-a1b2c3").stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform workload deploy \\",
+    "    --component greeting-api \\",
+    "    --environment <environment> \\",
+    "    --version 0.3.0-greetings.1a2b3c4",
+    "",
+    "  platform build list \\",
+    "    --component greeting-api",
+    "",
+    "  platform catalog component get greeting-api",
+  ]
+  api["polls"] = [RUNNING]
+  assert "workload deploy" not in run("get", "greeting-api-a1b2c3").stderr
+  api["polls"] = [{**DONE, "status": "InvalidSpec"}]
+  assert "workload deploy" not in run("get", "greeting-api-a1b2c3").stderr
+
+
+def test_get_hide_empty(api):
+  api["polls"] = [RUNNING]
+  lines = run("get", "greeting-api-a1b2c3").stdout.splitlines()
+  assert "  version       —" in lines and "  registry      —" in lines
+  lines = run("get", "greeting-api-a1b2c3", "--hide-empty").stdout.splitlines()
+  assert not any(line.endswith("—") for line in lines)
+  data = json.loads(run("get", "greeting-api-a1b2c3", "--hide-empty", "--output", "json").stdout)
+  assert "result" not in data and "errors" not in data and data["commit"] == COMMIT

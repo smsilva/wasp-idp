@@ -51,7 +51,16 @@ build/hello-api-8757ff (InvalidSpec)
   ✗ SpecValidated app-spec.yaml at 9590d3e: 2 error(s)
       resources.db.id: resource 'orders-db' is not in the catalog
       resources.cache.type: 'redis' is not a resource type of the platform (postgres, dns, route)
+
+next:
+
+  platform build list \
+    --component hello-api
+
+  platform catalog component get hello-api
 ```
+
+`next:` suggests a `workload deploy` only for a `ready` build: this version never reached the index.
 
 Before GitHub, the API refuses a version already in the index, since the CI would push its tag again:
 

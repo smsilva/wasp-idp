@@ -9,7 +9,7 @@ from typing import Annotated
 import typer
 
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_data, print_fields, print_table, success
 
 app = typer.Typer(help="Builds: a branch of a component becomes a version in the registry.", no_args_is_help=True)
 
@@ -154,30 +154,32 @@ def _build_of(client: PlatformClient, name: str) -> dict:
 @app.command("get", epilog=examples(
   "platform build get hello-api-6cf484",
   "platform build get hello-api.0.1.0-greetings.b5f9569",
+  "platform build get hello-api-6cf484 --hide-empty --output json",
 ))
 def get(
   name: Annotated[str, typer.Argument(help="A build (from build create) or a version (the NAME column of build list).")],
+  hide_empty: HideEmptyOption = None,
   output: OutputOption = Format.table,
 ):
   """Show a build and its steps (kept for 24 h after it ends)."""
+  hide_empty = hiding(hide_empty)
   try:
     build = _build_of(_client(), name)
   except ApiError as error:
     fail(str(error))
   if output.data:
-    print_data(build, output)
+    print_data(build, output, hide_empty)
     return
   result = build.get("result") or {}
   typer.echo(f"build/{build['name']} ({build['status']})")
-  for field, value in (
+  print_fields([
     ("component", build.get("component")),
     ("branch", build.get("branch")),
     ("version", result.get("version") or build.get("requestedVersion")),
     ("registry", f"{build['registry']} ({build.get('image')})" if build.get("registry") else None),
     ("commit", (build.get("commit") or "")[:7]),
     ("run", build.get("runUrl")),
-  ):
-    typer.echo(f"  {field.ljust(13)} {value or '—'}")
+  ], hide_empty, width=13)
   for condition in build.get("conditions") or []:
     if condition["type"] == "Ready":
       continue
@@ -185,3 +187,16 @@ def get(
     typer.echo(f"  {mark} {condition['type'].ljust(13)} {condition.get('message') or condition.get('reason')}")
   for error in build.get("errors") or []:
     typer.echo(f"      {error['field']}: {error['reason']}")
+  _next(build)
+
+
+def _next(build: dict) -> None:
+  component = (build["component"], "component")
+  steps = []
+  # Only a ready build registered its version in the index: InvalidSpec pushed the image and stopped.
+  version = (build.get("result") or {}).get("version")
+  if build["status"] == "ready" and version:
+    steps.append(("platform workload deploy", None, {"--component": component, "--environment": ("<environment>", "environment"), "--version": (version, None)}))
+  steps.append(("platform build list", None, {"--component": component}))
+  steps.append(("platform catalog component get", component, {}))
+  next_steps(steps)

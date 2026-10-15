@@ -59,6 +59,10 @@ provisioning demo-cloud (profile: ephemeral, cloud account: demo-aws) …
 demo-cloud: ready
   vpc vpc-0123456789abcdef0 in us-east-1, cloud account demo-aws
   in cloud account demo-aws
+
+next:
+
+  platform cloud account get demo-aws
 ```
 
 - It takes about 30 s: Crossplane creates the VPC with the account's role, through a `ProviderConfig` named after the account. AWS tags it with `platform.wasp.silvios.me/environment=demo-cloud`.

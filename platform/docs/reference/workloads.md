@@ -5,7 +5,7 @@ platform workload spec validate [--file <app-spec.yaml>]
 platform workload spec get --component <component> [--version <version> | --branch <branch>]
 platform workload deploy --component <component> [--instance <instance>] --environment <environment> (--version <version> | --branch <branch>) [--replicas <n>] [--resource-class <resource>=<class> ...] [--wait] [--timeout <seconds>]
 platform workload list [--environment <environment>] [--component <component>]
-platform workload get <instance> --environment <environment> | <instance>@<environment>
+platform workload get <instance> --environment <environment> | <instance>@<environment> [--hide-empty]
 platform workload signals <instance> --environment <environment> | <instance>@<environment> [--window <5m>]
 platform workload history --environment <environment> [--component <component> | --instance <instance>]
 platform workload rollback <instance> --environment <environment> | <instance>@<environment> [--revision <n>] [--wait] [--timeout <seconds>]
@@ -14,6 +14,8 @@ platform workload apply --file <plan.yaml> [--dry-run] [--prune] [--wait] [--tim
 ```
 
 A **Workload Spec** is the `app-spec.yaml` ([Score](https://score.dev), `score.dev/v1b1`) of a version, immutable, kept by the build in the version index (`spec.appSpec` of the `Version`). `spec validate` is open to any authenticated user. `spec get` is for members of the component's owner team and `platform-admins`: a Score may carry plain values from a private repo.
+
+`get` takes `--hide-empty`; its `next:` footer is `signals`, `history --instance` and the `catalog component get` of the instance ([After a `get`](output.md#after-a-get)). `spec get` has no footer: its output is a file.
 
 ## spec validate
 

@@ -44,6 +44,17 @@ hello-api@demo (Available)
   url           —
   message       1/1 replicas ready
   resource      db (postgres, provision): Ready
+
+next:
+
+  platform workload signals hello-api \
+    --environment demo
+
+  platform workload history \
+    --environment demo \
+    --instance hello-api
+
+  platform catalog component get hello-api
 ```
 
 The app connects with the outputs and nothing else:

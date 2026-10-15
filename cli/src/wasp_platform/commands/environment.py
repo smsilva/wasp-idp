@@ -11,7 +11,7 @@ import yaml
 
 from .. import config
 from ..client import ApiError, PlatformClient
-from ..output import Format, OutputOption, examples, fail, print_json, print_data, print_table, success
+from ..output import Format, HideEmptyOption, OutputOption, examples, fail, hiding, next_steps, print_json, print_data, print_table, success
 
 app = typer.Typer(help="Environments where releases run.", no_args_is_help=True)
 
@@ -181,13 +181,15 @@ def unshare(name: Name, team: Team, output: OutputOption = Format.table):
     success(f"{name} no longer shared with {team}")
 
 
-@app.command("get", epilog=examples("platform environment get demo", "platform environment get demo --admin"))
+@app.command("get", epilog=examples("platform environment get demo", "platform environment get demo --admin", "platform environment get demo --hide-empty --output json"))
 def get(
   name: Name,
   admin: Annotated[bool, typer.Option("--admin", help="Write the vcluster admin kubeconfig instead (platform-admins only).")] = False,
+  hide_empty: HideEmptyOption = None,
   output: OutputOption = Format.table,
 ):
   """Show an environment and write your kubeconfig when it is ready."""
+  hide_empty = hiding(hide_empty)
   try:
     client = _client()
     environment = client.get_environment(name)
@@ -198,8 +200,9 @@ def get(
   except ApiError as error:
     fail(str(error))
   if output.data:
-    print_data(environment, output)
+    print_data(environment, output, hide_empty)
     return
+  # Empty fields never had a line here: --hide-empty changes only the data output.
   typer.echo(f"{environment['name']}: {environment['status']}")
   if environment.get("message"):
     typer.echo(f"  {environment['message']}")
@@ -209,6 +212,21 @@ def get(
     typer.echo(f"  kubectl --kubeconfig {environment['kubeconfig']} get nodes")
   if environment.get("ingress"):
     typer.echo(f"  workloads at {environment['ingress']}")
+  _next(environment)
+
+
+def _next(environment: dict) -> None:
+  name = (environment["name"], "environment")
+  if environment.get("cloudAccount"):
+    # No vcluster: workloads answer 409 there.
+    next_steps([("platform cloud account get", (environment["cloudAccount"], "key"), {})])
+    return
+  steps = []
+  if environment["status"] == "ready":
+    steps.append(("platform workload deploy", None, {"--component": ("<component>", "component"), "--environment": name, "--version": ("<version>", None)}))
+  steps.append(("platform workload list", None, {"--environment": name}))
+  steps.append(("platform environment policy get", name, {}))
+  next_steps(steps)
 
 
 @app.command("credential", epilog=examples("platform environment credential demo"))

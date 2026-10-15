@@ -16,6 +16,8 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 | `platform environment profile policy set <profile> --file <file\|->` | replaces the policy of the profile for all its environments; an empty list removes it (`platform-admins` only) |
 | `platform environment delete <name>` | removes the environment and the vcluster, or the VPC in a cloud account |
 
+`get` takes `--hide-empty` (the table never shows empty fields, so it changes only a data output). Its `next:` footer is `workload deploy` once the environment is `ready`, `workload list` and `policy get`; for an environment in a cloud account, which has no vcluster, it is the `cloud account get` of the account ([After a `get`](output.md#after-a-get)).
+
 `--expires` takes `30m`, `12h`, `3d` or `1w`; the provider deletes the environment when the deadline passes (checked every 10 s).
 
 ## In a cloud account

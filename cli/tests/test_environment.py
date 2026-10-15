@@ -268,3 +268,40 @@ def test_get_shows_where_the_workloads_are(tmp_path, monkeypatch):
   result = runner.invoke(app, ["environment", "get", "vc"])
   assert result.exit_code == 0
   assert "workloads at http://*.vc.localhost:7080" in result.stdout
+
+
+def test_get_suggests_a_deploy_once_ready(tmp_path, monkeypatch):
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  credential_api(monkeypatch, lambda request: httpx.Response(200, json={"name": "vc", "status": "ready", "kubeconfigData": PERSONAL}))
+  result = runner.invoke(app, ["environment", "get", "vc"])
+  assert "next:" not in result.stdout
+  assert result.stderr.splitlines() == [
+    "",
+    "next:",
+    "",
+    "  platform workload deploy \\",
+    "    --component <component> \\",
+    "    --environment vc \\",
+    "    --version <version>",
+    "",
+    "  platform workload list \\",
+    "    --environment vc",
+    "",
+    "  platform environment policy get vc",
+  ]
+
+
+def test_get_while_pending_and_hide_empty(tmp_path, monkeypatch):
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  credential_api(monkeypatch, lambda request: httpx.Response(200, json={"name": "vc", "status": "pending", "message": None, "sharedWith": [], "cloudAccount": None}))
+  result = runner.invoke(app, ["environment", "get", "vc"])
+  assert "workload deploy" not in result.stderr and "platform workload list" in result.stderr
+  data = json.loads(runner.invoke(app, ["environment", "get", "vc", "--hide-empty", "--output", "json"]).stdout)
+  assert data == {"name": "vc", "status": "pending"}
+
+
+def test_get_in_a_cloud_account_points_to_the_account(tmp_path, monkeypatch):
+  monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+  credential_api(monkeypatch, lambda request: httpx.Response(200, json={"name": "vc", "status": "ready", "cloudAccount": "demo-aws"}))
+  result = runner.invoke(app, ["environment", "get", "vc"])
+  assert result.stderr.splitlines() == ["", "next:", "", "  platform cloud account get demo-aws"]
