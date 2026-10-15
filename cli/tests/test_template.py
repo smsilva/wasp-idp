@@ -4,6 +4,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from wasp_platform import client as client_module
@@ -13,12 +14,14 @@ from wasp_platform.commands import template as template_module
 runner = CliRunner()
 REPO = Path(__file__).parents[2]
 SEED = REPO / "platform" / "templates" / "python-service"
+# What platform init registers from the seed's template.yaml.
+SEED_DEFINITION = yaml.safe_load((SEED / "template.yaml").read_text())
 TEMPLATE = {
   "kind": "Template", "name": "python-service", "type": "service", "default": True, "owner": "team-platform",
   "description": "FastAPI service",
   "source": {"repo": "https://github.com/smsilva/wasp-idp", "path": "platform/templates/python-service/content", "ref": "abc1234"},
-  "parameters": {"type": "object", "properties": {"port": {"type": "integer", "default": 8000, "description": "Port"}}},
-  "copyWithoutRendering": [".github/workflows/*"],
+  "parameters": SEED_DEFINITION["parameters"],
+  "copyWithoutRendering": SEED_DEFINITION["copyWithoutRendering"],
 }
 PLAN = {
   "items": [
@@ -159,7 +162,7 @@ def test_render_from_registry_fetches_the_registered_ref(api, tmp_path, monkeypa
 
 @pytest.mark.parametrize("params,message", [
   (["port=abc"], "port: 'abc' is not an integer"),
-  (["nope=1"], "nope: not a parameter of python-service (port)"),
+  (["nope=1"], "nope: not a parameter of python-service (port, title, theme)"),
   (["port"], "--param takes key=value, got 'port'"),
 ])
 def test_render_rejects_bad_params(api, tmp_path, params, message):
