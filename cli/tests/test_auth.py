@@ -299,6 +299,30 @@ def test_listener_refuses_a_foreign_host(idp, oidc):
   assert oidc.login_browser(open_browser=open_browser, timeout=10)["access_token"] == "access-browser"
 
 
+def test_configured_locale_reaches_keycloak_and_the_cli_pages(idp, monkeypatch):
+  monkeypatch.setattr(auth.config, "load", lambda: {"issuer": ISSUER, "client_id": "platform-cli", "locale": "en"})
+  oidc = auth.Oidc(transport=httpx.MockTransport(idp.handler))
+  pages = []
+  def open_browser(url):
+    request = urllib.request.Request(url, headers={"Accept-Language": "pt-BR"})
+    pages.append(urllib.request.urlopen(request).read().decode())
+    authorize = html.unescape(re.search(r'<a id="go" href="([^"]+)"', pages[0]).group(1))
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(authorize).query))
+    assert query["ui_locales"] == "en"
+    idp.verifiers["code-1"] = query["code_challenge"]
+    callback = urllib.request.Request(f"{query['redirect_uri']}?code=code-1&state={query['state']}", headers={"Accept-Language": "pt-BR"})
+    threading.Thread(target=lambda: pages.append(urllib.request.urlopen(callback).read().decode()), daemon=True).start()
+    return True
+  oidc.login_browser(open_browser=open_browser, timeout=10)
+  time.sleep(0.2)
+  assert "Opening sign-in…" in pages[0] and "You're signed in" in pages[1]
+
+
+def test_without_locale_the_browser_language_wins():
+  assert '<html lang="pt-BR">' in auth.callback_page(True, None, "pt-BR,pt;q=0.9")
+  assert '<html lang="en">' in auth.callback_page(True, None, "pt-BR,pt;q=0.9", locale="en")
+
+
 def test_password_login_saves_the_issuing_client(idp):
   oidc = auth.Oidc(issuer=ISSUER, client_id="platform-smoke", transport=httpx.MockTransport(idp.handler))
   auth.save_credentials(oidc.login_password("platform-smoke", "right"), client_id="platform-smoke")

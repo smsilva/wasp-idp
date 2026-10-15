@@ -66,6 +66,8 @@ class Oidc:
     settings = config.load()
     self.issuer = issuer or settings.get("issuer")
     self.client_id = client_id or settings.get("client_id")
+    # `locale` in the config (en or pt-BR) picks the language of the sign-in pages; without it, the browser's.
+    self.locale = settings.get("locale")
     if not (self.issuer and self.client_id):
       raise AuthError("no identity provider configured: run 'platform init --target local' first")
     self.http = httpx.Client(timeout=30, transport=transport)
@@ -92,7 +94,7 @@ class Oidc:
   def login_browser(self, open_browser=webbrowser.open, idp_hint: str | None = "google", timeout: int = 300) -> dict:
     verifier, challenge = _pkce()
     state = secrets.token_urlsafe(24)
-    callback = _Callback(state)
+    callback = _Callback(state, self.locale)
     redirect_uri = f"http://127.0.0.1:{callback.port}/callback"
     params = {
       "client_id": self.client_id,
@@ -105,6 +107,8 @@ class Oidc:
     }
     if idp_hint:
       params["kc_idp_hint"] = idp_hint  # skip the Keycloak page and go straight to Google
+    if self.locale:
+      params["ui_locales"] = self.locale
     url = f"{self.endpoint('authorization_endpoint')}?{urllib.parse.urlencode(params)}"
     callback.authorize_url = url
     if not open_browser(f"http://127.0.0.1:{callback.port}{callback.start_path}"):
@@ -225,8 +229,9 @@ CALLBACK_TEXT = {
 }
 
 
-def _language(accept_language: str) -> str:
-  return "pt-BR" if accept_language.lower().startswith("pt") else "en"
+def _language(accept_language: str, locale: str | None = None) -> str:
+  """The configured locale wins over the browser's Accept-Language."""
+  return "pt-BR" if (locale or accept_language).lower().startswith("pt") else "en"
 
 
 def _page(lang: str, state: str, heading: str, message: str, error: str = "", refresh: str = "", under: str = "") -> str:
@@ -237,9 +242,9 @@ def _page(lang: str, state: str, heading: str, message: str, error: str = "", re
   )
 
 
-def callback_page(ok: bool, error: str | None, accept_language: str = "") -> str:
+def callback_page(ok: bool, error: str | None, accept_language: str = "", locale: str | None = None) -> str:
   """The browser page at the end of `platform login` (#537): one card with the outcome, like the Keycloak screens."""
-  lang = _language(accept_language)
+  lang = _language(accept_language, locale)
   text = CALLBACK_TEXT[lang]
   heading, message = text["ok" if ok else "fail"]
   # The error comes from the redirect query string: escape it, an attacker controls it.
@@ -248,10 +253,10 @@ def callback_page(ok: bool, error: str | None, accept_language: str = "") -> str
   return _page(lang, "ok" if ok else "fail", heading, message, error=detail, under=under)
 
 
-def start_page(url: str, accept_language: str = "") -> str:
+def start_page(url: str, accept_language: str = "", locale: str | None = None) -> str:
   """The first page `platform login` opens (#537): the card, painted at once, while the browser goes on to Keycloak.
   Without it the tab stays blank until Keycloak and Google answer."""
-  lang = _language(accept_language)
+  lang = _language(accept_language, locale)
   heading, message, button = CALLBACK_TEXT[lang]["start"]
   target = html.escape(url, quote=True)
   # Two frames first so the card is painted, then on to Keycloak; the browser keeps it on screen until Keycloak
@@ -267,8 +272,9 @@ def start_page(url: str, accept_language: str = "") -> str:
 class _Callback:
   """Single-request HTTP listener on a random free port of 127.0.0.1."""
 
-  def __init__(self, state: str):
+  def __init__(self, state: str, locale: str | None = None):
     self.state = state
+    self.locale = locale
     self.authorize_url = ""  # what the start page sends the browser on to
     # The start page carries the state: an unguessable path, served once, so a page in another tab can't read it.
     self.start_path = f"/start/{secrets.token_urlsafe(16)}"
@@ -286,7 +292,7 @@ class _Callback:
         url = urllib.parse.urlparse(self.path)
         if url.path == owner.start_path and owner.authorize_url:
           authorize_url, owner.authorize_url = owner.authorize_url, ""
-          self._send(200, start_page(authorize_url, self.headers.get("Accept-Language", "")))
+          self._send(200, start_page(authorize_url, self.headers.get("Accept-Language", ""), owner.locale))
           return
         if url.path != "/callback":
           self._send(404, "")
@@ -299,7 +305,7 @@ class _Callback:
         else:
           owner.code = query.get("code", [None])[0]
         ok = owner.code is not None
-        self._send(200 if ok else 400, callback_page(ok, owner.error, self.headers.get("Accept-Language", "")))
+        self._send(200 if ok else 400, callback_page(ok, owner.error, self.headers.get("Accept-Language", ""), owner.locale))
         owner.done.set()
 
       def _send(self, status: int, page: str):

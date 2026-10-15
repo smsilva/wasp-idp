@@ -26,6 +26,10 @@ and confirm the code ABCD-EFGH
 - The CLI refreshes the access token by itself when less than 60 s remain.
 - Team membership changes reach the token on the next refresh: `platform login --refresh` forces one, since Keycloak reads the groups again on every refresh. `platform team member add` of yourself already does it.
 
+## Language
+
+The sign-in pages (Keycloak's and the CLI's own) follow the browser's language, English or Portuguese. To pin one, add `locale: en` (or `locale: pt-BR`) to `~/.config/platform/config.yaml`: `platform login` then asks Keycloak for it (`ui_locales`) and the CLI's pages use it too. With `--use-device-code` the language selector at the top right of the page still applies.
+
 ## Test users
 
 On the local target, `platform login --test-user` (`platform-users`) and `--test-admin` (`platform-admins`) sign in without a browser, for [`scripts/test/cli-smoke` and `scripts/test/cli-e2e`](cli-smoke.md). They are hidden from `--help` and refuse any other target; the reasons are in `platform/keycloak/README.md`.
