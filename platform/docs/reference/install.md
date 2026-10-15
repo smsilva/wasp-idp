@@ -5,18 +5,38 @@
 !!! validated "Validated on"
     Tested on the operating systems below.
 
-    - Ubuntu 24.04.5 LTS
+    - Ubuntu 24.04.5 LTS, Docker Engine
+    - macOS 26.5.2 on Apple Silicon, Colima 0.10.1
 
-<div class="checks" markdown>
+=== "Ubuntu"
 
-| Tool | Version | Needed for | Check |
-|---|---|---|---|
-| Docker | 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
-| k3d | 5.9.0 | init | `k3d version` |
-| kubectl | 1.34.8 | init | `kubectl version --client` |
-| uv | 0.11.7 | install | `uv --version` |
+    <div class="checks" markdown>
 
-</div>
+    | Tool | Version | Needed for | Check |
+    |---|---|---|---|
+    | Docker | 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
+    | k3d | 5.9.0 | init | `k3d version` |
+    | kubectl | 1.34.8 | init | `kubectl version --client` |
+    | uv | 0.11.7 | install | `uv --version` |
+
+    </div>
+
+=== "macOS"
+
+    <div class="checks" markdown>
+
+    | Tool | Version | Needed for | Check |
+    |---|---|---|---|
+    | Colima | 0.10.1 | init | `colima version` |
+    | Docker | 28.4.0 | init | `docker version --format '{{.Server.Version}}'` |
+    | buildx | 0.32.0 | init | `docker buildx version` |
+    | k3d | 5.9.0 | init | `k3d version` |
+    | kubectl | 1.35.2 | init | `kubectl version --client` |
+    | uv | 0.13.1 | install | `uv --version` |
+
+    </div>
+
+    Colima runs the Docker daemon, `docker buildx` is linked as a CLI plugin (`init` builds with the BuildKit-only `--provenance=false`) and the inotify limit is raised in Colima's VM: the steps are in [Prerequisites](../walkthrough/bootstrap/prerequisites.md).
 
 ## Install
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 show_usage() {
@@ -71,7 +71,7 @@ cleanup() {
   platform registry remove "${other_registry}" > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete components.catalog.platform.wasp.silvios.me "${taken_component}" "${clone_component}" "${build_component}" "${workload_component}" --ignore-not-found > /dev/null 2>&1 || true
   kubectl --context k3d-platform-local --namespace platform-system delete versions.catalog.platform.wasp.silvios.me --selector "platform.wasp.silvios.me/component in (${build_component},${workload_component})" > /dev/null 2>&1 || true
-  rm --recursive --force "${smoke_config}" "${render_directory}" "${clone_directory}" "${workload_directory}"
+  rm -rf "${smoke_config}" "${render_directory}" "${clone_directory}" "${workload_directory}"
 }
 trap cleanup EXIT
 
@@ -89,13 +89,13 @@ output="$(platform init --dry-run --output json)"
 expect_output "\"platform-api\"" "${output}"
 expect_failure "already exists" platform init --generate-file
 # --edit with a scripted editor: the change is read back, a broken file is reported.
-output="$(PLATFORM_EDITOR="sed --in-place s/other@example.org/third@example.org/" platform init --edit)"
+output="$(PLATFORM_EDITOR="sed -i.bak s/other@example.org/third@example.org/" platform init --edit)"
 expect_output "settings saved in ${init_file}" "${output}"
 expect_output "- third@example.org" "$(cat "${init_file}")"
-PLATFORM_EDITOR="sed --in-place \$aunknownKey:\ true" expect_failure "unknown key(s) unknownKey" platform init --edit
-sed --in-place "/unknownKey/d" "${init_file}"
+PLATFORM_EDITOR="perl -i -pe '\$_ .= qq(unknownKey: true\n) if eof'" expect_failure "unknown key(s) unknownKey" platform init --edit
+sed -i.bak "/unknownKey/d" "${init_file}"
 expect_failure "add --yes" platform init < /dev/null
-sed --in-place "s/- smoke@example.org/- email_not_filled/" "${init_file}"
+sed -i.bak "s/- smoke@example.org/- email_not_filled/" "${init_file}"
 expect_failure "not an e-mail" platform init --yes
 rm "${init_file}"
 
@@ -565,7 +565,7 @@ expect_failure "no scm connection for the org 'smoke-no-connection'" \
     --arguments "{\"component\": \"${build_component}\", \"branch\": \"main\", \"registry\": \"${smoke_registry}\"}"
 output="$(platform build list --component "${build_component}")"
 expect_output "NAME" "${output}"
-if [[ "$(wc --lines <<< "${output}")" != "1" ]]; then
+if [[ "$(grep --count "" <<< "${output}")" != "1" ]]; then
   echo "expected no versions of ${build_component}, got:" >&2
   echo "${output}" >&2
   exit 1
@@ -580,11 +580,11 @@ fi
 step "workload spec validate|get: the Score gate and the spec of a version (#291)"
 # The seed Score, rendered: what a component created from python-service carries.
 sed \
-  --expression 's/\${{ values.name }}/'"${workload_component}"'/' \
-  --expression 's/\${{ values.port }}/8000/' \
-  --expression 's/\${{ values.title | default(values.name) | dump }}/"'"${workload_component}"'"/' \
-  --expression 's/\${{ values.theme }}/indigo/' \
-  --expression 's/\${{ (values.description or "") | dump }}/""/' \
+  -e 's/\${{ values.name }}/'"${workload_component}"'/' \
+  -e 's/\${{ values.port }}/8000/' \
+  -e 's/\${{ values.title | default(values.name) | dump }}/"'"${workload_component}"'"/' \
+  -e 's/\${{ values.theme }}/indigo/' \
+  -e 's/\${{ (values.description or "") | dump }}/""/' \
   platform/templates/python-service/content/app-spec.yaml > "${workload_directory}/app-spec.yaml"
 sed 's/^    type: postgres$/    type: redis/' "${workload_directory}/app-spec.yaml" > "${workload_directory}/invalid.yaml"
 # Open to any signed-in user, before any build.

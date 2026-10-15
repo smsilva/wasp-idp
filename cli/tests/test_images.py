@@ -10,6 +10,8 @@ BUILDS = {"platform-api": (Path("platform"), Path("platform/api/Dockerfile")), "
 NODES = [
   {"name": "k3d-platform-local-server-0", "role": "server", "runtimeLabels": {"k3d.cluster": "platform-local"}},
   {"name": "k3d-platform-local-serverlb", "role": "loadbalancer", "runtimeLabels": {"k3d.cluster": "platform-local"}},
+  # k3d lists its tools node without a role key (seen on macOS with Colima, #547).
+  {"name": "k3d-platform-local-tools", "runtimeLabels": {"k3d.cluster": "platform-local"}},
   {"name": "k3d-other-server-0", "role": "server", "runtimeLabels": {"k3d.cluster": "other"}},
 ]
 
