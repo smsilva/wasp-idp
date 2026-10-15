@@ -11,7 +11,7 @@ platform environment create demo \
 
 ``` { .text .output title="output" }
 provisioning demo (profile: shared) …
-  NoProviderForCapability
+  Pending
   Provisioning
 ✓ demo ready
 ```

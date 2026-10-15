@@ -120,9 +120,9 @@ def create_app(
     except AlreadyExists:
       raise HTTPException(409, f"environment '{request.name}' already exists")
     journal.mark_applied(entry)
-    # Until a provider claims it, the request waits as a standard condition. The replace carries the
+    # Until a provider claims it, the request waits as a pending condition. The replace carries the
     # resourceVersion from the create: if a provider already touched the object, it owns the status.
-    created["status"] = environments.no_provider_status()
+    created["status"] = environments.pending_status()
     try:
       created = state.replace_status(ENVIRONMENTS, created)
     except Conflict:
