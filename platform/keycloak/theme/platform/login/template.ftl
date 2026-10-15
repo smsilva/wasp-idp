@@ -1,5 +1,6 @@
 <#-- Copied from keycloak.v2 26.5.5 login/template.ftl. Changes (#173, variant B — Split), all marked
-     "platform:": the context column (context.ftl) wraps the stock card; the stock header is dropped.
+     "platform:": the context column (context.ftl) wraps the stock card; the stock header is dropped;
+     a header and a footer bar frame the page.
      On upgrade, diff this file against the new keycloak.v2 template. -->
 <#import "context.ftl" as context>
 <#import "field.ftl" as field>
@@ -140,6 +141,10 @@
 </head>
 
 <body id="keycloak-bg" class="${properties.kcBodyClass!} platform" data-page-id="login-${pageId}">
+<#-- platform: the callback page's frame (cli/src/wasp_platform/assets/callback.html): a glass header with the
+     brand, the split in the middle, a footer with the guide and the repo; the wordmark as the wall behind. -->
+<div class="platform-ghost" aria-hidden="true">platform-api</div>
+<header class="platform-bar platform-head"><@context.symbol /><div><b>platform-api<span>/v1</span></b><small>${msg("platform.tagline")}</small></div></header>
 <#-- platform: two columns, context on the left, the stock keycloak.v2 card on the right. -->
 <div class="platform-split">
 <@context.column pageId=pageId?remove_ending(".ftl") />
@@ -265,6 +270,11 @@
   </div>
 </div>
 </div>
+<footer class="platform-bar platform-foot">
+  <a href="https://smsilva.github.io/wasp-idp/platform/" target="_blank" rel="noopener"><b>${msg("platform.foot.docs")}</b><small>${msg("platform.foot.docsNote")}</small></a>
+  <a href="https://github.com/smsilva/wasp-idp" target="_blank" rel="noopener"><b>GitHub</b><small>smsilva/wasp-idp</small></a>
+  <span class="platform-note">${msg("platform.foot.note")}</span>
+</footer>
 </body>
 </html>
 </#macro>
