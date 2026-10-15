@@ -10,14 +10,21 @@
 
     | Tool | Version | Needed for | Check |
     |---|---|---|---|
-    | Docker | 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
-    | k3d | 5.9.0 | init | `k3d version` |
-    | kubectl | 1.34.8 | init | `kubectl version --client` |
-    | uv | 0.11.7 | install | `uv --version` |
-    | git | 2.43.0 | components | `git --version` |
-    | gh | 2.45.0 | cleanup | `gh --version` |
+    | AWS CLI | >= 2.34.30 | cloud accounts (optional) | `aws --version` |
+    | Claude Code | >= 2.1.301 | agents (optional) | `claude --version` |
+    | curl | >= 8.5.0 | environments, workloads | `curl --version` |
+    | Docker | >= 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
+    | gh | >= 2.102.0 | cleanup | `gh --version` |
+    | git | >= 2.43.0 | components | `git --version` |
+    | k3d | >= 5.9.0 | init | `k3d version` |
+    | kubectl | >= 1.34.8 | init | `kubectl version --client` |
+    | make | >= 4.3 | install | `make --version` |
+    | Python | >= 3.14.4 | install | `python3 --version` |
+    | uv | >= 0.11.7 | install | `uv --version` |
 
     </div>
+
+    The CLI and the MCP server declare `requires-python = ">=3.11"`: `uv tool install` uses the system Python when it satisfies that range, and downloads one only when it does not.
 
 === "macOS"
 
@@ -31,15 +38,15 @@
 
     | Tool | Version | Needed for | Check |
     |---|---|---|---|
-    | Colima | 0.10.1 | init | `colima version` |
-    | Docker | 28.4.0 | init | `docker version --format '{{.Server.Version}}'` |
-    | buildx | 0.32.0 | init | `docker buildx version` |
-    | k3d | 5.9.0 | init | `k3d version` |
-    | kubectl | 1.35.2 | init | `kubectl version --client` |
-    | uv | 0.13.1 | install | `uv --version` |
-    | git | 2.53.0 | components | `git --version` |
-    | gh | 2.92.0 | cleanup | `gh --version` |
-    | bash | 5.3 | tests | `bash --version` |
+    | bash | >= 5.3 | tests | `bash --version` |
+    | buildx | >= 0.32.0 | init | `docker buildx version` |
+    | Colima | >= 0.10.1 | init | `colima version` |
+    | Docker | >= 28.4.0 | init | `docker version --format '{{.Server.Version}}'` |
+    | gh | >= 2.92.0 | cleanup | `gh --version` |
+    | git | >= 2.53.0 | components | `git --version` |
+    | k3d | >= 5.9.0 | init | `k3d version` |
+    | kubectl | >= 1.35.2 | init | `kubectl version --client` |
+    | uv | >= 0.13.1 | install | `uv --version` |
 
     </div>
 
