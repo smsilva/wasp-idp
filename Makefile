@@ -4,11 +4,13 @@ UV_BIN := $(shell uv tool dir --bin 2>/dev/null)
 DOCS_PORT ?= 8000
 
 .DEFAULT_GOAL := help
-.PHONY: help cli cli-uninstall mcp mcp-uninstall docs
+.PHONY: help all cli cli-uninstall mcp mcp-uninstall docs
 
 help: ## List the targets
 	@grep --extended-regexp '^[a-z-]+:.*## ' $(MAKEFILE_LIST) \
 	  | awk 'BEGIN {FS = ":.*## "} {printf "  make %-15s %s\n", $$1, $$2}'
+
+all: cli mcp ## Install `platform` and `platform-mcp` from this checkout; `platform init` builds the images itself
 
 cli: ## Put `platform` on the PATH, editable from this checkout
 	uv tool install --force --editable "$(CURDIR)/cli"
