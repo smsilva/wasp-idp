@@ -32,16 +32,25 @@ The server runs on this machine (stdio): Claude Code starts it when a session st
 === "Manual"
 
     ```bash
-    make mcp                       # puts platform-mcp on the PATH, editable from this checkout
+    make mcp
 
-    platform whoami                # the server uses this login; run platform login if it fails
+    platform whoami
 
-    claude mcp remove --scope local platform   # an older registration here wins over the user one
-    claude mcp remove --scope user platform    # a "not found" from either is fine
+    claude mcp remove \
+      --scope local \
+      platform
 
-    claude mcp add --scope user platform -- platform-mcp \
-      --toolsets core,environments,catalog,builds,workloads
+    claude mcp remove \
+      --scope user \
+      platform
+
+    claude mcp add platform \
+      --scope user -- \
+        platform-mcp \
+          --toolsets core,environments,catalog,builds,workloads
     ```
+
+    `make mcp` installs `platform-mcp` from this checkout, and the server uses the login `platform whoami` shows: run `platform login` if it fails. A "not found" from either `remove` is fine.
 
     `--scope user` makes the server available in every directory; without it, Claude Code keeps it only for the current one. A `platform` left in the local scope, by an `add` without `--scope user`, wins over the user one in this directory, with the toolsets it had then: that is why both `remove` lines come first.
 
@@ -92,11 +101,15 @@ The agent calls `catalog_list` with `kind: system` and `owner: team-alpha`, `cat
 Tools that change the platform exist only when the server starts with `--allow-writes`. Replace the server:
 
 ```bash
-claude mcp remove --scope user platform
+claude mcp remove \
+  --scope user \
+  platform
 
-claude mcp add --scope user platform -- platform-mcp \
-  --toolsets core,environments,catalog,builds,workloads \
-  --allow-writes
+claude mcp add platform \
+  --scope user -- \
+    platform-mcp \
+      --toolsets core,environments,catalog,builds,workloads \
+      --allow-writes
 ```
 
 In a new session:

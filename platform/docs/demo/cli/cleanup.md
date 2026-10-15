@@ -1,4 +1,4 @@
-# After the demo
+# Wrap up
 
 Delete the environments, then the repo and its images, so the next run starts clean:
 

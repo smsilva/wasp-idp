@@ -1,4 +1,4 @@
-# Before the demo
+# Get ready
 
 Run these before the meeting. The demo needs the SCM connection, the registry and the catalog in place:
 
@@ -18,7 +18,7 @@ The system `greeter`, which the app joins, is in the catalog:
 platform catalog system get greeter
 ```
 
-The repo does not exist yet. A repo left by an earlier run stops the create ([After the demo](cleanup.md)), so `Could not resolve to a Repository` is the expected answer:
+The repo does not exist yet. A repo left by an earlier run stops the create ([Wrap up](cleanup.md)), so `Could not resolve to a Repository` is the expected answer:
 
 ```bash
 gh repo view wasp-foundry/hello-api

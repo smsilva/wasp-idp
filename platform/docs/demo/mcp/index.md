@@ -9,7 +9,7 @@ An agent in Claude Code asks the platform questions in plain language, through t
 </p>
 
 <ol class="journey">
-  <li class="prep"><a href="before/">Before the demo</a><span>before</span></li>
+  <li class="prep"><a href="before/">Get ready</a><span>before</span></li>
   <li><a href="setup/">Connect the agent</a><span>2 min</span></li>
   <li><a href="whoami/">Who am I</a><span>2 min</span></li>
   <li><a href="catalog/">The catalog</a><span>3 min</span></li>
@@ -22,4 +22,4 @@ An agent in Claude Code asks the platform questions in plain language, through t
   <li class="prep">Questions<span>2 min</span></li>
 </ol>
 
-Each page is one prompt to paste into Claude Code. [After the demo](cleanup.md) removes what it made.
+Each page is one prompt to paste into Claude Code. [Wrap up](cleanup.md) removes what it made.
