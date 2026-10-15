@@ -152,8 +152,10 @@ class PlatformClient:
     body = {"workloads": workloads, "dryRun": dry_run, "prune": prune}
     return self._request("POST", f"/v1/environments/{quote(environment, safe='')}/workloads:apply", json=body)
 
-  def list_workloads(self, environment: str) -> list[dict]:
-    return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads")["items"]
+  def list_workloads(self, environment: str | None = None, component: str | None = None) -> list[dict]:
+    """The workloads of every environment the caller can use, or of one; filter by component."""
+    params = {key: value for key, value in (("environment", environment), ("component", component)) if value is not None}
+    return self._request("GET", "/v1/workloads", params=params)["items"]
 
   def get_workload(self, environment: str, instance: str) -> dict:
     return self._request("GET", f"/v1/environments/{quote(environment, safe='')}/workloads/{quote(instance, safe='')}")

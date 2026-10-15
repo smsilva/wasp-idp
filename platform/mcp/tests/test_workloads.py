@@ -41,10 +41,21 @@ async def test_read_only_tools():
 
 async def test_list_reads_the_environment():
   def handler(request):
-    assert request.url.path == "/v1/environments/demo/workloads"
+    assert request.url.path == "/v1/workloads"
+    assert dict(request.url.params) == {"environment": "demo"}
     return httpx.Response(200, json={"items": [INSTANCE]})
 
   result = await call("workloads_list", {"environment": "demo"}, handler)
+  assert result.structured_content == {"items": [INSTANCE]}
+
+
+async def test_list_across_environments_by_component():
+  def handler(request):
+    assert request.url.path == "/v1/workloads"
+    assert dict(request.url.params) == {"component": "hello-api"}
+    return httpx.Response(200, json={"items": [INSTANCE]})
+
+  result = await call("workloads_list", {"component": "hello-api"}, handler)
   assert result.structured_content == {"items": [INSTANCE]}
 
 
