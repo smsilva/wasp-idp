@@ -868,3 +868,193 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Validated-on callout (`!!! validated "Validated on"`): small amber title, a short line, the list of systems.
+   Amber is the --wasp-strong of each theme. */
+.md-typeset .admonition.validated {
+  border: 0;
+  border-left: 3px solid var(--wasp-strong);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--wasp-strong) 8%, transparent);
+  box-shadow: none;
+  padding: .7rem .9rem;
+}
+
+.md-typeset .validated > .admonition-title {
+  margin: 0 0 .3rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--wasp-strong);
+  font-size: .65rem;
+  font-weight: 600;
+}
+
+.md-typeset .validated > .admonition-title::before {
+  display: none;
+}
+
+.md-typeset .validated > p {
+  margin: 0 0 .5rem;
+  color: var(--md-default-fg-color--light);
+  font-size: .65rem;
+}
+
+.md-typeset .validated > ul {
+  margin: 0;
+}
+
+.md-typeset .validated li {
+  margin-bottom: 0;
+}
+
+.md-typeset .validated li::marker {
+  color: var(--wasp-strong);
+}
+
+/* Prerequisite tables (`<div class="checks" markdown>`, javascripts/copy-checks.js): framed, zebra rows,
+   each check a chip that copies it, a footer that copies them all. */
+.md-typeset .checks .md-typeset__table {
+  display: block;
+}
+
+.md-typeset .checks table:not([class]) {
+  display: table;
+  width: 100%;
+  border: 1px solid var(--wasp-code-border);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  font-size: .7rem;
+}
+
+.md-typeset .checks table:not([class]) th {
+  background: var(--wasp-out-bg);
+  color: var(--md-default-fg-color--light);
+  font-size: .6rem;
+  font-weight: 600;
+  padding: .55rem .75rem;
+  border-bottom: 1px solid var(--wasp-code-border);
+}
+
+.md-typeset .checks table:not([class]) td {
+  padding: .5rem .75rem;
+  border-top: 0;
+  vertical-align: middle;
+}
+
+.md-typeset .checks table:not([class]) tbody tr:nth-child(even) td {
+  background: var(--wasp-out-bg);
+}
+
+.md-typeset .checks table:not([class]) tbody tr:hover {
+  box-shadow: none;
+}
+
+/* Tool, Version and Needed for take only what they need: the Check column gets the rest. */
+.md-typeset .checks th:not(:last-child),
+.md-typeset .checks tbody td:not(:last-child) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.md-typeset .checks tbody td:first-child {
+  font-weight: 600;
+  color: var(--wasp-heading);
+}
+
+.md-typeset .checks tbody td:nth-child(2) {
+  font-family: var(--md-code-font-family);
+  font-variant-numeric: tabular-nums;
+  font-size: .65rem;
+}
+
+.md-typeset .checks tbody td:nth-child(3) {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .check-chip,
+.md-typeset .check-all {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  cursor: copy;
+}
+
+.md-typeset .check-chip {
+  font-family: var(--md-code-font-family);
+  font-size: .6rem;
+  color: var(--wasp-code-fg);
+  background: var(--wasp-code-bg);
+  border: 1px solid var(--wasp-code-border);
+  border-radius: 4px;
+  padding: .1rem .35rem;
+  white-space: nowrap;
+}
+
+.md-typeset .check-chip svg,
+.md-typeset .check-all svg {
+  flex-shrink: 0;
+  width: .65rem;
+  height: .65rem;
+  fill: currentColor;
+}
+
+.md-typeset .check-chip svg {
+  opacity: .6;
+}
+
+.md-typeset .check-chip:hover {
+  border-color: var(--md-typeset-a-color);
+}
+
+.md-typeset .check-chip:hover svg {
+  opacity: 1;
+}
+
+.md-typeset .check-chip:focus-visible,
+.md-typeset .check-all:focus-visible {
+  outline: 2px solid var(--md-typeset-a-color);
+  outline-offset: 1px;
+}
+
+.md-typeset .checks tfoot td {
+  background: var(--wasp-out-bg);
+  border-top: 1px solid var(--wasp-code-border);
+  padding: .4rem .75rem;
+}
+
+.md-typeset .checks-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .6rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .check-all {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: .15rem .35rem;
+}
+
+.md-typeset .check-all:hover {
+  color: var(--wasp-heading);
+  border-color: var(--wasp-code-border);
+}
+
+.md-typeset .check-chip.copied,
+.md-typeset .check-all.copied {
+  color: #1a7f4b;
+  border-color: #1a7f4b;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .check-chip.copied,
+[data-md-color-scheme="slate"] .md-typeset .check-all.copied {
+  color: #5fd39a;
+  border-color: #5fd39a;
+}
