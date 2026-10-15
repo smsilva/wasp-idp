@@ -130,3 +130,15 @@ body.platform[data-page-id="login-info"] .platform-form .pf-v5-c-login__main-bod
 #kc-error-message { text-align: center; }
 #kc-error-message .instruction { margin: 0; font: 12px var(--platform-mono); color: var(--platform-fg-3); overflow-wrap: anywhere; }
 body.platform[data-page-id="login-error"] .platform-form .pf-v5-c-login__main-body { padding-top: 10px; }
+
+/* Device code: eight boxes in two groups of four (js/platform.js), sized to fill the card's column */
+.platform-code { display: grid; grid-template-columns: repeat(4, 1fr) auto repeat(4, 1fr); align-items: center; gap: 6px; margin: 2px 0 4px; }
+.platform-code input {
+  width: 100%; min-width: 0; height: 48px; padding: 0; box-sizing: border-box; text-align: center; font: 600 22px var(--platform-mono); text-transform: uppercase;
+  color: var(--platform-fg); background: #0e1013; border: 1px solid var(--platform-line-2); border-radius: 8px; caret-color: var(--platform-accent); outline: none;
+}
+.platform-code input:focus { border-color: var(--platform-accent); box-shadow: 0 0 0 3px rgba(90, 169, 255, .18); }
+.platform-code.complete input { border-color: rgba(126, 231, 135, .45); }
+.platform-code input::selection { background: rgba(90, 169, 255, .35); color: var(--platform-fg); }
+.platform-code .dash { color: var(--platform-fg-3); font: 600 22px var(--platform-mono); padding: 0 2px; }
+@media (max-width: 400px) { .platform-code { gap: 4px; } .platform-code input { height: 42px; font-size: 19px; } }
