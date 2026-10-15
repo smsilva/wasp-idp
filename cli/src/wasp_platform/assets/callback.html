@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} · platform-api</title>
-<style>
-/* The page at the end of `platform login` (#537): the Keycloak theme's card, alone. Inline only: no external assets. */
+{refresh}<style>
+/* The pages of `platform login` (#537): the Keycloak theme's card, alone. /start shows it while the browser goes to
+   Keycloak (no blank tab), /callback with the outcome. Inline only: no external assets. */
 :root {{ --bg: #0a0b0e; --panel: #121418; --line: #23262d; --fg: #e8eaee; --fg-2: #a4abb8; --fg-3: #707785; --fg-4: #4f5562;
   --accent: #5aa9ff; --ok: #7ee787; --err: #ff7b72; color-scheme: dark; }}
 * {{ box-sizing: border-box; }}
@@ -16,6 +17,9 @@ main {{ width: 100%; max-width: 380px; background: var(--panel); border: 1px sol
 .badge {{ width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; }}
 .badge.ok {{ color: var(--ok); border: 1.5px solid rgba(126, 231, 135, .45); background: rgba(126, 231, 135, .08); }}
 .badge.fail {{ color: var(--err); border: 1.5px solid rgba(255, 123, 114, .45); background: rgba(255, 123, 114, .08); }}
+.badge.wait {{ border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .9s linear infinite; }}
+@keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+@media (prefers-reduced-motion: reduce) {{ .badge.wait {{ animation: none; }} }}
 h1 {{ margin: 0; font-size: 21px; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; }}
 p {{ margin: 8px 0 0; color: var(--fg-2); font-size: 14px; }}
 .error {{ margin-top: 14px; font: 12px ui-monospace, "JetBrains Mono", Consolas, monospace; color: var(--fg-4); overflow-wrap: anywhere; }}
@@ -35,6 +39,6 @@ p {{ margin: 8px 0 0; color: var(--fg-2); font-size: 14px; }}
   <p>{message}</p>
   <div class="error">{error}</div>
 </main>
-<div class="under"><a href="{docs_url}" target="_blank" rel="noopener">{docs}</a></div>
+{under}
 </body>
 </html>

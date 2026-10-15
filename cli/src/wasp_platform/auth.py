@@ -106,7 +106,8 @@ class Oidc:
     if idp_hint:
       params["kc_idp_hint"] = idp_hint  # skip the Keycloak page and go straight to Google
     url = f"{self.endpoint('authorization_endpoint')}?{urllib.parse.urlencode(params)}"
-    if not open_browser(url):
+    callback.authorize_url = url
+    if not open_browser(f"http://127.0.0.1:{callback.port}/start"):
       print(f"Open this URL to sign in:\n{url}")
     code = callback.wait(timeout)
     response = self._token({"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri, "code_verifier": verifier})
@@ -212,28 +213,55 @@ CALLBACK_TEXT = {
   "en": {
     "ok": ("You're signed in", "Return to the terminal. You can close this tab."),
     "fail": ("That didn't work", "Run platform login again."),
+    "start": ("Opening sign-in…", "Taking you to the sign-in page.", "Continue"),
     "docs": "Documentation",
   },
   "pt-BR": {
     "ok": ("Você entrou", "Volte para o terminal. Pode fechar esta aba."),
     "fail": ("Não deu certo", "Rode platform login de novo."),
+    "start": ("Abrindo o login…", "Levando você para a página de login.", "Continuar"),
     "docs": "Documentação",
   },
 }
 
 
+def _language(accept_language: str) -> str:
+  return "pt-BR" if accept_language.lower().startswith("pt") else "en"
+
+
+def _page(lang: str, state: str, heading: str, message: str, error: str = "", refresh: str = "", under: str = "") -> str:
+  template = (Path(__file__).parent / "assets" / "callback.html").read_text()
+  return template.format(
+    lang=lang, title=heading, heading=heading, message=message, error=error, refresh=refresh, under=under,
+    state=state, mark={"ok": "✓", "fail": "✗"}.get(state, ""),
+  )
+
+
 def callback_page(ok: bool, error: str | None, accept_language: str = "") -> str:
   """The browser page at the end of `platform login` (#537): one card with the outcome, like the Keycloak screens."""
-  lang = "pt-BR" if accept_language.lower().startswith("pt") else "en"
+  lang = _language(accept_language)
   text = CALLBACK_TEXT[lang]
   heading, message = text["ok" if ok else "fail"]
   # The error comes from the redirect query string: escape it, an attacker controls it.
   detail = "" if ok else html.escape(error) if error else "login failed"
-  template = (Path(__file__).parent / "assets" / "callback.html").read_text()
-  return template.format(
-    lang=lang, title=heading, heading=heading, message=message, error=detail,
-    state="ok" if ok else "fail", mark="✓" if ok else "✗", docs_url=DOCS_URL, docs=text["docs"],
+  under = f'<div class="under"><a href="{DOCS_URL}" target="_blank" rel="noopener">{text["docs"]}</a></div>'
+  return _page(lang, "ok" if ok else "fail", heading, message, error=detail, under=under)
+
+
+def start_page(url: str, accept_language: str = "") -> str:
+  """The first page `platform login` opens (#537): the card, painted at once, while the browser goes on to Keycloak.
+  Without it the tab stays blank until Keycloak and Google answer."""
+  lang = _language(accept_language)
+  heading, message, button = CALLBACK_TEXT[lang]["start"]
+  target = html.escape(url, quote=True)
+  # Two frames first so the card is painted, then on to Keycloak; the browser keeps it on screen until Keycloak
+  # answers. replace() keeps /start out of the history. The meta refresh covers a tab without JavaScript.
+  refresh = f'<meta http-equiv="refresh" content="1;url={target}">\n'
+  under = (
+    f'<div class="under"><a id="go" href="{target}">{button}</a></div>\n'
+    "<script>requestAnimationFrame(() => requestAnimationFrame(() => location.replace(document.getElementById('go').href)));</script>"
   )
+  return _page(lang, "wait", heading, message, refresh=refresh, under=under)
 
 
 class _Callback:
@@ -241,6 +269,7 @@ class _Callback:
 
   def __init__(self, state: str):
     self.state = state
+    self.authorize_url = ""  # what /start sends the browser on to
     self.code = None
     self.error = None
     self.done = threading.Event()
@@ -248,7 +277,14 @@ class _Callback:
 
     class Handler(http.server.BaseHTTPRequestHandler):
       def do_GET(self):
-        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        url = urllib.parse.urlparse(self.path)
+        if url.path == "/start" and owner.authorize_url:
+          self._send(200, start_page(owner.authorize_url, self.headers.get("Accept-Language", "")))
+          return
+        if url.path != "/callback":
+          self._send(404, "")
+          return
+        query = urllib.parse.parse_qs(url.query)
         if query.get("state", [None])[0] != owner.state:
           owner.error = "state mismatch"
         elif "error" in query:
@@ -256,12 +292,14 @@ class _Callback:
         else:
           owner.code = query.get("code", [None])[0]
         ok = owner.code is not None
-        body = callback_page(ok, owner.error, self.headers.get("Accept-Language", "")).encode()
-        self.send_response(200 if ok else 400)
+        self._send(200 if ok else 400, callback_page(ok, owner.error, self.headers.get("Accept-Language", "")))
+        owner.done.set()
+
+      def _send(self, status: int, page: str):
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(body)
-        owner.done.set()
+        self.wfile.write(page.encode())
 
       def log_message(self, *args):
         pass  # the query string carries the authorization code

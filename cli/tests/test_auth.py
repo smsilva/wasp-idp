@@ -1,9 +1,12 @@
 import base64
 import hashlib
+import html
 import json
+import re
 import stat
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -93,9 +96,16 @@ def oidc(idp):
   return auth.Oidc(issuer=ISSUER, client_id="platform-cli", transport=httpx.MockTransport(idp.handler))
 
 
+def _authorize_url(start_url):
+  """Follows the CLI's /start page the way the browser does: to the authorization URL in its link."""
+  page = urllib.request.urlopen(start_url).read().decode()
+  return html.unescape(re.search(r'<a id="go" href="([^"]+)"', page).group(1))
+
+
 def browser_that_consents(idp):
   """Plays the user's browser: approves and follows the redirect to the CLI's 127.0.0.1 listener."""
   def open_browser(url):
+    url = _authorize_url(url)
     query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
     assert query["code_challenge_method"] == "S256" and query["kc_idp_hint"] == "google"
     idp.verifiers["code-1"] = query["code_challenge"]
@@ -112,6 +122,7 @@ def test_browser_login_with_pkce(idp, oidc):
 
 def test_browser_login_rejects_wrong_state(oidc):
   def attacker(url):
+    url = _authorize_url(url)
     query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
     callback = f"{query['redirect_uri']}?code=stolen&state=forged"
     threading.Thread(target=lambda: _ignore_http_error(callback), daemon=True).start()
@@ -235,6 +246,7 @@ def test_callback_page_failure_escapes_error():
 def test_browser_login_serves_themed_page(idp, oidc):
   pages = []
   def open_browser(url):
+    url = _authorize_url(url)
     query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
     idp.verifiers["code-1"] = query["code_challenge"]
     callback = f"{query['redirect_uri']}?code=code-1&state={query['state']}"
@@ -244,6 +256,27 @@ def test_browser_login_serves_themed_page(idp, oidc):
   oidc.login_browser(open_browser=open_browser, timeout=10)
   time.sleep(0.2)
   assert "You're signed in" in pages[0]
+
+
+def test_browser_login_opens_the_start_page_first(idp, oidc):
+  opened, pages = [], []
+  def open_browser(url):
+    opened.append(url)
+    request = urllib.request.Request(url, headers={"Accept-Language": "pt-BR"})
+    pages.append(urllib.request.urlopen(request).read().decode())
+    return browser_that_consents(idp)(url)
+  oidc.login_browser(open_browser=open_browser, timeout=10)
+  assert re.fullmatch(r"http://127\.0\.0\.1:\d+/start", opened[0])
+  assert "Abrindo o login…" in pages[0]
+  assert 'http-equiv="refresh"' in pages[0] and "kc_idp_hint=google" in pages[0]
+
+
+def test_listener_answers_404_outside_start_and_callback(idp, oidc):
+  def open_browser(url):
+    with pytest.raises(urllib.error.HTTPError, match="404"):
+      urllib.request.urlopen(url.replace("/start", "/favicon.ico"))
+    return browser_that_consents(idp)(url)
+  assert oidc.login_browser(open_browser=open_browser, timeout=10)["access_token"] == "access-browser"
 
 
 def test_password_login_saves_the_issuing_client(idp):
