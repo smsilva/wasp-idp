@@ -476,6 +476,36 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-ownership]
 
+  - name: concept-colors
+    act: developer-control
+    parent: catalog-levels
+    label: "Concept colors"
+    topic: "Software Catalog"
+    message: "Cada conceito do catálogo tem uma cor, e ela se repete em todos os exemplos do deck."
+    heading: "One color per concept"
+    columns:
+      - title: "business view"
+        note: "how it is grouped"
+        kinds:
+          - { kind: domain, name: "Domain", examples: ["tailwind domain", "airport subdomain"] }
+          - { kind: system, name: "System", examples: ["seat-map system"] }
+          - { kind: group, name: "Group", examples: ["team-airport team"] }
+      - title: "engineering view"
+        note: "what is built"
+        kinds:
+          - { kind: component, name: "Component", examples: ["seat-selection service", "web-checkin website"] }
+          - { kind: api, name: "API", examples: ["seats rest api"] }
+          - { kind: resource, name: "Resource", examples: ["passengers-db database", "flight-events topic"] }
+    notes: |-
+      O que queremos dizer: **a cor diz o conceito**; daqui em diante, cada nome do catálogo aparece na cor do seu conceito, seguido do seu tipo.
+
+      A visão de negócio tem tons terrosos e a de engenharia, tons frios: de longe, a cor já diz de que lado do catálogo a peça está.
+
+      Os exemplos são da Tailwind Air, a companhia aérea fictícia do catálogo de exemplo (`idp/catalog/airline/tailwind/`).
+
+      Fonte: references/content-rules.md.
+    dependsOn: [catalog-levels]
+
   - name: catalog-business-view
     act: developer-control
     parent: catalog-levels
@@ -491,7 +521,7 @@ slides:
       **System:** o conjunto de Components e Resources que entrega uma capacidade e expõe uma ou mais APIs públicas, **escondendo a implementação de quem consome**.
 
       Fonte: references/backstage-catalog.md.
-    dependsOn: [catalog-levels]
+    dependsOn: [concept-colors]
 
   - name: catalog-engineering-view
     act: developer-control
@@ -538,8 +568,7 @@ slides:
     audiences: [engineering, platform]
     label: "Component example from Tailwind Air"
     message: "O seat-selection, do catálogo de exemplo da Tailwind Air, é um Component."
-    animations: none
-    screen: ["`seat-selection` (service) _holds_ the seat a passenger picks"]
+    screen: ["**{component:seat-selection service}**\n- _shows_ the free seats of a flight\n- _holds_ the seat a passenger picks"]
     notes: |-
       `seat-selection`, o serviço que mostra o mapa de assentos e reserva o assento que o passageiro escolhe. Vem do **catálogo de exemplo deste repo** (`idp/catalog/airline/tailwind/`), que modela a **Tailwind Air**, uma companhia aérea fictícia.
 
@@ -571,8 +600,7 @@ slides:
     audiences: [engineering, platform]
     label: "API example from Tailwind Air"
     message: "O Component web-checkin consome a API seats, fornecida pelo Component seat-selection."
-    animations: none
-    screen: ["`web-checkin` (website) _consumes_ `seats` (API)", "`seats` (API) _provided by_ `seat-selection` (service)"]
+    screen: ["**{api:seats rest api}**\n- _provided by_ {component:seat-selection service}\n- _consumed by_ {component:web-checkin website}"]
     notes: |-
       O site de check-in `web-checkin` (`type: website`) consome a API `seats` (`consumesApis`), que o microsserviço `seat-selection` (`type: service`) expõe (`providesApis`). O tipo vem do campo `spec.type` de cada Component no catálogo da Tailwind Air.
 
@@ -603,8 +631,7 @@ slides:
     audiences: [engineering, platform]
     label: "Resource example from Tailwind Air"
     message: "O seat-selection depende do banco passengers-db."
-    animations: none
-    screen: ["`passengers-db` (database) _used by_ `seat-selection` (service)"]
+    screen: ["**{resource:passengers-db database}**\n- _owned by_ {system:reservations system}\n- _used by_ {component:seat-selection service}"]
     notes: |-
       O microsserviço `seat-selection` (`type: service`) depende de `passengers-db` (`type: database`), que guarda as reservas e os seus passageiros.
 
@@ -635,8 +662,7 @@ slides:
     audiences: [engineering, platform]
     label: "System example from Tailwind Air"
     message: "O System seat-map junta as peças anteriores."
-    animations: none
-    screen: ["`seat-map` (System) _groups_:", "`web-checkin` (website)", "`seat-selection` (service)", "`seats` (API)"]
+    screen: ["**{system:seat-map system}**\n- _groups_ {component:web-checkin website}\n- _groups_ {component:seat-selection service}\n- _groups_ {api:seats rest api}"]
     notes: |-
       O System `seat-map` reúne o site `web-checkin`, o microsserviço `seat-selection` e a API `seats` entre eles — as peças dos slides anteriores. Um System junta **Components, APIs e Resources**.
 
@@ -667,10 +693,9 @@ slides:
     parent: entity-domain
     topic: "Software Catalog"
     audiences: [engineering, platform]
-    label: "Domain example"
+    label: "Domain example from Tailwind Air"
     message: "O Domain tailwind tem um subdomínio por área de negócio."
-    animations: none
-    screen: ["The `tailwind` domain _contains_:", "`airport` subdomain", "`booking` subdomain"]
+    screen: ["**{domain:tailwind domain}**\n- _contains_ {domain:airport subdomain}\n- _contains_ {domain:booking subdomain}\n- _owned by_ {group:team-tailwind-architecture team}"]
     notes: |-
       `tailwind`, o Domain da companhia, tem um subdomínio (`subdomainOf`) por área de negócio. Na tela, dois deles: `airport` (check-in, assentos, embarque, bagagem) e `booking` (busca, tarifa, reserva). Os outros são `flight-ops`, `loyalty` e `crew`.
 
@@ -681,9 +706,8 @@ slides:
     parent: detail-catalog
     topic: "Software Catalog"
     message: "Juntando: do negócio ao banco de dados, uma árvore só."
-    align: true
     heading: "Tailwind Air catalog"
-    screen: ["**Domain:** `tailwind`", "**Subdomain:** `airport`", "**System:** `seat-map`", "**Component:** `seat-selection`"]
+    screen: ["{domain:tailwind domain}", "{domain:airport subdomain}", "{system:seat-map system}", "{component:seat-selection service}"]
     notes: |-
       O que queremos dizer: **do negócio ao código, o catálogo é uma árvore só.**
 
@@ -855,7 +879,7 @@ slides:
     label: "What the catalog stores example"
     message: "seat-selection é um Component, com várias versões rodando."
     animations: none
-    screen: ["`seat-selection` _is_ 1 component, N versions running"]
+    screen: ["{component:seat-selection service} _is_ 1 component, N versions running"]
     notes: |-
       Recomendação explícita da documentação do Backstage (FAQ do catálogo). O `seat-selection`, o serviço de assentos da Tailwind Air, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
 
