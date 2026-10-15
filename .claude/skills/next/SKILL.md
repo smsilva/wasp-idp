@@ -1,7 +1,7 @@
 ---
 name: next
-description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board", "pega uma nova", "quero algo de AWS", "o que o time está fazendo"), or names an issue number to work on. The user speaks natural language, not flags. Claims the issue (assignee + In Progress), loads its context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" archives it to ~/.claude/prompts/ and removes it.
-argument-hint: "[issue number | what you want, in your own words | save | clear]"
+description: Use when the user asks to pick up, resume, or start the next issue of the wasp-idp board ("next", "próxima issue", "pegue a próxima issue do board", "pega uma nova", "quero algo de AWS", "o que o time está fazendo"), or names an issue number to work on. The user types short words (`new`, `track aws`, `team`) or free phrases, never flags. Claims the issue (assignee + In Progress), loads its context and presents the design before any implementation. When .claude/PROMPT.local.md has content, follows that session prompt instead; "save" writes it from the current session, "clear" archives it to ~/.claude/prompts/ and removes it.
+argument-hint: "[number | new | track <value> | theme <value> | team | save | clear]"
 ---
 
 # Next issue from the board
@@ -23,10 +23,18 @@ The board (Project v2 #6, `smsilva/wasp-idp`) is the work queue, shared by a tea
 
    - **With an issue number:** use it, unless `gh issue view <n> --json assignees` shows someone else. Then refuse and say who holds it; go on only if the user says it is a takeover.
    - **Without one:** run `scripts/board/queue next`. It lists my own `In Progress` items; with none, it shows the top of `Todo` that has no assignee, no open sub-issues and no `feat/<n>-*` branch on origin. An issue with open sub-issues is skipped (the parent stays `In Progress` while its sub-issues are the work). With two or more of my own items, list them and ask which one to resume.
-   - **The user speaks natural language; you translate it to the script's flags** (the user never types them):
-     - wants a new item although one is open ("pega uma nova", "outra issue") → `queue next --new`. There is no WIP limit, so it is the user's call;
-     - wants an area ("algo de AWS", "coisa de docs") → `--track <t>` or `--theme <t>`, from the board's own values (`Track`, `Theme`). Never guess a value: when the words do not match one exactly, run `queue next --theme x` to get the list of values in use (the script prints it on an unknown value) and ask which one;
-     - asks what the team is doing → `queue team`, no claim.
+   - **The user types a word from this vocabulary; you run the matching `queue` command** (the user never types the `--` flags):
+
+     | Word | Meaning | You run |
+     | --- | --- | --- |
+     | *(none)* | resume my item, else claim the top free `Todo` | `queue next` |
+     | `new` | a new item even with one open (no WIP limit, the user's call) | `queue next --new` |
+     | `track <value>` | a new item of that `Track` (asking for an area means a new item, so it implies `new`) | `queue next --new --track <value>` |
+     | `theme <value>` | a new item of that `Theme` (implies `new`) | `queue next --new --theme <value>` |
+     | `team` | who is on what, claims nothing | `queue team` |
+     | `<number>` | that issue | the "With an issue number" rule above |
+
+     A free phrase ("pega uma nova", "quero algo de AWS", "o que o time está fazendo") stays valid: read it as the closest word. The vocabulary fixes the action, never the value: for `<value>` ignore case, and when the words match no `Track`/`Theme` exactly, or match several (`docs` is `CLI docs` or `Architecture docs`), run `queue next --new --theme x` to get the values in use (the script prints them on an unknown value) and ask which one.
    - With several candidates and no filter, prefer the `Theme` of the last issue I closed.
    - **Claim before anything else:** for a `Todo` candidate run `scripts/board/queue claim <n>`. It assigns me and sets `In Progress`; if it refuses (someone else holds it or claimed at the same moment), run `queue next` again. A resumed item of mine needs no claim.
    - If any `queue` command fails with `the gh token of <login> lacks the 'project' scope` or `<login> cannot see board #6`, relay the message and its fix to the user and stop: do not try to work around it (no other account, no direct GraphQL).
