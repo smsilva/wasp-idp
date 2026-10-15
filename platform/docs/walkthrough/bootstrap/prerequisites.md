@@ -14,9 +14,9 @@
     | Claude Code | >= 2.1.301 | agents (optional) | `claude --version` |
     | curl | >= 8.5.0 | environments, workloads | `curl --version` |
     | Docker | >= 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
-    | gh | >= 2.45.0 | cleanup | `gh --version` |
+    | gh | >= 2.102.0 | cleanup | `gh --version` |
     | git | >= 2.43.0 | components | `git --version` |
-    | k3d | >= 5.8.3 | init | `k3d version` |
+    | k3d | >= 5.9.0 | init | `k3d version` |
     | kubectl | >= 1.34.8 | init | `kubectl version --client` |
     | make | >= 4.3 | install | `make --version` |
     | Python | >= 3.14.4 | install | `python3 --version` |
