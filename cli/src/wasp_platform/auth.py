@@ -107,7 +107,7 @@ class Oidc:
       params["kc_idp_hint"] = idp_hint  # skip the Keycloak page and go straight to Google
     url = f"{self.endpoint('authorization_endpoint')}?{urllib.parse.urlencode(params)}"
     callback.authorize_url = url
-    if not open_browser(f"http://127.0.0.1:{callback.port}/start"):
+    if not open_browser(f"http://127.0.0.1:{callback.port}{callback.start_path}"):
       print(f"Open this URL to sign in:\n{url}")
     code = callback.wait(timeout)
     response = self._token({"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri, "code_verifier": verifier})
@@ -269,7 +269,9 @@ class _Callback:
 
   def __init__(self, state: str):
     self.state = state
-    self.authorize_url = ""  # what /start sends the browser on to
+    self.authorize_url = ""  # what the start page sends the browser on to
+    # The start page carries the state: an unguessable path, served once, so a page in another tab can't read it.
+    self.start_path = f"/start/{secrets.token_urlsafe(16)}"
     self.code = None
     self.error = None
     self.done = threading.Event()
@@ -277,9 +279,14 @@ class _Callback:
 
     class Handler(http.server.BaseHTTPRequestHandler):
       def do_GET(self):
+        # DNS rebinding: a hostile site resolved to 127.0.0.1 sends its own name as Host.
+        if self.headers.get("Host") != f"127.0.0.1:{owner.port}":
+          self._send(403, "")
+          return
         url = urllib.parse.urlparse(self.path)
-        if url.path == "/start" and owner.authorize_url:
-          self._send(200, start_page(owner.authorize_url, self.headers.get("Accept-Language", "")))
+        if url.path == owner.start_path and owner.authorize_url:
+          authorize_url, owner.authorize_url = owner.authorize_url, ""
+          self._send(200, start_page(authorize_url, self.headers.get("Accept-Language", "")))
           return
         if url.path != "/callback":
           self._send(404, "")

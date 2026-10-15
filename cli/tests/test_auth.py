@@ -264,17 +264,37 @@ def test_browser_login_opens_the_start_page_first(idp, oidc):
     opened.append(url)
     request = urllib.request.Request(url, headers={"Accept-Language": "pt-BR"})
     pages.append(urllib.request.urlopen(request).read().decode())
-    return browser_that_consents(idp)(url)
+    authorize = html.unescape(re.search(r'<a id="go" href="([^"]+)"', pages[0]).group(1))
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(authorize).query))
+    idp.verifiers["code-1"] = query["code_challenge"]
+    threading.Thread(target=lambda: urllib.request.urlopen(f"{query['redirect_uri']}?code=code-1&state={query['state']}").read(), daemon=True).start()
+    return True
   oidc.login_browser(open_browser=open_browser, timeout=10)
-  assert re.fullmatch(r"http://127\.0\.0\.1:\d+/start", opened[0])
+  assert re.fullmatch(r"http://127\.0\.0\.1:\d+/start/[\w-]{20,}", opened[0])
   assert "Abrindo o login…" in pages[0]
   assert 'http-equiv="refresh"' in pages[0] and "kc_idp_hint=google" in pages[0]
 
 
-def test_listener_answers_404_outside_start_and_callback(idp, oidc):
+def test_start_page_is_served_once_and_only_on_its_path(idp, oidc):
   def open_browser(url):
     with pytest.raises(urllib.error.HTTPError, match="404"):
-      urllib.request.urlopen(url.replace("/start", "/favicon.ico"))
+      urllib.request.urlopen(url.rsplit("/", 1)[0] + "/guessed")
+    authorize = _authorize_url(url)
+    with pytest.raises(urllib.error.HTTPError, match="404"):
+      urllib.request.urlopen(url)  # a second read finds nothing
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(authorize).query))
+    idp.verifiers["code-1"] = query["code_challenge"]
+    threading.Thread(target=lambda: urllib.request.urlopen(f"{query['redirect_uri']}?code=code-1&state={query['state']}").read(), daemon=True).start()
+    return True
+  assert oidc.login_browser(open_browser=open_browser, timeout=10)["access_token"] == "access-browser"
+
+
+def test_listener_refuses_a_foreign_host(idp, oidc):
+  def open_browser(url):
+    port = urllib.parse.urlparse(url).port
+    request = urllib.request.Request(url, headers={"Host": f"rebind.example:{port}"})
+    with pytest.raises(urllib.error.HTTPError, match="403"):
+      urllib.request.urlopen(request)
     return browser_that_consents(idp)(url)
   assert oidc.login_browser(open_browser=open_browser, timeout=10)["access_token"] == "access-browser"
 
