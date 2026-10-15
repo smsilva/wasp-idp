@@ -120,6 +120,7 @@ def test_import_finds_platform_format(api, monkeypatch):
   assert result.exit_code == 0, result.output
   documents = api[0][2]["documents"]
   assert sorted(document["path"] for document in documents) == [
+    "platform/templates/node-service/template.yaml",
     "platform/templates/python-service-with-postgresql-for-demo-only/template.yaml",
     "platform/templates/python-service/template.yaml",
   ]

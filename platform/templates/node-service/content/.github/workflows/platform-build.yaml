@@ -1,0 +1,146 @@
+# The build contract with the platform (#206): the platform dispatches this workflow by its file
+# name, finds the run by run-name, and reads the result from the platform-build artifact. The CI
+# decides the version (Commitizen) and holds no platform credential. The platform names the image
+# (ADR 0037): the repository in the registry the build chose, <host>/<namespace>/<component>.
+name: platform-build
+run-name: platform-build ${{ inputs.request-id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      request-id:
+        description: Platform request id, used to find this run
+        required: true
+      version:
+        description: Version to build; computed from the Conventional Commits when empty
+        required: false
+        default: ""
+      image:
+        description: Repository to push to, without the tag, as <host>/<namespace>/<name> (the registry of the build)
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    # A real PostgreSQL, so test/database.test.js proves the connection instead of skipping it.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_DB: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username app --dbname app"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5432
+      DATABASE_NAME: app
+      DATABASE_USER: app
+      DATABASE_PASSWORD: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: pip install commitizen==4.19.2
+      - name: Compute version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_IMAGE: ${{ inputs.image }}
+        run: |
+          if [[ ! "${INPUT_IMAGE}" =~ ^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+$ ]]; then
+            echo "image '${INPUT_IMAGE}' is not <host>/<namespace>/<name>" >&2
+            exit 1
+          fi
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            if [[ ! "${INPUT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "version '${INPUT_VERSION}' is not <major>.<minor>.<patch>[-<pre-release>]" >&2
+              exit 1
+            fi
+            version="${INPUT_VERSION}"
+          else
+            # No commit to bump since the last tag (cz exits non-zero): build the tagged version.
+            version="$(cz bump --get-next --yes 2>/dev/null || cz version --project)"
+            if [[ "${GITHUB_REF_NAME}" != "main" ]]; then
+              # The branch without its <type>/ prefix, lowercase, [^a-z0-9] as -, at most 20 characters.
+              slug="$(tr '[:upper:]' '[:lower:]' <<< "${GITHUB_REF_NAME#*/}" | sed 's/[^a-z0-9]/-/g' | cut --characters 1-20 | sed 's/-*$//')"
+              version="${version}-${slug:-branch}.${GITHUB_SHA::7}"
+            fi
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "image=${INPUT_IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "registry=${INPUT_IMAGE%%/*}" >> "${GITHUB_OUTPUT}"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        # GITHUB_TOKEN writes to the GHCR of this repo's org: the platform refuses any other registry for it.
+        with:
+          registry: ${{ steps.version.outputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # buildx with oci-mediatypes: the docker driver pushes a Docker v2 manifest and drops the
+      # annotations without an error (GHCR keeps them only on an OCI manifest).
+      - id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          provenance: false
+          outputs: type=image,push=true,oci-mediatypes=true
+          tags: ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+          # The version and commit the home page shows (Dockerfile ARGs).
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            APP_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          annotations: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            me.silvios.wasp.request-id=${{ inputs.request-id }}
+      - name: Write platform-build.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IMAGE: ${{ steps.version.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          REQUEST_ID: ${{ inputs.request-id }}
+        run: |
+          jq --null-input \
+            --arg version "${VERSION}" \
+            --arg image "${IMAGE}" \
+            --arg digest "${DIGEST}" \
+            --arg commit "${GITHUB_SHA}" \
+            --arg branch "${GITHUB_REF_NAME}" \
+            --arg requestId "${REQUEST_ID}" \
+            '{version: $version, image: $image, digest: $digest, commit: $commit, branch: $branch, requestId: $requestId}' \
+            > platform-build.json
+          cat platform-build.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: platform-build
+          path: platform-build.json
+          if-no-files-found: error

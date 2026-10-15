@@ -256,6 +256,13 @@ output="$(platform catalog template list)"
 row="$(awk '$1 == "python-service"' <<< "${output}")"
 expect_output "service" "${row}"
 expect_output "yes" "${row}"
+# node-service sorts first by name and is still not the default: python-service's `default: true` wins.
+row="$(awk '$1 == "node-service"' <<< "${output}")"
+expect_output "service" "${row}"
+if grep --quiet --word-regexp "yes" <<< "${row}"; then
+  echo "node-service is the default for service, python-service should be" >&2
+  exit 1
+fi
 
 step "catalog template render python-service (fetched at the registered ref)"
 platform catalog template render python-service \

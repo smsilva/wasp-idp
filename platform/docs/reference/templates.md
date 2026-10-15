@@ -2,6 +2,8 @@
 
 A template is the golden path for a type of component (`service`, `website`, `library`; ADR 0024). The content lives in Git; the platform stores the repo, path and ref. `platform init` registers `platform/templates/*` at the last commit of the checkout that exists on GitHub; the one marked `default: true` in its `template.yaml` (else the first of its type by name) becomes the default.
 
+The seed has three `service` templates: `python-service` (FastAPI, the default), `node-service` (Fastify on Node.js, the same contract with its own look) and `python-service-with-postgresql-for-demo-only` (`python-service` with the database details on its home page, for demos).
+
 | Command | What it does | Who |
 |---|---|---|
 | `platform catalog template list` | NAME, TYPE, REF, DEFAULT, SOURCE | any user |
