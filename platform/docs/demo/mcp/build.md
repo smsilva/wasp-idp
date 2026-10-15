@@ -1,4 +1,4 @@
-# Build a branch
+# Build from a branch
 
 ```text
 Build the feat/greetings branch of hello-api and tell me the version it registers.

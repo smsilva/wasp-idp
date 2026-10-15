@@ -627,3 +627,144 @@
     transition: none;
   }
 }
+
+/* Demo picker: the two demos side by side, each opening with what the audience sees first (a prompt to
+   the agent, a command in the terminal), and a strip of its steps on a shared 30-minute scale, so the
+   lengths compare at a glance. The last segment (questions) is hatched: off the script. */
+.md-typeset .demo-pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.6rem 0 1rem;
+}
+
+.md-typeset a.demo-run {
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+  padding: 1.1rem 1.2rem 1.2rem;
+  color: var(--md-typeset-color);
+  background: var(--md-default-bg-color--light, transparent);
+  border: 1px solid var(--wasp-term-border);
+  border-top: 3px solid var(--run-accent);
+  border-radius: 8px;
+  transition: border-color 150ms ease;
+}
+
+.md-typeset .demo-run--mcp { --run-accent: #7c5cff; }
+.md-typeset .demo-run--cli { --run-accent: var(--md-typeset-a-color); }
+
+.md-typeset a.demo-run:hover,
+.md-typeset a.demo-run:focus-visible {
+  border-color: var(--run-accent);
+  color: var(--md-typeset-color);
+}
+
+.md-typeset a.demo-run:focus-visible {
+  outline: 2px solid var(--run-accent);
+  outline-offset: 2px;
+}
+
+.md-typeset .demo-run-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.md-typeset .demo-run-title {
+  color: var(--wasp-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -.01em;
+}
+
+.md-typeset .demo-run-time {
+  color: var(--run-accent);
+  font-size: 1rem;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sample: a chat bubble for the agent, a terminal line for the CLI. */
+.md-typeset .demo-run-sample {
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+}
+
+.md-typeset .demo-run-ask {
+  padding: .45em .9em;
+  font-size: .8rem;
+  color: var(--wasp-heading);
+  background: color-mix(in srgb, var(--run-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--run-accent) 45%, transparent);
+  border-radius: 1em 1em 1em .2em;
+}
+
+.md-typeset .demo-run-sample code {
+  display: block;
+  width: 100%;
+  padding: .55em .9em;
+  font-size: .72rem;
+  background: var(--wasp-term-bg);
+  border: 1px solid var(--wasp-term-border);
+  border-radius: 6px;
+}
+
+.md-typeset .demo-run-note {
+  margin: 0;
+  font-size: .75rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .demo-strip {
+  display: flex;
+  gap: 2px;
+  width: calc(var(--total) / 30 * 100%);
+  height: .45rem;
+  margin-top: auto;
+}
+
+.md-typeset .demo-strip > i {
+  flex: var(--m) 1 0;
+  border-radius: 1px;
+  background: var(--run-accent);
+}
+
+.md-typeset .demo-strip > i.open {
+  background: repeating-linear-gradient(-45deg, var(--run-accent) 0 2px, transparent 2px 5px);
+  opacity: .7;
+}
+
+.md-typeset .demo-pick + p {
+  font-size: .7rem;
+  color: var(--wasp-out-fg);
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-typeset .demo-pick {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset a.demo-run {
+    transition: none;
+  }
+}
+
+/* A demo's steps in acts (`.acts`): one column per act with its time, the steps as plain links. The setup
+   act is neutral; the acts of the run take the demo's color, the same as its card on the demo index. */
+.md-typeset .acts { display: grid; grid-template-columns: 1.3fr 2fr 2fr; gap: 1rem; margin: 2rem 0; }
+.md-typeset .acts section { display: flex; flex-direction: column; gap: .5em; padding: .8rem 1rem 1rem; border-top: 3px solid var(--run-accent); border-radius: 0 0 6px 6px; background: color-mix(in srgb, var(--run-accent) 7%, transparent); }
+.md-typeset .acts section:first-child { background: color-mix(in srgb, var(--wasp-term-border) 25%, transparent); }
+.md-typeset .acts section:first-child { border-top-color: var(--wasp-term-border); }
+.md-typeset .acts h4 { display: flex; justify-content: space-between; align-items: baseline; gap: .6em; margin: 0 0 .4em; font-size: 1rem; color: var(--wasp-heading); }
+.md-typeset .acts h4 span { white-space: nowrap; font-weight: 400; font-size: .75rem; color: var(--wasp-out-fg); }
+.md-typeset .acts a { font-size: .8rem; }
+@media screen and (max-width: 44.984375em) {
+  .md-typeset .acts { grid-template-columns: 1fr; }
+}
