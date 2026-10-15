@@ -15,8 +15,7 @@ parameters:
       default: 8000
     title:
       type: string
-      description: Headline of the home page; the component name when empty.
-      default: ""
+      description: Headline of the home page; the component name when not given.
     theme:
       type: string
       description: Accent color of the home page.

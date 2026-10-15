@@ -20,7 +20,7 @@ containers:
     image: .
     variables:
       APP_NAME: ${{ values.name }}
-      APP_TITLE: ${{ (values.title or values.name) | dump }}
+      APP_TITLE: ${{ values.title | default(values.name) | dump }}
       APP_THEME: ${{ values.theme }}
       APP_DESCRIPTION: ${{ (values.description or "") | dump }}
       DATABASE_HOST: ${resources.db.host}
