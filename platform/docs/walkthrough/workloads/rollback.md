@@ -29,7 +29,7 @@ platform catalog component get hello-api
   resource      dns (dns, provision): Ready
   resource      route (route, provision): Ready
 component/hello-api
-  system       greeter
+  system       seat-map
   owner        team-alpha
   ...
   running in   demo (0.1.0-greetings.b5f9569, Available)

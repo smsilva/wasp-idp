@@ -11,8 +11,9 @@ journey through a vcluster (environments, sharing, workloads, Forager, routes, s
 
 Login as the test user, platform status as each role, the same user seen by an agent through
 platform-mcp (whoami over stdio), the refusals a non-admin gets, then login as the test admin,
-the catalog import of idp/catalog/ (then read over MCP), a team with two test users, checked in
-the token (member add of yourself renews it, login --refresh drops a team you left), the
+the catalog import of the Tailwind Air example (idp/catalog/airline/tailwind/, plus the teams of
+idp/catalog/org.yaml and the System of idp/catalog/platform.yaml; then read over MCP), a team
+with two test users, checked in the token (member add of yourself renews it, login --refresh drops a team you left), the
 Keycloak client of the API unable to promote anyone to platform-admins, the templates (list,
 render, import plan), an SCM connection up to the GitHub manifest page (creating the App needs a
 browser and an org owner, so it stays out), the next: footer on stderr and --hide-empty of team get
@@ -172,9 +173,11 @@ if ! grep --quiet --extended-regexp "^  github +scm_github +[0-9a-f]{12} +1/1 +A
 fi
 expect_failure "capability 'nope' not found" platform status nope
 
-step "catalog import idp/catalog/"
-platform catalog import idp/catalog/ --yes
-output="$(platform catalog import idp/catalog/ --dry-run)"
+step "catalog import idp/catalog/airline/tailwind/, idp/catalog/org.yaml and idp/catalog/platform.yaml"
+# org.yaml brings team-platform, the owner of platform.yaml and of the later steps' --owner.
+catalog_files=(idp/catalog/airline/tailwind/ idp/catalog/org.yaml idp/catalog/platform.yaml)
+platform catalog import "${catalog_files[@]}" --yes
+output="$(platform catalog import "${catalog_files[@]}" --dry-run)"
 expect_output "nothing to do" "${output}"
 
 step "an agent over MCP reads the catalog: domains, a domain with its dependents, templates (#223)"
@@ -184,6 +187,8 @@ expect_output '"name": "platform"' "${output}"
 output="$("${mcp_catalog[@]}" catalog_get --arguments '{"kind": "domain", "name": "platform"}')"
 echo "${output}"
 expect_output '"system/platform"' "${output}"
+output="$("${mcp_catalog[@]}" catalog_get --arguments '{"kind": "domain", "name": "airport"}')"
+expect_output '"system/seat-map"' "${output}"
 output="$("${mcp_catalog[@]}" catalog_templates_list)"
 expect_output '"name": "python-service"' "${output}"
 

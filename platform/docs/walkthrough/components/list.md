@@ -4,16 +4,16 @@ The component shows up in the catalog right after the create:
 
 ```bash
 platform catalog component list \
-  --system greeter
+  --system seat-map
 
 platform catalog component get hello-api
 ```
 
 ``` { .text .output title="output" }
-NAME       SYSTEM   OWNER       LIFECYCLE     TEMPLATE
-hello-api  greeter  team-alpha  experimental  python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
+NAME       SYSTEM    OWNER       LIFECYCLE     TEMPLATE
+hello-api  seat-map  team-alpha  experimental  python-service@5adb796c62a44bb2b580dda4ef7d21d49ae82ba9
 component/hello-api
-  system       greeter
+  system       seat-map
   owner        team-alpha
   type         service
   lifecycle    experimental

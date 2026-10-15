@@ -137,9 +137,9 @@ def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> 
 
 
 @app.command("create", epilog=examples(
-  "platform catalog component create hello-api --system messaging --type service --wait",
-  "platform catalog component create hello-api --system messaging --owner team-a --template python-service --param port=8080",
-  "platform catalog component create hello-api --system messaging --replace --wait",
+  "platform catalog component create hello-api --system seat-map --type service --wait",
+  "platform catalog component create hello-api --system seat-map --owner team-airport --template python-service --param port=8080",
+  "platform catalog component create hello-api --system seat-map --replace --wait",
 ))
 def create(
   name: Annotated[str, typer.Argument(help="Name of the new component, also the repo name.")],
@@ -187,7 +187,7 @@ def create(
 
 @app.command("list", epilog=examples(
   "platform catalog component list",
-  "platform catalog component list --system messaging --owner team-a",
+  "platform catalog component list --system seat-map --owner team-airport",
 ))
 def list_(
   system: Annotated[str | None, typer.Option(help="Only this system.")] = None,

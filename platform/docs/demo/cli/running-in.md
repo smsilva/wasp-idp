@@ -6,7 +6,7 @@ platform catalog component get hello-api
 
 ``` { .text .output title="output" }
 component/hello-api
-  system       greeter
+  system       seat-map
   owner        team-alpha
   type         service
   lifecycle    experimental
