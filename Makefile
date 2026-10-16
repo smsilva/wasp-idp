@@ -2,9 +2,10 @@
 
 UV_BIN := $(shell uv tool dir --bin 2>/dev/null)
 DOCS_PORT ?= 8000
+DECK := $(CURDIR)/docs/presentation
 
 .DEFAULT_GOAL := help
-.PHONY: help all cli cli-uninstall mcp mcp-uninstall docs
+.PHONY: help all cli cli-uninstall mcp mcp-uninstall docs deck presentation slides
 
 help: ## List the targets
 	@grep --extended-regexp '^[a-z-]+:.*## ' $(MAKEFILE_LIST) \
@@ -37,3 +38,16 @@ docs: ## Serve the Platform API guide (platform/docs) with live reload and open 
 	  --config-file "$(CURDIR)/platform/mkdocs.yml" \
 	  --dev-addr 127.0.0.1:$(DOCS_PORT) \
 	  --open
+
+# The browser drops the #present-1 fragment when xdg-open turns a file:// URL into a path, so it opens a
+# launcher page that redirects to the deck instead.
+deck: ## Render the IDP presentation and open it in presentation mode on the first slide; F11 for full screen
+	cd "$(DECK)" && ./render-outline idp.yaml
+	@launcher="$$(mktemp --suffix=.html)"; \
+	  printf '<meta http-equiv="refresh" content="0; url=file://%s/idp.html#present-1">\n' "$(DECK)" > "$${launcher}"; \
+	  xdg-open "$${launcher}" 2> /dev/null || open "$${launcher}"
+	@echo "✓ deck opened in presentation mode: press F11 for full screen, I for the index, S for the presenter window"
+
+presentation: deck ## Alias of make deck
+
+slides: deck ## Alias of make deck
