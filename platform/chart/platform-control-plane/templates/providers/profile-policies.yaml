@@ -1,0 +1,16 @@
+# The profile layer (#329): the default policy of each profile, created by platform init only when
+# missing, so that a change made through the API (platform environment profile policy set) survives
+# the next init. An ephemeral environment gets a database in the shared instance, not a Postgres of
+# its own, without an admin setting its policy.
+apiVersion: platform.wasp.silvios.me/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: profile-ephemeral
+  namespace: {{ .Values.namespace }}
+spec:
+  profile: ephemeral
+  provisioners:
+    - type: postgres
+      mode: compose
+      params:
+        instance: shared-pg

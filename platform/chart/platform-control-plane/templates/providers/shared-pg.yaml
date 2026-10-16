@@ -1,0 +1,59 @@
+# shared-pg (#305): the shared Postgres the Forager composes into (postgres in mode compose), one
+# role and one database per ResourceRequest. The admin password is in Secret shared-pg-admin,
+# generated once by `platform init`; only the Forager reads it. Every vcluster replicates the Service
+# into its namespace resources (local_vcluster). No volume, like the provision mode: the databases go
+# with the pod (aws/docs/known-broken.md). Registered in the catalog as Resource shared-pg
+# (idp/catalog/platform.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: shared-pg
+  namespace: {{ .Values.resourcesNamespace }}
+  labels:
+    app.kubernetes.io/name: shared-pg
+spec:
+  selector:
+    app.kubernetes.io/name: shared-pg
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: shared-pg
+  namespace: {{ .Values.resourcesNamespace }}
+  labels:
+    app.kubernetes.io/name: shared-pg
+spec:
+  serviceName: shared-pg
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: shared-pg
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: shared-pg
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shared-pg-admin
+                  key: password
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: [pg_isready, --username, postgres]
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 256Mi

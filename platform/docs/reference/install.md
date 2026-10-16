@@ -32,6 +32,7 @@
     | buildx | 0.32.0 | init | `docker buildx version` |
     | k3d | 5.9.0 | init | `k3d version` |
     | kubectl | 1.35.2 | init | `kubectl version --client` |
+    | Helm | >= 3.14.0 | init | `helm version --short` |
     | uv | 0.13.1 | install | `uv --version` |
 
     </div>

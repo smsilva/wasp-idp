@@ -1,0 +1,132 @@
+# Keycloak for the local target: start-dev with the embedded H2 database on a PVC, so users and
+# group memberships survive a pod restart. Secrets keycloak-admin and keycloak-google are created
+# by `platform init`, never versioned.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.authNamespace }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-data
+  namespace: {{ .Values.authNamespace }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: {{ .Values.authNamespace }}
+  # What `platform status` reads (ADR 0039): the provider, the capabilities it serves and its vendor.
+  labels:
+    platform.wasp.silvios.me/provider: keycloak
+    platform.wasp.silvios.me/capabilities: identity
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # single writer of the H2 file
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      securityContext:
+        fsGroup: 1000
+      # The platform theme (#173) arrives flattened in the ConfigMap keycloak-theme (a ConfigMap has
+      # no directories: "login__resources__css__platform.css"); this rebuilds the tree.
+      initContainers:
+        - name: theme
+          image: quay.io/keycloak/keycloak:26.5.5
+          command:
+            - bash
+            - -c
+            - |
+              for file in /theme-src/*; do
+                target="/themes/platform/$(basename "${file}" | sed 's|__|/|g')"
+                mkdir -p "$(dirname "${target}")"
+                cp "${file}" "${target}"
+              done
+          volumeMounts:
+            - name: theme-src
+              mountPath: /theme-src
+            - name: themes
+              mountPath: /themes
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.5.5
+          args: [start-dev, --http-port=8080]
+          env:
+            # The issuer in every token comes from this public URL. The Platform API, inside the
+            # cluster, compares `iss` against it while fetching the JWKS through the Service.
+            - name: KC_HOSTNAME
+              value: http://localhost:8180
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: password
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests:
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/keycloak/data
+            - name: themes
+              mountPath: /opt/keycloak/themes
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: keycloak-data
+        - name: theme-src
+          configMap:
+            name: keycloak-theme
+        - name: themes
+          emptyDir: {}
+---
+# k3s servicelb publishes port 8180 on the load balancer; `platform init` maps it to 127.0.0.1:8180.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: {{ .Values.authNamespace }}
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8180
+      targetPort: http
+    - name: internal # in-cluster URL used by the Platform API (JWKS) and the realm import
+      port: 8080
+      targetPort: http

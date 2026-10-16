@@ -1,0 +1,50 @@
+# Empty by default: local.py never sets this, so every image resolves to its bare `repository` (the
+# short name k3d/Docker already has after a local build). A remote install sets this once
+# (e.g. "ghcr.io/smsilva/wasp-idp") and every image below is looked up under it.
+registry: ""
+
+namespace: platform-system
+authNamespace: platform-auth
+resourcesNamespace: platform-resources
+crossplaneNamespace: crossplane-system
+ingressNamespace: platform-ingress
+
+images:
+  api:
+    repository: platform-api
+    tag: dev
+    pullPolicy: Never
+  localVclusterProvider:
+    repository: local-vcluster-provider
+    tag: dev
+    pullPolicy: Never
+  scmGithubProvider:
+    repository: scm-github-provider
+    tag: dev
+    pullPolicy: Never
+  workloadProvider:
+    repository: workload-provider
+    tag: dev
+    pullPolicy: Never
+  foragerProvider:
+    repository: forager-provider
+    tag: dev
+    pullPolicy: Never
+  registryProvider:
+    repository: registry-provider
+    tag: dev
+    pullPolicy: Never
+  awsAccountProvider:
+    repository: aws-account-provider
+    tag: dev
+    pullPolicy: Never
+  crossplaneAwsProvider:
+    repository: crossplane-aws-provider
+    tag: dev
+    pullPolicy: Never
+
+providers:
+  awsAccount:
+    enabled: false
+  crossplaneAws:
+    enabled: false
