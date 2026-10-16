@@ -88,7 +88,7 @@ O mesmo pedido nos dois mundos: um volume para um Pod no Kubernetes, e o Postgre
 | Concept | volume | `type: postgres` no Score | Database |
 | Instance | PersistentVolumeClaim `data` | `ResourceRequest` `demo.orders.db` (o Forager cria a partir do Score) | igual |
 | Class | StorageClass `ebs-gp3` | `BindingPolicy` `profile-ephemeral` | `ResourceClass` `postgres-shared-pg` |
-| Driver | `ebs.csi.aws.com` | `postgres/compose` | `shared-database` |
+| Driver | `ebs.csi.aws.com` | `postgres/compose` | `shared-postgresql-database` |
 | Controller | Pod `ebs-csi-controller` | `forager` | `forager` |
 | Tool | API do EBS | SQL no Postgres compartilhado `shared-pg` | igual |
 | Vendor | AWS | local | local |
@@ -106,7 +106,7 @@ provisioner: ebs.csi.aws.com               spec:
 parameters:                                  concept: database
   type: gp3                                  scope:
                                                profile: ephemeral
-                                             driver: shared-database
+                                             driver: shared-postgresql-database
                                              params:
                                                instance: shared-pg
 ---                                        ---
@@ -135,7 +135,7 @@ spec:                                        resource: db
   volumeName: pvc-3f1c…                    status:
 status:                                      resolution:
   phase: Bound                                 class: postgres-shared-pg
-                                               driver: shared-database
+                                               driver: shared-postgresql-database
                                              conditions:
                                                - {type: Ready, status: "True"}
 ```
@@ -161,6 +161,7 @@ status:                                      resolution:
 11. **Todo comando imperativo tem contraparte declarativa**, e os dois convergem para o mesmo estado.
 12. **A CLI é o contrato estável da migração.** CRDs, nomes de Class e Tools mudam por baixo, fatia a fatia, sem mudar a experiência.
 13. **O nome da Class diz o que ela entrega, nunca onde vale.** Como `ebs-gp3` numa StorageClass: engine e Driver no nome (`postgres-in-cluster`, `postgres-shared-pg`, `postgres-rds-orders`); o escopo (`profile: ephemeral`) fica em `spec.scope`. Um nome pelo escopo (`database-ephemeral`) repete o campo e esconde o Driver: duas Classes com o mesmo nome em seções diferentes podiam entregar coisas diferentes sem ninguém notar.
+14. **O nome do Driver diz o que ele materializa**, como `ebs.csi.aws.com` diz EBS: onde, engine e Concept (`in-cluster-postgresql-database`, `shared-postgresql-database`, `existing-postgresql-database`). Um nome sem a engine (`in-cluster-database`) não deixa um Driver de MySQL coexistir com ele.
 
 ## Exemplo de ponta a ponta
 
@@ -180,7 +181,7 @@ spec:
   drivers:
     environment: [vcluster, aws-eks]
     workload: [kubernetes-workload]
-    resources: [in-cluster-database, existing-database]
+    resources: [in-cluster-postgresql-database, existing-postgresql-database]
 ```
 
 Cada Driver traz um manifesto no próprio pacote:
@@ -226,11 +227,11 @@ O instalador (hoje `platform init`, no futuro um operator) lê os manifestos e:
 
 ```bash
 platform status
-# environment  vcluster             Ready
-# environment  aws-eks              Ready   (crossplane ✓, provider-aws-eks ✓, aws-account ✓)
-# workload     kubernetes-workload  Ready   (consome kubernetes ← vcluster, aws-eks)
-# resources    in-cluster-database  Ready
-# resources    existing-database    Ready
+# environment  vcluster                        Ready
+# environment  aws-eks                         Ready   (crossplane ✓, provider-aws-eks ✓, aws-account ✓)
+# workload     kubernetes-workload             Ready   (consome kubernetes ← vcluster, aws-eks)
+# resources    in-cluster-postgresql-database  Ready
+# resources    existing-postgresql-database    Ready
 ```
 
 ### Ato 1 — Admin: configurar contas e Classes
@@ -273,7 +274,7 @@ spec:
   concept: database
   scope:
     profile: ephemeral
-  driver: in-cluster-database
+  driver: in-cluster-postgresql-database
 ---
 apiVersion: platform.wasp.silvios.me/v1
 kind: ResourceClass
@@ -283,7 +284,7 @@ spec:
   concept: database
   scope:
     profile: production
-  driver: existing-database
+  driver: existing-postgresql-database
   params:
     host: orders.abc.sa-east-1.rds.amazonaws.com
     secretRef: rds-orders
@@ -293,7 +294,7 @@ spec:
 platform apply --file platform-config/     # requer a permissão can_configure
 ```
 
-O `cloudAccount` vai na Class, não no pedido do User nem no `Platform`. O `Platform` diz "esta plataforma sabe criar EKS"; a Class diz "produção cria EKS na conta `aws-prod`". Uma Class que aponta para um Driver incompatível com o runtime do escopo é recusada (`in-cluster-database` só existe onde o runtime é `kubernetes`).
+O `cloudAccount` vai na Class, não no pedido do User nem no `Platform`. O `Platform` diz "esta plataforma sabe criar EKS"; a Class diz "produção cria EKS na conta `aws-prod`". Uma Class que aponta para um Driver incompatível com o runtime do escopo é recusada (`in-cluster-postgresql-database` só existe onde o runtime é `kubernetes`).
 
 ### Ato 2 — User: pedir os ambientes
 
@@ -354,8 +355,8 @@ spec:
 Depois, para cada revisão:
 
 1. **Resolução do workload, sem Class:** o runtime do ambiente é `kubernetes`, então `status.resolution.driver: kubernetes-workload`.
-2. **Resolução do `db` do Score pela `ResourceClass`:** em `demo`, `in-cluster-database` (um Postgres dentro do vcluster); em `prod`, `existing-database` (copia a senha do RDS, sem criar nada).
-3. **Acesso:** o `kubernetes-workload` e o `in-cluster-database` pedem uma credencial para `demo`. A plataforma delega ao Driver `vcluster`, que emite um token de ServiceAccount com escopo restrito. Em `prod`, delega ao `aws-eks`, que gera o token STS com a própria identidade (EKS Pod Identity).
+2. **Resolução do `db` do Score pela `ResourceClass`:** em `demo`, `in-cluster-postgresql-database` (um Postgres dentro do vcluster); em `prod`, `existing-postgresql-database` (copia a senha do RDS, sem criar nada).
+3. **Acesso:** o `kubernetes-workload` e o `in-cluster-postgresql-database` pedem uma credencial para `demo`. A plataforma delega ao Driver `vcluster`, que emite um token de ServiceAccount com escopo restrito. Em `prod`, delega ao `aws-eks`, que gera o token STS com a própria identidade (EKS Pod Identity).
 4. **Materialização:** o `kubernetes-workload` aplica Deployment, Service, ConfigMap e Secret, **com o mesmo código** nos dois ambientes, e grava o estado observado no `WorkloadInstance` (ADR 0033).
 
 A plataforma **não** cria um CR intermediário como "WorkloadKubernetes". O Driver traduz o Concept em objetos nativos do runtime. Se um Driver precisar de um CR intermediário (um kind do Crossplane, por exemplo), ele é detalhe interno daquele Driver e a API nunca o vê.
@@ -365,7 +366,7 @@ A plataforma **não** cria um CR intermediário como "WorkloadKubernetes". O Dri
 ```bash
 platform workload get orders --environment prod
 # orders  1.4.0  Ready  driver: kubernetes-workload
-#   db    Ready  driver: existing-database (class postgres-rds-orders)
+#   db    Ready  driver: existing-postgresql-database (class postgres-rds-orders)
 
 platform environment get prod   # kubeconfig com exec: platform environment credential prod
 kubectl get pods                # o exec passa pelo mesmo caminho: a plataforma delega ao aws-eks
@@ -418,7 +419,7 @@ spec:
     region: southamerica-east1
 ```
 
-O `gcp-cloud-run` oferece `runtime: cloud-run`; o workload resolve para `cloud-run-workload`; o `db` precisa de uma `ResourceClass` com um Driver compatível com esse runtime (`gcp-cloud-sql`), porque `in-cluster-database` só existe onde há Kubernetes.
+O `gcp-cloud-run` oferece `runtime: cloud-run`; o workload resolve para `cloud-run-workload`; o `db` precisa de uma `ResourceClass` com um Driver compatível com esse runtime (`gcp-cloud-sql`), porque `in-cluster-postgresql-database` só existe onde há Kubernetes.
 
 ## O que existe hoje
 
@@ -426,7 +427,7 @@ O `gcp-cloud-run` oferece `runtime: cloud-run`; o workload resolve para `cloud-r
 
 | Concept | Instance | Como o Driver é escolhido hoje | Driver (nome proposto) → Controller de hoje | Tool | Vendor |
 |---|---|---|---|---|---|
-| Database | `ResourceRequest` | **Class explícita:** `BindingPolicy` em camadas (ambiente → profile → default) | InClusterDatabase, SharedDatabase, ExistingDatabase → `forager` | manifests, SQL, cópia de Secret | local |
+| Database | `ResourceRequest` | **Class explícita:** `BindingPolicy` em camadas (ambiente → profile → default) | InClusterPostgresqlDatabase, SharedPostgresqlDatabase, ExistingPostgresqlDatabase → `forager` | manifests, SQL, cópia de Secret | local |
 | DNS, Route | `ResourceRequest` | a mesma `BindingPolicy` | `dns/provision`, `route/provision` → `forager` | manifests | local |
 | Environment | `Environment` | **campo na Instance:** com ou sem `spec.cloudAccount` | LocalVcluster → `local_vcluster`; CloudVcluster → `crossplane_aws` | Helm; Crossplane | local; AWS |
 | Build | `Build` | **por referência:** a API resolve a `ScmConnection` da org do repo | GitHubActionsBuild → `scm_github` | GitHub Actions | GitHub |
@@ -510,7 +511,7 @@ platform status
 platform driver list
 platform class list
 platform class get database --environment staging   # qual Driver resolve aqui, e por qual camada
-platform class set database --profile ephemeral --driver shared-database --param instance=shared-pg
+platform class set database --profile ephemeral --driver shared-postgresql-database --param instance=shared-pg
 ```
 
 ### Maintainer
@@ -595,7 +596,7 @@ Um Driver é um pacote com três partes: o controller, o manifesto `driver.yaml`
 | vcluster, AKS, EKS | três cópias da lógica de deploy | um `kubernetes-workload` para os três |
 | Novo tipo de cluster (GKE) | mais uma cópia | só o Driver de environment |
 | Container Apps | junto faz sentido | dois Drivers, que podem vir no mesmo pacote |
-| Forager (`in-cluster-database`) | também precisaria da credencial de cada Driver | consome o mesmo acesso |
+| Forager (`in-cluster-postgresql-database`) | também precisaria da credencial de cada Driver | consome o mesmo acesso |
 
 **A variação de autenticação é grande, mas converge:**
 
@@ -623,9 +624,9 @@ O que muda no Forager (`platform/providers/forager/`) com o modelo:
 | Hoje | No modelo |
 |---|---|
 | `BindingPolicy` | `ResourceClass` (ou `ResourcePolicy`; ver questões) |
-| `mode: provision` | Driver `in-cluster-database` |
-| `mode: compose` (com `params.instance: shared-pg`) | Driver `shared-database` |
-| `mode: bind` | Driver `existing-database` |
+| `mode: provision` | Driver `in-cluster-postgresql-database` |
+| `mode: compose` (com `params.instance: shared-pg`) | Driver `shared-postgresql-database` |
+| `mode: bind` | Driver `existing-postgresql-database` |
 | `ResourceRequest.spec.provisioner` (`postgres/provision`) | `status.resolution.driver` |
 | camadas ambiente → profile → default (`policy.py`) | iguais, mais o runtime como escopo |
 | `NoProviderForCapability` no deploy | recusa já no `class set` quando o Driver é incompatível com o runtime |
@@ -670,7 +671,7 @@ Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta
 ## Questões em aberto
 
 1. **Escopo do ADR:** o padrão Instance → Class → Driver vale para todos os subsistemas (ADR geral, com resources como primeira aplicação) ou só para resources por enquanto? Inclinação: todos.
-2. **Nomes:** Class por Concept ou genérica; `ResourceClass` ou `ResourcePolicy`; nomes dos Drivers (`in-cluster-database`, `shared-database`, `existing-database`…). O critério de nome das Classes (o que entrega, não onde vale) já está no princípio 13, saído da sessão ao vivo de 2026-10-16.
+2. **Nomes:** Class por Concept ou genérica; `ResourceClass` ou `ResourcePolicy`; nomes dos Drivers (`in-cluster-postgresql-database`, `shared-postgresql-database`, `existing-postgresql-database`…). O critério de nome das Classes (o que entrega, não onde vale) já está no princípio 13, saído da sessão ao vivo de 2026-10-16.
 3. **Granularidade do Concept:** `Database` com `engine: postgres`, ou um Concept por engine. O Score pede hoje `type: postgres`.
 4. **Environment lógico × Runtime como recurso** (ver [Alternativas em aberto](#alternativas-em-aberto)).
 5. **Crossplane como camada inteira ou só como Tool** (ver [Alternativas em aberto](#alternativas-em-aberto)).
