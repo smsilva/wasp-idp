@@ -195,14 +195,50 @@ def test_card_shows_at_most_five_steps_running_ones_first():
   text = shown(console, reporter)
   assert "platform init" in text and "local · run 2026-10-14T05-12-03" in text
   assert "3 / 8  steps  1m02s" in text
-  rows = [name for name in STEPS if f"│  {name} " in text or f"  {name}  " in text]
-  assert rows[:3] == ["keycloak", "traefik", "import images"]
-  assert "keycloak realm" in text and "waits keycloak" in text
-  assert "platform-api" in text and "waits keycloak realm" in text
+  now_section = text.split("Now")[1].split("Overall")[0]
+  for task in ("keycloak", "traefik", "import images", "keycloak realm", "platform-api"):
+    assert task in now_section
+  assert "waits keycloak" in now_section and "waits keycloak realm" in now_section
   assert "Now · 5 of 5" in text
-  assert "cluster" not in text.split("Now")[1].split("Overall")[0]
+  for task in ("cluster", "build images", "CRDs"):
+    assert task not in now_section
   assert "■ done 3   ■ running 3   ■ waiting 2" in text
   assert "logs /state/init/2026-10-14T05-12-03" in text
+
+
+def wide_card(previous=None, ticks=None):
+  console = Console(record=True, width=120, color_system=None, force_terminal=False)
+  reporter = LiveReporter(console, __import__("pathlib").Path("/state/init/2026-10-14T05-12-03"), previous, "local · run 2026-10-14T05-12-03", clock=ticks or Ticks(), live=False)
+  reporter.planned(STEPS)
+  return console, reporter
+
+
+def test_card_splits_shown_steps_into_two_columns_running_first():
+  ticks = Ticks()
+  console, reporter = wide_card(ticks=ticks)
+  for task in ("cluster", "build images", "CRDs"):
+    reporter.started(task)
+    reporter.finished(task, 1)
+  for task in ("keycloak", "traefik", "import images"):
+    reporter.started(task)
+  ticks.value = 62
+  text = shown(console, reporter)
+  now_section = text.split("Now")[1].split("Overall")[0]
+  lines = [line for line in now_section.splitlines() if line.strip()]
+  running_line = next(line for line in lines if line.startswith("keycloak ") or "  keycloak " in line)
+  assert "keycloak realm" in running_line, "a running step and a waiting one share a row, side by side"
+
+
+def test_a_narrow_card_falls_back_to_one_column():
+  console = Console(record=True, width=38, color_system=None, force_terminal=False)
+  reporter = LiveReporter(console, __import__("pathlib").Path("/state/init/2026-10-14T05-12-03"), None, "local · run 2026-10-14T05-12-03", clock=Ticks(), live=False)
+  reporter.planned(STEPS)
+  for task in ("keycloak", "traefik"):
+    reporter.started(task)
+  text = shown(console, reporter)
+  now_section = text.split("Now")[1].split("Overall")[0]
+  lines = [line for line in now_section.splitlines() if line.strip()]
+  assert not any("keycloak" in line and "traefik" in line for line in lines)
 
 
 def test_card_counts_the_queue_beyond_five():
