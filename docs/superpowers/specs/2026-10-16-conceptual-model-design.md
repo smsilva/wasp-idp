@@ -675,6 +675,72 @@ Cada fatia começa pelos exemplos de CLI (o walkthrough escrito antes do código
 
 Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta decidir se ele instala ou só referencia Keycloak e OpenFGA; ele precisa de RBAC amplo, restrito à instalação; e o upgrade de CRDs com Instances vivas (versões e conversão) é o ponto mais caro.
 
+**Class default, Environment por projeto e multi-região.** Ideias da conversa de 2026-10-16, ainda não discutidas. A Class marcada como default responde quando o pedido não diz qual usar, como a annotation `storageclass.kubernetes.io/is-default-class` da StorageClass. A Class aponta para quem a atende (`spec.controller`; no vocabulário do modelo, o Driver, como o `controllerName` da GatewayClass):
+
+```yaml
+apiVersion: platform.wasp.silvios.me/v1
+kind: EnvironmentClass
+metadata:
+  name: azure-aks
+  annotations:
+    environmentclass.platform.wasp.silvios.me/is-default-class: "true"
+spec:
+  controller: environment-azure-aks
+```
+
+O Environment fica num namespace (o projeto, ADR 0042, admin de projeto), escolhe a Class pelo nome (`spec.className`, como o `spec.gatewayClassName` do Gateway) e lista regiões, uma delas em standby:
+
+```bash
+platform environment create prod-eu-1 \
+  --namespace tailwind \
+  --class azure-aks \
+  --description "Tailwind production in Europe" \
+  --region "{name: eu-east-1}" \
+  --region "{name: eu-west-1, standby: true}"
+```
+
+```yaml
+apiVersion: platform.wasp.silvios.me/v1alpha1
+kind: Environment
+metadata:
+  name: prod-eu-1
+  namespace: tailwind
+spec:
+  className: azure-aks
+  description: Tailwind production in Europe
+  regions:
+    - name: eu-east-1
+    - name: eu-west-1
+      standby: true
+```
+
+Os controllers viram objeto da CLI, com ciclo de vida próprio: listar com saúde, instalar de um repositório Helm e desligar. É a mesma área do `platform driver list` (fatia 1 do [Caminho incremental](#caminho-incremental)) e do operator acima:
+
+```bash
+platform controller list
+# NAME                      STATUS    HEALTHY
+# environment-azure-aks     RUNNING   DEGRADED
+# environment-azure-cae     RUNNING   HEALTHY
+# environment-aws-eks       RUNNING   HEALTHY
+# environment-gcp-gke       RUNNING   HEALTHY
+# environment-gcp-cloudrun  RUNNING   HEALTHY
+# environment-alibaba-ack   RUNNING   HEALTHY
+
+platform controller install environment-alibaba-ack \
+  --version 0.1.0 \
+  --helm-repository https://charts.platform.wasp.silvios.me
+
+platform controller disable environment-azure-cae \
+  --wait \
+  --follow
+
+# só os controllers degradados
+platform controller list \
+  --jsonpath='{range .items[?(@.status.healthy=="DEGRADED")]}{.metadata.name}{"\n"}{end}'
+```
+
+Pontos a decidir antes de aproveitar: `controller` × `driver` (o glossário separa o Driver, que cumpre o contrato, do Controller, o processo que o executa); Class escolhida pelo nome (`className`) × resolvida pelo `profile` (o Ato 2 de hoje); o que é uma região em standby para um Driver que não é multi-região (vcluster); e a relação entre `platform controller install` e o `driver.yaml` com `requires`/`dependsOn`.
+
 ## Questões em aberto
 
 1. **Escopo do ADR:** o padrão Instance → Class → Driver vale para todos os subsistemas (ADR geral, com resources como primeira aplicação) ou só para resources por enquanto? Inclinação: todos.
