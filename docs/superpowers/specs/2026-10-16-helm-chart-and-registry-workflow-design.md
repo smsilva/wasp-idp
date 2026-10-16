@@ -49,7 +49,9 @@ A new `.github/workflows/platform-control-plane-release.yaml` (name indicative),
 
 **Registry: GHCR, public.** Consistent with how the platform already publishes user-component images (`ghcr-wasp-foundry`, walkthrough) and with the repo itself being public — none of the 8 Dockerfiles embed a secret or credential (verified by reading all 8; credentials are injected at runtime via Kubernetes Secrets, never baked into the image). Accepted as the unblocking choice now; **flagged to revisit later** if the control plane's images or chart should not be publicly pullable (e.g. once providers need authenticated pulls, mirroring the open question already tracked for user-component images in issues #367/#368).
 
-**Tag/version scheme inside the chart:** left to the implementation plan, not fixed here. The chart's own version (`Chart.yaml`) is the unit that matters for this spec — whether the 8 images inside it share one tag or version independently does not block packaging or publishing.
+**Each image versions independently, under one global `registry` value.** `values.yaml` has a single `registry` field (empty by default, so a local install resolves every `images.<key>.repository` to its bare short name — exactly what `local` has today, no behavior change) plus one `images.<key>` entry per image, each with its own `repository` and `tag`. A shared template helper (`platform-control-plane.image`) composes `<registry>/<repository>:<tag>` when `registry` is set, or just `<repository>:<tag>` when it is not, so no per-provider template repeats that concatenation. This means the CI workflow (or whoever releases a provider later) can bump one image's tag without touching the other 7 or the chart's own `Chart.yaml` version — confirmed by rendering a throwaway sketch of this chart with `helm template`, setting `registry` and two independent `images.*.tag` overrides, and checking the rendered `image:` lines resolved as expected.
+
+**Alternative considered: all 8 images share one tag (a single "control plane version").** Rejected: it would force releasing all 8 together even when only one provider changed, and does not match how the chart's own version (`Chart.yaml`) already serves as the "coherent set" unit — a second, image-level version lock would be redundant with it.
 
 ### What does not change
 
@@ -60,7 +62,6 @@ A new `.github/workflows/platform-control-plane-release.yaml` (name indicative),
 ## Open questions (do not block this spec)
 
 - Exact chart directory layout (`platform/chart/` at the repo root vs. nested per component) — a detail for the implementation plan.
-- Whether the 8 images share the chart's tag or version independently.
 - Whether GHCR public stays the long-term answer once provider pull credentials exist (tracked as a revisit, not a blocker).
 
 ## Relationship to #558
