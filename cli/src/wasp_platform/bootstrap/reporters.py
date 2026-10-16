@@ -209,6 +209,10 @@ def previous_run(base: Path) -> dict | None:
 
 
 VISIBLE_STEPS = 5
+# Gap between the two step columns, and the minimum half-width worth splitting into two: below it, a step name
+# plus a "waits <task>" label wraps or truncates, so one column reads better.
+STEP_COLUMN_GAP = 4
+MIN_COLUMN_WIDTH = 36
 
 
 def shorter(path: Path) -> str:
@@ -244,8 +248,9 @@ def frame(title: str, subtitle: str, *parts, width: int):
 
 
 def card_width(console) -> int:
-  """The width of the bars: the card fits a narrow terminal and stops growing at 48."""
-  return max(min(console.width - 12, 48), 10)
+  """The width of the bars: the card fits a narrow terminal and stops growing at 96, wide enough for
+  two step columns side by side without each bar shrinking to the old single-column width."""
+  return max(min(console.width - 12, 96), 10)
 
 
 def settings_card(console, settings: list[tuple[str, str, str]]):
@@ -344,6 +349,30 @@ class LiveReporter(Reporter):
     pending = [need for need in self.needs.get(task, ()) if self.state.get(need) != "done"]
     return f"waits {pending[0]}" if pending else ""
 
+  def _step_columns(self, tasks: list[str], width: int, now: float):
+    """Two columns of step rows side by side, so a wide terminal shows more at once than it is tall. Falls back
+    to one column when the card is too narrow to split."""
+    from rich.console import Group
+    from rich.table import Table
+
+    column_width = (width - STEP_COLUMN_GAP) // 2
+    if len(tasks) <= 1 or column_width < MIN_COLUMN_WIDTH:
+      body = []
+      for task in tasks:
+        body += self._row(task, width, now)
+      return Group(*body)
+
+    half = (len(tasks) + 1) // 2
+    left, right = tasks[:half], tasks[half:]
+    grid = Table.grid()
+    grid.add_column(width=column_width)
+    grid.add_column(width=STEP_COLUMN_GAP)
+    grid.add_column(width=column_width)
+    for index, task in enumerate(left):
+      other = right[index] if index < len(right) else None
+      grid.add_row(Group(*self._row(task, column_width, now)), "", Group(*self._row(other, column_width, now)) if other else "")
+    return grid
+
   def _row(self, task: str, width: int, now: float):
     from rich.table import Table
 
@@ -410,8 +439,7 @@ class LiveReporter(Reporter):
         shown = (running + waiting)[:VISIBLE_STEPS]
         body.append(f"[bold]Now[/bold] · {len(shown)} of {len(running) + len(waiting)}" + ("" if not self.previous["steps"] else "   [dim]bar = time of the last run[/dim]"))
         body.append("")
-        for task in shown:
-          body += self._row(task, width, now)
+        body.append(self._step_columns(shown, width, now))
         if len(running) + len(waiting) > len(shown):
           body += [f"[dim]+{len(running) + len(waiting) - len(shown)} more waiting[/dim]", ""]
       elif failed:

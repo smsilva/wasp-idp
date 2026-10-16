@@ -80,45 +80,48 @@ export GOOGLE_CLIENT_SECRET=<secret>
 
 ## Progress
 
-On a terminal, `init` shows one card that redraws in place. It opens with the settings and the file they came from (each row shows only its source's file name, `default`, `flag` or `cluster`), then the run: the steps done out of the total, the elapsed time and how far along the last run that is; the steps running now and the next to start (at most 5, `+N more waiting` below), each with its time or the step it waits for, and a bar that fills by the time the step took in the last successful run and stops short of full until the step ends (with no last run, it pulses); a finished step leaves the list and counts in `Overall`. A step's notes (a reused cluster, a credential about to expire) close the card under `Notes`; a warning comes with `⚠` in yellow.
+On a terminal, `init` shows one card that redraws in place. It opens with the settings and the file they came from (each row shows only its source's file name, `default`, `flag` or `cluster`), then the run: the steps done out of the total, the elapsed time and how far along the last run that is; the steps running now and the next to start, in two columns side by side (at most 5, `+N more waiting` below; a narrow terminal falls back to one column), each with its time or the step it waits for, and a bar that fills by the time the step took in the last successful run and stops short of full until the step ends (with no last run, it pulses); a finished step leaves the list and counts in `Overall`. A step's notes (a reused cluster, a credential about to expire) close the card under `Notes`; a warning comes with `⚠` in yellow.
 
 ``` { .text .output title="output" }
-╭──────────────────────────────────────────────────────────╮
-│ platform init                                            │
-│ local · run 2026-10-14T05-12-03 · settings from          │
-│ ~/.config/platform/init.yaml                             │
-│                                                          │
-│ target           local                         init.yaml │
-│ admins           you@example.com               init.yaml │
-│ aws_profile      —                             default   │
-│ with_crossplane  false                         init.yaml │
-│                                                          │
-│ ╭──────────────────────────────────────────────────────╮ │
-│ │                                                      │ │
-│ │  17 / 21  steps  13.1s  ~47% of the last run         │ │
-│ │                                                      │ │
-│ │  Now · 4 of 4   bar = time of the last run           │ │
-│ │                                                      │ │
-│ │  keycloak                                      3.3s  │ │
-│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
-│ │                                                      │ │
-│ │  keycloak realm                      waits keycloak  │ │
-│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
-│ │                                                      │ │
-│ │  Overall                                             │ │
-│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
-│ │  0 %                                          100 %  │ │
-│ │                                                      │ │
-│ │  ■ done 17   ■ running 1   ■ waiting 3               │ │
-│ │  logs ~/.local/state/platform/init/2026-10-14T05-1…  │ │
-│ │                                                      │ │
-│ ╰──────────────────────────────────────────────────────╯ │
-│                                                          │
-│ Notes                                                    │
-│ cluster        cluster platform-local already exists,    │
-│                reusing it                                │
-│                                                          │
-╰──────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ platform init                                                                                            │
+│ local · run 2026-10-14T05-12-03 · settings from init.yaml                                                │
+│                                                                                                          │
+│ target           local            init.yaml                                                              │
+│ admins           you@example.com  init.yaml                                                              │
+│ aws_profile      —                default                                                                │
+│ with_crossplane  false            init.yaml                                                              │
+│                                                                                                          │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │                                                                                                      │ │
+│ │  4 / 11  steps  0.0s  ~0% of the last run                                                            │ │
+│ │                                                                                                      │ │
+│ │  Now · 5 of 7   bar = time of the last run                                                           │ │
+│ │                                                                                                      │ │
+│ │  keycloak                                  0.0s    shared-pg                                         │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
+│ │                                                                                                      │ │
+│ │  keycloak realm                  waits keycloak    profile policies                                  │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
+│ │                                                                                                      │ │
+│ │  traefik                                                                                             │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍                                                      │ │
+│ │                                                                                                      │ │
+│ │  +2 more waiting                                                                                     │ │
+│ │                                                                                                      │ │
+│ │  Overall                                                                                             │ │
+│ │  ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍    │ │
+│ │  0 %                                                                                          100 %  │ │
+│ │                                                                                                      │ │
+│ │  ■ done 4   ■ running 1   ■ waiting 6                                                                │ │
+│ │  logs /home/you/.local/state/platform/init/2026-10-14T05-12-03                                       │ │
+│ │                                                                                                      │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│                                                                                                          │
+│ Notes                                                                                                    │
+│ cluster  cluster platform-local already exists, reusing it                                               │
+│                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 The bars are green for done, blue for running and grey for what is left. At the end, the card shows the 3 slowest steps; when a step fails, it stays in the card in red, and `init` prints the end of its log below.
