@@ -736,11 +736,11 @@ slides:
     topic: "Software Catalog"
     message: "Um atraso de voo vira um evento que chega a cinco subdomínios, e o catálogo mostra quem depende dele."
     heading: "Across the Tailwind domain"
-    screen: ["**{resource:flight-events topic}**\n- _published by_ {component:flight-tracker service} in {domain:flight-ops subdomain}\n- _read by_ {component:boarding-pass-issuer service} in {domain:airport subdomain}\n- _read by_ {component:bag-tracker service} in {domain:airport subdomain}\n- _read by_ {component:rebooking-assistant service} in {domain:booking subdomain}\n- _read by_ {component:miles-ledger service} in {domain:loyalty subdomain}\n- _read by_ {component:roster-planner service} in {domain:crew subdomain}"]
+    screen: ["**{resource:flight-events topic}**\n- _written by_ {component:flight-tracker service} in {domain:flight-ops subdomain}\n- _read by_ {component:boarding-pass-issuer service} in {domain:airport subdomain}\n- _read by_ {component:bag-tracker service} in {domain:airport subdomain}\n- _read by_ {component:rebooking-assistant service} in {domain:booking subdomain}\n- _read by_ {component:miles-ledger service} in {domain:loyalty subdomain}\n- _read by_ {component:roster-planner service} in {domain:crew subdomain}"]
     notes: |-
       O que queremos dizer: **a árvore mostra o caminho de cima para baixo; o catálogo também mostra o que atravessa os galhos.**
 
-      Um atraso no voo vira um evento no tópico `flight-events`. Quem publica é o `flight-tracker`, em `flight-ops`; quem lê está em **quatro outros subdomínios**: o `boarding-pass-issuer` reemite o cartão de embarque e o `bag-tracker` redireciona as malas (`airport`), o `rebooking-assistant` remarca os passageiros de um voo cancelado no próximo com assentos livres (`booking`), o `miles-ledger` estorna as milhas de um voo cancelado (`loyalty`) e o `roster-planner` refaz a escala da tripulação (`crew`).
+      Um atraso no voo vira um evento no tópico `flight-events`. Quem escreve no tópico é o `flight-tracker`, em `flight-ops`; quem lê está em **quatro outros subdomínios**: o `boarding-pass-issuer` reemite o cartão de embarque e o `bag-tracker` redireciona as malas (`airport`), o `rebooking-assistant` remarca os passageiros de um voo cancelado no próximo com assentos livres (`booking`), o `miles-ledger` estorna as milhas de um voo cancelado (`loyalty`) e o `roster-planner` refaz a escala da tripulação (`crew`).
 
       **Quem muda o evento precisa saber quem o lê.** O catálogo responde sem ninguém perguntar no chat: no Backstage, a página do `flight-events` lista os quatro Components (`scripts/demo/backstage-tailwind`). Na Platform API isso chega quando os Components entram no catálogo pela discovery (#205).
 
