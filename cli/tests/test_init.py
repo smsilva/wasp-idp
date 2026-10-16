@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -302,3 +303,11 @@ def test_edit_without_a_terminal_needs_an_editor_variable(monkeypatch, no_instal
   monkeypatch.setenv("PLATFORM_EDITOR", "true")
   result = run("--edit")
   assert result.exit_code == 0, result.output
+
+
+def test_init_refuses_without_helm(monkeypatch):
+  real_which = shutil.which
+  monkeypatch.setattr(local.shutil, "which", lambda name: None if name == "helm" else real_which(name))
+  result = run("--admin", "you@example.org", input="y\n")
+  assert result.exit_code != 0
+  assert "helm" in result.output

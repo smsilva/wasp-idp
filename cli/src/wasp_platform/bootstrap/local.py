@@ -619,7 +619,7 @@ def install(admin_emails: list[str] | None = None, reporter: Reporter | None = N
   """timings: passed by the caller so the steps run so far can be shown when init fails."""
   reporter = reporter or Reporter()
   timings = timings or Timings()
-  for tool in ("docker", "k3d", "kubectl", *(("aws",) if aws_profile else ())):
+  for tool in ("docker", "k3d", "kubectl", "helm", *(("aws",) if aws_profile else ())):
     if not shutil.which(tool):
       raise BootstrapError(f"'{tool}' not found in PATH")
   root = repo_root()

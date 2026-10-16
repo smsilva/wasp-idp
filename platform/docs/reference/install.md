@@ -17,6 +17,7 @@
     | Docker | 29.9.1 | init | `docker version --format '{{.Server.Version}}'` |
     | k3d | 5.9.0 | init | `k3d version` |
     | kubectl | 1.34.8 | init | `kubectl version --client` |
+    | Helm | >= 3.14.0 | init | `helm version --short` |
     | uv | 0.11.7 | install | `uv --version` |
 
     </div>
