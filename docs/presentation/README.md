@@ -7,6 +7,12 @@ Apresentação detalhada sobre Internal Developer Platform: o problema, os 5 pla
 ## Ver
 
 ```bash
+make deck
+```
+
+Na raiz do repo, `make deck` (ou `make presentation`, `make slides`) regenera o `idp.html` e abre o navegador em modo de apresentação no primeiro slide; `F11` põe em tela cheia. Para abrir a página de revisão, sem o modo de apresentação:
+
+```bash
 cd docs/presentation
 ./render-outline idp.yaml
 google-chrome "file://${PWD}/idp.html"
