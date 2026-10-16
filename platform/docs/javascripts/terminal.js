@@ -22,9 +22,9 @@
   // `http://<component>.<environment>.localhost`: the host of a workload instance (Reach an instance from outside).
   const INSTANCE_URL = /^(https?:\/\/)([a-z0-9-]+)\.([a-z0-9-]+)(\.localhost.*)$/;
 
-  // Names of components and environments the page's commands use (`--component hello-api`,
+  // Names of components and environments the page's commands use (`--component seat-selection`,
   // `environment create demo`): a path or URL segment equal to one of them takes its color too
-  // (`/tmp/hello-api`, `wasp-foundry/hello-api.git`).
+  // (`/tmp/seat-selection`, `wasp-foundry/seat-selection.git`).
   let names = new Map();
 
   function collectNames(texts) {

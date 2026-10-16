@@ -4,8 +4,8 @@
 # Idempotent: what is already gone is reported and skipped. The component stays in the catalog index.
 
 org="${DEMO_ORG:-wasp-foundry}"
-component="${DEMO_COMPONENT:-hello-api}"
-environments=(demo greetings-test)
+component="${DEMO_COMPONENT:-seat-selection}"
+environments=(demo checkin-test)
 clone_directory="/tmp/${component}"
 wait_timeout_seconds=300
 
@@ -25,7 +25,7 @@ Options:
 
 Environment:
   DEMO_ORG        GitHub org (default: wasp-foundry)
-  DEMO_COMPONENT  Component name (default: hello-api)
+  DEMO_COMPONENT  Component name (default: seat-selection)
 EOF
 }
 

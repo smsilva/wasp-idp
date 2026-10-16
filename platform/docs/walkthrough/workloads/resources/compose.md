@@ -39,14 +39,14 @@ The same version `0.5.0` of [A database for a workload](provision.md), deployed 
 
 ```bash
 platform workload deploy \
-  --component hello-api \
+  --component seat-selection \
   --environment demo \
   --version 0.5.0 \
   --wait
 ```
 
 ``` { .text .output title="output" }
-✓ hello-api@demo revision 10: 0.5.0 running · 1/1 replicas available
+✓ seat-selection@demo revision 10: 0.5.0 running · 1/1 replicas available
   resource      db (postgres, compose): Ready
 ```
 
@@ -55,11 +55,11 @@ The app now connects to its own database in `shared-pg`:
 ``` { .text .output title="output" }
   current_database
 ---------------------
- hello-api-db-<hash>
+ seat-selection-db-<hash>
 (1 row)
 ```
 
-- `PGHOST` is `shared-pg.resources`: each vcluster replicates the `shared-pg` Service of the host into its namespace `resources`. `PGDATABASE` and `PGUSER` are `hello-api-db-<hash>`, and the role connects only to its own database.
+- `PGHOST` is `shared-pg.resources`: each vcluster replicates the `shared-pg` Service of the host into its namespace `resources`. `PGDATABASE` and `PGUSER` are `seat-selection-db-<hash>`, and the role connects only to its own database.
 - `workload remove` drops the database and the role. Deleting the environment does too, and its policy goes with it.
 - An environment that already has the database in another mode keeps it: the revision ends `ResourceModeChanged`, and changing the mode takes a `workload remove` and a new deploy.
 - `compose` needs `params.instance`: without it, `policy set` is refused.

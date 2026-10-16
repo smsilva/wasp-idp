@@ -3,7 +3,7 @@
 The API checks everything before it writes the request, so a refused create leaves nothing on GitHub:
 
 ```bash
-platform catalog component create hello-api \
+platform catalog component create seat-selection \
   --system seat-map
 
 platform catalog component create other-api \
@@ -15,7 +15,7 @@ platform catalog component create other-api \
 ```
 
 ``` { .text .output title="output" }
-✗ 409: component 'hello-api' already exists
+✗ 409: component 'seat-selection' already exists
 ✗ 422: component 'other-api': system 'nope' not found
 ✗ 422: params.colour: not a parameter of python-service (port)
 ```

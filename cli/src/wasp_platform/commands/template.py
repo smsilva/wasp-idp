@@ -198,8 +198,8 @@ def _params(pairs: list[str]) -> dict:
 
 
 @app.command("render", epilog=examples(
-  "platform catalog template render python-service --name hello-api --output /tmp/hello-api",
-  "platform catalog template render --from platform/templates/python-service --name hello-api --output /tmp/hello-api --param port=8080",
+  "platform catalog template render python-service --name seat-selection --output /tmp/seat-selection",
+  "platform catalog template render --from platform/templates/python-service --name seat-selection --output /tmp/seat-selection --param port=8080",
 ))
 def render(
   name: Annotated[str | None, typer.Argument(help="Registered template; its content is fetched at the registered ref.")] = None,

@@ -43,7 +43,7 @@ The deploy asks for the class with `--resource-class <resource>=<class>`, repeat
 
 ```bash
 platform workload deploy \
-  --component hello-api \
+  --component seat-selection \
   --environment demo \
   --version 0.5.0 \
   --resource-class db=restored \
@@ -51,7 +51,7 @@ platform workload deploy \
 ```
 
 ``` { .text .output title="output" }
-✓ hello-api@demo revision 12: 0.5.0 running · 1/1 replicas available
+✓ seat-selection@demo revision 12: 0.5.0 running · 1/1 replicas available
   resource      db (postgres, bind, class restored): Ready
 ```
 

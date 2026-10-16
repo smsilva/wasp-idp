@@ -7,7 +7,7 @@ for i in $(seq 1 60); do
   curl \
     --silent \
     --output /dev/null \
-    http://hello-api.demo.localhost:7080/
+    http://seat-selection.demo.localhost:7080/
 
   sleep 1
 done
@@ -16,7 +16,7 @@ done
 The four signals, with no instrumentation in the app:
 
 ```bash
-platform workload signals hello-api \
+platform workload signals seat-selection \
   --environment demo
 ```
 

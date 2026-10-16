@@ -1,18 +1,18 @@
 # The spec of a version
 
-When a build registers a version, it keeps the validated `app-spec.yaml` in the version index: deploying a version later reads the spec from the platform, not from GitHub. Read the spec of the newest version built from `feat/greetings` ([Build a branch](../builds/create.md)):
+When a build registers a version, it keeps the validated `app-spec.yaml` in the version index: deploying a version later reads the spec from the platform, not from GitHub. Read the spec of the newest version built from `feat/seat-pick` ([Build a branch](../builds/create.md)):
 
 ```bash
 platform workload spec get \
-  --component hello-api \
-  --branch feat/greetings
+  --component seat-selection \
+  --branch feat/seat-pick
 ```
 
 ``` { .text .output title="output" }
-# hello-api 0.1.0-greetings.b5f9569 · feat/greetings @ b5f9569
+# seat-selection 0.1.0-seat-pick.b5f9569 · feat/seat-pick @ b5f9569
 apiVersion: score.dev/v1b1
 metadata:
-  name: hello-api
+  name: seat-selection
 resources:
   db:
     type: postgres
@@ -28,7 +28,7 @@ containers:
   api:
     image: .
     variables:
-      APP_NAME: hello-api
+      APP_NAME: seat-selection
       DATABASE_HOST: ${resources.db.host}
       DATABASE_NAME: ${resources.db.name}
       DATABASE_PASSWORD: ${resources.db.password}
@@ -49,13 +49,13 @@ A version registered before the index kept the spec (on a cluster older than #29
 
 ```bash
 platform workload spec get \
-  --component hello-api \
-  --version 0.1.0-greetings.86a7c08
+  --component seat-selection \
+  --version 0.1.0-seat-pick.86a7c08
 ```
 
 ``` { .text .output title="output" }
-✗ 409: SpecNotIndexed: hello-api 0.1.0-greetings.86a7c08 was indexed before the version index kept the spec: build it again under a new version
+✗ 409: SpecNotIndexed: seat-selection 0.1.0-seat-pick.86a7c08 was indexed before the version index kept the spec: build it again under a new version
 ```
 
 !!! note
-    The spec is in `spec.appSpec` of the `Version`, in the catalog group: `kubectl --context k3d-platform-local --namespace platform-system get versions.catalog.platform.wasp.silvios.me hello-api.0.1.0-greetings.b5f9569 --output yaml`.
+    The spec is in `spec.appSpec` of the `Version`, in the catalog group: `kubectl --context k3d-platform-local --namespace platform-system get versions.catalog.platform.wasp.silvios.me seat-selection.0.1.0-seat-pick.b5f9569 --output yaml`.

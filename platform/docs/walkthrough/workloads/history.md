@@ -1,27 +1,27 @@
 # The history of a workload
 
-A deploy can fail after the build passed: here, a version whose Score asks for a resource of type `redis`, which no binding policy resolves. The build refuses `redis` ([What a build refuses](../builds/refused.md)), so this one version is staged: `0.1.0-redis.b5f9569` is the `Version` of `feat/greetings` copied by `kubectl` with `db` of type `redis`. Deploy it:
+A deploy can fail after the build passed: here, a version whose Score asks for a resource of type `redis`, which no binding policy resolves. The build refuses `redis` ([What a build refuses](../builds/refused.md)), so this one version is staged: `0.1.0-redis.b5f9569` is the `Version` of `feat/seat-pick` copied by `kubectl` with `db` of type `redis`. Deploy it:
 
 ```bash
 platform workload deploy \
-  --component hello-api \
+  --component seat-selection \
   --environment demo \
   --version 0.1.0-redis.b5f9569 \
   --wait
 
 platform workload history \
   --environment demo \
-  --component hello-api
+  --component seat-selection
 ```
 
 ``` { .text .output title="output" }
-✗ hello-api@demo revision 2: ResourcesNotSupported: db: no provisioner for redis in demo
-WORKLOAD        REVISION  ACTION  VERSION                  STATUS                 BY               CREATED
-hello-api@demo  1         deploy  0.1.0-greetings.b5f9569  Succeeded              dev@example.com  2026-10-12T19:02:42Z
-hello-api@demo  2         deploy  0.1.0-redis.b5f9569      ResourcesNotSupported  dev@example.com  2026-10-12T19:03:44Z
+✗ seat-selection@demo revision 2: ResourcesNotSupported: db: no provisioner for redis in demo
+WORKLOAD             REVISION  ACTION  VERSION                  STATUS                 BY               CREATED
+seat-selection@demo  1         deploy  0.1.0-seat-pick.b5f9569  Succeeded              dev@example.com  2026-10-12T19:02:42Z
+seat-selection@demo  2         deploy  0.1.0-redis.b5f9569      ResourcesNotSupported  dev@example.com  2026-10-12T19:03:44Z
 ```
 
-- A revision that fails changes nothing in the vcluster: `hello-api@demo` still runs revision 1, and `workload get` shows revision 2 on a `newest` line.
+- A revision that fails changes nothing in the vcluster: `seat-selection@demo` still runs revision 1, and `workload get` shows revision 2 on a `newest` line.
 - `history` without `--component` lists every workload of the environment.
 
 What a deploy refuses:

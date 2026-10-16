@@ -1,6 +1,6 @@
 # CLI: developer journey
 
-The goal: a new app, <span class="t-component">hello-api</span>, running in two environments, <span class="t-environment">demo</span> and <span class="t-environment">greetings-test</span>, made with the CLI.
+The goal: a new app, <span class="t-component">seat-selection</span>, running in two environments, <span class="t-environment">demo</span> and <span class="t-environment">checkin-test</span>, made with the CLI.
 
 <div class="acts acts--even demo-run--cli">
   <section>

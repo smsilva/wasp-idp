@@ -78,8 +78,8 @@ def _wait(client: PlatformClient, build: dict, timeout: int, quiet: bool) -> dic
 
 
 @app.command("create", epilog=examples(
-  "platform build create --component hello-api --branch feat/greetings --wait",
-  "platform build create --component hello-api --branch main --version 1.0.0 --registry ghcr-wasp-foundry",
+  "platform build create --component seat-selection --branch feat/seat-pick --wait",
+  "platform build create --component seat-selection --branch main --version 1.0.0 --registry ghcr-wasp-foundry",
 ))
 def create(
   component: Annotated[str, typer.Option(help="Component to build, from the index.")],
@@ -110,8 +110,8 @@ def create(
 
 
 @app.command("list", epilog=examples(
-  "platform build list --component hello-api",
-  "platform build list --component hello-api --output json",
+  "platform build list --component seat-selection",
+  "platform build list --component seat-selection --output json",
 ))
 def list_(
   component: Annotated[str, typer.Option(help="Component whose versions to list.")],
@@ -152,9 +152,9 @@ def _build_of(client: PlatformClient, name: str) -> dict:
 
 
 @app.command("get", epilog=examples(
-  "platform build get hello-api-6cf484",
-  "platform build get hello-api.0.1.0-greetings.b5f9569",
-  "platform build get hello-api-6cf484 --hide-empty --output json",
+  "platform build get seat-selection-6cf484",
+  "platform build get seat-selection.0.1.0-seat-pick.b5f9569",
+  "platform build get seat-selection-6cf484 --hide-empty --output json",
 ))
 def get(
   name: Annotated[str, typer.Argument(help="A build (from build create) or a version (the NAME column of build list).")],

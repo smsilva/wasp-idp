@@ -9,7 +9,7 @@ Two demos, both on a platform already configured.
       <span class="demo-run-time">21 min</span>
     </div>
     <div class="demo-run-sample"><span class="demo-run-ask">Which environments do I have, and when do they expire?</span></div>
-    <p class="demo-run-note">Claude Code gets the answers through the MCP server. Runs <span class="t-component">hello-api</span> in <span class="t-environment">agent-demo</span>.</p>
+    <p class="demo-run-note">Claude Code gets the answers through the MCP server. Runs <span class="t-component">seat-selection</span> in <span class="t-environment">agent-demo</span>.</p>
     <div class="demo-strip" aria-hidden="true" style="--total:21">
       <i style="--m:2" title="Connect the agent"></i>
       <i style="--m:2" title="Who am I"></i>
@@ -28,8 +28,8 @@ Two demos, both on a platform already configured.
       <span class="demo-run-title">CLI: developer journey</span>
       <span class="demo-run-time">30 min</span>
     </div>
-    <div class="demo-run-sample"><code><span class="t-prompt"><span class="t-cmd">platform</span> <span class="t-arg">catalog component create</span> <span class="t-component">hello-api</span></span></code></div>
-    <p class="demo-run-note">From a new app to two running environments, one command at a time. Runs <span class="t-component">hello-api</span> in <span class="t-environment">demo</span> and <span class="t-environment">greetings-test</span>.</p>
+    <div class="demo-run-sample"><code><span class="t-prompt"><span class="t-cmd">platform</span> <span class="t-arg">catalog component create</span> <span class="t-component">seat-selection</span></span></code></div>
+    <p class="demo-run-note">From a new app to two running environments, one command at a time. Runs <span class="t-component">seat-selection</span> in <span class="t-environment">demo</span> and <span class="t-environment">checkin-test</span>.</p>
     <div class="demo-strip" aria-hidden="true" style="--total:30">
       <i style="--m:3" title="Create the app"></i>
       <i style="--m:1" title="Clone the app"></i>

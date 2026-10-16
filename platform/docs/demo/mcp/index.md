@@ -1,6 +1,6 @@
 # AI agent: questions in plain language
 
-The goal: an instance of <span class="t-component">hello-api</span> running in the environment <span class="t-environment">agent-demo</span>, made by an agent in Claude Code.
+The goal: an instance of <span class="t-component">seat-selection</span> running in the environment <span class="t-environment">agent-demo</span>, made by an agent in Claude Code.
 
 <div class="acts demo-run--mcp">
   <section>
