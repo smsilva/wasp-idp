@@ -11,10 +11,16 @@ The goal: a new app, <span class="t-component">seat-selection</span>, running in
     <a href="push/">Push the branch</a>
   </section>
   <section>
-    <h4>Run<span>11 min</span></h4>
+    <h4>Run<span>15 min</span></h4>
     <a href="build/">Build the branch</a>
     <a href="environment/">Create an environment</a>
-    <a href="deploy/">Deploy and call it</a>
+    <a href="deploy/version/">Deploy the branch</a>
+    <a href="deploy/page/">Open the home page</a>
+    <a href="deploy/seat/">Pick a seat</a>
+    <a href="deploy/database/">Check the database</a>
+    <a href="database/stop/">Stop the database</a>
+    <a href="database/check/">See the app without it</a>
+    <a href="database/start/">Bring it back</a>
     <a href="signals/">Golden signals</a>
   </section>
   <section>
