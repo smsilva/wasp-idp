@@ -22,23 +22,25 @@ Every image is built locally with `docker build` and imported into the k3d clust
 
 ## Objectives
 
-1. Package the control plane as a single Helm chart, so `local.py` installs it with `helm upgrade --install` instead of per-file `kubectl apply` plus string replacement.
-2. Publish that chart, and the 8 images it references, from CI to an OCI registry — so a cluster that is not the one running `init` could eventually pull them (the `remote` target, next spec).
-3. Change nothing about what gets installed or how `local` behaves today: same objects, same RBAC, same task order, same local Docker build + `k3d image import` path. Only the deploy mechanism (chart vs. raw YAML) and the addition of a publish workflow are new.
+1. Package the control plane as a single Helm chart covering all 16 manifests `init` applies today (not only the 8 whose image `_deploy` substitutes) — Keycloak, its realm-import Job, the pod security policy, Traefik, Crossplane and its AWS EC2 provider, shared-pg, and Prometheus included. The chart is one artifact with one version; a future `remote` target points at it and never has to enumerate 8 image/tag pairs by hand.
+2. Publish that chart, and the 8 provider/API images it references, from CI to an OCI registry — so a cluster that is not the one running `init` could eventually pull them (the `remote` target, next spec).
+3. Change nothing about what gets installed, in what order, or how `local`'s progress output looks today: same objects, same RBAC, same step-by-step task graph and progress card (`17 / 21 steps`, per-step logs). Only the rendering mechanism (chart templates vs. raw YAML + string replace) and the addition of a publish workflow are new.
 
 Out of scope: `Target.remote` itself, any change to ingress (Traefik stays as installed today), reworking how `local` obtains images (it keeps building locally, never pulls from the registry this spec publishes to).
 
 ## Decisions
 
-### One umbrella chart, not one chart per component
+### One umbrella chart, covering all 16 manifests, not one chart per component
 
-A single chart, `platform-control-plane`, with one template per existing manifest (grouped by component as today: `api/`, `keycloak/`, `providers/<name>/`), one values tree with a key per image. `helm upgrade --install platform-control-plane ./chart --namespace platform-system -f values.yaml` replaces the whole sequence of per-file `_deploy` calls.
+A single chart, `platform-control-plane`, with one template per existing manifest (grouped by component as today: `api/`, `keycloak/`, `providers/<name>/`, plus `observability/` for Prometheus), one values tree with a key per image (the 8 `_deploy`-managed ones) and a flag per optional piece (`providers.awsAccount.enabled`, `providers.crossplaneAws.enabled`, mirroring `--aws-profile`/`--with-crossplane` today). The 8 manifests with no variable image (Keycloak's Deployment/PVC/Service, the realm-import Job, the pod-security `ValidatingAdmissionPolicy`, Traefik's `HelmChart` CR, Crossplane's `HelmChart` CR and its `Provider` CR, shared-pg, Prometheus) convert the same way: hardcoded namespaces become `{{ .Values.namespace }}`/`{{ .Values.authNamespace }}`/`{{ .Values.resourcesNamespace }}`, everything else (RBAC rules, labels, container args, the Prometheus scrape config, the admission policy's CEL expressions) copied verbatim.
 
-**Alternative considered: one chart per component (8 independent charts).** Rejected: it would require orchestrating 8 separate `helm install` calls in the right dependency order (the API needs Keycloak's realm; providers need the CRDs) — exactly the ordering `init_tasks`' `needs=(...)` graph already encodes in Python. An umbrella chart keeps that ordering in `local.py` exactly as it is; the chart only replaces the rendering/apply step, not the task graph.
+**Alternative considered: one chart per component (16 independent charts, or 8 if only the imaged ones were converted).** Rejected: it would require orchestrating many separate `helm install` calls in the right dependency order (the API needs Keycloak's realm; providers need the CRDs) — exactly the ordering `init_tasks`' `needs=(...)` graph already encodes in Python. An umbrella chart keeps that ordering in `local.py` exactly as it is; the chart only replaces the rendering/apply step, not the task graph. Converting only the 8 imaged manifests was also considered and rejected: it would leave the chart unable to stand on its own as the one artifact a `remote` target points at — the other 8 (Keycloak above all) are load-bearing parts of "the control plane", not incidental extras.
 
-### `local.py` keeps building locally; only the apply mechanism changes
+### `local.py` keeps its 21-step task graph and progress card; each step renders from the chart instead of reading a file
 
-`build_images`, `_cluster_images`, `import_images` (k3d-specific, Docker-based) are untouched. The chart's `values.yaml` receives the locally-built image references (`platform-api:dev-<id>`, etc.) the same way `_deploy` receives them today — as a parameter, not a change to where images come from. `local` never pulls from the registry this spec adds; it continues to need nothing but Docker and k3d, as documented in `prerequisites.md`.
+`build_images`, `_cluster_images`, `import_images` (k3d-specific, Docker-based) are untouched. What changes inside `_deploy` (and the other `_kubectl("apply", ...)` call sites in `local.py` — `deploy_keycloak`, `import_realm`, `apply_crds`'s pod-security line, `install_ingress`, `install_crossplane`, `install_shared_pg`, `install_observability`) is *how* each step gets its manifest: `helm template <chart> --show-only templates/<path>` renders just that one object group from the chart, piped into the same `kubectl apply -f -` the step already does. Each task in `init_tasks()` keeps its own name, its own log file, its own position in the `17 / 21 steps` progress card — this spec changes the rendering source per step, not the step graph itself.
+
+**Alternative considered: one `helm upgrade --install` call replacing the whole task graph.** Rejected for `local`: it would collapse `init`'s ~21 named steps (each with its own log file and line in the progress card, per `reporters.py`) into one opaque Helm operation, contradicting objective 3 ("same task order... same progress card"). Kept as the expected approach for a future `remote` target, which has no equivalent per-step local progress UI to preserve.
 
 ### A new CI workflow builds the 8 images and packages/publishes the chart to GHCR
 
@@ -55,9 +57,10 @@ A new `.github/workflows/platform-control-plane-release.yaml` (name indicative),
 
 ### What does not change
 
-- `init_tasks()`'s task graph, dependency ordering, and step names in `local.py`.
+- `init_tasks()`'s task graph, dependency ordering, step names, and per-step logging/progress card in `local.py`.
 - RBAC, namespaces, CRDs, and every object the 16 manifests create today — the chart is a repackaging, not a redesign.
 - The `local` developer experience: `platform init` prerequisites, flags, and output stay as documented today.
+- Keycloak's dynamic setup in Python (`deploy_keycloak`/`render_realm`/`theme_configmap`/`_apply_theme` in `local.py`): generating the admin password, building the realm JSON per `--admin` list, flattening the theme directory into a ConfigMap. These stay exactly as they are — only the static Keycloak Deployment/PVC/Service manifest moves into the chart; the dynamically-generated Secrets and ConfigMaps the Deployment consumes are still applied by this existing Python code, the same way `local.py` already separates "generate a Secret in Python" from "apply a static manifest" for other components.
 
 ## Open questions (do not block this spec)
 
@@ -66,4 +69,4 @@ A new `.github/workflows/platform-control-plane-release.yaml` (name indicative),
 
 ## Relationship to #558
 
-Once this chart exists and is published, `Target.remote` (separate spec) reuses the same chart via `helm upgrade --install` against a kubeconfig context that is not k3d, skipping `ensure_cluster` (no cluster creation) and the local build/import steps (pulls the chart's referenced images from the registry instead). Ingress, identity (Keycloak as today), and the `remote`-specific CLI config (so a non-admin user can `platform login` against it without running `init`) are explicitly deferred to that follow-up spec.
+Once this chart exists and is published, `Target.remote` (separate spec) installs it with a single `helm upgrade --install platform-control-plane oci://ghcr.io/<org>/<repo>/charts/platform-control-plane --version <chart-version>` against a kubeconfig context that is not k3d — the one-call install the "Alternative considered" above rejects for `local` but is exactly right for `remote`, which has no per-step local progress UI to preserve and benefits from the one-chart-one-version simplicity this spec's packaging provides. This skips `ensure_cluster` (no cluster creation) and the local build/import steps entirely (the chart's `values.yaml` `registry` and each image's `tag` point at what CI published instead). Ingress, identity (Keycloak as today), and the `remote`-specific CLI config (so a non-admin user can `platform login` against it without running `init`) are explicitly deferred to that follow-up spec.
