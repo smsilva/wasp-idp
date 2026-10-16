@@ -146,3 +146,42 @@ def test_each_parallel_build_reports_to_the_build_step(monkeypatch, recorder):
   with reporting("build images", recorder):
     local.build_images(BUILDS)
   assert sorted(event[2] for event in recorder.of("build images")) == ["built forager-provider", "built platform-api"]
+
+
+def test_render_calls_helm_template_show_only(monkeypatch):
+  calls = []
+
+  def run(*command, input=None, secret=False):
+    calls.append(command)
+    return "apiVersion: v1\nkind: ServiceAccount\n"
+
+  monkeypatch.setattr(local, "_run", run)
+  root = Path("/repo")
+  manifest = local._render(root, "templates/providers/registry-provider.yaml", {"images.registryProvider.tag": "abc123"})
+  assert manifest == "apiVersion: v1\nkind: ServiceAccount\n"
+  assert calls == [(
+    "helm", "template", "platform-control-plane", str(root / "platform" / "chart" / "platform-control-plane"),
+    "--show-only", "templates/providers/registry-provider.yaml",
+    "--set", "images.registryProvider.tag=abc123",
+  )]
+
+
+def test_render_with_no_set_values(monkeypatch):
+  calls = []
+  monkeypatch.setattr(local, "_run", lambda *command, input=None, secret=False: calls.append(command) or "rendered\n")
+  local._render(Path("/repo"), "templates/keycloak/keycloak.yaml")
+  assert calls == [(
+    "helm", "template", "platform-control-plane", str(Path("/repo") / "platform" / "chart" / "platform-control-plane"),
+    "--show-only", "templates/keycloak/keycloak.yaml",
+  )]
+
+
+def test_render_propagates_failure_on_a_bad_template_path(monkeypatch):
+  """`helm template --show-only` on a path the chart does not have exits non-zero; `_run` already turns
+  that into a BootstrapError (local.py:133) — `_render` must not swallow it into an empty manifest."""
+  def run(*command, input=None, secret=False):
+    raise local.BootstrapError("helm template … failed:\ncould not find template templates/providers/regsitry-provider.yaml in chart")
+
+  monkeypatch.setattr(local, "_run", run)
+  with pytest.raises(local.BootstrapError, match="regsitry-provider"):
+    local._render(Path("/repo"), "templates/providers/regsitry-provider.yaml")

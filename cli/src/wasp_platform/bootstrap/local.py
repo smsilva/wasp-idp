@@ -77,6 +77,8 @@ SHARED_PG_SECRET = "shared-pg-admin"
 SEED_REPO = "https://github.com/smsilva/wasp-idp"
 SEED_FOLDER = Path("platform") / "templates"
 CATALOG_API_VERSION = "catalog.platform.wasp.silvios.me/v1alpha1"
+CHART_DIR = Path("platform") / "chart" / "platform-control-plane"
+CHART_NAME = "platform-control-plane"
 
 
 class BootstrapError(Exception):
@@ -234,8 +236,37 @@ def import_images(images: dict[str, str]) -> None:
   _run("k3d", "image", "import", *missing, "--cluster", CLUSTER)
 
 
-def _deploy(manifest_path: Path, name: str, image: str) -> None:
-  manifest = manifest_path.read_text().replace(f"image: {name}:dev", f"image: {image}")
+def _render(root: Path, template_path: str, set_values: dict[str, str] | None = None) -> str:
+  """Renders one template of the control-plane chart, the same object `_kubectl("apply", ...)` used to
+  read straight from a YAML file. `set_values` mirrors `--set key=value` (e.g. an image's tag)."""
+  args = ["helm", "template", CHART_NAME, str(root / CHART_DIR), "--show-only", template_path]
+  for key, value in (set_values or {}).items():
+    args.extend(["--set", f"{key}={value}"])
+  return _run(*args)
+
+
+# Maps the image constant (IMAGE, PROVIDER_IMAGE, ...) each _deploy call already passes to the chart's
+# values key and template path, so this dict is the single place that pairing lives.
+CHART_TEMPLATES = {
+  IMAGE: ("templates/api/platform-api.yaml", "images.api"),
+  PROVIDER_IMAGE: ("templates/providers/local-vcluster-provider.yaml", "images.localVclusterProvider"),
+  SCM_PROVIDER_IMAGE: ("templates/providers/scm-github-provider.yaml", "images.scmGithubProvider"),
+  WORKLOAD_PROVIDER_IMAGE: ("templates/providers/workload-provider.yaml", "images.workloadProvider"),
+  FORAGER_PROVIDER_IMAGE: ("templates/providers/forager-provider.yaml", "images.foragerProvider"),
+  REGISTRY_PROVIDER_IMAGE: ("templates/providers/registry-provider.yaml", "images.registryProvider"),
+  AWS_PROVIDER_IMAGE: ("templates/providers/aws-account-provider.yaml", "images.awsAccountProvider"),
+  CROSSPLANE_PROVIDER_IMAGE: ("templates/providers/crossplane-aws-provider.yaml", "images.crossplaneAwsProvider"),
+}
+
+
+def _deploy(root: Path, name: str, image: str) -> None:
+  template_path, values_key = CHART_TEMPLATES[name]
+  set_values = {f"{values_key}.tag": image.split(":", 1)[1]}
+  if name == AWS_PROVIDER_IMAGE:
+    set_values["providers.awsAccount.enabled"] = "true"
+  if name == CROSSPLANE_PROVIDER_IMAGE:
+    set_values["providers.crossplaneAws.enabled"] = "true"
+  manifest = _render(root, template_path, set_values)
   _kubectl("apply", "--filename", "-", input=manifest)
 
 
@@ -295,7 +326,7 @@ def render_realm(realm: dict, google: bool, admins: list[str], smoke: dict | Non
 
 def deploy_keycloak(root: Path, admin_emails: list[str]) -> dict:
   keycloak_dir = root / "platform" / "keycloak"
-  _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "keycloak.yaml"))
+  _kubectl("apply", "--filename", "-", input=_render(root, "templates/keycloak/keycloak.yaml"))
 
   # The bootstrap admin password is generated once and kept: Keycloak only reads it on first start.
   if not _secret_value(AUTH_NAMESPACE, "keycloak-admin", "password"):
@@ -342,9 +373,8 @@ def deploy_keycloak(root: Path, admin_emails: list[str]) -> dict:
 
 
 def import_realm(root: Path, google: bool) -> None:
-  keycloak_dir = root / "platform" / "keycloak"
   _kubectl("delete", "job", "keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--ignore-not-found")
-  _kubectl("apply", "--filename", str(keycloak_dir / "deploy" / "realm-import.yaml"))
+  _kubectl("apply", "--filename", "-", input=_render(root, "templates/keycloak/realm-import.yaml"))
   try:
     _kubectl("wait", "job/keycloak-realm-import", "--namespace", AUTH_NAMESPACE, "--for", "condition=Complete", "--timeout", "300s")
   except Stopped:
@@ -426,7 +456,7 @@ def store_aws_credential(aws_profile: str | None) -> tuple[dict, str | None]:
   return (values if values["AWS_ACCESS_KEY_ID"] else {}), expiration
 
 
-def install_aws_account(provider_dir: Path, aws_profile: str | None) -> dict:
+def install_aws_account(root: Path, provider_dir: Path, aws_profile: str | None) -> dict:
   """The aws_account controller, with the stored base credential as its environment. Its image is built
   here, not with the others: it exists only when a credential is stored."""
   values, expiration = store_aws_credential(aws_profile)
@@ -434,7 +464,7 @@ def install_aws_account(provider_dir: Path, aws_profile: str | None) -> dict:
     return {"cloud_account": False, "values": {}}
   image = _build(AWS_PROVIDER_IMAGE, provider_dir)
   import_images({AWS_PROVIDER_IMAGE: image})
-  _deploy(provider_dir / "deploy" / "aws-account-provider.yaml", AWS_PROVIDER_IMAGE, image)
+  _deploy(root, AWS_PROVIDER_IMAGE, image)
   # The credential reaches the pod as environment: a new one needs a new pod, an unchanged one keeps it.
   digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()[:16]
   patch = {"spec": {"template": {"metadata": {"annotations": {"platform.wasp.silvios.me/credential": digest}}}}}
@@ -502,14 +532,14 @@ def _wait_for(description: str, check, timeout: int, hint: str) -> None:
     _pause(3)
 
 
-def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool) -> dict:
+def install_crossplane(root: Path, provider_dir: Path, values: dict, with_crossplane: bool) -> dict:
   """Crossplane, provider-aws-ec2, the base credential in crossplane-system and the crossplane_aws provider.
   Its image is built here, like the aws_account one: it exists only with Crossplane."""
   if not wants_crossplane(with_crossplane, values):
     return {"crossplane": False}
   image = _build(CROSSPLANE_PROVIDER_IMAGE, provider_dir)
   import_images({CROSSPLANE_PROVIDER_IMAGE: image})
-  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "crossplane.yaml"))
+  _kubectl("apply", "--filename", "-", input=_render(root, "templates/providers/crossplane.yaml", {"providers.crossplaneAws.enabled": "true"}))
   # The CRDs exist only once the helm-controller's install job ran.
   _wait_for(
     "Crossplane", lambda: bool(_kubectl("get", "crd", "providers.pkg.crossplane.io", "--ignore-not-found", "--output", "name").strip()), 300,
@@ -521,10 +551,10 @@ def install_crossplane(provider_dir: Path, values: dict, with_crossplane: bool) 
   _kubectl("delete", "secret", AWS_BASE_SECRET, "--namespace", CROSSPLANE_NAMESPACE, "--ignore-not-found")
   _apply_secret(CROSSPLANE_NAMESPACE, AWS_BASE_SECRET, {"creds": crossplane_credential(values)})
   note("installing the Crossplane provider for AWS EC2 (pulls its package, a few minutes the first time) …")
-  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "provider-aws-ec2.yaml"))
+  _kubectl("apply", "--filename", "-", input=_render(root, "templates/providers/provider-aws-ec2.yaml", {"providers.crossplaneAws.enabled": "true"}))
   _kubectl("wait", f"provider.pkg.crossplane.io/{CROSSPLANE_PROVIDER_PACKAGE}", "--for", "condition=Healthy", "--timeout", "600s")
   _kubectl("wait", "crd", "vpcs.ec2.aws.upbound.io", "providerconfigs.aws.upbound.io", "--for", "condition=Established", "--timeout", "120s")
-  _deploy(provider_dir / "deploy" / "crossplane-aws-provider.yaml", CROSSPLANE_PROVIDER_IMAGE, image)
+  _deploy(root, CROSSPLANE_PROVIDER_IMAGE, image)
   _rollout(CROSSPLANE_PROVIDER_IMAGE)
   return {"crossplane": True}
 
@@ -555,8 +585,8 @@ def apply_crds(root: Path) -> None:
     _ensure_namespace(namespace)
 
 
-def deploy_provider(provider_dir: Path, manifest: str, name: str, image: str) -> None:
-  _deploy(provider_dir / "deploy" / manifest, name, image)
+def deploy_provider(root: Path, name: str, image: str) -> None:
+  _deploy(root, name, image)
   _rollout(name)
 
 
@@ -584,12 +614,12 @@ def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, wit
   }
 
   def api(results):
-    _deploy(api_dir / "deploy" / "platform-api.yaml", IMAGE, results["build images"][IMAGE])
+    _deploy(root, IMAGE, results["build images"][IMAGE])
     _rollout("platform-api")
     wait_healthy(API_URL)
 
   def provider(name, directory, manifest):
-    return Task(name, lambda results: deploy_provider(directory, manifest, name, results["build images"][name]), needs=("CRDs", "import images"))
+    return Task(name, lambda results: deploy_provider(root, name, results["build images"][name]), needs=("CRDs", "import images"))
 
   return [
     Task("cluster", lambda results: ensure_cluster(root)),
@@ -602,16 +632,16 @@ def init_tasks(root: Path, admin_emails: list[str], aws_profile: str | None, wit
     Task(IMAGE, api, needs=("keycloak admin permissions", "import images")),
     *(provider(name, directory, manifest) for name, (directory, manifest) in provider_manifests.items()),
     # The pods of every environment as the vcluster syncs them (ADR 0041): its users are cluster-admin inside.
-    Task("pod policy", lambda results: _kubectl("apply", "--filename", str(vcluster_dir / "deploy" / "pod-security.yaml")), needs=("CRDs",)),
-    Task("traefik", lambda results: install_ingress(vcluster_dir), needs=("CRDs",)),
-    Task("shared-pg", lambda results: install_shared_pg(forager_dir), needs=("CRDs",)),
-    Task("profile policies", lambda results: install_profile_policies(forager_dir), needs=("CRDs",)),
-    Task("prometheus", lambda results: install_observability(root / "platform" / "observability"), needs=("CRDs",)),
+    Task("pod policy", lambda results: _kubectl("apply", "--filename", "-", input=_render(root, "templates/providers/pod-security.yaml")), needs=("CRDs",)),
+    Task("traefik", lambda results: install_ingress(root), needs=("CRDs",)),
+    Task("shared-pg", lambda results: install_shared_pg(root), needs=("CRDs",)),
+    Task("profile policies", lambda results: install_profile_policies(root), needs=("CRDs",)),
+    Task("prometheus", lambda results: install_observability(root), needs=("CRDs",)),
     Task("templates", lambda results: install_templates(root), needs=("CRDs",)),
     # After the shared import: two `k3d image import` at once would race for the same tools node.
-    Task("aws-account-provider", lambda results: install_aws_account(providers / "aws_account", aws_profile), needs=("CRDs", "import images")),
+    Task("aws-account-provider", lambda results: install_aws_account(root, providers / "aws_account", aws_profile), needs=("CRDs", "import images")),
     # After aws-account-provider: it stores the base credential and imports its own image (one k3d import at a time).
-    Task("crossplane", lambda results: install_crossplane(providers / "crossplane_aws", results["aws-account-provider"]["values"], with_crossplane), needs=("aws-account-provider",)),
+    Task("crossplane", lambda results: install_crossplane(root, providers / "crossplane_aws", results["aws-account-provider"]["values"], with_crossplane), needs=("aws-account-provider",)),
   ]
 
 
@@ -644,9 +674,9 @@ def cli_config(current: dict, issuer: str) -> dict:
   }
 
 
-def install_ingress(provider_dir: Path) -> None:
+def install_ingress(root: Path) -> None:
   """The shared Traefik of the environments (ADR 0036), through the helm-controller of k3s."""
-  _kubectl("apply", "--filename", str(provider_dir / "deploy" / "traefik.yaml"))
+  _kubectl("apply", "--filename", "-", input=_render(root, "templates/providers/traefik.yaml"))
   deadline = time.monotonic() + 300
   # The Deployment exists only once the helm-controller's install job ran.
   while not _kubectl("get", "deployment", "--namespace", INGRESS_NAMESPACE, "--selector", "app.kubernetes.io/name=traefik", "--output", "name").strip():
@@ -656,32 +686,32 @@ def install_ingress(provider_dir: Path) -> None:
   _kubectl("rollout", "status", "deployment", "--selector", "app.kubernetes.io/name=traefik", "--namespace", INGRESS_NAMESPACE, "--timeout", "180s")
 
 
-def install_observability(observability_dir: Path) -> None:
+def install_observability(root: Path) -> None:
   """The Prometheus of the observability subsystem (ADR 0040): an upstream image, nothing to build.
   The hash of the manifest goes on the pod template, so a changed scrape config rolls the pod."""
-  manifest = (observability_dir / "deploy" / "prometheus.yaml").read_text()
+  manifest = _render(root, "templates/observability/prometheus.yaml")
   checksum = hashlib.sha256(manifest.encode()).hexdigest()[:12]
   _kubectl("apply", "--filename", "-", input=manifest.replace("config-hash: dev", f"config-hash: {checksum}"))
   _kubectl("rollout", "status", "deployment/prometheus", "--namespace", NAMESPACE, "--timeout", "180s")
 
 
-def install_profile_policies(forager_dir: Path) -> None:
+def install_profile_policies(root: Path) -> None:
   """The binding policy of each profile (#329): created when missing, never applied over, since
   platform-admins change it through the API."""
   try:
-    _kubectl("create", "--filename", str(forager_dir / "deploy" / "profile-policies.yaml"))
+    _kubectl("create", "--filename", "-", input=_render(root, "templates/providers/profile-policies.yaml"))
   except BootstrapError as error:
     failures = [line for line in str(error).splitlines()[1:] if line.strip() and "AlreadyExists" not in line and "already exists" not in line]
     if failures:
       raise
 
 
-def install_shared_pg(forager_dir: Path) -> None:
+def install_shared_pg(root: Path) -> None:
   """The shared Postgres compose writes into (#305), in the namespace of the Forager's credentials.
   The admin password is generated once and kept across runs: a new one would lock the Forager out."""
   password = _secret_value(SHARED_PG_NAMESPACE, SHARED_PG_SECRET, "password") or secrets.token_urlsafe(24)
   _apply_secret(SHARED_PG_NAMESPACE, SHARED_PG_SECRET, {"password": password})
-  _kubectl("apply", "--filename", str(forager_dir / "deploy" / "shared-pg.yaml"))
+  _kubectl("apply", "--filename", "-", input=_render(root, "templates/providers/shared-pg.yaml"))
   _kubectl("rollout", "status", "statefulset/shared-pg", "--namespace", SHARED_PG_NAMESPACE, "--timeout", "180s")
 
 
