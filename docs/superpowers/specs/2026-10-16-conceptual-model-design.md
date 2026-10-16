@@ -800,7 +800,7 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
 
 1. **Objetivo em uma frase e nivelamento sobre a Gateway API.** A primeira mensagem é só o bloco abaixo, com o negrito, as cores e as quebras de linha exatamente assim ("você sabe" quando for uma pessoa):
 
-   > Oi! Queremos discutir alguns conceitos-chave para a **platform-api** ser agnóstica a 🟧 **tools**, com inspiração nas specs do Kubernetes:
+   > Oi! Queremos discutir alguns conceitos-chave para a **platform-api** ser agnóstica às 🟧 **tools** que implementam cada pedido:
    >
    > - Crossplane
    > - Terraform
@@ -809,7 +809,7 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
    > - Argo CD
    > - GitHub Actions
    >
-   > Para nivelar: o que vocês já sabem da **Gateway API** do Kubernetes?
+   > A inspiração vem das specs do Kubernetes. Para nivelar: o que vocês já sabem da **Gateway API**?
    >
    > - 🟦 **Gateway**
    > - 🟩 **GatewayClass**
