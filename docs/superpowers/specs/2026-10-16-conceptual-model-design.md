@@ -17,7 +17,7 @@ Este documento é o resultado de uma conversa de design (2026-10-16) e foi escri
 
 **Para apresentar ao time:** seguir o [Guia para apresentar ao time](#guia-para-apresentar-ao-time), que introduz os conceitos em sessões curtas, um bloco por vez.
 
-**Vocabulário em inglês:** os termos do modelo (Concept, Instance, Class, Driver, Controller, Tool, Vendor), as personas (User, Admin, Maintainer) e os termos técnicos do Kubernetes e das ferramentas (Persistent Volume, PersistentVolumeClaim, StorageClass, CSI driver, Pod) ficam sempre em inglês, mesmo em texto e conversa em pt-BR: "a Instance grava o Driver escolhido", nunca "a Instância grava o Driver escolhido"; "Persistent Volumes", nunca "volumes persistentes". Isso vale para este documento, para ADRs, issues, comentários e para quem conduz a conversa (pessoa ou agente). "Instância da plataforma", no sentido de uma instalação da plataforma, não é termo do modelo e fica em português.
+**Vocabulário em inglês:** os termos do modelo (Concept, Instance, Class, Driver, Controller, Tool, Vendor), as personas (User, Admin, Maintainer) e os termos técnicos do Kubernetes e das ferramentas (Gateway, GatewayClass, HTTPRoute, controller, load balancer, Pod) ficam sempre em inglês, mesmo em texto e conversa em pt-BR: "a Instance grava o Driver escolhido", nunca "a Instância grava o Driver escolhido"; "load balancer", nunca "balanceador de carga". Isso vale para este documento, para ADRs, issues, comentários e para quem conduz a conversa (pessoa ou agente). "Instância da plataforma", no sentido de uma instalação da plataforma, não é termo do modelo e fica em português.
 
 **platform-api é o nome do projeto inteiro**, sempre escrito assim (minúsculo e com hífen), não só do serviço HTTP: a API (`platform/api/`), a CLI `platform`, o MCP, os CRDs e os controllers (`platform/providers/*`). Quando o texto fala só do serviço HTTP, diz "a API". É o mesmo sentido do guia publicado em `/platform/` (site `platform-api`), que já cobre CLI, MCP e controllers.
 
@@ -27,7 +27,7 @@ Este documento é o resultado de uma conversa de design (2026-10-16) e foi escri
 
 **A aposta:** um modelo conceitual forte é o que permite trocar os componentes que implementam cada Concept. A caixa `IaC` do Integration & Delivery plane é um Concept; a ferramenta por trás dela pode ser Terraform ou Crossplane sem que o User perceba.
 
-**O modelo** separa seis camadas: **Concept → Instance → Class → Driver → Tool**, com **Vendor** como atributo. É o mesmo padrão do Kubernetes com volumes: PersistentVolumeClaim (Instance) → StorageClass (Class) → CSI driver (Driver) → API do storage (Tool).
+**O modelo** separa seis camadas: **Concept → Instance → Class → Driver → Tool**, com **Vendor** como atributo. É o mesmo padrão da Gateway API do Kubernetes: Gateway (Instance) → GatewayClass (Class) → o controller do `controllerName` (Driver) → API do load balancer (Tool).
 
 **A divisão entre camadas do sistema:** a API conhece Concepts e Instances e trata a Class como dado opaco. A resolução da Class, os Drivers e as Tools ficam na camada Kubernetes (CRDs e controllers). Assim o modelo não recria na API a abstração que o Kubernetes já oferece.
 
@@ -61,13 +61,13 @@ A API usa o Kubernetes como motor: ela grava CRs, e controllers os reconciliam (
 
 | Camada | Pergunta que responde | Quem escreve | Analogia no Kubernetes | Exemplo |
 |---|---|---|---|---|
-| **Concept** | o que existe na plataforma? | a plataforma (CRD + contrato) | "volume" | Environment, Workload, Database |
-| **Instance** | qual ocorrência, de quem? | o User, via API | PersistentVolumeClaim | Environment `demo`, Workload `orders` em `demo` |
-| **Class** | como materializar neste contexto? | o Admin | StorageClass | "ambientes efêmeros usam vcluster" |
-| **Driver** | quem cumpre o contrato do Concept? | a plataforma ou terceiros | CSI driver | `vcluster`, `aws-eks`, `kubernetes-workload` |
-| **Controller** | qual processo executa o Driver? | — (deployable) | o Pod do CSI driver | hoje `platform/providers/*` |
-| **Tool** | com o quê o Driver trabalha, por dentro? | — (detalhe do Driver) | a API do storage | Helm, Crossplane, Terraform, STS |
-| **Vendor** (atributo) | de quem é a coisa materializada? | — | AWS, NetApp | AWS, Azure, GitHub |
+| **Concept** | o que existe na plataforma? | a plataforma (CRD + contrato) | "entrada de tráfego" | Environment, Workload, Database |
+| **Instance** | qual ocorrência, de quem? | o User, via API | Gateway | Environment `demo`, Workload `orders` em `demo` |
+| **Class** | como materializar neste contexto? | o Admin | GatewayClass | "ambientes efêmeros usam vcluster" |
+| **Driver** | quem cumpre o contrato do Concept? | a plataforma ou terceiros | o `controllerName` (`gateway.k8s.aws/alb`) | `vcluster`, `aws-eks`, `kubernetes-workload` |
+| **Controller** | qual processo executa o Driver? | — (deployable) | o Pod do `aws-load-balancer-controller` | hoje `platform/providers/*` |
+| **Tool** | com o quê o Driver trabalha, por dentro? | — (detalhe do Driver) | a API do ELB | Helm, Crossplane, Terraform, STS |
+| **Vendor** (atributo) | de quem é a coisa materializada? | — | AWS | AWS, Azure, GitHub |
 
 Termos auxiliares:
 
@@ -75,82 +75,89 @@ Termos auxiliares:
 - **Resolução:** o ato de escolher o Driver de uma Instance, gravado em `status.resolution`.
 - **Runtime:** o tipo de lugar que um ambiente entrega (`kubernetes`, `container-apps`, `cloud-run`). É o contrato entre Drivers de environment e Drivers de workload e resources.
 - **Pacote de Driver:** o controller, o manifesto `driver.yaml` e os manifests da Tool.
-- **Personas:** **User** (pede Instances: qualquer papel que usa a plataforma, seja desenvolvimento, segurança, SRE, DevOps, negócio ou um agente), **Admin** (instala e configura uma instância da plataforma e cadastra as Classes) e **Maintainer** (opera e diagnostica os Drivers). No Kubernetes, o par é o mesmo: o user do cluster escreve o PVC, o admin do cluster escreve a StorageClass. Maintainer, e não Operator, para não colidir com o operator do Kubernetes.
+- **Personas:** **User** (pede Instances: qualquer papel que usa a plataforma, seja desenvolvimento, segurança, SRE, DevOps, negócio ou um agente), **Admin** (instala e configura uma instância da plataforma e cadastra as Classes) e **Maintainer** (opera e diagnostica os Drivers). Na Gateway API, o par é parecido: quem pede escreve o Gateway, o admin do cluster escreve a GatewayClass (a divisão de papéis da própria spec é um pouco diferente, ver [onde o paralelo não é exato](#o-paralelo-com-a-gateway-api-lado-a-lado)). Maintainer, e não Operator, para não colidir com o operator do Kubernetes.
 
 **Por que Driver, e não Provider:** "Provider" já nomeia o plugin de vendor no Terraform e no Crossplane, o que colide com a camada Tool na explicação ("o provider do Crossplane é provider de quê?"). Driver tem o sentido de sistema operacional: o OS define "impressora", o driver adapta, o hardware é do vendor. O ADR 0034 já fala em "driver de um vendor". O que hoje se chama provider (`platform/providers/*`) é o **Controller** que implementa um ou mais Drivers.
 
-### O paralelo com PVC, lado a lado
+### O paralelo com a Gateway API, lado a lado
 
-O mesmo pedido nos dois mundos: um volume para um Pod no Kubernetes, e o Postgres `db` do componente `orders` num ambiente efêmero da plataforma.
+O mesmo padrão nos dois mundos: uma entrada de tráfego no Kubernetes, e o Postgres `db` do componente `orders` num ambiente efêmero da plataforma.
 
-| Camada | Kubernetes | Plataforma hoje | Plataforma no modelo |
+| Camada | Kubernetes (Gateway API) | Plataforma hoje | Plataforma no modelo |
 |---|---|---|---|
-| Concept | volume | `type: postgres` no Score | Database |
-| Instance | PersistentVolumeClaim `data` | `ResourceRequest` `demo.orders.db` (o Forager cria a partir do Score) | igual |
-| Class | StorageClass `ebs-gp3` | `BindingPolicy` `profile-ephemeral` | `ResourceClass` `postgres-shared-pg` |
-| Driver | `ebs.csi.aws.com` | `postgres/compose` | `shared-postgresql-database` |
-| Controller | Pod `ebs-csi-controller` | `forager` | `forager` |
-| Tool | API do EBS | SQL no Postgres compartilhado `shared-pg` | igual |
+| Concept | entrada de tráfego | `type: postgres` no Score | Database |
+| Instance | Gateway `public` | `ResourceRequest` `demo.orders.db` (o Forager cria a partir do Score) | igual |
+| Class | GatewayClass `aws-alb` | `BindingPolicy` `profile-ephemeral` | `ResourceClass` `postgres-shared-pg` |
+| Driver | `gateway.k8s.aws/alb` | `postgres/compose` | `shared-postgresql-database` |
+| Controller | Pod `aws-load-balancer-controller` | `forager` | `forager` |
+| Tool | API do ELB | SQL no Postgres compartilhado `shared-pg` | igual |
 | Vendor | AWS | local | local |
-| Onde a escolha fica gravada | annotation `volume.kubernetes.io/storage-provisioner` no PVC | `spec.provisioner` do `ResourceRequest` | `status.resolution` |
-| O que é materializado | PersistentVolume + volume EBS | database e role no `shared-pg` + Secret | igual |
+| Onde a escolha fica gravada | `spec.gatewayClassName` do Gateway, e o `controllerName` da GatewayClass | `spec.provisioner` do `ResourceRequest` | `status.resolution` |
+| O que é materializado | um ALB, publicado em `status.addresses` do Gateway | database e role no `shared-pg` + Secret | igual |
+| Quem consome | `HTTPRoute` se liga ao Gateway por `parentRefs` | o Workload lê o Secret | igual |
+
+Trocar a implementação é trocar a GatewayClass: `istio.io/gateway-controller` sobe um Envoy dentro do cluster, `gateway.envoyproxy.io/gatewayclass-controller` sobe um Envoy Gateway, e o Gateway e as HTTPRoutes continuam iguais. A platform-api já usa Istio, então o exemplo tem par no código.
 
 Lado a lado, o que o Admin cadastra e o que o User pede:
 
 ```yaml
 # Kubernetes                               # Plataforma (no modelo)
-kind: StorageClass                         kind: ResourceClass
+kind: GatewayClass                         kind: ResourceClass
 metadata:                                  metadata:
-  name: ebs-gp3                              name: postgres-shared-pg
-provisioner: ebs.csi.aws.com               spec:
-parameters:                                  concept: database
-  type: gp3                                  scope:
+  name: aws-alb                              name: postgres-shared-pg
+spec:                                      spec:
+  controllerName: gateway.k8s.aws/alb        concept: database
+                                             scope:
                                                profile: ephemeral
                                              driver: shared-postgresql-database
                                              params:
                                                instance: shared-pg
 ---                                        ---
-kind: PersistentVolumeClaim                # score.yaml do orders
+kind: Gateway                              # score.yaml do orders
 metadata:                                  resources:
-  name: data                                 db:
+  name: public                               db:
 spec:                                          type: postgres
-  storageClassName: ebs-gp3
-  resources:
-    requests:
-      storage: 10Gi
+  gatewayClassName: aws-alb
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
 ```
 
-E a Instance depois da escolha:
+E a Instance depois da materialização:
 
 ```yaml
 # Kubernetes                               # Plataforma (no modelo)
-kind: PersistentVolumeClaim                kind: ResourceRequest
+kind: Gateway                              kind: ResourceRequest
 metadata:                                  metadata:
-  name: data                                 name: demo.orders.db
-  annotations:                             spec:
-    volume.kubernetes.io/storage-provisioner:  environment: demo
-      ebs.csi.aws.com                        component: orders
-spec:                                        resource: db
-  storageClassName: ebs-gp3                  type: postgres
-  volumeName: pvc-3f1c…                    status:
-status:                                      resolution:
-  phase: Bound                                 class: postgres-shared-pg
-                                               driver: shared-postgresql-database
+  name: public                               name: demo.orders.db
+spec:                                      spec:
+  gatewayClassName: aws-alb                  environment: demo
+status:                                      component: orders
+  addresses:                                 resource: db
+    - type: Hostname                         type: postgres
+      value: k8s-public-1a2b…              status:
+  conditions:                                resolution:
+    - {type: Accepted, status: "True"}         class: postgres-shared-pg
+    - {type: Programmed, status: "True"}       driver: shared-postgresql-database
                                              conditions:
                                                - {type: Ready, status: "True"}
 ```
 
 **Onde o paralelo não é exato:**
 
-- **Quem nomeia a Class.** O PVC pode nomear a StorageClass (`storageClassName`) ou cair na default. O User da plataforma nunca nomeia a Class: ela é escolhida pelo escopo, em camadas (ambiente → profile → default). É como se cada namespace tivesse a própria default StorageClass.
-- **Quem cria a Instance.** O PVC é escrito pelo user do cluster. O `ResourceRequest` é derivado do Score pelo Forager, um por recurso de cada `WorkloadRevision`; o User escreve só o Score.
-- **Não há PersistentVolume.** O Kubernetes tem um objeto para a coisa materializada (o PV). A plataforma não tem: o que o Driver criou aparece no `status` da Instance e nos Secrets que ela publica.
+- **Quem nomeia a Class.** O Gateway sempre nomeia a GatewayClass (`gatewayClassName` é obrigatório; não há GatewayClass default). O User da plataforma nunca nomeia a Class: ela é escolhida pelo escopo, em camadas (ambiente → profile → default). É como se cada namespace tivesse a própria GatewayClass default.
+- **Onde a escolha fica gravada.** No Gateway, a escolha é o próprio `spec.gatewayClassName`, escrito por quem pede, e o controller a confirma com a condition `Accepted`. Na plataforma, a escolha é feita depois, por um resolvedor, e gravada em `status.resolution`.
+- **Quem cria a Instance.** O Gateway é escrito pelo operador do cluster ou do time (a spec divide os papéis em infrastructure provider, cluster operator e application developer). O `ResourceRequest` é derivado do Score pelo Forager, um por recurso de cada `WorkloadRevision`; o User escreve só o Score.
+- **O consumidor.** A HTTPRoute que se liga ao Gateway é o melhor exemplo do [contrato de runtime](#contrato-de-runtime-e-acesso): ela não sabe se o Gateway virou um ALB ou um Envoy. Na plataforma, o Driver de workload consome o runtime que o Driver de environment publica, da mesma forma.
+
+**Por que Gateway API, e não CSI (PersistentVolumeClaim → StorageClass → CSI driver):** a primeira versão desta seção usava o CSI, e a sessão ao vivo de 2026-10-16 mostrou o custo. O CSI resolve um problema específico de storage com peças sem par na plataforma: o PersistentVolume (um objeto à parte para a coisa materializada, criado pelo sidecar `external-provisioner`, não pelo plugin do vendor), sidecars genéricos e um DaemonSet por nó. Cada uma dessas peças vira uma pergunta ("e o PV?") que desvia do modelo. Na Gateway API, o resultado fica no `status` da própria Instance, como na plataforma, o Driver é um controller só, e a HTTPRoute dá de graça o exemplo do contrato entre Drivers. Também foram descartados o cert-manager (Certificate → Issuer: o Driver é quase sempre built-in, então a troca de implementação aparece pouco), a IngressClass (o mesmo padrão, mais pobre) e o Crossplane (é uma das Tools, e usá-lo como analogia confunde as camadas).
 
 ## Princípios
 
 1. **A API conhece Concepts e Instances; a Class é dado opaco para ela.** A API autoriza quem escreve uma Class e a guarda no journal, mas não interpreta o conteúdo. Resolução e escolha de Driver acontecem em controllers.
 2. **Um escritor por objeto** (ADR 0034). A API escreve o `spec` das Instances; o resolvedor escreve `status.resolution`; o Driver escreve o resto do `status`.
-3. **A resolução fica gravada na Instance** (`status.resolution`) antes de qualquer Driver agir, venha ela de uma Class (Environment, Database) ou de uma regra fixa (Workload pelo runtime do ambiente). Cada Driver só atende Instances com o próprio nome, como um CSI driver só atende os PVCs anotados com ele.
+3. **A resolução fica gravada na Instance** (`status.resolution`) antes de qualquer Driver agir, venha ela de uma Class (Environment, Database) ou de uma regra fixa (Workload pelo runtime do ambiente). Cada Driver só atende Instances com o próprio nome, como um controller da Gateway API só atende os Gateways cuja GatewayClass leva o seu `controllerName`.
 4. **A Tool é código do Driver.** Não aparece no pedido, na Class nem no manifesto `Platform`. O Driver a declara no próprio `driver.yaml`.
 5. **Vendor é atributo**, usado para agrupar e reportar. Vai no nome do Driver só quando a coisa materializada é do vendor (`aws-eks`), não quando o Concept é genérico.
 6. **Drivers se encontram por contrato de runtime** (`provides`/`consumes`), nunca por acoplamento direto. Um pacote pode trazer vários Drivers juntos, mas o contrato continua separado.
@@ -160,8 +167,8 @@ status:                                      resolution:
 10. **A experiência é dedutível:** os mesmos verbos para todo Concept na CLI, o mesmo formato declarativo para todo `kind`, as mesmas relações de permissão para todo tipo.
 11. **Todo comando imperativo tem contraparte declarativa**, e os dois convergem para o mesmo estado.
 12. **A CLI é o contrato estável da migração.** CRDs, nomes de Class e Tools mudam por baixo, fatia a fatia, sem mudar a experiência.
-13. **O nome da Class diz o que ela entrega, nunca onde vale.** Como `ebs-gp3` numa StorageClass: engine e Driver no nome (`postgres-in-cluster`, `postgres-shared-pg`, `postgres-rds-orders`); o escopo (`profile: ephemeral`) fica em `spec.scope`. Um nome pelo escopo (`database-ephemeral`) repete o campo e esconde o Driver: duas Classes com o mesmo nome em seções diferentes podiam entregar coisas diferentes sem ninguém notar.
-14. **O nome do Driver diz o que ele materializa**, como `ebs.csi.aws.com` diz EBS: onde, engine e Concept (`in-cluster-postgresql-database`, `shared-postgresql-database`, `existing-postgresql-database`). Um nome sem a engine (`in-cluster-database`) não deixa um Driver de MySQL coexistir com ele.
+13. **O nome da Class diz o que ela entrega, nunca onde vale.** Como `aws-alb` numa GatewayClass: engine e Driver no nome (`postgres-in-cluster`, `postgres-shared-pg`, `postgres-rds-orders`); o escopo (`profile: ephemeral`) fica em `spec.scope`. Um nome pelo escopo (`database-ephemeral`) repete o campo e esconde o Driver: duas Classes com o mesmo nome em seções diferentes podiam entregar coisas diferentes sem ninguém notar.
+14. **O nome do Driver diz o que ele materializa**, como `gateway.k8s.aws/alb` diz ALB: onde, engine e Concept (`in-cluster-postgresql-database`, `shared-postgresql-database`, `existing-postgresql-database`). Um nome sem a engine (`in-cluster-database`) não deixa um Driver de MySQL coexistir com ele.
 
 ## Exemplo de ponta a ponta
 
@@ -441,7 +448,7 @@ São cinco formas de escolher o Driver: Class explícita, campo na Instance, ref
 
 ### Dois tipos de objeto
 
-A API mistura o que o User pede com o que o Admin cadastra. É a mesma divisão de PVC × StorageClass, Gateway × GatewayClass, e Claim × ProviderConfig no Crossplane:
+A API mistura o que o User pede com o que o Admin cadastra. É a mesma divisão de Gateway × GatewayClass, PVC × StorageClass, e Claim × ProviderConfig no Crossplane:
 
 - **Instances (pedidos):** `Environment`, `WorkloadRevision`, `ResourceRequest`, `Build`, `ComponentCreation`.
 - **Classes e configuração (cadastros):** `BindingPolicy`, `CloudAccount`, `ScmConnection`, `OCIRegistry`.
@@ -698,7 +705,7 @@ O modelo tem muitos conceitos, e apresentá-los todos de uma vez confunde. O gui
 **Regras gerais:**
 
 - Começar sempre pelo exemplo concreto, nunca pelo glossário: primeiro o Postgres do `orders`, depois o nome das camadas.
-- Usar a analogia PVC/StorageClass/CSI driver com quem conhece Kubernetes e a analogia de sistema operacional (impressora, driver, fabricante) com quem não conhece.
+- Usar a analogia Gateway/GatewayClass/controller com quem conhece Kubernetes e a analogia de sistema operacional (impressora, driver, fabricante) com quem não conhece.
 - Uma camada nova por sessão, no máximo duas.
 - Terminar cada sessão com a pergunta proposta e registrar as respostas como comentário na #594: elas alimentam as questões em aberto.
 - Deixar claro desde o início que é um rascunho: o objetivo é ouvir, não convencer.
@@ -714,8 +721,8 @@ O modelo tem muitos conceitos, e apresentá-los todos de uma vez confunde. O gui
 ### Sessão 2 — Concept, Instance e Class
 
 - **Objetivo:** separar o que se pede do como se materializa.
-- **Material:** [Glossário](#glossário) (só as três primeiras linhas); [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado), sem as linhas Driver, Controller, Tool e Vendor; [Dois tipos de objeto](#dois-tipos-de-objeto); o Ato 1 e o Ato 2 do [Exemplo de ponta a ponta](#exemplo-de-ponta-a-ponta), só com Database.
-- **Mostrar:** o mesmo Score do `orders` resolvendo em três Postgres diferentes conforme o ambiente (no cluster, compartilhado, RDS existente); e a analogia PVC × StorageClass.
+- **Material:** [Glossário](#glossário) (só as três primeiras linhas); [O paralelo com a Gateway API, lado a lado](#o-paralelo-com-a-gateway-api-lado-a-lado), sem as linhas Driver, Controller, Tool e Vendor; [Dois tipos de objeto](#dois-tipos-de-objeto); o Ato 1 e o Ato 2 do [Exemplo de ponta a ponta](#exemplo-de-ponta-a-ponta), só com Database.
+- **Mostrar:** o mesmo Score do `orders` resolvendo em três Postgres diferentes conforme o ambiente (no cluster, compartilhado, RDS existente); e a analogia Gateway × GatewayClass.
 - **Não mostrar ainda:** Tool, Vendor, runtime, credenciais.
 - **Pergunta para fechar:** "Que outros Concepts da plataforma deveriam ter uma Class?"
 
@@ -763,23 +770,24 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
 - **O público é de programadores muito experientes:** ir direto ao ponto, sem didatismo, sem explicar o óbvio.
 - **Menos texto, mais exemplos:** mostrar um YAML, um comando ou uma tabela curta em vez de um parágrafo; a prosa só liga os exemplos.
 - **Listas em linhas, no terminal:** quando a mensagem no terminal enumera itens (tools, camadas, recursos, opções), cada item vai numa linha própria, como lista em markdown, nunca separado por vírgulas no meio da frase. Isso facilita a leitura na janela do agente.
-- **Uma cor por camada, como no deck:** o terminal não renderiza cor arbitrária, então cada camada do modelo leva sempre o mesmo quadrado colorido antes do nome, do mesmo jeito que o deck dá uma cor a cada conceito do catálogo (`concept-colors` em `docs/presentation/idp.yaml`). Legenda: 🟪 **Concept**, 🟦 **Instance**, 🟩 **Class**, 🟨 **Driver**, 🟫 **Controller**, 🟧 **Tool**, ⬜ **Vendor**. A cor vale também para o equivalente no Kubernetes (🟦 PVC, 🟩 StorageClass, 🟨 CSI driver), e é isso que torna o paralelo visível. Cor e **negrito** valem desde a primeira mensagem: os termos do Kubernetes já entram com o quadrado da camada equivalente (🟦 **PersistentVolumeClaim**, 🟩 **StorageClass**, 🟨 **CSI driver**) e as tools com 🟧, para que o olho se acostume com a cor antes de o nome da camada aparecer. O nome das camadas e a legenda só aparecem quando a primeira camada é nomeada (passo 3 do roteiro). Todo termo-chave vai em **negrito**, em toda mensagem.
+- **Uma cor por camada, como no deck:** o terminal não renderiza cor arbitrária, então cada camada do modelo leva sempre o mesmo quadrado colorido antes do nome, do mesmo jeito que o deck dá uma cor a cada conceito do catálogo (`concept-colors` em `docs/presentation/idp.yaml`). Legenda: 🟪 **Concept**, 🟦 **Instance**, 🟩 **Class**, 🟨 **Driver**, 🟫 **Controller**, 🟧 **Tool**, ⬜ **Vendor**. A cor vale também para o equivalente no Kubernetes (🟦 Gateway, 🟩 GatewayClass, 🟨 o controller do `controllerName`), e é isso que torna o paralelo visível. Cor e **negrito** valem desde a primeira mensagem: os termos do Kubernetes já entram com o quadrado da camada equivalente (🟦 **Gateway**, 🟩 **GatewayClass**, 🟨 **controller**) e as tools com 🟧, para que o olho se acostume com a cor antes de o nome da camada aparecer. O nome das camadas e a legenda só aparecem quando a primeira camada é nomeada (passo 3 do roteiro). Todo termo-chave vai em **negrito**, em toda mensagem.
 - **Diagramas no browser:** o Visual Companion do skill `superpowers:brainstorming` (`skills/brainstorming/visual-companion.md` do plugin) abre uma aba do browser que o agente atualiza a cada passo. O documento já vale como aprovação do autor: o agente sobe o servidor logo depois do "sim" (`scripts/start-server.sh --project-dir <repo> --open`), sem oferecer antes. No browser vão os diagramas, os YAMLs lado a lado e a tabela de camadas, com as cores reais por camada, na mesma família `oklch` do slide `concept-colors` do deck (`docs/presentation/idp.html`): Concept `oklch(0.78 0.05 290)`, Instance `oklch(0.90 0.09 210)`, Class `oklch(0.84 0.11 170)`, Driver `oklch(0.86 0.06 105)`, Controller `oklch(0.74 0.12 260)`, Tool `oklch(0.80 0.08 35)`, Vendor `oklch(0.70 0.02 250)`. No terminal ficam a prosa curta e a pergunta de transição. Cada passo que muda o que está na tela termina com "Na aba do browser: …" em uma linha. Quando o passo não tem nada visual, o browser mostra a tela anterior até o próximo diagrama.
 - **Browser e terminal não se repetem:** o que está na tela do browser (fluxo, YAML, tabela, lista de passos) não volta no terminal. O terminal leva só o que a tela não diz: a frase que liga ao passo anterior, a conclusão do passo e a pergunta de transição, mais a linha "Na aba do browser: …" apontando o que olhar.
-- **Nomes de sistemas em produção, do catálogo da Tailwind Air:** nos exemplos ao vivo, nada de nomes genéricos (`data`, `fast`, `db`, `orders`), que soam como palavra-chave e confundem ("PVC data" lê como "o dado do PVC"). Usar os nomes do catálogo de exemplo do deck (`idp/catalog/airline/tailwind/catalog-info.yaml`, a companhia aérea fictícia Tailwind Air). No Kubernetes: PVC `passengers-db` (o disco do Postgres das reservas) e StorageClass `ebs-gp3`. Na plataforma: o Component `seat-selection` (mapa de assentos, `team-airport`) com o recurso `passengers-db` (`type: database`) no lugar de `orders` e `db`. Outros nomes à mão: `fares-cache` (cache), `flight-events` (topic), `web-checkin`, `flight-finder`. Os exemplos das outras seções deste documento ainda usam `orders`; na sessão, traduzir para esses nomes.
+- **Nomes de sistemas em produção, do catálogo da Tailwind Air:** nos exemplos ao vivo, nada de nomes genéricos (`data`, `fast`, `db`, `orders`), que soam como palavra-chave e confundem ("Gateway public" lê como "um Gateway qualquer, público"). Usar os nomes do catálogo de exemplo do deck (`idp/catalog/airline/tailwind/catalog-info.yaml`, a companhia aérea fictícia Tailwind Air). No Kubernetes: Gateway `seat-selection-edge` (a entrada do mapa de assentos), GatewayClass `aws-alb` e HTTPRoute `seat-selection`. Os exemplos das seções acima usam `public`; na sessão, trocar. Na plataforma: o Component `seat-selection` (mapa de assentos, `team-airport`) com o recurso `passengers-db` (`type: database`) no lugar de `orders` e `db`. Outros nomes à mão: `fares-cache` (cache), `flight-events` (topic), `web-checkin`, `flight-finder`. Os exemplos das outras seções deste documento ainda usam `orders`; na sessão, traduzir para esses nomes.
 - **Exemplos com syntax highlight:** todo YAML, comando ou saída de CLI renderizado no browser leva realce de sintaxe (chaves, valores, comentários e `kind` em cores distintas), para facilitar a leitura. O realce é inline no HTML, sem depender de biblioteca externa, e não usa as cores das camadas, que ficam reservadas ao modelo.
 - **Destacar as linhas que importam:** em cada YAML, as linhas que o passo explica (a annotation `storage-provisioner`, o `provisioner`, o `status.resolution`) ganham um fundo destacado e uma barra na margem esquerda, para que o olho vá direto a elas. O resto do YAML fica como contexto, com realce normal. No máximo duas ou três linhas destacadas por YAML.
 - **Contraste em toda caixa:** todo bloco de conteúdo (código, lista, caixa de diagrama) usa o mesmo fundo escuro dos YAMLs, com texto claro, em vez de herdar as cores do template do Visual Companion, que deixaram texto escuro sobre fundo escuro. Não reutilizar nomes de classe CSS do template (`main`, `side`, `option`, `card`…): eles herdam estilos inesperados. Depois de cada tela nova, tirar um print (skill `print`) e conferir a legibilidade antes de falar dela.
 - **Comandos na convenção dos scripts bash do autor** (skill `bash-scripts`): opções sempre na forma longa (`--namespace`, nunca `-n`; `--output`, nunca `-o`), variáveis entre aspas e chaves (`"${name}"`), e um comando com mais de uma opção quebrado com `\`, uma opção por linha e 2 espaços de indentação. Vale para o terminal e para o browser.
 
   ```bash
-  helm install aws-ebs-csi-driver aws-ebs-csi-driver/aws-ebs-csi-driver \
-    --namespace kube-system
+  helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+    --namespace kube-system \
+    --set clusterName="${cluster_name}"
   ```
 - **Caber em meia tela:** na chamada, o browser ocupa metade de um monitor 1920×1080 (cerca de 960×870 px úteis), ao lado do terminal. Dois YAMLs lado a lado ficam com cerca de 50 caracteres por linha (fonte de 13 px): comentários vão em linha própria, nunca no fim da linha, e nada pede barra de rolagem horizontal. Uma tela não passa de cerca de 25 linhas de código.
-- **Siglas por extenso na primeira menção:** a primeira vez que uma sigla aparece na conversa, o significado vem entre parênteses: CSI (Container Storage Interface), PVC (PersistentVolumeClaim), EBS (Elastic Block Store), EKS (Elastic Kubernetes Service), CRD (Custom Resource Definition). Depois, só a sigla.
-- **pt-BR**, com os termos do modelo e os termos técnicos em inglês (Persistent Volume, nunca "volume persistente").
-- **Nunca "desenvolvedor"** para quem usa a plataforma ou o cluster: segurança, SRE, DevOps e negócio também usam. Na plataforma, User; no Kubernetes, o user do cluster (quem escreve o PVC) e o admin do cluster (quem escreve a StorageClass).
+- **Siglas por extenso na primeira menção:** a primeira vez que uma sigla aparece na conversa, o significado vem entre parênteses: ALB (Application Load Balancer), ELB (Elastic Load Balancing), EKS (Elastic Kubernetes Service), CRD (Custom Resource Definition). Depois, só a sigla.
+- **pt-BR**, com os termos do modelo e os termos técnicos em inglês (load balancer, nunca "balanceador de carga").
+- **Nunca "desenvolvedor"** para quem usa a plataforma ou o cluster: segurança, SRE, DevOps e negócio também usam. Na plataforma, User; no Kubernetes, quem escreve o Gateway e o admin do cluster (quem escreve a GatewayClass).
 - **Mensagens curtas:** no máximo três ou quatro linhas de prosa além do exemplo, sem cenário hipotético longo.
 - **Um passo por vez, curto:** cada mensagem cabe numa tela, explica um passo e termina numa pergunta de transição que deixa a pessoa escolher como seguir ("Seguimos para …?"), esperando a resposta antes do passo seguinte. Nada de despejar seções do documento.
 - **Explicar, não testar:** o agente explica; não faz perguntas de conteúdo nem pede que a pessoa repita o passo com as próprias palavras. Quem quiser aprofundar ou questionar pergunta. Se a pessoa travar, voltar ao exemplo concreto, nunca ao glossário.
@@ -790,7 +798,7 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
 
 **Roteiro:**
 
-1. **Objetivo em uma frase e nivelamento sobre CSI.** A primeira mensagem é só o bloco abaixo, com o negrito, as cores e as quebras de linha exatamente assim ("você sabe" quando for uma pessoa):
+1. **Objetivo em uma frase e nivelamento sobre a Gateway API.** A primeira mensagem é só o bloco abaixo, com o negrito, as cores e as quebras de linha exatamente assim ("você sabe" quando for uma pessoa):
 
    > Oi! Queremos discutir alguns conceitos-chave para a **platform-api** ser agnóstica a 🟧 **tools**, com inspiração nas specs do Kubernetes:
    >
@@ -801,29 +809,29 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
    > - Argo CD
    > - GitHub Actions
    >
-   > Para nivelar: o que vocês já sabem da spec **CSI** (Container Storage Interface)?
+   > Para nivelar: o que vocês já sabem da **Gateway API** do Kubernetes?
    >
-   > - 🟦 **PersistentVolumeClaim**
-   > - 🟩 **StorageClass**
-   > - 🟨 **CSI driver**
+   > - 🟦 **Gateway**
+   > - 🟩 **GatewayClass**
+   > - 🟨 **controller** (o `controllerName`)
 
-   Nada sobre como a plataforma funciona ainda. Se a pessoa pedir uma recapitulação, responder com o PVC e a StorageClass em YAML (os do [paralelo](#o-paralelo-com-pvc-lado-a-lado)) e uma linha de comentário em cada, sem lista de definições. Senão, completar a partir do que a pessoa sabe: o Pod quer um volume; o PersistentVolumeClaim é o pedido ("10Gi, leitura e escrita"), sem dizer onde nem como; a StorageClass, escrita pelo admin do cluster, diz como materializar (`provisioner: ebs.csi.aws.com`, `parameters: {type: gp3}`); a StorageClass default atende o PVC que não nomeia uma. Nos dois casos, terminar com a pergunta de transição: "Seguimos para o que acontece quando o PVC é criado?".
-2. **O CSI driver em detalhe.** O controller do driver observa os PVCs cuja StorageClass aponta para ele (e só esses); chama a API do storage (AWS EBS); cria o volume; o PersistentVolume registra o volume criado e o PVC fica `Bound`. A escolha fica gravada no próprio PVC (annotation `volume.kubernetes.io/storage-provisioner`). O Kubernetes não sabe nada de EBS: quem sabe é o driver. Trocar EBS por NetApp muda a StorageClass e o driver instalado, e o PVC continua igual: o user do cluster não precisa saber nada do storage para pedir um volume.
-3. **Dar nome às camadas, ainda no Kubernetes:** volume (Concept), PVC (Instance), StorageClass (Class), CSI driver (Driver), o Pod do driver (Controller), a API do EBS (Tool), AWS (Vendor). Só a primeira coluna da tabela de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado).
-4. **A plataforma em uma frase:** a platform-api é o projeto inteiro: uma API que recebe pedidos (ambiente, deploy, banco), a CLI e o MCP que falam com ela, e controllers que materializam os pedidos no Kubernetes. Mostrar o Postgres `db` do `orders`: o Score pede `type: postgres`, e conforme o ambiente vira um Postgres no cluster, um database num Postgres compartilhado ou um RDS existente: o mesmo padrão do PVC.
+   Nada sobre como a plataforma funciona ainda. Se a pessoa pedir uma recapitulação, responder com a GatewayClass e o Gateway em YAML (os do [paralelo](#o-paralelo-com-a-gateway-api-lado-a-lado)) e uma linha de comentário em cada, sem lista de definições. Senão, completar a partir do que a pessoa sabe: o Gateway é o pedido ("uma entrada HTTP na porta 80"), sem dizer qual load balancer; a GatewayClass, escrita pelo admin do cluster, diz quem materializa (`controllerName: gateway.k8s.aws/alb`); o Gateway nomeia a GatewayClass em `gatewayClassName`. Nos dois casos, terminar com a pergunta de transição: "Seguimos para o que acontece quando o Gateway é criado?".
+2. **O controller em detalhe.** O `aws-load-balancer-controller` observa os Gateways cuja GatewayClass tem o `controllerName` dele (e só esses); marca o Gateway como `Accepted`; chama a API do ELB; cria um ALB; publica o endereço em `status.addresses` e marca `Programmed`. As HTTPRoutes se ligam ao Gateway por `parentRefs` e viram regras de listener. O Kubernetes não sabe nada de ALB: quem sabe é o controller. Trocar ALB por Istio muda a GatewayClass e o controller instalado, e o Gateway e as HTTPRoutes continuam iguais: quem escreve a rota não precisa saber qual load balancer está por trás.
+3. **Dar nome às camadas, ainda no Kubernetes:** entrada de tráfego (Concept), Gateway (Instance), GatewayClass (Class), o `controllerName` (Driver), o Pod do `aws-load-balancer-controller` (Controller), a API do ELB (Tool), AWS (Vendor). Só a primeira coluna da tabela de [O paralelo com a Gateway API, lado a lado](#o-paralelo-com-a-gateway-api-lado-a-lado).
+4. **A plataforma em uma frase:** a platform-api é o projeto inteiro: uma API que recebe pedidos (ambiente, deploy, banco), a CLI e o MCP que falam com ela, e controllers que materializam os pedidos no Kubernetes. Mostrar o Postgres `db` do `orders`: o Score pede `type: postgres`, e conforme o ambiente vira um Postgres no cluster, um database num Postgres compartilhado ou um RDS existente: o mesmo padrão do Gateway, que vira ALB ou Envoy conforme a GatewayClass.
 5. **O modelo proposto, sozinho:** o mesmo `passengers-db` do `seat-selection` contado só com os nomes do modelo, sem comparar ainda com o Kubernetes nem com a platform-api de hoje. O Score pede; o Forager cria o 🟦 `ResourceRequest`; a 🟩 `ResourceClass` do escopo escolhe o 🟨 Driver; a escolha fica em `status.resolution`; o Driver materializa. No browser, o fluxo e dois YAMLs: a `ResourceClass` e o `ResourceRequest` com o `status.resolution` destacado.
-6. **O paralelo com o Kubernetes:** agora que os dois lados são conhecidos, a tabela de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado) só com as colunas Kubernetes e "no modelo", e os pontos em que o paralelo não é exato.
+6. **O paralelo com o Kubernetes:** agora que os dois lados são conhecidos, a tabela de [O paralelo com a Gateway API, lado a lado](#o-paralelo-com-a-gateway-api-lado-a-lado) só com as colunas Kubernetes e "no modelo", e os pontos em que o paralelo não é exato.
 7. **O de hoje e o problema:** só então a coluna "hoje" entra, como de/para do modelo para os nomes atuais (`BindingPolicy`, os modos `provision`/`compose`/`bind`, "provider" com dois sentidos), mais as cinco formas de escolher o Driver ([Concepts, Instances e como o Driver é escolhido](#concepts-instances-e-como-o-driver-é-escolhido)).
-8. **A aposta:** um modelo forte permite trocar a Tool (Terraform, Crossplane) sem que o User perceba, como o PVC não muda quando o storage muda. Aqui entra o [Resumo](#resumo).
+8. **A aposta:** um modelo forte permite trocar a Tool (Terraform, Crossplane) sem que o User perceba, como o Gateway e as HTTPRoutes não mudam quando o load balancer muda. Aqui entra o [Resumo](#resumo).
 9. **Fechar:** perguntar o que fez sentido e o que não fez, e combinar o próximo encontro. Daí em diante a sequência é a do guia (Sessão 3 em diante), uma por encontro; as [Questões em aberto](#questões-em-aberto) entram só no fim, uma por vez.
 
 ### FAQ das sessões ao vivo
 
 Perguntas que já surgiram nas sessões ao vivo, com a resposta que funcionou. Cada entrada traz o passo do roteiro em que a pergunta apareceu, a resposta curta e o que mostrar no browser. Uma entrada só entra aqui depois de avaliada (ver a regra "FAQ vivo" acima).
 
-**O CSI driver é instalado como qualquer coisa no Kubernetes?** (passo 2, sessão de 2026-10-16)
+**Por que a analogia é a Gateway API, e não o CSI?** (passo 1, sessão de 2026-10-16)
 
-Sim: é um pacote comum (Helm chart ou add-on do EKS), e o core do Kubernetes não traz nenhum driver de storage. O pacote sobe um Deployment `ebs-csi-controller` (o plugin que fala com a API do EBS, mais sidecars genéricos da spec, como o `csi-provisioner`, que observa os PVCs e chama `CreateVolume`; roda com identidade própria via IRSA ou Pod Identity), um DaemonSet `ebs-csi-node` (formata e monta no nó) e o objeto `CSIDriver`, que registra o nome `ebs.csi.aws.com`. A StorageClass aponta para esse nome em `provisioner`. Os sidecars são iguais em todo CSI driver; o que muda por vendor é só o plugin. **No browser:** os comandos de instalação, o que o pacote sobe e o `CSIDriver` ao lado da StorageClass, com o nome em comum destacado. **Ponte para o modelo:** é o mesmo "Pacote de Driver" de [Driver como pacote](#driver-como-pacote) (controller, manifesto e Tool), mas só mencionar depois do passo 3.
+A primeira sessão começou pelo CSI (PersistentVolumeClaim → StorageClass → CSI driver), e a primeira pergunta foi "não faltou o PersistentVolume?". O CSI tem peças sem par na plataforma (o PV como objeto à parte, criado pelo sidecar `external-provisioner`; sidecars genéricos; um DaemonSet por nó), e o de/para fica caro. A Gateway API tem o mesmo padrão com menos peças: o resultado fica no `status` do próprio Gateway, o Driver é um controller só, e a HTTPRoute é o exemplo do contrato entre Drivers. Se alguém trouxer o CSI, responder que o padrão é o mesmo (PVC = Instance, StorageClass = Class, CSI driver = Driver) e voltar ao Gateway. **No browser:** a tabela CSI × Gateway API × cert-manager, camada por camada. **Ponte para o modelo:** a [justificativa no paralelo](#o-paralelo-com-a-gateway-api-lado-a-lado).
 
 ### Entrada de uma pessoa nova no meio do caminho
 
