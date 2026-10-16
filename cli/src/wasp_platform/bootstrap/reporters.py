@@ -248,9 +248,8 @@ def frame(title: str, subtitle: str, *parts, width: int):
 
 
 def card_width(console) -> int:
-  """The width of the bars: the card fits a narrow terminal and stops growing at 96, wide enough for
-  two step columns side by side without each bar shrinking to the old single-column width."""
-  return max(min(console.width - 12, 96), 10)
+  """The width of the bars: the card fits a narrow terminal and stops growing at 116."""
+  return max(min(console.width - 12, 116), 10)
 
 
 def settings_card(console, settings: list[tuple[str, str, str]]):
@@ -376,7 +375,7 @@ class LiveReporter(Reporter):
   def _row(self, task: str, width: int, now: float):
     from rich.table import Table
 
-    head = Table.grid(expand=True)
+    head = Table.grid(expand=True, padding=(0, 1, 0, 0))
     head.add_column(ratio=1)
     head.add_column(justify="right")
     state = self.state[task]
