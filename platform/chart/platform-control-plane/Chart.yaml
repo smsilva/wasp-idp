@@ -1,0 +1,8 @@
+apiVersion: v2
+name: platform-control-plane
+description: >
+  Umbrella chart for the wasp-idp control plane: the Platform API, Keycloak, and the providers
+  (local_vcluster, scm_github, workload, forager, registry, aws_account, crossplane_aws).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

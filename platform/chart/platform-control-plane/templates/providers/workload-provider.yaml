@@ -1,0 +1,89 @@
+# Provider workload (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment
+# (with the admin kubeconfig of Environment.status) and keeps the WorkloadInstance; turns each
+# WorkloadRoute into a GAMMA HTTPRoute there (ADR 0035, #344). Works with any
+# Environment that is Ready with kubeconfigData. Installed by `platform init`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workload-provider
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workload-provider
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadrevisions]
+    verbs: [get, list, watch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadrevisions/status]
+    verbs: [get, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadinstances]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadinstances/status]
+    verbs: [get, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadroutes]
+    verbs: [get, list, watch, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadroutes/status]
+    verbs: [get, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [environments]
+    verbs: [get]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [resourcerequests]
+    verbs: [get, list, delete]
+  - apiGroups: [catalog.platform.wasp.silvios.me]
+    resources: [versions]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workload-provider
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workload-provider
+subjects:
+  - kind: ServiceAccount
+    name: workload-provider
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workload-provider
+  namespace: {{ .Values.namespace }}
+  labels:
+    platform.wasp.silvios.me/provider: workload
+    platform.wasp.silvios.me/capabilities: workload
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: workload-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: workload-provider
+    spec:
+      serviceAccountName: workload-provider
+      containers:
+        - name: provider
+          image: "{{ include "platform-control-plane.image" (dict "registry" .Values.registry "image" .Values.images.workloadProvider) }}"
+          imagePullPolicy: {{ .Values.images.workloadProvider.pullPolicy }}
+          args: [--namespace, {{ .Values.namespace }}]
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 256Mi

@@ -1,0 +1,130 @@
+# Forager (ADR 0022, 0031, #263): resolves the resources of each WorkloadRevision against the
+# BindingPolicies into ResourceRequests and provisions them in the vcluster of the Environment (with
+# the admin kubeconfig of Environment.status). Generated credentials live in namespace
+# {{ .Values.resourcesNamespace }}, never in {{ .Values.namespace }}. Installed by `platform init`,
+# with the platform default policy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.resourcesNamespace }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: forager-provider
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: forager-provider
+  namespace: {{ .Values.namespace }}
+rules:
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [workloadrevisions]
+    verbs: [get, list, watch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [bindingpolicies]
+    verbs: [list]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [resourcerequests]
+    verbs: [get, list, create, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [resourcerequests/status]
+    verbs: [get, patch]
+  - apiGroups: [platform.wasp.silvios.me]
+    resources: [environments]
+    verbs: [get]
+  - apiGroups: [catalog.platform.wasp.silvios.me]
+    resources: [versions, components]
+    verbs: [get]
+  - apiGroups: [catalog.platform.wasp.silvios.me]
+    resources: [resources]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: forager-provider
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: forager-provider
+subjects:
+  - kind: ServiceAccount
+    name: forager-provider
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: forager-provider
+  namespace: {{ .Values.resourcesNamespace }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: forager-provider
+  namespace: {{ .Values.resourcesNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: forager-provider
+subjects:
+  - kind: ServiceAccount
+    name: forager-provider
+    namespace: {{ .Values.namespace }}
+---
+# The platform default layer: every environment provisions a dedicated postgres unless its own
+# policy or the policy of its profile says otherwise, and reaches an instance from outside through its
+# entry point (dns, route, ADR 0036).
+apiVersion: platform.wasp.silvios.me/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: platform-default
+  namespace: {{ .Values.namespace }}
+spec:
+  provisioners:
+    - type: postgres
+      mode: provision
+    - type: dns
+      mode: provision
+    - type: route
+      mode: provision
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forager-provider
+  namespace: {{ .Values.namespace }}
+  labels:
+    platform.wasp.silvios.me/provider: forager
+    platform.wasp.silvios.me/capabilities: resources
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: forager-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: forager-provider
+    spec:
+      serviceAccountName: forager-provider
+      containers:
+        - name: provider
+          image: "{{ include "platform-control-plane.image" (dict "registry" .Values.registry "image" .Values.images.foragerProvider) }}"
+          imagePullPolicy: {{ .Values.images.foragerProvider.pullPolicy }}
+          args: [--namespace, {{ .Values.namespace }}]
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 256Mi
