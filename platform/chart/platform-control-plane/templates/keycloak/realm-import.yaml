@@ -1,0 +1,59 @@
+# Applies realm-platform.yaml (ConfigMap keycloak-realm, rendered by `platform init`).
+# keycloak-config-cli is idempotent; init deletes and recreates this Job on every run.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-realm-import
+  namespace: {{ .Values.authNamespace }}
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: keycloak-config-cli
+          image: adorsys/keycloak-config-cli:6.5.1-26.5.5
+          env:
+            - name: KEYCLOAK_URL
+              value: http://keycloak.platform-auth.svc:8080
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: 180s
+            - name: KEYCLOAK_USER
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: username
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: password
+            - name: IMPORT_FILES_LOCATIONS
+              value: /config/*
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            # Keep Keycloak's built-in client scopes (profile, email, basic…): the file only adds ours.
+            - name: IMPORT_MANAGED_CLIENTSCOPE
+              value: no-delete
+            # Teams are groups the Platform API creates under /teams (ADR 0026): never prune them.
+            - name: IMPORT_MANAGED_GROUP
+              value: no-delete
+          envFrom:
+            - secretRef:
+                name: keycloak-google
+            # Passwords of the local test users (realm-smoke.yaml, #179).
+            - secretRef:
+                name: keycloak-smoke-user
+                optional: true
+            # Secret of the platform-api-admin client (#231).
+            - secretRef:
+                name: platform-api-keycloak
+          volumeMounts:
+            - name: realm
+              mountPath: /config
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm
