@@ -87,7 +87,7 @@ O mesmo pedido nos dois mundos: um volume para um Pod no Kubernetes, e o Postgre
 |---|---|---|---|
 | Concept | volume | `type: postgres` no Score | Database |
 | Instance | PersistentVolumeClaim `data` | `ResourceRequest` `demo.orders.db` (o Forager cria a partir do Score) | igual |
-| Class | StorageClass `fast` | `BindingPolicy` `profile-ephemeral` | `ResourceClass` `database-ephemeral` |
+| Class | StorageClass `ebs-gp3` | `BindingPolicy` `profile-ephemeral` | `ResourceClass` `postgres-shared-pg` |
 | Driver | `ebs.csi.aws.com` | `postgres/compose` | `shared-database` |
 | Controller | Pod `ebs-csi-controller` | `forager` | `forager` |
 | Tool | API do EBS | SQL no Postgres compartilhado `shared-pg` | igual |
@@ -101,7 +101,7 @@ Lado a lado, o que o Admin cadastra e o que o User pede:
 # Kubernetes                               # Plataforma (no modelo)
 kind: StorageClass                         kind: ResourceClass
 metadata:                                  metadata:
-  name: fast                                 name: database-ephemeral
+  name: ebs-gp3                              name: postgres-shared-pg
 provisioner: ebs.csi.aws.com               spec:
 parameters:                                  concept: database
   type: gp3                                  scope:
@@ -114,7 +114,7 @@ kind: PersistentVolumeClaim                # score.yaml do orders
 metadata:                                  resources:
   name: data                                 db:
 spec:                                          type: postgres
-  storageClassName: fast
+  storageClassName: ebs-gp3
   resources:
     requests:
       storage: 10Gi
@@ -131,10 +131,10 @@ metadata:                                  metadata:
     volume.kubernetes.io/storage-provisioner:  environment: demo
       ebs.csi.aws.com                        component: orders
 spec:                                        resource: db
-  storageClassName: fast                     type: postgres
+  storageClassName: ebs-gp3                  type: postgres
   volumeName: pvc-3f1c…                    status:
 status:                                      resolution:
-  phase: Bound                                 class: database-ephemeral
+  phase: Bound                                 class: postgres-shared-pg
                                                driver: shared-database
                                              conditions:
                                                - {type: Ready, status: "True"}
@@ -160,6 +160,7 @@ status:                                      resolution:
 10. **A experiência é dedutível:** os mesmos verbos para todo Concept na CLI, o mesmo formato declarativo para todo `kind`, as mesmas relações de permissão para todo tipo.
 11. **Todo comando imperativo tem contraparte declarativa**, e os dois convergem para o mesmo estado.
 12. **A CLI é o contrato estável da migração.** CRDs, nomes de Class e Tools mudam por baixo, fatia a fatia, sem mudar a experiência.
+13. **O nome da Class diz o que ela entrega, nunca onde vale.** Como `ebs-gp3` numa StorageClass: engine e Driver no nome (`postgres-in-cluster`, `postgres-shared-pg`, `postgres-rds-orders`); o escopo (`profile: ephemeral`) fica em `spec.scope`. Um nome pelo escopo (`database-ephemeral`) repete o campo e esconde o Driver: duas Classes com o mesmo nome em seções diferentes podiam entregar coisas diferentes sem ninguém notar.
 
 ## Exemplo de ponta a ponta
 
@@ -267,7 +268,7 @@ spec:
 apiVersion: platform.wasp.silvios.me/v1
 kind: ResourceClass
 metadata:
-  name: database-ephemeral
+  name: postgres-in-cluster
 spec:
   concept: database
   scope:
@@ -277,7 +278,7 @@ spec:
 apiVersion: platform.wasp.silvios.me/v1
 kind: ResourceClass
 metadata:
-  name: database-production
+  name: postgres-rds-orders
 spec:
   concept: database
   scope:
@@ -364,7 +365,7 @@ A plataforma **não** cria um CR intermediário como "WorkloadKubernetes". O Dri
 ```bash
 platform workload get orders --environment prod
 # orders  1.4.0  Ready  driver: kubernetes-workload
-#   db    Ready  driver: existing-database (class database-production)
+#   db    Ready  driver: existing-database (class postgres-rds-orders)
 
 platform environment get prod   # kubeconfig com exec: platform environment credential prod
 kubectl get pods                # o exec passa pelo mesmo caminho: a plataforma delega ao aws-eks
@@ -669,7 +670,7 @@ Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta
 ## Questões em aberto
 
 1. **Escopo do ADR:** o padrão Instance → Class → Driver vale para todos os subsistemas (ADR geral, com resources como primeira aplicação) ou só para resources por enquanto? Inclinação: todos.
-2. **Nomes:** Class por Concept ou genérica; `ResourceClass` ou `ResourcePolicy`; nomes dos Drivers (`in-cluster-database`, `shared-database`, `existing-database`…).
+2. **Nomes:** Class por Concept ou genérica; `ResourceClass` ou `ResourcePolicy`; nomes dos Drivers (`in-cluster-database`, `shared-database`, `existing-database`…). O critério de nome das Classes (o que entrega, não onde vale) já está no princípio 13, saído da sessão ao vivo de 2026-10-16.
 3. **Granularidade do Concept:** `Database` com `engine: postgres`, ou um Concept por engine. O Score pede hoje `type: postgres`.
 4. **Environment lógico × Runtime como recurso** (ver [Alternativas em aberto](#alternativas-em-aberto)).
 5. **Crossplane como camada inteira ou só como Tool** (ver [Alternativas em aberto](#alternativas-em-aberto)).
