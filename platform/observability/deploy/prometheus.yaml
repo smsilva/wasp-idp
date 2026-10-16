@@ -1,4 +1,3 @@
-# RENDERED FROM platform/chart/platform-control-plane/templates/observability/prometheus.yaml: platform init no longer reads this file directly.
 # The Prometheus of the observability subsystem (ADR 0040, #411): scrapes the Istio sidecar of each
 # workload pod in every environment and the cAdvisor of the kubelet; the Platform API reads the golden
 # signals from it on demand (platform/api/src/platform_api/signals.py). Short retention, no volume.

@@ -18,7 +18,6 @@
     | git | >= 2.43.0 | components | `git --version` |
     | k3d | >= 5.9.0 | init | `k3d version` |
     | kubectl | >= 1.34.8 | init | `kubectl version --client` |
-    | Helm | >= 3.14.0 | init | `helm version --short` |
     | make | >= 4.3 | install | `make --version` |
     | Python | >= 3.14.4 | install | `python3 --version` |
     | uv | >= 0.11.7 | install | `uv --version` |
@@ -32,7 +31,7 @@
     Where Docker Desktop is not allowed, [Colima](https://github.com/abiosoft/colima) runs the Docker daemon in a Linux VM. Every tool comes from Homebrew:
 
     ```bash
-    brew install colima docker docker-buildx k3d kubernetes-cli uv git gh bash helm
+    brew install colima docker docker-buildx k3d kubernetes-cli uv git gh bash
     ```
 
     <div class="checks" markdown>
@@ -47,7 +46,6 @@
     | git | >= 2.53.0 | components | `git --version` |
     | k3d | >= 5.9.0 | init | `k3d version` |
     | kubectl | >= 1.35.2 | init | `kubectl version --client` |
-    | Helm | >= 3.14.0 | init | `helm version --short` |
     | uv | >= 0.13.1 | install | `uv --version` |
 
     </div>

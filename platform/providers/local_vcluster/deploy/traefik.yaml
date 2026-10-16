@@ -1,4 +1,3 @@
-# RENDERED FROM platform/chart/platform-control-plane/templates/providers/traefik.yaml: platform init no longer reads this file directly.
 # The shared entry point of every environment (ADR 0036): Traefik on host port 7080 (platform init maps
 # 127.0.0.1:7080), routing *.<environment>.localhost to the Gateway of that environment's vcluster through
 # the Ingress the local_vcluster provider writes in env-<name>. Installed by the helm-controller of k3s,

@@ -1,4 +1,3 @@
-# RENDERED FROM platform/chart/platform-control-plane/templates/providers/shared-pg.yaml: platform init no longer reads this file directly.
 # shared-pg (#305): the shared Postgres the Forager composes into (postgres in mode compose), one
 # role and one database per ResourceRequest. The admin password is in Secret shared-pg-admin,
 # generated once by `platform init`; only the Forager reads it. Every vcluster replicates the Service

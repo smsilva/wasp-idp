@@ -1,4 +1,3 @@
-# RENDERED FROM platform/chart/platform-control-plane/templates/providers/scm-github-provider.yaml: platform init no longer reads this file directly.
 # Provider scm_github (#199): validates each GitHub ScmConnection with the App's key and records the
 # installation, and runs each ComponentCreation (#279) and each Build (#206). Installed by `platform
 # init`. The only reader of the credential Secrets (ADR 0025).

@@ -1,4 +1,3 @@
-# RENDERED FROM platform/chart/platform-control-plane/templates/providers/crossplane-aws-provider.yaml: platform init no longer reads this file directly.
 # Provider crossplane_aws (#436, ADR 0032): a VPC per Environment in an AWS CloudAccount, through
 # Crossplane, and a ProviderConfig per CloudAccount. Installed by `platform init --with-crossplane`.
 apiVersion: v1
