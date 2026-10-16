@@ -705,7 +705,7 @@ slides:
     label: "Domain example from Tailwind Air"
     kind: domain
     message: "O Domain tailwind tem um subdomínio por área de negócio."
-    screen: ["**{domain:tailwind domain}**\n- _contains_ {domain:airport subdomain}\n- _contains_ {domain:booking subdomain}\n- _owned by_ {group:team-tailwind-architecture team}"]
+    screen: ["**{domain:tailwind domain}**\n- _contains_ {domain:airport subdomain}\n- _contains_ {domain:booking subdomain}"]
     notes: |-
       `tailwind`, o Domain da companhia, tem um subdomínio (`subdomainOf`) por área de negócio. Na tela, dois deles: `airport` (check-in, assentos, embarque, bagagem) e `booking` (busca, tarifa, reserva). Os outros são `flight-ops`, `loyalty` e `crew`.
 
