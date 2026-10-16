@@ -776,7 +776,7 @@ slides:
     code: {file: snippets/catalog-info.yaml, focus: 6-7}
     dependsOn: [declare-name]
     notes: |-
-      O que queremos dizer: **`system` posiciona a app na árvore** — liga ao System `greeter`, que liga ao Domain `communication`.
+      O que queremos dizer: **`system` posiciona a app na árvore** — liga ao System `seat-map`, que liga ao subdomain `airport` da Tailwind Air.
 
       `type: service` diz o tipo de Component: poderia ser `website` ou `library`.
 
@@ -792,9 +792,9 @@ slides:
     code: {file: snippets/catalog-info.yaml, focus: 8-9}
     dependsOn: [declare-system]
     notes: |-
-      O que queremos dizer: **`owner` diz quem responde pela app** — liga ao Group `team-alpha`.
+      O que queremos dizer: **`owner` diz quem responde pela app** — liga ao Group `team-airport`.
 
-      `lifecycle: experimental` diz **o quanto dá para confiar** nela; para um Internal Product, em que ponto da jornada ele está.
+      `lifecycle: production` diz **o quanto dá para confiar** nela; para um Internal Product, em que ponto da jornada ele está.
 
       Fonte: references/backstage-catalog.md.
 
@@ -808,7 +808,7 @@ slides:
     notes: |-
       O que queremos dizer: **compartilhar com a organização é uma mudança de estado**, e o catálogo já tem o campo para isso.
 
-      **Valores bem conhecidos do Backstage:** `experimental`, `production` e `deprecated`, no `spec.lifecycle` de Component, API, Resource e System. Hoje **todo o nosso catálogo está em `experimental`**.
+      **Valores bem conhecidos do Backstage:** `experimental`, `production` e `deprecated`, no `spec.lifecycle` de Component, API, Resource e System. Na Tailwind Air, todo o catálogo está em `production`; o catálogo de exemplo da plataforma, em `experimental`.
 
       **Proposta** (ideia, não decidida):
       - `experimental`: o dono provisiona, testa e refina.
@@ -830,7 +830,7 @@ slides:
     code: {file: snippets/catalog-info.yaml, focus: 10-11}
     dependsOn: [declare-ownership]
     notes: |-
-      O que queremos dizer: **a app declara o contrato que oferece.** `providesApis` aponta para a entidade API `greeting-http`.
+      O que queremos dizer: **a app declara o contrato que oferece.** `providesApis` aponta para a entidade API `seats`; o `web-checkin` declara `consumesApis` dela.
 
       Quem consome declara `consumesApis` do outro lado — **o catálogo desenha a aresta.**
 
@@ -843,14 +843,14 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "Do que depende para rodar — descrito pelo papel."
-    code: {file: snippets/catalog-info.yaml, focus: 12-15}
+    code: {file: snippets/catalog-info.yaml, focus: 12-13}
     dependsOn: [declare-apis]
     notes: |-
       O que queremos dizer: **a app declara do que depende pelo papel, nunca pelo serviço de nuvem.**
 
-      Um banco relacional, um tópico de eventos e um bucket de imagens. **Nenhuma linha diz qual produto de nuvem** — o mesmo princípio que reaparece na declaração da app.
+      O `passengers-db` é um banco relacional, e **nenhuma linha diz qual produto de nuvem** — o mesmo princípio que reaparece na declaração da app.
 
-      Baseado em `idp/catalog/communication/catalog-info.yaml`, onde os três Resources do `greeter` declaram `dependencyOf` o `greeting-api` — a mesma aresta, vista do outro lado.
+      É um Resource compartilhado: pertence ao System `reservations`, e o `seat-selection` só o usa (slide `entity-resource-example`). Baseado em `idp/catalog/airline/tailwind/catalog-info.yaml`.
 
       Fonte: references/backstage-catalog.md.
 
@@ -921,11 +921,13 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Breaking change example"
-    message: "A FAQ do Backstage: customerinfo vira customerinfo2."
+    message: "Quebrar o contrato de assentos cria a API seats2, ao lado da seats."
     animations: none
-    screen: ["`customerinfo` → `customerinfo2`"]
+    screen: ["{api:seats rest api} → {api:seats2 rest api}"]
     notes: |-
-      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
+      Na Tailwind Air: mudar o contrato de `seats` de forma incompatível cria a API `seats2`, e o `web-checkin` migra de forma explícita, trocando o `consumesApis`. As duas convivem até a `seats` ser `deprecated`.
+
+      É o mesmo padrão do exemplo da FAQ do Backstage: `customerinfo` → `customerinfo2`.
 
     dependsOn: [major-breaking]
 
@@ -1064,10 +1066,10 @@ slides:
   - name: golden-paths
     act: developer-control
     parent: detail-golden-paths
-    label: "The easy way is the right way"
+    label: "Why developers choose it"
     topic: "Golden Paths"
     message: "O caminho certo precisa ser o mais fácil: é isso que faz o dev escolher o golden path."
-    heading: "The easy way is the right way"
+    heading: "Why developers choose it"
     screen: ["**What:** the supported path for a recurring task", "**Rule:** the easy way _is_ the right way"]
     notes: |-
       O que queremos dizer: **o caminho certo precisa ser o mais fácil** — é a facilidade, não a obrigação, que faz o dev segui-lo.
@@ -1085,7 +1087,7 @@ slides:
     parent: detail-golden-paths
     topic: "Golden Paths"
     message: "O golden path guia sem prender: é opcional e se compõe com outros."
-    heading: "Optional and composable"
+    heading: "How it guides"
     screen: ["**Shape:** optional and composable", "**Risk:** a golden cage _breeds_ shadow platforms"]
     notes: |-
       O que queremos dizer: **o golden path guia sem virar jaula**.
@@ -1176,7 +1178,7 @@ slides:
     topic: "Version Control"
     audiences: [engineering, platform]
     message: "Tudo começa como código versionado."
-    heading: "Version control"
+    heading: "Where code lives"
     screen: ["**What:** source of truth for code and infra", "**Tools:** `GitHub`, `Bitbucket`"]
     notes: |-
       O que queremos dizer: **tudo começa como código versionado** — inclusive o estado desejado da infraestrutura.
@@ -1242,7 +1244,7 @@ slides:
     topic: "Registry"
     message: "O registry guarda cada versão — é aqui que a versão que o catálogo não guarda mora."
     heading: "Where versions live"
-    screen: ["**Registry:** `Azure Container Registry` _stores_ the version", "**Chosen:** per build, a default set by the platform team"]
+    screen: ["**Tool:** `Azure Container Registry`", "**Chosen:** per build, with a platform default"]
     notes: |-
       O que queremos dizer: **a versão que o catálogo não guarda mora aqui** — é a tag da imagem no registry.
 
@@ -1258,9 +1260,9 @@ slides:
     parent: registry
     topic: "Registry"
     label: "Where versions live example"
-    message: "vitrine:1.4.2 é uma versão; vitrine:latest não é."
+    message: "seat-selection:1.4.2 é uma versão; seat-selection:latest não é."
     animations: none
-    screen: ["`vitrine:1.4.2` _is_ a version"]
+    screen: ["{component:seat-selection:1.4.2} _is_ a version"]
     notes: |-
       A tag `1.4.2` é **ilustrativa**: uma imagem publicada só como `:latest` **não identifica versão nenhuma**.
 
@@ -1419,7 +1421,7 @@ slides:
     parent: detail-delivery
     topic: "Delivery"
     message: "A entrega é GitOps: o estado desejado de cada ambiente está no git."
-    heading: "GitOps delivery"
+    heading: "GitOps"
     screen: ["**What:** desired state per environment _lives in_ git", "**Tool:** `Argo CD`"]
     notes: |-
       O que queremos dizer: **o git registra qual versão roda em qual ambiente** — fecha o fio de "Where versions live".
@@ -1983,7 +1985,7 @@ slides:
   - name: portal
     act: api
     parent: detail-portal
-    topic: "Clients"
+    topic: "Portal"
     message: "Antes de criar, o dev precisa descobrir o que já existe: o portal é a vitrine da plataforma."
     heading: "Discovery first"
     screen: ["**Question:** what already exists?", "**Tool:** `Backstage`"]
@@ -2002,7 +2004,7 @@ slides:
   - name: portal-is-not-platform
     act: api
     parent: detail-portal
-    topic: "Clients"
+    topic: "Portal"
     message: "Portal e plataforma não são a mesma coisa: o portal é a interface, a plataforma é o que está atrás dela."
     heading: "Portal is not the platform"
     screen: ["**Portal:** the interface", "**Platform:** the capabilities behind it"]
@@ -2043,7 +2045,7 @@ slides:
   - name: cli-example
     act: api
     parent: detail-cli
-    topic: "Clients"
+    topic: "CLI"
     audiences: [engineering, platform]
     message: "Uma boa CLI mostra as mesmas entidades do portal — para gente, para pipeline e para agente."
     heading: "What a good platform CLI does"
@@ -2089,7 +2091,7 @@ slides:
   - name: editor-and-agent
     act: api
     parent: detail-ide-agents
-    topic: "Clients"
+    topic: "IDE & Agents"
     audiences: [engineering, platform]
     message: "O dev começa no editor — e cada vez mais com um agente ao lado."
     heading: "Where developers work"
@@ -2110,7 +2112,7 @@ slides:
   - name: catalog-as-context
     act: api
     parent: detail-ide-agents
-    topic: "Clients"
+    topic: "IDE & Agents"
     audiences: [engineering, platform]
     message: "O mesmo catálogo serve o portal, a CLI e o agente."
     heading: "One catalog"
@@ -2138,7 +2140,7 @@ slides:
   - name: context-next-to-code
     act: api
     parent: detail-ide-agents
-    topic: "Clients"
+    topic: "IDE & Agents"
     audiences: [engineering, platform]
     message: "O repo diz ao agente como trabalhar no código: comandos, convenções e guardrails."
     heading: "What the repo tells the agent"
@@ -2502,7 +2504,7 @@ slides:
     act: agentic
     topic: "Agents as users"
     message: "Agentes já são usuários da plataforma — e ela vira o contexto e o freio deles."
-    heading: "Agents as users"
+    heading: "A new kind of user"
     screen: ["**Context:** the platform _feeds_ the agent", "**Brakes:** the platform _limits_ the agent", "**Today:** platform clients in 29% of orgs"]
     source: "DORA ROI of AI-assisted Software Development (2026), p. 40; State of AI in Platform Engineering, Vol. 2 (2026), p. 43"
     notes: |-
@@ -2651,7 +2653,7 @@ slides:
     act: agentic
     topic: "Maturity"
     message: "A escala de maturidade vai do humano como loop ao humano como orquestrador."
-    heading: "AI maturity levels"
+    heading: "Levels of AI use"
     screen: ["**Level 0:** no agents", "**Level 1:** AI suggests, human executes", "**Level 2:** agents open PRs in parallel", "**Level 3:** agents act on signals", "**Level 4:** autonomous within guardrails"]
     source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 18"
     notes: |-

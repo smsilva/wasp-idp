@@ -1,7 +1,7 @@
 apiVersion: platform/v1
 
 metadata:
-  name: greeting-api
+  name: seat-selection
 
 resources:
   db:

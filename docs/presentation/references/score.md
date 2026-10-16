@@ -15,6 +15,6 @@ Workload spec independente de plataforma e de ambiente: o dev descreve **o que**
 ## Na apresentação
 
 - Logo depois do slide que introduz Score (`workload-spec`), um quadro de código no estilo IDE (fundo escuro, números de linha, syntax highlight).
-- Arquivo: `snippets/app-spec.yaml` (exemplo `greeting-api`).
+- Arquivo: `snippets/app-spec.yaml` (exemplo `seat-selection`, da Tailwind Air).
 - Mostrado por partes: arquivo inteiro → `containers` → `service` → `resources` → placeholders, cada parte em destaque com o resto esmaecido. Fecha com "nenhuma linha diz onde, em qual nuvem, nem com qual tool" → gancho para o orquestrador.
 - Na fase visual: o mesmo efeito vira slides duplicados com as linhas fora de foco esmaecidas (progressive build).
