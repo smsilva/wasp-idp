@@ -6,7 +6,7 @@
 
 Este documento é o resultado de uma conversa de design (2026-10-16) e foi escrito para que uma sessão nova, sem nenhum contexto, continue de onde ela parou.
 
-**Antes de tudo (agente):** ao receber este documento numa sessão nova, a primeira coisa a fazer, antes de qualquer resumo, é perguntar: "Você está com uma pessoa para quem precisamos introduzir o tema? Se sim, qual o nome dela?". Se sim, seguir a [Sessão ao vivo](#sessão-ao-vivo-trazer-um-colega-para-pensar-junto). Se não, seguir os passos abaixo.
+**Antes de tudo (agente):** ao receber este documento numa sessão nova, a primeira coisa a fazer, antes de qualquer resumo, é perguntar: "Você está com mais alguém (uma pessoa ou um grupo) para quem precisamos introduzir o tema?". Se sim, seguir a [Sessão ao vivo](#sessão-ao-vivo-trazer-um-colega-para-pensar-junto). Se não, seguir os passos abaixo.
 
 **Para retomar numa sessão nova (agente ou pessoa):**
 
@@ -748,14 +748,14 @@ O modelo tem muitos conceitos, e apresentá-los todos de uma vez confunde. O gui
 
 ### Sessão ao vivo: trazer um colega para pensar junto
 
-O autor e um colega, juntos numa chamada, com a tela compartilhada mostrando uma sessão nova do Claude Code. O colega chega sem nenhum contexto. O objetivo é que ele entenda o modelo bem o bastante para questioná-lo, não receber o modelo pronto. O agente conduz, o autor complementa, e o colega é quem precisa entender.
+O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartilhada mostrando uma sessão nova do Claude Code. Quem chega vem sem nenhum contexto e vai colaborar no modelo. O objetivo é entender o modelo bem o bastante para questioná-lo, não recebê-lo pronto. O agente conduz, o autor complementa, e quem chegou é quem precisa entender.
 
-**Como a sessão começa:** o autor abre uma sessão limpa e manda o path deste documento (`@docs/superpowers/specs/2026-10-16-conceptual-model-design.md`), talvez já dizendo que está com alguém. O agente lê o documento inteiro e, antes de qualquer resumo, pergunta: "Você está com uma pessoa para quem precisamos introduzir o tema? Se sim, qual o nome dela?". Se a resposta for sim, o agente segue o roteiro abaixo. Se for não, segue [Para retomar numa sessão nova](#como-usar-este-documento).
+**Como a sessão começa:** o autor abre uma sessão limpa e manda o path deste documento (`@docs/superpowers/specs/2026-10-16-conceptual-model-design.md`), talvez já dizendo que está com mais alguém. O agente lê o documento inteiro e, antes de qualquer resumo, pergunta: "Você está com mais alguém (uma pessoa ou um grupo) para quem precisamos introduzir o tema?". Se a resposta for sim, o agente segue o roteiro abaixo. Se for não, segue [Para retomar numa sessão nova](#como-usar-este-documento).
 
 **Regras para o agente:**
 
-- **Ir direto ao ponto:** depois do nome, a primeira mensagem é uma saudação de uma linha seguida da pergunta do passo 1 do roteiro. Sem explicar o objetivo da sessão, que o modelo é um rascunho ou como a conversa vai funcionar: o autor já fez esse enquadramento.
-- **O nome só na saudação.** Depois dela, falar direto, sem vocativo: repetir o nome soa artificial.
+- **Ir direto ao ponto:** depois da resposta, a primeira mensagem é uma saudação curta seguida da pergunta do passo 1 do roteiro. Sem explicar o objetivo da sessão, que o modelo é um rascunho ou como a conversa vai funcionar: o autor já fez esse enquadramento.
+- **Sem nomes:** a saudação e as mensagens seguintes se dirigem a quem chegou como colaborador, sem vocativo nem nome de ninguém, mesmo que o autor os informe. Usar "vocês" quando for um grupo e "você" quando for uma pessoa.
 - **O público é de programadores muito experientes:** ir direto ao ponto, sem didatismo, sem explicar o óbvio.
 - **Menos texto, mais exemplos:** mostrar um YAML, um comando ou uma tabela curta em vez de um parágrafo; a prosa só liga os exemplos.
 - **pt-BR**, com os termos do modelo e os termos técnicos em inglês (Persistent Volume, nunca "volume persistente").
@@ -768,7 +768,7 @@ O autor e um colega, juntos numa chamada, com a tela compartilhada mostrando uma
 
 **Roteiro:**
 
-1. **Relembrar o PVC do Kubernetes, sem falar da plataforma.** A primeira mensagem é só isto: "Oi, <nome>! Vamos começar pelo Kubernetes, antes da plataforma: o que você já sabe sobre Persistent Volumes, PersistentVolumeClaim e StorageClass?". Se a pessoa pedir uma recapitulação, responder com o PVC e a StorageClass em YAML (os do [paralelo](#o-paralelo-com-pvc-lado-a-lado)) e uma linha de comentário em cada, sem lista de definições. Senão, completar a partir do que a pessoa sabe: o Pod quer um volume; o PersistentVolumeClaim é o pedido ("10Gi, leitura e escrita"), sem dizer onde nem como; a StorageClass, escrita pelo admin do cluster, diz como materializar (`provisioner: ebs.csi.aws.com`, `parameters: {type: gp3}`); a StorageClass default atende o PVC que não nomeia uma. Nos dois casos, terminar com a pergunta de transição: "Seguimos para o que acontece quando o PVC é criado?".
+1. **Relembrar o PVC do Kubernetes, sem falar da plataforma.** A primeira mensagem é só isto: "Oi! Antes da plataforma, vamos partir do Kubernetes: o que vocês já sabem sobre Persistent Volumes, PersistentVolumeClaim e StorageClass?" ("você sabe" quando for uma pessoa). Se a pessoa pedir uma recapitulação, responder com o PVC e a StorageClass em YAML (os do [paralelo](#o-paralelo-com-pvc-lado-a-lado)) e uma linha de comentário em cada, sem lista de definições. Senão, completar a partir do que a pessoa sabe: o Pod quer um volume; o PersistentVolumeClaim é o pedido ("10Gi, leitura e escrita"), sem dizer onde nem como; a StorageClass, escrita pelo admin do cluster, diz como materializar (`provisioner: ebs.csi.aws.com`, `parameters: {type: gp3}`); a StorageClass default atende o PVC que não nomeia uma. Nos dois casos, terminar com a pergunta de transição: "Seguimos para o que acontece quando o PVC é criado?".
 2. **O CSI driver em detalhe.** O controller do driver observa os PVCs cuja StorageClass aponta para ele (e só esses); chama a API do storage (AWS EBS); cria o volume; o PersistentVolume registra o volume criado e o PVC fica `Bound`. A escolha fica gravada no próprio PVC (annotation `volume.kubernetes.io/storage-provisioner`). O Kubernetes não sabe nada de EBS: quem sabe é o driver. Trocar EBS por NetApp muda a StorageClass e o driver instalado, e o PVC continua igual: o user do cluster não precisa saber nada do storage para pedir um volume.
 3. **Dar nome às camadas, ainda no Kubernetes:** volume (Concept), PVC (Instance), StorageClass (Class), CSI driver (Driver), o Pod do driver (Controller), a API do EBS (Tool), AWS (Vendor). Só a primeira coluna da tabela de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado).
 4. **A plataforma em uma frase:** a Platform API recebe pedidos (ambiente, deploy, banco) e controllers os materializam no Kubernetes. Mostrar o Postgres `db` do `orders`: o Score pede `type: postgres`, e conforme o ambiente vira um Postgres no cluster, um database num Postgres compartilhado ou um RDS existente: o mesmo padrão do PVC.
