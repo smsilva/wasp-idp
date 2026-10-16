@@ -330,6 +330,12 @@ def test_color_key_slide(tmp_path):
 def test_aligned_subitems():
   # `align: true` on a value made of sub-items: each word group in its own column of an invisible table.
   out = ro.rich("**{resource:t topic}**\n- _read by_ {component:a service} in {domain:x subdomain}\n- _read by_ {component:bb service} in {domain:y subdomain}", table=True)
-  assert "<span class='value table' style='--cols: 7'>" in out
+  assert "<span class='value table' style='--cols: 6'>" in out
   assert ("<span class='c'><em>read by</em></span><span class='c'><span class='entity k-component'><span class='n'>a</span></span></span>"
           "<span class='c'><span class='entity k-component'><span class='t'>service</span></span></span><span class='c'>in</span>") in out
+
+
+def test_aligned_subitems_with_header():
+  # `align: {header: [...]}`: the column names in a row above, in the kind's color.
+  out = ro.rich("**{resource:t topic}**\n- _read by_ {component:a} {domain:x}", table=["", "{component:service}", "{domain:subdomain}"])
+  assert ("<span class='sub colhead'><span class='c'></span><span class='c'><span class='entity k-component'><span class='t'>service</span></span></span>") in out

@@ -112,8 +112,15 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .item.hidden { visibility: hidden; }
 .stage .item .sub { display: block; margin-top: 0.5cqw; }
 /* `align: true` on sub-items: an invisible table, the dash and each word group in its own column. */
-.stage .item .value.table { display: grid; grid-template-columns: repeat(var(--cols), max-content); column-gap: 0.3em; width: max-content; }
+.stage .item .value.table { display: grid; grid-template-columns: repeat(var(--cols), max-content); width: max-content; }
 .stage .item .value.table .head { grid-column: 1 / -1; }
+.stage .item.labeled:has(.value.table) { margin-top: 0; }
+.stage .item.labeled .value.table { margin-top: 1.4cqw; row-gap: 0.3em; column-gap: 0.9em; }
+.stage .item .value.table .sub { margin-top: 0; }
+.stage .item .value.table .sub.colhead { font-size: 0.8em; }
+/* The dash goes inside the relation's cell, so it sits next to it and not a column apart. */
+.stage .item .value.table .sub::before { content: none; }
+.stage .item .value.table .sub:not(.colhead) .c:first-child::before { content: '- '; font-style: normal; color: #6b7a8d; }
 .stage .item .value.table .sub { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
 .stage .item .sub::before { content: '- '; }
 .stage .item .sub.dim, .stage .item .head.dim { color: #6b7a8d; }
@@ -322,7 +329,13 @@ function fitAligned(stage) {
     const left = list.getBoundingClientRect().left;
     const rows = list.classList.contains('entities') ? '.item, .sub' : '.value, .item';
     const widest = Math.max(...Array.from(list.querySelectorAll(rows)).map((el) => el.getBoundingClientRect().right - left));
-    if (widest > room) list.style.setProperty('--fit', (room / widest * 0.98).toFixed(3));
+    let fit = widest > room ? room / widest * 0.98 : 1;
+    // Nor taller than the room left above the footer.
+    const footer = list.closest('.stage').querySelector('.footer');
+    const bottom = (footer ? footer.getBoundingClientRect().top : inner.getBoundingClientRect().bottom - parseFloat(style.paddingBottom));
+    const top = list.getBoundingClientRect().top, height = list.getBoundingClientRect().bottom - top;
+    if (top + height > bottom - room * 0.06) fit = Math.min(fit, (bottom - room * 0.06 - top) / height);
+    if (fit < 1) list.style.setProperty('--fit', fit.toFixed(3));
   });
 }
 document.fonts.ready.then(() => { if (deck.classList.contains('on')) fitAligned(stages[current]); });
@@ -876,9 +889,13 @@ def rich(text, subs=None, table=False):
       raw = re.match(r"\*\*(.+?)\*\*\n(.*)", text, re.S).group(2)
       items = [cells(item) for item in ("\n" + raw if raw.startswith("- ") else raw).split("\n- ")[1:]]
     value = head + "".join(f"<span class='sub{state(i)}'>{sub}</span>" for i, sub in enumerate(items))
+    if isinstance(table, list) and items:
+      # Column names (`align: {header: [...]}`): a row above the sub-items, always shown; `{kind:type}` in the kind's color, faded.
+      name = lambda h: (lambda m: f"<span class='entity k-{m.group(1)}'><span class='t'>{m.group(2)}</span></span>" if m else rich(h))(ENTITY.fullmatch(h))
+      value = head + "<span class='sub colhead'>" + "".join(f"<span class='c'>{name(h)}</span>" for h in table) + "</span>" + value[len(head):]
     if table and items:
-      # The dash is the first column, then as many as the longest row has cells.
-      columns = 1 + max(sub.count("<span class='c'>") for sub in items)
+      # As many columns as the longest row has cells.
+      columns = max(sub.count("<span class='c'>") for sub in items)
       return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value table' style='--cols: {columns}'>{value}</span>"
     return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value'>{value}</span>"
   out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
@@ -1035,6 +1052,8 @@ def render_stage(step, base, outline=None):
     # On items whose value is a list of sub-items, the sub-items' words line up in columns instead.
     align = bool(step["slide"] and step["slide"].get("align")) and aligned(step["items"])
     table = bool(step["slide"] and step["slide"].get("align")) and not align
+    if table and isinstance(step["slide"]["align"], dict):
+      table = step["slide"]["align"].get("header") or True
     subs = lambda state: int(state.split("subs-")[1]) if "subs-" in state else None
     render = lambda text, state: rich_aligned(text) if align and "heading" not in state else rich(text, subs(state), table)
     entities = " entities" if not align and any(ENTITY.search(text) for text, _ in step["items"]) else ""

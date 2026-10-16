@@ -149,7 +149,8 @@ parts:
 #   heading    título do slide: aparece sozinho no 1º passo e fica no alto, esmaecido, enquanto os itens de screen entram
 #   source     origem curta mostrada no rodapé do slide (obrigatória quando há número na tela)
 #   align      true: itens **Rótulo:** valor viram tabela invisível (valores alinhados à esquerda);
-#              num item com subitens "- ", as palavras dos subitens viram colunas alinhadas
+#              num item com subitens "- ", as palavras dos subitens viram colunas alinhadas;
+#              {header: ["", "{component:service}", ...]}: nomes das colunas acima, e o tipo sai das linhas
 #   subitems   together: subitens "- " de um valor aparecem todos de uma vez (default: um por passo)
 #   code       {file, lines?, focus?}: bloco de código estilo IDE no lugar de `screen`;
 #              `focus` realça linhas e esmaece o resto (mostrar um arquivo por partes)
@@ -737,8 +738,8 @@ slides:
     topic: "Software Catalog"
     message: "Um atraso de voo vira um evento que chega a cinco subdomínios, e o catálogo mostra quem depende dele."
     heading: "Across the Tailwind domain"
-    align: true
-    screen: ["**{resource:flight-events topic}**\n- _written by_ {component:flight-tracker service} in {domain:flight-ops subdomain}\n- _read by_ {component:boarding-pass-issuer service} in {domain:airport subdomain}\n- _read by_ {component:bag-tracker service} in {domain:airport subdomain}\n- _read by_ {component:rebooking-assistant service} in {domain:booking subdomain}\n- _read by_ {component:miles-ledger service} in {domain:loyalty subdomain}\n- _read by_ {component:roster-planner service} in {domain:crew subdomain}"]
+    align: {header: ["", "{component:service}", "{domain:subdomain}"]}
+    screen: ["**{resource:flight-events topic}**\n- _written by_ {component:flight-tracker} {domain:flight-ops}\n- _read by_ {component:boarding-pass-issuer} {domain:airport}\n- _read by_ {component:bag-tracker} {domain:airport}\n- _read by_ {component:rebooking-assistant} {domain:booking}\n- _read by_ {component:miles-ledger} {domain:loyalty}\n- _read by_ {component:roster-planner} {domain:crew}"]
     notes: |-
       O que queremos dizer: **a árvore mostra o caminho de cima para baixo; o catálogo também mostra o que atravessa os galhos.**
 
