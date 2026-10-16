@@ -118,6 +118,29 @@ nav:
           - Sign out: walkthrough/cleanup/sign-out.md
   - Demo:
       - demo/index.md
+      - CLI:
+          - demo/cli/index.md
+          - Get ready: demo/cli/before.md
+          - Create the app: demo/cli/create.md
+          - Clone the app: demo/cli/clone.md
+          - A branch and a change: demo/cli/branch.md
+          - Push the branch: demo/cli/push.md
+          - Build the branch: demo/cli/build.md
+          - Create an environment: demo/cli/environment.md
+          - Deploy and call it:
+              - Deploy the branch: demo/cli/deploy/version.md
+              - Open the home page: demo/cli/deploy/page.md
+              - Pick a seat: demo/cli/deploy/seat.md
+              - Check the database: demo/cli/deploy/database.md
+          - Database down:
+              - Stop the database: demo/cli/database/stop.md
+              - See the app without it: demo/cli/database/check.md
+              - Bring it back: demo/cli/database/start.md
+          - Golden signals: demo/cli/signals.md
+          - A second environment: demo/cli/second.md
+          - Call it there: demo/cli/second-call.md
+          - Where the app runs: demo/cli/running-in.md
+          - Wrap up: demo/cli/cleanup.md
       - MCP:
           - demo/mcp/index.md
           - Get ready:
@@ -135,21 +158,6 @@ nav:
           - Deploy it: demo/mcp/deploy.md
           - What runs: demo/mcp/signals.md
           - Wrap up: demo/mcp/cleanup.md
-      - CLI:
-          - demo/cli/index.md
-          - Get ready: demo/cli/before.md
-          - Create the app: demo/cli/create.md
-          - Clone the app: demo/cli/clone.md
-          - A branch and a change: demo/cli/branch.md
-          - Push the branch: demo/cli/push.md
-          - Build the branch: demo/cli/build.md
-          - Create an environment: demo/cli/environment.md
-          - Deploy and call it: demo/cli/deploy.md
-          - Golden signals: demo/cli/signals.md
-          - A second environment: demo/cli/second.md
-          - Call it there: demo/cli/second-call.md
-          - Where the app runs: demo/cli/running-in.md
-          - Wrap up: demo/cli/cleanup.md
   - Architecture: architecture.md
   - Reference:
       - reference/index.md

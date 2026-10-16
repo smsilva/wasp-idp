@@ -28,11 +28,11 @@ platform environment list \
 ``` { .json .output title="output" }
 [
   {
-    "name": "greetings-test",
+    "name": "checkin-test",
     "profile": "ephemeral",
     "expiresAt": "2026-10-10T21:35:22Z",
     "status": "ready",
-    "message": "vcluster running in namespace env-greetings-test, API on 127.0.0.1:7100",
+    "message": "vcluster running in namespace env-checkin-test, API on 127.0.0.1:7100",
     "port": 7100,
     "createdAt": "2026-10-10T20:35:22Z"
   }

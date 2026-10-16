@@ -51,7 +51,7 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <text class="s" x="354" y="324">picks the mode, provisions</text>
 <rect class="box" x="340" y="404" width="230" height="90" rx="6"/>
 <text class="t" x="354" y="428">ResourceRequest</text>
-<text class="m" x="354" y="448">demo.hello-api.db</text>
+<text class="m" x="354" y="448">demo.seat-selection.db</text>
 <text class="s" x="354" y="467">mode compose · Ready</text>
 <text class="s" x="354" y="484">outputs · secretRef</text>
 <rect class="box" x="340" y="556" width="230" height="64" rx="6"/>
@@ -63,7 +63,7 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <text class="t" x="694" y="96">shared-pg</text>
 <text class="s" x="694" y="116">role + database</text>
 <text class="s" x="694" y="133">one pair per ResourceRequest</text>
-<text class="m dim" x="694" y="172">hello-api-db-&lt;hash&gt;</text>
+<text class="m dim" x="694" y="172">seat-selection-db-&lt;hash&gt;</text>
 <rect class="box" x="880" y="70" width="180" height="120" rx="6"/>
 <text class="t" x="894" y="96">Secret resource.&lt;rr&gt;</text>
 <text class="s" x="894" y="116">password, generated once</text>
@@ -83,14 +83,14 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <rect class="ns" x="666" y="452" width="398" height="172" rx="6"/>
 <text class="cap" x="1052" y="470" text-anchor="end">namespace apps</text>
 <rect class="box" x="680" y="486" width="180" height="124" rx="6"/>
-<text class="t" x="694" y="510">Deployment hello-api</text>
+<text class="t" x="694" y="510">Deployment seat-selection</text>
 <text class="m dim" x="694" y="532">PGHOST=</text>
 <text class="m dim" x="706" y="548">shared-pg.resources</text>
 <text class="m dim" x="694" y="570">PGPASSWORD ←</text>
 <text class="m dim" x="706" y="586">secretKeyRef</text>
 <rect class="box" x="880" y="486" width="170" height="124" rx="6"/>
 <text class="t" x="894" y="510">Secret</text>
-<text class="m dim" x="894" y="532">hello-api-db-&lt;hash&gt;</text>
+<text class="m dim" x="894" y="532">seat-selection-db-&lt;hash&gt;</text>
 <text class="s" x="894" y="552">password</text>
 <path class="edge" d="M240,68 H336" marker-end="url(#fg-arr)"/>
 <text class="lbl" x="290" y="60" text-anchor="middle">deploy</text>
@@ -118,12 +118,12 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <text class="lbl" x="778" y="244">replicateServices.fromHost</text>
 </svg>
 </div>
-<figcaption>The deploy of <code>hello-api</code> in <code>demo</code>, with the policy on <code>compose</code>. The highlighted arrows are the Forager's work: it creates the role and the database in <code>shared-pg</code> and writes the Secrets, the password in the control plane and a copy in the namespace <code>apps</code> of the vcluster. In <code>provision</code> mode it creates the StatefulSet in the vcluster instead of talking SQL. The Deployment never holds the password, only a <code>secretKeyRef</code>.</figcaption>
+<figcaption>The deploy of <code>seat-selection</code> in <code>demo</code>, with the policy on <code>compose</code>. The highlighted arrows are the Forager's work: it creates the role and the database in <code>shared-pg</code> and writes the Secrets, the password in the control plane and a copy in the namespace <code>apps</code> of the vcluster. In <code>provision</code> mode it creates the StatefulSet in the vcluster instead of talking SQL. The Deployment never holds the password, only a <code>secretKeyRef</code>.</figcaption>
 </figure>
 
 1. `platform workload deploy` reaches the API, which writes `WorkloadRevision` 10, still open.
 2. The Forager sees the open revision and reads the Score in `Version.spec.appSpec`. For each resource (`db: postgres`) it walks the `BindingPolicy`s: the environment's first (`env-demo`), then its profile's (`profile-ephemeral` for an `ephemeral` environment, #329), then the platform default (`platform-default`). The first item that matches `type`, `class` and `id` wins.
-3. It creates or reuses the `ResourceRequest` `demo.hello-api.db`, with the mode fixed in `spec`. When the policy now resolves another mode, the resource is left alone and the revision ends as `ResourceModeChanged`.
+3. It creates or reuses the `ResourceRequest` `demo.seat-selection.db`, with the mode fixed in `spec`. When the policy now resolves another mode, the resource is left alone and the revision ends as `ResourceModeChanged`.
 4. The provisioner of the mode makes the database and writes `outputs` (`host`, `port`, `database`, `username`), `secretRef` and the condition `Ready` to the `status`.
 5. Meanwhile the workload provider keeps the revision in `ResourcesPending`. Once the `ResourceRequest` is `Ready`, it replaces `${resources.db.*}` with the `outputs`, turns the password into a `secretKeyRef` and applies the Deployment.
 6. On `workload remove`, the `ResourceRequest`s are deleted and the Forager's finalizer undoes each one: `DROP DATABASE` and `DROP ROLE` in `compose`, the StatefulSet and the Secrets in `provision`.
@@ -157,7 +157,7 @@ A deploy runs two translations of the same Score. The **Forager** turns the `res
 <rect class="frame" x="345" y="196" width="300" height="120" rx="8"/>
 <text class="cap" x="359" y="216">host · shared-pg</text>
 <rect class="box" x="365" y="232" width="125" height="30" rx="4"/>
-<text class="m" x="427" y="251" text-anchor="middle">demo · hello-api</text>
+<text class="m" x="427" y="251" text-anchor="middle">demo · seat-selection</text>
 <rect class="box" x="500" y="232" width="125" height="30" rx="4"/>
 <text class="m dim" x="562" y="251" text-anchor="middle">qa · orders</text>
 <rect class="box" x="365" y="272" width="125" height="30" rx="4"/>
@@ -202,7 +202,7 @@ Each object has a single writer of its `status`, so the Forager and the workload
 | `WorkloadRevision` | API (spec), workload provider (status) | Forager |
 | `BindingPolicy` | API (`env-<name>` and `profile-<profile>`, `platform-admins` only), `platform init` (`platform-default`, and `profile-ephemeral` when missing) | Forager |
 | `ResourceRequest` | **Forager** (spec and status) | workload provider |
-| catalog `Resource` | **Forager**, when the Score has no `id` (`hello-api-db`) | API, Backstage |
+| catalog `Resource` | **Forager**, when the Score has no `id` (`seat-selection-db`) | API, Backstage |
 | database and Secrets | the **provisioner** of the mode, inside the Forager | the app, through `secretKeyRef` |
 | `HTTPRoute` in the vcluster (`route`) | the **provisioner** `route/provision`, inside the Forager | the `Gateway` of the environment |
 | Deployment in the vcluster | workload provider | the vcluster |

@@ -75,7 +75,7 @@ While the component is not in the index yet, `get` shows the creation steps.
 `Protected` makes `main` change only through a pull request, with no approval required: the org may have a single member, who cannot approve their own PR (ADR 0017). On a private repo of a GitHub Free org, `--wait` ends with the warning:
 
 ``` { .text .output title="output" }
-⚠ main of wasp-foundry/hello-api is not protected: GitHub answered 403: PUT /repos/wasp-foundry/hello-api/branches/main/protection: Upgrade to GitHub Pro or make this repository public to enable this feature.
+⚠ main of wasp-foundry/seat-selection is not protected: GitHub answered 403: PUT /repos/wasp-foundry/seat-selection/branches/main/protection: Upgrade to GitHub Pro or make this repository public to enable this feature.
 ```
 
 A GitHub failure in any step is one of:

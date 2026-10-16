@@ -11,15 +11,15 @@ It lists what is still there, asks before deleting (`--yes` skips the question) 
 ```bash
 platform environment delete demo
 
-platform environment delete greetings-test
+platform environment delete checkin-test
 
-gh repo delete wasp-foundry/hello-api --yes
+gh repo delete wasp-foundry/seat-selection --yes
 
 gh api \
   --method DELETE \
-  orgs/wasp-foundry/packages/container/hello-api
+  orgs/wasp-foundry/packages/container/seat-selection
 
-rm -rf /tmp/hello-api
+rm -rf /tmp/seat-selection
 ```
 
 The component stays in the catalog index. `gh` needs the `delete_repo` and `delete:packages` scopes, which the script checks before deleting anything: `gh auth refresh --hostname github.com --scopes delete_repo,delete:packages`.

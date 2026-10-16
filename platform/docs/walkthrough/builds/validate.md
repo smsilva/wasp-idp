@@ -2,10 +2,10 @@
 
 The Workload Spec is the `app-spec.yaml` (Score) of a version. `workload spec validate` runs the same check as the build ([What a build refuses](refused.md)) on a local file, before any commit: the Score schema, the resource types the platform provisions and each `resources.<name>.id` in the catalog. Anyone signed in can run it.
 
-In the clone of [Push a branch](branch.md), on `feat/greetings`:
+In the clone of [Push a branch](branch.md), on `feat/seat-pick`:
 
 ```bash
-cd /tmp/hello-api
+cd /tmp/seat-selection
 
 platform workload spec validate
 ```
@@ -17,10 +17,10 @@ platform workload spec validate
 On `feat/bad-spec` ([What a build refuses](refused.md)), the same errors the build reported come back without a build:
 
 ```bash
-git -C /tmp/hello-api switch feat/bad-spec
+git -C /tmp/seat-selection switch feat/bad-spec
 
 platform workload spec validate \
-  --file /tmp/hello-api/app-spec.yaml
+  --file /tmp/seat-selection/app-spec.yaml
 ```
 
 ``` { .text .output title="output" }

@@ -1,6 +1,6 @@
 # Connect an AI agent
 
-`platform-mcp` is the platform's **MCP server**: an AI agent (Claude Code or any other MCP client) calls the Platform API through it, with the same answers the CLI gets. Every tool calls one `/v1/*` route; the API decides what is allowed and writes the audit trail (ADR 0027). This step comes last because the agent works on what the walkthrough built: the environment `demo`, the catalog of `team-alpha` and the component `hello-api`.
+`platform-mcp` is the platform's **MCP server**: an AI agent (Claude Code or any other MCP client) calls the Platform API through it, with the same answers the CLI gets. Every tool calls one `/v1/*` route; the API decides what is allowed and writes the audit trail (ADR 0027). This step comes last because the agent works on what the walkthrough built: the environment `demo`, the catalog of `team-alpha` and the component `seat-selection`.
 
 | Toolset | What the agent can do |
 |---|---|
@@ -91,10 +91,10 @@ Which environments do I have, what is their status, and when do they expire?
 The agent calls `environments_list` and `environments_get`. It never sees a kubeconfig: you get yours with `platform environment get demo`.
 
 ```text
-Which systems does team-airport own, which components belong to seat-map, and where does hello-api run?
+Which systems does team-airport own, which components belong to seat-map, and where does seat-selection run?
 ```
 
-The agent calls `catalog_list` with `kind: system` and `owner: team-airport`, `catalog_components_list` with `system: seat-map`, then `catalog_components_get` for `hello-api`: its newest builds and versions, and a `runningIn` that lists only the environments you can use.
+The agent calls `catalog_list` with `kind: system` and `owner: team-airport`, `catalog_components_list` with `system: seat-map`, then `catalog_components_get` for `seat-selection`: its newest builds and versions, and a `runningIn` that lists only the environments you can use.
 
 ## Let the agent create an environment
 

@@ -69,7 +69,7 @@ def validate(
     fail(f"{file.name}: {len(result['errors'])} error(s)")
 
 
-@spec_app.command("get", epilog=examples("platform workload spec get --component hello-api", "platform workload spec get --component hello-api --version 0.1.0-greetings.b5f9569"))
+@spec_app.command("get", epilog=examples("platform workload spec get --component seat-selection", "platform workload spec get --component seat-selection --version 0.1.0-seat-pick.b5f9569"))
 def get(
   component: Annotated[str, typer.Option(help="Component whose spec to show.")],
   version: Annotated[str | None, typer.Option(help="Version from the index; by default the newest.")] = None,
@@ -138,7 +138,7 @@ def _wait(client: PlatformClient, revision: dict, timeout: int) -> dict:
   return revision
 
 
-@app.command("deploy", epilog=examples("platform workload deploy --component hello-api --environment demo --version 0.1.0-greetings.b5f9569 --wait", "platform workload deploy --component hello-api --environment demo --instance hello-api-canary --branch feat/greetings --replicas 2"))
+@app.command("deploy", epilog=examples("platform workload deploy --component seat-selection --environment demo --version 0.1.0-seat-pick.b5f9569 --wait", "platform workload deploy --component seat-selection --environment demo --instance seat-selection-canary --branch feat/seat-pick --replicas 2"))
 def deploy(
   component: Annotated[str, typer.Option(help="Component to deploy.")],
   environment: Annotated[str, typer.Option(help="Environment to deploy to.")],
@@ -243,7 +243,7 @@ def _previous(client: PlatformClient, environment: str, instance: str) -> int:
   return max(candidates)
 
 
-@app.command("rollback", epilog=examples("platform workload rollback hello-api --environment demo", "platform workload rollback hello-api-canary@demo --revision 3 --wait"))
+@app.command("rollback", epilog=examples("platform workload rollback seat-selection --environment demo", "platform workload rollback seat-selection-canary@demo --revision 3 --wait"))
 def rollback(
   target: InstanceArgument = None,
   environment: EnvironmentOption = None,
@@ -267,7 +267,7 @@ def rollback(
   _report(client, created, wait, output, f"rolling back to revision {target} ({created['version']}) …")
 
 
-@app.command("remove", epilog=examples("platform workload remove hello-api-canary@demo", "platform workload remove hello-api --environment demo --wait"))
+@app.command("remove", epilog=examples("platform workload remove seat-selection-canary@demo", "platform workload remove seat-selection --environment demo --wait"))
 def remove(
   target: InstanceArgument = None,
   environment: EnvironmentOption = None,
@@ -373,7 +373,7 @@ def apply(
     fail(f"{environment}: {len(failed)} of {len(ended)} revision(s) did not succeed")
 
 
-@app.command("list", epilog=examples("platform workload list", "platform workload list --environment demo", "platform workload list --component hello-api --output json"))
+@app.command("list", epilog=examples("platform workload list", "platform workload list --environment demo", "platform workload list --component seat-selection --output json"))
 def list_(
   environment: Annotated[str | None, typer.Option(help="Only the workloads of this environment; by default every environment you can use.")] = None,
   component: Annotated[str | None, typer.Option(help="Only the instances of this component.")] = None,
@@ -398,7 +398,7 @@ def list_(
   )
 
 
-@app.command("get", epilog=examples("platform workload get hello-api --environment demo", "platform workload get hello-api-canary@demo", "platform workload get hello-api@demo --hide-empty --output json"))
+@app.command("get", epilog=examples("platform workload get seat-selection --environment demo", "platform workload get seat-selection-canary@demo", "platform workload get seat-selection@demo --hide-empty --output json"))
 def get_(
   target: InstanceArgument = None,
   environment: EnvironmentOption = None,
@@ -465,7 +465,7 @@ def signals_line(item: dict) -> str:
   return " · ".join(parts)
 
 
-@app.command("signals", epilog=examples("platform workload signals hello-api --environment demo", "platform workload signals hello-api-canary@demo --window 1h --output json"))
+@app.command("signals", epilog=examples("platform workload signals seat-selection --environment demo", "platform workload signals seat-selection-canary@demo --window 1h --output json"))
 def signals(
   target: InstanceArgument = None,
   environment: EnvironmentOption = None,
@@ -488,7 +488,7 @@ def signals(
     typer.echo(f"  {item['message']} ({item['window']})")
 
 
-@app.command("history", epilog=examples("platform workload history --environment demo", "platform workload history --environment demo --component hello-api"))
+@app.command("history", epilog=examples("platform workload history --environment demo", "platform workload history --environment demo --component seat-selection"))
 def history(
   environment: Annotated[str, typer.Option(help="Environment whose revisions to list.")],
   component: Annotated[str | None, typer.Option(help="Only the revisions of this component, in all its instances.")] = None,
@@ -566,7 +566,7 @@ def _rule_text(rule: dict) -> str:
   return " · ".join(f"{instance} {weight}%" for instance, weight in rule["weights"].items())
 
 
-@app.command("route", epilog=examples("platform workload route --component hello-api --environment demo --to hello-api-canary --header x-sandbox=pr-42", "platform workload route --component hello-api --environment demo --to hello-api-canary --weight 10"))
+@app.command("route", epilog=examples("platform workload route --component seat-selection --environment demo --to seat-selection-canary --header x-sandbox=pr-42", "platform workload route --component seat-selection --environment demo --to seat-selection-canary --weight 10"))
 def route(
   component: Annotated[str, typer.Option(help="Component whose traffic to route; the route attaches to the Service of its main instance.")],
   environment: Annotated[str, typer.Option(help="Environment of the instances.")],

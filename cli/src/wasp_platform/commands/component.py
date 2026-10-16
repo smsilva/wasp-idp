@@ -137,9 +137,9 @@ def _wait(client: PlatformClient, creation: dict, timeout: int, quiet: bool) -> 
 
 
 @app.command("create", epilog=examples(
-  "platform catalog component create hello-api --system seat-map --type service --wait",
-  "platform catalog component create hello-api --system seat-map --owner team-airport --template python-service --param port=8080",
-  "platform catalog component create hello-api --system seat-map --replace --wait",
+  "platform catalog component create seat-selection --system seat-map --type service --wait",
+  "platform catalog component create seat-selection --system seat-map --owner team-airport --template python-service --param port=8080",
+  "platform catalog component create seat-selection --system seat-map --replace --wait",
 ))
 def create(
   name: Annotated[str, typer.Argument(help="Name of the new component, also the repo name.")],
@@ -242,9 +242,9 @@ def _next(component: dict) -> None:
 
 
 @app.command("get", epilog=examples(
-  "platform catalog component get hello-api",
-  "platform catalog component get hello-api --verbose",
-  "platform catalog component get hello-api --hide-empty --output json",
+  "platform catalog component get seat-selection",
+  "platform catalog component get seat-selection --verbose",
+  "platform catalog component get seat-selection --hide-empty --output json",
 ))
 def get(
   name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")],
@@ -288,8 +288,8 @@ def get(
 
 
 @app.command("clone", epilog=examples(
-  "platform catalog component clone hello-api",
-  "platform catalog component clone hello-api --https --directory ~/src/hello-api",
+  "platform catalog component clone seat-selection",
+  "platform catalog component clone seat-selection --https --directory ~/src/seat-selection",
 ))
 def clone(
   name: Annotated[str, typer.Argument(help="Component name (platform catalog component list).")],
@@ -333,7 +333,7 @@ def creation_list(output: OutputOption = Format.table):
   print_table(["NAME", "STATUS", "STEP", "REQUESTED BY", "AGE", "FREES IN"], rows)
 
 
-@creation_app.command("get", epilog=examples("platform catalog component creation get hello-api"))
+@creation_app.command("get", epilog=examples("platform catalog component creation get seat-selection"))
 def creation_get(name: Annotated[str, typer.Argument(help="Component name (platform catalog component creation list).")], output: OutputOption = Format.table):
   """Show the steps of a creation."""
   try:
@@ -347,7 +347,7 @@ def creation_get(name: Annotated[str, typer.Argument(help="Component name (platf
   _steps(creation)
 
 
-@creation_app.command("delete", epilog=examples("platform catalog component creation delete hello-api"))
+@creation_app.command("delete", epilog=examples("platform catalog component creation delete seat-selection"))
 def creation_delete(name: Annotated[str, typer.Argument(help="Component name (platform catalog component creation list).")]):
   """Delete a stopped or finished creation and free its name; a running one is refused."""
   try:

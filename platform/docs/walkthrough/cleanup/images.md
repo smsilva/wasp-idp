@@ -1,13 +1,13 @@
 # Delete the repo and its images
 
-The repo `wasp-foundry/hello-api` and the images its CI pushed to `ghcr.io/wasp-foundry/hello-api` live on GitHub, not in the cluster: no `platform` command removes them. Deleting the repo leaves the package behind, unlinked, so delete both.
+The repo `wasp-foundry/seat-selection` and the images its CI pushed to `ghcr.io/wasp-foundry/seat-selection` live on GitHub, not in the cluster: no `platform` command removes them. Deleting the repo leaves the package behind, unlinked, so delete both.
 
 ```bash
-gh repo delete wasp-foundry/hello-api --yes
+gh repo delete wasp-foundry/seat-selection --yes
 
 gh api \
   --method DELETE \
-  orgs/wasp-foundry/packages/container/hello-api
+  orgs/wasp-foundry/packages/container/seat-selection
 ```
 
 Deleting the package takes every version (tag) of the image at once.
@@ -22,7 +22,7 @@ gh api "orgs/wasp-foundry/packages?package_type=container" \
   --jq '.[] | "\(.name)\t\(.repository.name // "-")"'
 ```
 
-`hello-api` is no longer in the list. A package that still shows `-` was left by an earlier round; delete it the same way.
+`seat-selection` is no longer in the list. A package that still shows `-` was left by an earlier round; delete it the same way.
 
 !!! tip
-    An org owner can restore a deleted package for 30 days, from the org settings (Packages). The next round of the walkthrough pushes `hello-api` again from a new repo, and that new package starts with no versions.
+    An org owner can restore a deleted package for 30 days, from the org settings (Packages). The next round of the walkthrough pushes `seat-selection` again from a new repo, and that new package starts with no versions.

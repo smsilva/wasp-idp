@@ -6,8 +6,8 @@
 cat > demo.yaml <<PLAN
 environment: demo
 workloads:
-  hello-api:
-    branch: feat/greetings
+  seat-selection:
+    branch: feat/seat-pick
     replicas: 2
 PLAN
 
@@ -17,8 +17,8 @@ platform workload apply \
 ```
 
 ``` { .text .output title="output" }
-WORKLOAD        ACTION  FROM  TO                          REVISION
-hello-api@demo  add     —     0.1.0-greetings.b5f9569 ×2  —
+WORKLOAD             ACTION  FROM  TO                          REVISION
+seat-selection@demo  add     —     0.1.0-seat-pick.b5f9569 ×2  —
 demo: 1 to add, 0 to change, 0 to remove
 dry run: nothing applied
 ```
@@ -40,16 +40,16 @@ platform workload apply \
 ```
 
 ``` { .text .output title="output" }
-WORKLOAD        ACTION  FROM  TO                          REVISION
-hello-api@demo  add     —     0.1.0-greetings.b5f9569 ×2  6
+WORKLOAD             ACTION  FROM  TO                          REVISION
+seat-selection@demo  add     —     0.1.0-seat-pick.b5f9569 ×2  6
 demo: 1 to add, 0 to change, 0 to remove
-✓ hello-api@demo revision 6: 0.1.0-greetings.b5f9569 running · 2/2 replicas available
-  url           http://hello-api.demo.localhost:7080/
+✓ seat-selection@demo revision 6: 0.1.0-seat-pick.b5f9569 running · 2/2 replicas available
+  url           http://seat-selection.demo.localhost:7080/
   resource      db (postgres, provision): Ready
   resource      dns (dns, provision): Ready
   resource      route (route, provision): Ready
-WORKLOAD        ACTION     FROM                        TO                          REVISION
-hello-api@demo  unchanged  0.1.0-greetings.b5f9569 ×2  0.1.0-greetings.b5f9569 ×2  —
+WORKLOAD             ACTION     FROM                        TO                          REVISION
+seat-selection@demo  unchanged  0.1.0-seat-pick.b5f9569 ×2  0.1.0-seat-pick.b5f9569 ×2  —
 demo: 0 to add, 0 to change, 0 to remove
 dry run: nothing applied
 ```
@@ -71,8 +71,8 @@ platform workload apply \
 ```
 
 ``` { .text .output title="output" }
-WORKLOAD        ACTION  FROM                        TO  REVISION
-hello-api@demo  remove  0.1.0-greetings.b5f9569 ×2  —   7
+WORKLOAD             ACTION  FROM                        TO  REVISION
+seat-selection@demo  remove  0.1.0-seat-pick.b5f9569 ×2  —   7
 demo: 0 to add, 0 to change, 1 to remove
-✓ hello-api@demo revision 7: removed from demo
+✓ seat-selection@demo revision 7: removed from demo
 ```

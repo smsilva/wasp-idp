@@ -5,14 +5,14 @@ Deleting an environment takes everything in it: workloads, revisions, and the da
 ```bash
 platform environment delete demo
 
-platform environment delete greetings-test
+platform environment delete checkin-test
 
 platform environment delete agent-demo
 ```
 
 ``` { .text .output title="output" }
 ✓ demo deleting
-✓ greetings-test deleting
+✓ checkin-test deleting
 ✓ agent-demo deleting
 ```
 

@@ -4,30 +4,30 @@
 
 ```bash
 platform build create \
-  --component hello-api \
-  --branch feat/greetings \
+  --component seat-selection \
+  --branch feat/seat-pick \
   --version 1.0.0-rc.1 \
   --wait
 
 platform build list \
-  --component hello-api
+  --component seat-selection
 ```
 
 ``` { .text .output title="output" }
-building from feat/greetings @ b5f9569 …
+building from feat/seat-pick @ b5f9569 …
 ✓ app-spec.yaml valid · db (postgres), dns, route
-✓ image hello-api:1.0.0-rc.1 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/hello-api)
-NAME                               VERSION                  BRANCH          REGISTRY           CREATED
-hello-api.1.0.0-rc.1               1.0.0-rc.1               feat/greetings  ghcr-wasp-foundry  2026-10-12T19:12:49Z
-hello-api.0.1.0-greetings.b5f9569  0.1.0-greetings.b5f9569  feat/greetings  ghcr-wasp-foundry  2026-10-12T18:37:33Z
+✓ image seat-selection:1.0.0-rc.1 pushed to ghcr-wasp-foundry (ghcr.io/wasp-foundry/seat-selection)
+NAME                                    VERSION                  BRANCH          REGISTRY           CREATED
+seat-selection.1.0.0-rc.1               1.0.0-rc.1               feat/seat-pick  ghcr-wasp-foundry  2026-10-12T19:12:49Z
+seat-selection.0.1.0-seat-pick.b5f9569  0.1.0-seat-pick.b5f9569  feat/seat-pick  ghcr-wasp-foundry  2026-10-12T18:37:33Z
 ```
 
-`platform catalog component get hello-api` shows the newest of both on its `builds` and `versions` lines, and the 5 newest with `--verbose` ([Components](../../reference/catalog.md#components)).
+`platform catalog component get seat-selection` shows the newest of both on its `builds` and `versions` lines, and the 5 newest with `--verbose` ([Components](../../reference/catalog.md#components)).
 
 `NAME` is the version itself, and `build get` takes it too: it shows the build that produced the version, while that build lasts.
 
 ```bash
-platform build get hello-api.1.0.0-rc.1
+platform build get seat-selection.1.0.0-rc.1
 ```
 
 Underneath, a build is a `Build` and a version is a `Version` in the catalog group:

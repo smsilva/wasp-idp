@@ -6,4 +6,4 @@ The server uses the CLI login:
 platform whoami
 ```
 
-A component already in the catalog and running, for the catalog questions: run the [CLI demo](../cli/index.md) up to [Deploy and call it](../cli/deploy.md) first, or keep a `hello-api` from an earlier round.
+A component already in the catalog and running, for the catalog questions: run the [CLI demo](../cli/index.md) up to [Deploy the branch](../cli/deploy/version.md) first, or keep a `seat-selection` from an earlier round.

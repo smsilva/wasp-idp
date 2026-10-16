@@ -1,5 +1,5 @@
 # Push the branch
 
 ```bash
-git -C /tmp/hello-api push --set-upstream origin feat/greetings
+git -C /tmp/seat-selection push --set-upstream origin feat/seat-pick
 ```
