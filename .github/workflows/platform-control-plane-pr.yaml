@@ -1,0 +1,127 @@
+# Validates a change to any of the 8 control-plane Dockerfiles or the chart before merge: lints
+# each Dockerfile, builds every image locally (no push, nothing published), and scans each build for
+# vulnerabilities — the same checks platform-control-plane-release.yaml runs before publishing, run
+# here against the PR's content so a broken or insecure image is caught before it ever reaches a tag.
+name: platform-control-plane-pr
+
+on:
+  pull_request:
+    paths:
+      - platform/api/**
+      - platform/providers/local_vcluster/**
+      - platform/providers/scm_github/**
+      - platform/providers/workload/**
+      - platform/providers/forager/**
+      - platform/providers/registry/**
+      - platform/providers/aws_account/**
+      - platform/providers/crossplane_aws/**
+      - platform/libs/**
+      - platform/chart/platform-control-plane/**
+      - .github/workflows/platform-control-plane-pr.yaml
+      - .github/workflows/platform-control-plane-release.yaml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-control-plane-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  hadolint:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        dockerfile:
+          - platform/api/Dockerfile
+          - platform/providers/local_vcluster/Dockerfile
+          - platform/providers/scm_github/Dockerfile
+          - platform/providers/workload/Dockerfile
+          - platform/providers/forager/Dockerfile
+          - platform/providers/registry/Dockerfile
+          - platform/providers/aws_account/Dockerfile
+          - platform/providers/crossplane_aws/Dockerfile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ matrix.dockerfile }}
+
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        project:
+          - platform/api
+          - platform/providers/local_vcluster
+          - platform/providers/scm_github
+          - platform/providers/workload
+          - platform/providers/forager
+          - platform/providers/registry
+          - platform/providers/aws_account
+          - platform/providers/crossplane_aws
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv run --directory ${{ matrix.project }} pytest
+
+  build-and-scan:
+    needs: [hadolint, test]
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - image: platform-api
+            context: platform
+            dockerfile: platform/api/Dockerfile
+          - image: local-vcluster-provider
+            context: platform/providers/local_vcluster
+            dockerfile: platform/providers/local_vcluster/Dockerfile
+          - image: scm-github-provider
+            context: platform
+            dockerfile: platform/providers/scm_github/Dockerfile
+          - image: workload-provider
+            context: platform/providers/workload
+            dockerfile: platform/providers/workload/Dockerfile
+          - image: forager-provider
+            context: platform/providers/forager
+            dockerfile: platform/providers/forager/Dockerfile
+          - image: registry-provider
+            context: platform/providers/registry
+            dockerfile: platform/providers/registry/Dockerfile
+          - image: aws-account-provider
+            context: platform/providers/aws_account
+            dockerfile: platform/providers/aws_account/Dockerfile
+          - image: crossplane-aws-provider
+            context: platform/providers/crossplane_aws
+            dockerfile: platform/providers/crossplane_aws/Dockerfile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      # No push, no registry login: the image stays in the runner's local Docker daemon
+      # (outputs: type=docker), loaded by its own tag so Trivy can scan it next.
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: platform-control-plane/${{ matrix.image }}:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: platform-control-plane/${{ matrix.image }}:pr-${{ github.event.pull_request.number }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+  lint-chart:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+      - run: helm lint platform/chart/platform-control-plane

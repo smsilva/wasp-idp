@@ -1,0 +1,6 @@
+# DL3008 (pin apt package versions): not applied. Pinning git/ca-certificates on python:3.12-slim
+# ties the build to a Debian archive snapshot that disappears on the base image's next rebuild,
+# which breaks the build for a reason unrelated to this repo's own code — a worse failure mode than
+# the unpinned install this rule flags.
+ignored:
+  - DL3008

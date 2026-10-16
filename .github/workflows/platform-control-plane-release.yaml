@@ -1,6 +1,6 @@
-# Builds the 8 control-plane images and packages/publishes the Helm chart to GHCR (#599), so a
-# `remote` init target (future work, #558) has images and a chart to point at instead of only the
-# local Docker build + k3d image import path. Triggered by a tag push or by hand.
+# Tests, builds, scans, signs and publishes the 8 control-plane images and the Helm chart to GHCR
+# (#599), so a `remote` init target (future work, #558) has images and a chart to point at instead
+# of only the local Docker build + k3d image import path. Triggered by a tag push or by hand.
 name: platform-control-plane-release
 
 on:
@@ -13,12 +13,35 @@ on:
         description: Chart version to publish, without the leading "control-plane-v"
         required: true
 
+permissions:
+  contents: read
+
 jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        project:
+          - platform/api
+          - platform/providers/local_vcluster
+          - platform/providers/scm_github
+          - platform/providers/workload
+          - platform/providers/forager
+          - platform/providers/registry
+          - platform/providers/aws_account
+          - platform/providers/crossplane_aws
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv run --directory ${{ matrix.project }} pytest
+
   build-images:
+    needs: test
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+      id-token: write # cosign keyless signing (OIDC to Sigstore's Fulcio)
     strategy:
       matrix:
         include:
@@ -64,13 +87,45 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v7
+      # buildx with oci-mediatypes: the docker driver pushes a Docker v2 manifest and drops the
+      # annotations without an error (GHCR keeps them only on an OCI manifest) — same reasoning as
+      # the user-component build (platform-build.yaml), for the same OCI labels/annotations below.
+      - id: push
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          provenance: false
-          push: true
+          outputs: type=image,push=true,oci-mediatypes=true
           tags: ghcr.io/${{ github.repository }}/${{ matrix.image }}:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          sbom: true
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+          annotations: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+
+      # Scans the pushed image by digest (not by tag, which can move): fails the run on a CRITICAL
+      # or HIGH vulnerability with a fix available, the same bar a supply-chain review expects.
+      - uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}@${{ steps.push.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - uses: sigstore/cosign-installer@v3
+      # Keyless signing (Sigstore/Fulcio via OIDC, `id-token: write` above): no key material to
+      # manage or leak. Verify with:
+      #   cosign verify ghcr.io/<repo>/<image>@<digest> \
+      #     --certificate-identity-regexp 'https://github.com/<repo>/.github/workflows/platform-control-plane-release.yaml@.*' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - run: cosign sign --yes "ghcr.io/${{ github.repository }}/${{ matrix.image }}@${{ steps.push.outputs.digest }}"
 
   publish-chart:
     needs: build-images
@@ -78,6 +133,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # cosign keyless signing (OIDC to Sigstore's Fulcio)
     steps:
       - uses: actions/checkout@v7
       - name: Compute version
@@ -95,4 +151,10 @@ jobs:
           version: 'v3.14.0'
       - run: helm registry login ghcr.io --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
       - run: helm package platform/chart/platform-control-plane --version "${{ steps.version.outputs.version }}" --app-version "${{ steps.version.outputs.version }}" --destination /tmp
-      - run: helm push "/tmp/platform-control-plane-${{ steps.version.outputs.version }}.tgz" "oci://ghcr.io/${{ github.repository }}/charts"
+      - id: push
+        run: |
+          helm push "/tmp/platform-control-plane-${{ steps.version.outputs.version }}.tgz" "oci://ghcr.io/${{ github.repository }}/charts" 2>&1 | tee /tmp/push.log
+          digest="$(grep --only-matching --extended-regexp 'sha256:[0-9a-f]{64}' /tmp/push.log | tail -1)"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+      - uses: sigstore/cosign-installer@v3
+      - run: cosign sign --yes "ghcr.io/${{ github.repository }}/charts/platform-control-plane@${{ steps.push.outputs.digest }}"
