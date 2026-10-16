@@ -1,7 +1,9 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 from wasp_platform.bootstrap import local
 from wasp_platform.bootstrap.tasks import reporting
@@ -185,3 +187,40 @@ def test_render_propagates_failure_on_a_bad_template_path(monkeypatch):
   monkeypatch.setattr(local, "_run", run)
   with pytest.raises(local.BootstrapError, match="regsitry-provider"):
     local._render(Path("/repo"), "templates/providers/regsitry-provider.yaml")
+
+
+# Every template of platform-control-plane and the object count (`kind:` documents) it must render,
+# counted against the original (now doc-only) deploy/*.yaml manifests of #599: a future edit that drops an
+# object from a template fails this test immediately instead of silently diverging from history. The two
+# providers that render nothing unless their feature is enabled (ADR 0029, ADR 0032) are rendered with
+# that flag set, matching how `_deploy` enables them (local.py's CHART_TEMPLATES/_deploy).
+CHART_TEMPLATE_OBJECT_COUNTS = {
+  "templates/api/platform-api.yaml": (9, {}),
+  "templates/providers/local-vcluster-provider.yaml": (3, {}),
+  "templates/providers/scm-github-provider.yaml": (4, {}),
+  "templates/providers/workload-provider.yaml": (4, {}),
+  "templates/providers/forager-provider.yaml": (8, {}),
+  "templates/providers/registry-provider.yaml": (4, {}),
+  "templates/providers/aws-account-provider.yaml": (4, {"providers.awsAccount.enabled": "true"}),
+  "templates/providers/crossplane-aws-provider.yaml": (6, {"providers.crossplaneAws.enabled": "true"}),
+  "templates/keycloak/keycloak.yaml": (4, {}),
+  "templates/keycloak/realm-import.yaml": (1, {}),
+  "templates/providers/pod-security.yaml": (2, {}),
+  "templates/providers/traefik.yaml": (1, {}),
+  "templates/providers/crossplane.yaml": (1, {"providers.crossplaneAws.enabled": "true"}),
+  "templates/providers/provider-aws-ec2.yaml": (1, {"providers.crossplaneAws.enabled": "true"}),
+  "templates/providers/shared-pg.yaml": (2, {}),
+  "templates/providers/profile-policies.yaml": (1, {}),
+  "templates/observability/prometheus.yaml": (7, {}),
+}
+
+
+@pytest.mark.parametrize(("template_path", "expected"), CHART_TEMPLATE_OBJECT_COUNTS.items())
+def test_chart_template_object_count_has_not_drifted(template_path, expected):
+  count, set_values = expected
+  args = ["helm", "template", local.CHART_NAME, str(local.repo_root() / local.CHART_DIR), "--show-only", template_path]
+  for key, value in set_values.items():
+    args.extend(["--set", f"{key}={value}"])
+  manifest = subprocess.run(args, capture_output=True, text=True, check=True).stdout
+  objects = [document for document in yaml.safe_load_all(manifest) if document is not None]
+  assert len(objects) == count, [document.get("kind") for document in objects]

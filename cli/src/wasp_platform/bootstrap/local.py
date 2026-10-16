@@ -3,6 +3,7 @@ import contextvars
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -690,7 +691,10 @@ def install_observability(root: Path) -> None:
   """The Prometheus of the observability subsystem (ADR 0040): an upstream image, nothing to build.
   The hash of the manifest goes on the pod template, so a changed scrape config rolls the pod."""
   manifest = _render(root, "templates/observability/prometheus.yaml")
-  checksum = hashlib.sha256(manifest.encode()).hexdigest()[:12]
+  # Helm's own "---"/"# Source: ..." framing of each document must not shift the hash: neither line
+  # carries scrape config, only the template path, which does not change between renders of this template.
+  hashed = re.sub(r"^---\n# Source: .*\n", "", manifest, flags=re.MULTILINE)
+  checksum = hashlib.sha256(hashed.encode()).hexdigest()[:12]
   _kubectl("apply", "--filename", "-", input=manifest.replace("config-hash: dev", f"config-hash: {checksum}"))
   _kubectl("rollout", "status", "deployment/prometheus", "--namespace", NAMESPACE, "--timeout", "180s")
 
