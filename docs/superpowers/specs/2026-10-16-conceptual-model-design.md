@@ -19,7 +19,7 @@ Este documento é o resultado de uma conversa de design (2026-10-16) e foi escri
 
 **Vocabulário em inglês:** os termos do modelo (Concept, Instance, Class, Driver, Controller, Tool, Vendor), as personas (User, Admin, Maintainer) e os termos técnicos do Kubernetes e das ferramentas (Persistent Volume, PersistentVolumeClaim, StorageClass, CSI driver, Pod) ficam sempre em inglês, mesmo em texto e conversa em pt-BR: "a Instance grava o Driver escolhido", nunca "a Instância grava o Driver escolhido"; "Persistent Volumes", nunca "volumes persistentes". Isso vale para este documento, para ADRs, issues, comentários e para quem conduz a conversa (pessoa ou agente). "Instância da plataforma", no sentido de uma instalação da plataforma, não é termo do modelo e fica em português.
 
-**Platform API é o nome do projeto inteiro**, não só do serviço HTTP: a API (`platform/api/`), a CLI `platform`, o MCP, os CRDs e os controllers (`platform/providers/*`). Quando o texto fala só do serviço HTTP, diz "a API". É o mesmo sentido do guia publicado em `/platform/` (site `platform-api`), que já cobre CLI, MCP e controllers.
+**platform-api é o nome do projeto inteiro**, sempre escrito assim (minúsculo e com hífen), não só do serviço HTTP: a API (`platform/api/`), a CLI `platform`, o MCP, os CRDs e os controllers (`platform/providers/*`). Quando o texto fala só do serviço HTTP, diz "a API". É o mesmo sentido do guia publicado em `/platform/` (site `platform-api`), que já cobre CLI, MCP e controllers.
 
 **Convenções:** os nomes propostos (`EnvironmentClass`, `ResourceClass`, `driver.yaml`, `platform driver`, `platform class`, `kind: Platform`…) são propostas para discussão. Os exemplos de YAML e de CLI mostram a experiência desejada, não comandos que existem hoje, exceto onde o texto diz "hoje".
 
@@ -44,7 +44,7 @@ Este documento é o resultado de uma conversa de design (2026-10-16) e foi escri
 
 ### A aposta
 
-A Platform API (a API, a CLI `platform`, o MCP e os controllers) cresceu por fatias, uma capability por vez (ADR 0034, subsistemas da plataforma). Cada capability tem uma implementação concreta: vcluster para ambientes, GitHub para SCM e build, Postgres em cluster para bancos. Para que a plataforma sirva a organizações diferentes (AWS, Azure, GCP, GitHub, Bitbucket, Crossplane, Terraform), a implementação tem que ser trocável sem mudar o que o User pede. Isso só funciona se o Concept for estável e bem definido, e se a forma de explicá-lo for clara.
+A platform-api (a API, a CLI `platform`, o MCP e os controllers) cresceu por fatias, uma capability por vez (ADR 0034, subsistemas da plataforma). Cada capability tem uma implementação concreta: vcluster para ambientes, GitHub para SCM e build, Postgres em cluster para bancos. Para que a plataforma sirva a organizações diferentes (AWS, Azure, GCP, GitHub, Bitbucket, Crossplane, Terraform), a implementação tem que ser trocável sem mudar o que o User pede. Isso só funciona se o Concept for estável e bem definido, e se a forma de explicá-lo for clara.
 
 ### Os problemas de vocabulário que dispararam a conversa
 
@@ -679,7 +679,7 @@ Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta
 9. **Vazamentos da API:** entram como consequências do ADR ou viram issues próprias antes dele.
 10. **Class por projeto:** um admin de projeto (ADR 0042) pode ter Classes próprias para os ambientes do projeto, ou Class é só da plataforma?
 11. **`managed` × `external` por Tool:** onde se declara, no `Platform` ou na configuração do Driver.
-12. **Onde ficam as figuras da #595:** o guia da Platform API, o deck, ou os dois.
+12. **Onde ficam as figuras da #595:** o guia da platform-api, o deck, ou os dois.
 
 ## Próximos passos
 
@@ -789,7 +789,7 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
 
 1. **Objetivo em uma frase e nivelamento sobre CSI.** A primeira mensagem é só o bloco abaixo, com o negrito, as cores e as quebras de linha exatamente assim ("você sabe" quando for uma pessoa):
 
-   > Oi! Queremos discutir alguns conceitos-chave para a **Platform API** ser agnóstica a 🟧 **tools**, com inspiração nas specs do Kubernetes:
+   > Oi! Queremos discutir alguns conceitos-chave para a **platform-api** ser agnóstica a 🟧 **tools**, com inspiração nas specs do Kubernetes:
    >
    > - Crossplane
    > - Terraform
@@ -807,7 +807,7 @@ O autor e mais uma pessoa ou um grupo, juntos numa chamada, com a tela compartil
    Nada sobre como a plataforma funciona ainda. Se a pessoa pedir uma recapitulação, responder com o PVC e a StorageClass em YAML (os do [paralelo](#o-paralelo-com-pvc-lado-a-lado)) e uma linha de comentário em cada, sem lista de definições. Senão, completar a partir do que a pessoa sabe: o Pod quer um volume; o PersistentVolumeClaim é o pedido ("10Gi, leitura e escrita"), sem dizer onde nem como; a StorageClass, escrita pelo admin do cluster, diz como materializar (`provisioner: ebs.csi.aws.com`, `parameters: {type: gp3}`); a StorageClass default atende o PVC que não nomeia uma. Nos dois casos, terminar com a pergunta de transição: "Seguimos para o que acontece quando o PVC é criado?".
 2. **O CSI driver em detalhe.** O controller do driver observa os PVCs cuja StorageClass aponta para ele (e só esses); chama a API do storage (AWS EBS); cria o volume; o PersistentVolume registra o volume criado e o PVC fica `Bound`. A escolha fica gravada no próprio PVC (annotation `volume.kubernetes.io/storage-provisioner`). O Kubernetes não sabe nada de EBS: quem sabe é o driver. Trocar EBS por NetApp muda a StorageClass e o driver instalado, e o PVC continua igual: o user do cluster não precisa saber nada do storage para pedir um volume.
 3. **Dar nome às camadas, ainda no Kubernetes:** volume (Concept), PVC (Instance), StorageClass (Class), CSI driver (Driver), o Pod do driver (Controller), a API do EBS (Tool), AWS (Vendor). Só a primeira coluna da tabela de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado).
-4. **A plataforma em uma frase:** a Platform API é o projeto inteiro: uma API que recebe pedidos (ambiente, deploy, banco), a CLI e o MCP que falam com ela, e controllers que materializam os pedidos no Kubernetes. Mostrar o Postgres `db` do `orders`: o Score pede `type: postgres`, e conforme o ambiente vira um Postgres no cluster, um database num Postgres compartilhado ou um RDS existente: o mesmo padrão do PVC.
+4. **A plataforma em uma frase:** a platform-api é o projeto inteiro: uma API que recebe pedidos (ambiente, deploy, banco), a CLI e o MCP que falam com ela, e controllers que materializam os pedidos no Kubernetes. Mostrar o Postgres `db` do `orders`: o Score pede `type: postgres`, e conforme o ambiente vira um Postgres no cluster, um database num Postgres compartilhado ou um RDS existente: o mesmo padrão do PVC.
 5. **O paralelo lado a lado:** a tabela e os YAMLs de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado), com a coluna "hoje", e os pontos em que o paralelo não é exato.
 6. **O problema:** os nomes de hoje (`BindingPolicy`, os modos `provision`/`compose`/`bind`, "provider" com dois sentidos) e as cinco formas de escolher o Driver ([Concepts, Instances e como o Driver é escolhido](#concepts-instances-e-como-o-driver-é-escolhido)). Em seguida, a proposta: Class e `status.resolution` para todo Concept.
 7. **A aposta:** um modelo forte permite trocar a Tool (Terraform, Crossplane) sem que o User perceba, como o PVC não muda quando o storage muda. Aqui entra o [Resumo](#resumo).
@@ -860,5 +860,5 @@ Quem chega depois das sessões segue a mesma ordem, sozinho, lendo as seções i
 
 - #594: vocabulário e modelo conceitual (futuro ADR).
 - #595: representações visuais do modelo.
-- #540: padronizar o estilo visual do guia da Platform API.
+- #540: padronizar o estilo visual do guia da platform-api.
 - #182: todo comando novo atualiza o walkthrough.
