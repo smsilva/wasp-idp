@@ -35,6 +35,25 @@ Exemplo:
 DatabaseResource → staging.orders.db → env-staging (Class) → CloudDatabase (Driver) → crossplane-database (Controller) → Crossplane (Tool), AWS (Vendor)
 ```
 
+## Camadas
+
+O modelo não é uma abstração nova da Platform API: é o padrão do próprio Kubernetes (CRD, CR, *Class, controller) com nomes da plataforma. A Platform API usa o Kubernetes como motor (ADR 0022, a kube API como fonte da verdade) e não recria nele o que o Kubernetes já resolve.
+
+| Camada | Conceito | Instância | Class | Driver / Controller | Tool |
+|---|---|---|---|---|---|
+| **Platform API** | expõe (rotas, CLI, MCP) | valida, autoriza, faz o journal e grava o CR | só CRUD, para admins (`PUT .../binding-policy`) | — | — |
+| **Kubernetes** | CRD | CR | CRD (`BindingPolicy`) | controller (`forager`, `local_vcluster`…) | dentro do controller |
+
+**Regra:** a API conhece Conceitos e Instâncias e trata a Class como dado opaco. Ela autoriza quem escreve e guarda no journal, mas não interpreta o conteúdo. A resolução da Class e a escolha do Driver acontecem no controller.
+
+Isso já vale para resources: a API grava a `WorkloadRevision` sem saber qual Driver atende cada recurso, e o Forager lê a `BindingPolicy` e decide.
+
+### Vazamentos de hoje
+
+1. **A API resolve um Driver:** `connection_of` em `platform/api/src/platform_api/builds.py` escolhe a `ScmConnection` da org do repo e a grava no `Build`. É resolução de Class e deveria ficar no controller.
+2. **A API conhece os params de um Driver:** `BIND_PARAMS` em `platform/api/src/platform_api/binding_policies.py` valida `host`, `database` e `username` do `bind`. Um Driver novo (CloudDatabase) obrigaria a mexer na API. A validação deveria morar no schema do CRD (CEL) ou ser declarada pelo Driver.
+3. **A API conhece o enum de modes:** pelo mesmo motivo, com Drivers como dado a API só repassa a escolha.
+
 ### Por que Driver, e não Provider
 
 - "Provider" já nomeia o plugin de vendor no Terraform e no Crossplane: na explicação, colide com a camada Tool ("o provider do Crossplane é provider de quê?").
@@ -95,3 +114,5 @@ O que muda no Forager com o modelo:
 4. **Rename de `platform/providers/*` para controllers**, e o que isso muda em `platform status` (ADR 0039: o label `provider` dos Deployments).
 5. **`Environment.spec.cloudAccount`:** migra para param da Class (quebra o teste de agnosticidade hoje) ou fica como exceção registrada.
 6. **Onde ficam as figuras da #595:** o guia da Platform API, o deck, ou os dois.
+7. **Crossplane na camada Kubernetes:** o Crossplane já é esse modelo dentro do Kubernetes (XRD = Conceito, Claim = Instância, Composition = Class/Driver, Function/Provider = Tool). As opções são duas: os Drivers de infra passam a ser Compositions, ou o Crossplane fica só como Tool de alguns Drivers. Ele não cobre Build, SCM e Workload, que continuam com controller próprio, então a tendência é um híbrido. Fatos já decididos: o ADR 0031 adiou Radius e KubeVela, e o ADR 0032 adotou o Crossplane como único método de provisionamento por cloud, adiando o Kratix.
+8. **Correção dos vazamentos:** entram no ADR como consequências, ou viram issues próprias antes dele.
