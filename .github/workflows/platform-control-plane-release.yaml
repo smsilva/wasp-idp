@@ -50,9 +50,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: Compute tag
         id: tag
+        env:
+          CHART_VERSION: ${{ inputs.chart-version }}
         run: |
-          if [[ -n "${{ inputs.chart-version }}" ]]; then
-            echo "tag=${{ inputs.chart-version }}" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${CHART_VERSION}" ]]; then
+            echo "tag=${CHART_VERSION}" >> "${GITHUB_OUTPUT}"
           else
             echo "tag=${GITHUB_REF_NAME#control-plane-v}" >> "${GITHUB_OUTPUT}"
           fi
@@ -80,9 +82,11 @@ jobs:
       - uses: actions/checkout@v7
       - name: Compute version
         id: version
+        env:
+          CHART_VERSION: ${{ inputs.chart-version }}
         run: |
-          if [[ -n "${{ inputs.chart-version }}" ]]; then
-            echo "version=${{ inputs.chart-version }}" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${CHART_VERSION}" ]]; then
+            echo "version=${CHART_VERSION}" >> "${GITHUB_OUTPUT}"
           else
             echo "version=${GITHUB_REF_NAME#control-plane-v}" >> "${GITHUB_OUTPUT}"
           fi
