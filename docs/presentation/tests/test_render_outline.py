@@ -305,8 +305,8 @@ def test_entity_markup():
   # {kind:name type}: the name in its kind's color, the type after it; the kind picks the color.
   out = ro.rich("_provided by_ {component:seat-selection service}")
   assert ("<span class='entity k-component'><span class='n'>seat-selection</span>"
-          "<span class='t'>service</span></span>") in out
-  assert ro.rich("{api:seats rest api}").endswith("<span class='n'>seats</span><span class='t'>rest api</span></span>")
+          "<span class='sp'> </span><span class='t'>service</span></span>") in out
+  assert ro.rich("{api:seats rest api}").endswith("<span class='n'>seats</span><span class='sp'> </span><span class='t'>rest api</span></span>")
   assert ro.rich("{system:seat-map}") == "<span class='entity k-system'><span class='n'>seat-map</span></span>"
   # An unknown kind is not markup.
   assert "entity" not in ro.rich("{nope:x y}")
@@ -324,4 +324,4 @@ def test_color_key_slide(tmp_path):
   (tmp_path / "d.svg").write_text(SVG)
   html_out = ro.render_html(data, tmp_path)
   assert "<div class='key k-domain'>" in html_out
-  assert "<span class='entity k-domain'><span class='n'>tailwind</span><span class='t'>domain</span></span>" in html_out
+  assert "<span class='entity k-domain'><span class='n'>tailwind</span><span class='sp'> </span><span class='t'>domain</span></span>" in html_out

@@ -715,7 +715,7 @@ slides:
     act: developer-control
     parent: detail-catalog
     topic: "Software Catalog"
-    message: "Juntando: do negócio ao banco de dados, uma árvore só."
+    message: "Juntando: do negócio ao serviço, uma árvore só."
     heading: "Tailwind Air catalog"
     screen: ["{domain:tailwind domain}", "{domain:airport subdomain}", "{system:seat-map system}", "{component:seat-selection service}"]
     notes: |-
@@ -730,18 +730,21 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-levels]
 
-  - name: catalog-tree
+  - name: tailwind-dependents
     act: developer-control
     parent: detail-catalog
     topic: "Software Catalog"
-    message: "No exemplo deste repo: o Domain communication com os Systems greeter e notifier."
-    heading: "Our catalog"
-    subitems: together
-    screen: ["**Example:**\nThe `communication` domain _contains_:\n- `greeter` system\n- `notifier` system"]
+    message: "Um atraso de voo vira um evento que chega a cinco subdomínios, e o catálogo mostra quem depende dele."
+    heading: "Across the Tailwind domain"
+    screen: ["**{resource:flight-events topic}**\n- _published by_ {component:flight-tracker service} in {domain:flight-ops}\n- _read by_ {component:boarding-pass-issuer service} in {domain:airport}\n- _read by_ {component:bag-tracker service} in {domain:airport}\n- _read by_ {component:rebooking-assistant service} in {domain:booking}\n- _read by_ {component:miles-ledger service} in {domain:loyalty}\n- _read by_ {component:roster-planner service} in {domain:crew}"]
     notes: |-
-      O que queremos dizer: **a mesma árvore descreve um software real.**
+      O que queremos dizer: **a árvore mostra o caminho de cima para baixo; o catálogo também mostra o que atravessa os galhos.**
 
-      É a mesma árvore, aplicada ao **catálogo de exemplo deste repo** (`idp/catalog/communication/`): o `greeter` publica saudações e um evento por saudação; o `notifier` consome esse evento e entrega notificações. Os Resources são descritos **pelo papel** (banco, tópico, fila, bucket), não pelo serviço de nuvem.
+      Um atraso no voo vira um evento no tópico `flight-events`. Quem publica é o `flight-tracker`, em `flight-ops`; quem lê está em **quatro outros subdomínios**: o `boarding-pass-issuer` reemite o cartão de embarque e o `bag-tracker` redireciona as malas (`airport`), o `rebooking-assistant` remarca os passageiros de um voo cancelado no próximo com assentos livres (`booking`), o `miles-ledger` estorna as milhas de um voo cancelado (`loyalty`) e o `roster-planner` refaz a escala da tripulação (`crew`).
+
+      **Quem muda o evento precisa saber quem o lê.** O catálogo responde sem ninguém perguntar no chat: no Backstage, a página do `flight-events` lista os quatro Components (`scripts/demo/backstage-tailwind`). Na Platform API isso chega quando os Components entram no catálogo pela discovery (#205).
+
+      Os nomes vêm de `idp/catalog/airline/tailwind/catalog-info.yaml`; a cor de cada nome diz o conceito (legenda: `concept-colors`).
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [tailwind-tree]
@@ -754,7 +757,7 @@ slides:
     audiences: [engineering, platform]
     message: "No catálogo, a app é um arquivo curto junto do código — começando pelo nome e pelo que ela faz."
     code: {file: snippets/catalog-info.yaml, focus: 3-4}
-    dependsOn: [catalog-tree]
+    dependsOn: [tailwind-dependents]
     notes: |-
       O que queremos dizer: **cada app se declara no catálogo com um arquivo curto, junto do código**; as primeiras linhas dizem o nome e o que a app faz, em linguagem humana — é o que aparece na busca do catálogo.
 

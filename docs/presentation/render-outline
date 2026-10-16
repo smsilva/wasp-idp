@@ -76,7 +76,12 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 /* A catalog entity: the name in its kind's color, the type after it in the same color, faded; the same
    monospace for both, its lowercase matched to the text's so the line reads at one size. */
 .stage .entity { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size-adjust: ex-height 0.53; letter-spacing: -0.02em; font-weight: 400; white-space: nowrap; color: var(--kind); }
-.stage .entity .t { opacity: 0.42; margin-left: 0.5em; }
+.stage .entity .t { opacity: 0.42; }
+/* A line that names catalog entities reads as a list of terms: a little more room between words
+   (word-spacing only, letters keep their spacing). The space before the type is a real one, in the text font:
+   a monospace space is a whole letter wide and would set the type apart. */
+.stage .item:has(.entity) { word-spacing: 0.12em; }
+.stage .entity .sp { font-family: system-ui, sans-serif; font-size-adjust: none; }
 /* A kind word in a heading (`kind` on the slide): only the color, in the heading's own font. */
 .stage .item.heading .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: 700; }
 .stage .item.heading.dim .entity { opacity: 0.75; }
@@ -815,7 +820,8 @@ ENTITY = re.compile(r"\{(" + "|".join(KINDS) + r"):([^\s{}]+)(?: ([^{}]+))?\}")
 def entity(match):
   """`{component:seat-selection service}`: the name in its kind's color, the type after it, faded."""
   kind, name, kind_type = match.groups()
-  type_html = f"<span class='t'>{kind_type}</span>" if kind_type else ""
+  # A real space before the type: selecting or copying the line keeps "seat-selection service" apart.
+  type_html = f"<span class='sp'> </span><span class='t'>{kind_type}</span>" if kind_type else ""
   return f"<span class='entity k-{kind}'><span class='n'>{name}</span>{type_html}</span>"
 
 
