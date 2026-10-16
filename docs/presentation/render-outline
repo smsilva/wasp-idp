@@ -58,7 +58,7 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .code .k { color: #9cdcfe; } .code .s { color: #ce9178; } .code .p { color: #dcdcaa; font-weight: bold; } .code .c { color: #6a9955; } .code .n { color: #b5cea8; }
 .tag { display: inline-block; background: #1f2937; border-radius: 10px; padding: 0 8px; margin-right: 4px; }
 .stage { container-type: inline-size; position: relative; aspect-ratio: 16/9; background: #0a0e1a; border: 1px solid #1f2937; border-radius: 6px; overflow: hidden; box-sizing: border-box; }
-.stage .inner { position: absolute; inset: 0; padding: 8cqw 7cqw 7cqw; display: flex; flex-direction: column; justify-content: center; gap: 1.6cqw; }
+.stage .inner { position: absolute; inset: 0; padding: 8cqw 7cqw 7cqw; display: flex; flex-direction: column; justify-content: safe center; gap: 1.6cqw; }
 .stage .section { position: absolute; top: 4cqw; left: 7cqw; font-size: 1.3cqw; letter-spacing: 0.4cqw; text-transform: uppercase; font-weight: bold; color: #fff; }
 .stage .inner.with-topic { padding-top: 10cqw; }
 .stage .section.has-topic .act-name { font-size: 1.0cqw; color: #6b7a8d; }
@@ -70,11 +70,36 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .item.rich strong { font-weight: 700; }
 .stage .item .mono { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-weight: 400; font-size: 0.85em; color: #7cc4ff; background: rgba(74, 158, 244, 0.12); border: 1px solid rgba(74, 158, 244, 0.45); border-radius: 0.4cqw; padding: 0 0.5cqw; }
 .stage .item em { font-style: italic; color: #e5c07b; }
-.stage .item.dim .mono, .stage .item.dim em { opacity: 0.55; }
+.stage .item strong.what { color: #e5c07b; }
+.stage .item.dim strong.what { opacity: 0.55; }
+.stage .item.dim .mono, .stage .item.dim em, .stage .item.dim .entity { opacity: 0.55; }
+/* A catalog entity: the name in its kind's color, the type after it in the same color, faded; the same
+   monospace for both, its lowercase matched to the text's so the line reads at one size. */
+.stage .entity { font-family: Consolas, 'DejaVu Sans Mono', monospace; font-size-adjust: ex-height 0.53; letter-spacing: -0.02em; font-weight: 400; white-space: nowrap; color: var(--kind); }
+.stage .entity .t { opacity: 0.42; }
+/* A line that names catalog entities reads as a list of terms: a little more room between words
+   (word-spacing only, letters keep their spacing). The space before the type is a real one, in the text font:
+   a monospace space is a whole letter wide and would set the type apart. */
+.stage .item:has(.entity) { word-spacing: 0.12em; }
+.stage .entity .sp { font-family: system-ui, sans-serif; font-size-adjust: none; }
+/* A kind word in a heading (`kind` on the slide): only the color, in the heading's own font. */
+.stage .item.heading .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: 700; }
+.stage .item.heading.dim .entity { opacity: 0.75; }
+/* A kind word as an inline label (`**{domain:Domain}:** …`): the color, in the label's own font. */
+.stage .item strong:not(.lbl) .entity { font-family: inherit; font-size-adjust: none; letter-spacing: normal; font-weight: inherit; }
+.stage .k-domain { --kind: var(--domain); }
+.stage .k-system { --kind: var(--system); }
+.stage .k-group { --kind: var(--group); }
+.stage .k-component { --kind: var(--component); }
+.stage .k-api { --kind: var(--api); }
+.stage .k-resource { --kind: var(--resource); }
 .stage .item.labeled { margin-top: 2.4cqw; }
 .stage .item.labeled .value { display: block; margin-top: 1.8cqw; padding-left: 0.9em; }
 .stage .item.bullet::before { content: '- '; }
 .stage .items { display: contents; }
+.stage .items.entities { display: flex; flex-direction: column; gap: 1.6cqw; font-size: calc(var(--item-size) * var(--fit, 1)); }
+.stage .items.entities .item { font-size: inherit; white-space: nowrap; width: max-content; }
+.stage .items.entities .item.heading { white-space: normal; font-size: var(--item-size); }
 .stage .items.aligned { display: grid; grid-template-columns: max-content 1fr; column-gap: 0.35em; row-gap: 1.6cqw; font-size: calc(var(--item-size) * var(--fit, 1)); }
 .stage .items.aligned .item { font-size: inherit; }
 .stage .items.aligned .item { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
@@ -86,10 +111,32 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .item.dim { color: #6b7a8d; }
 .stage .item.hidden { visibility: hidden; }
 .stage .item .sub { display: block; margin-top: 0.5cqw; }
+/* `align: true` on sub-items: an invisible table, the dash and each word group in its own column. */
+.stage .item .value.table { display: grid; grid-template-columns: repeat(var(--cols), max-content); width: max-content; }
+.stage .item .value.table .head { grid-column: 1 / -1; }
+.stage .item.labeled:has(.value.table) { margin-top: 0; }
+.stage .item.labeled .value.table { margin-top: 1.4cqw; row-gap: 0.3em; column-gap: 0.9em; }
+.stage .item .value.table .sub { margin-top: 0; }
+.stage .item .value.table .sub.colhead { font-size: 0.8em; }
+/* The dash goes inside the relation's cell, so it sits next to it and not a column apart. */
+.stage .item .value.table .sub::before { content: none; }
+.stage .item .value.table .sub:not(.colhead) .c:first-child::before { content: '- '; font-style: normal; color: #6b7a8d; }
+.stage .item .value.table .sub { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
 .stage .item .sub::before { content: '- '; }
 .stage .item .sub.dim, .stage .item .head.dim { color: #6b7a8d; }
-.stage .item .sub.dim .mono, .stage .item .sub.dim em, .stage .item .head.dim .mono, .stage .item .head.dim em { opacity: 0.55; }
+.stage .item .sub.dim .mono, .stage .item .sub.dim em, .stage .item .head.dim .mono, .stage .item .head.dim em, .stage .item .sub.dim .entity, .stage .item .head.dim .entity { opacity: 0.55; }
 .stage .item .sub.hidden { visibility: hidden; }
+/* Color key (`columns`): one column per view, each kind with its color rule, its name and its examples. */
+.stage .inner.key-inner { justify-content: flex-start; padding-top: 10.5cqw; gap: 0; }
+.stage .key-heading { font-size: 3cqw; }
+.stage .key-cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 6cqw; margin-top: 2.2cqw; }
+.stage .key-view { color: #6b7a8d; font-size: 1.4cqw; padding-bottom: 0.9cqw; border-bottom: 1px solid #1c2638; margin-bottom: 1.8cqw; }
+.stage .key-view b { color: #c0d2e4; font-weight: 600; }
+.stage .key { display: grid; grid-template-columns: 0.35cqw 1fr; column-gap: 1.4cqw; margin-bottom: 2.4cqw; }
+.stage .key:last-child { margin-bottom: 0; }
+.stage .key .rule { background: var(--kind); border-radius: 1cqw; }
+.stage .key-name { font-size: 2cqw; color: var(--kind); font-weight: 600; line-height: 1.15; margin-bottom: 0.8cqw; }
+.stage .key-ex { font-size: 1.6cqw; line-height: 1.45; }
 .stage .item.subtitle { font-size: 2.2cqw; font-weight: 400; color: #9fb3c8; margin-top: -0.6cqw; }
 .stage .item.audience { font-size: 1.3cqw; font-weight: 600; color: #6b7a8d; letter-spacing: 0.3cqw; text-transform: uppercase; margin-top: 0.4cqw; }
 .stage .item.heading { margin-bottom: 1.2cqw; }
@@ -272,15 +319,23 @@ const NOTES_KEY = 'idp-outline-notes';
 if (localStorage.getItem(NOTES_KEY) === '1' || location.search.includes('presenter')) deck.classList.add('with-notes');
 const LAYOUT_KEY = 'idp-outline-notes-layout';
 if (localStorage.getItem(LAYOUT_KEY) !== 'bottom') deck.classList.add('notes-right');
-// Aligned label/value lists: shrink the font until the widest row fits the slide width.
+// Aligned label/value lists, and lists that name catalog entities: shrink the font until the widest row
+// fits the slide width, so a row never wraps (an entity line reads as one term after another).
 function fitAligned(stage) {
-  stage.querySelectorAll('.items.aligned').forEach((list) => {
+  stage.querySelectorAll('.items.aligned, .items.entities').forEach((list) => {
     list.style.removeProperty('--fit');
     const inner = list.closest('.inner'), style = getComputedStyle(inner);
     const room = inner.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     const left = list.getBoundingClientRect().left;
-    const widest = Math.max(...Array.from(list.querySelectorAll('.value, .item')).map((el) => el.getBoundingClientRect().right - left));
-    if (widest > room) list.style.setProperty('--fit', (room / widest * 0.98).toFixed(3));
+    const rows = list.classList.contains('entities') ? '.item, .sub' : '.value, .item';
+    const widest = Math.max(...Array.from(list.querySelectorAll(rows)).map((el) => el.getBoundingClientRect().right - left));
+    let fit = widest > room ? room / widest * 0.98 : 1;
+    // Nor taller than the room left above the footer.
+    const footer = list.closest('.stage').querySelector('.footer');
+    const bottom = (footer ? footer.getBoundingClientRect().top : inner.getBoundingClientRect().bottom - parseFloat(style.paddingBottom));
+    const top = list.getBoundingClientRect().top, height = list.getBoundingClientRect().bottom - top;
+    if (top + height > bottom - room * 0.06) fit = Math.min(fit, (bottom - room * 0.06 - top) / height);
+    if (fit < 1) list.style.setProperty('--fit', fit.toFixed(3));
   });
 }
 document.fonts.ready.then(() => { if (deck.classList.contains('on')) fitAligned(stages[current]); });
@@ -667,6 +722,10 @@ def slide_steps(outline, slide, act, section):
       steps.append({"slide": slide, "act": act, "section": section, "items": [], **extra, "focus": spot(part),
                     "diagram": {**shown, **{done: kept(done, part) for done in reveal[:n]}, part: "on"}})
     return steps
+  # `columns`: a color key of catalog kinds, one column per view (references/content-rules.md, "Cores dos conceitos").
+  if slide.get("columns"):
+    steps.append({"slide": slide, "act": act, "section": section, "items": [], "columns": slide["columns"]})
+    return steps
   screen = slide.get("screen") or []
   if slide.get("code") or not screen:
     steps.append({"slide": slide, "act": act, "section": section, "items": [], "code": slide.get("code")})
@@ -674,13 +733,26 @@ def slide_steps(outline, slide, act, section):
     # `deck.audience`: who the deck is for, discreet, on the first slide only.
     audience = outline["deck"].get("audience") if slide is outline["slides"][0] else None
     # A detail slide without a `heading` opens with its `label` ("System example"): its header names the box only.
-    title = [(slide["label"], "dim heading")] if slide.get("parent") and slide.get("label") and not slide.get("heading") else []
+    # Like a `heading`, the label is shown alone first, then dims as the items enter together.
+    label = slide.get("label") if slide.get("parent") and not slide.get("heading") else None
+    title = [(label, "dim heading")] if label else []
+    if label:
+      steps.append({"slide": slide, "act": act, "section": section,
+                    "items": [(label, "active heading")] + [(item, "hidden") for item in screen]})
     steps.append({"slide": slide, "act": act, "section": section, "items": title + [(item, "active") for item in screen]
                   + ([(slide["subtitle"], "active subtitle")] if slide.get("subtitle") else [])
                   + ([(audience, "active audience")] if audience else [])})
   else:
     # Optional `heading`: shown alone first, then stays on top, dimmed, while the items are revealed.
-    heading = slide.get("heading")
+    # A detail slide without a `heading` uses its `label` the same way.
+    heading = slide.get("heading") or (slide.get("label") if slide.get("parent") else None)
+    # `kind` on the slide: the heading's first word ("Component example…") takes that kind's color.
+    if heading and slide.get("kind") in KINDS:
+      first, _, rest = heading.partition(" ")
+      heading = f"{{{slide['kind']}:{first}}} {rest}".rstrip()
+    # The example company of the catalog slides is named in bold in their headings.
+    if heading and slide.get("parent"):
+      heading = heading.replace("Tailwind Air", "**Tailwind Air**")
     if heading:
       steps.append({"slide": slide, "act": act, "section": section,
                     "items": [(heading, "active heading")] + [(item, "hidden") for item in screen]})
@@ -760,26 +832,75 @@ def build_steps(outline):
   return steps
 
 
-def rich(text, subs=None):
-  """Inline markup in screen items: **label**, `catalog name`, _relation_.
+# One color per catalog kind (references/content-rules.md, "Cores dos conceitos"): the business view in
+# earthy tones, the engineering view in cool ones. Amber stays for the relations (_holds_).
+KINDS = {"domain": "oklch(0.80 0.08 35)", "system": "oklch(0.86 0.06 105)", "group": "oklch(0.78 0.05 290)",
+         "component": "oklch(0.84 0.11 170)", "api": "oklch(0.90 0.09 210)", "resource": "oklch(0.74 0.12 260)"}
+ENTITY = re.compile(r"\{(" + "|".join(KINDS) + r"):([^\s{}]+)(?: ([^{}]+))?\}")
+
+
+def entity(match):
+  """`{component:seat-selection service}`: the name in its kind's color, the type after it, faded."""
+  kind, name, kind_type = match.groups()
+  # A real space before the type: selecting or copying the line keeps "seat-selection service" apart.
+  # Spaces inside a type ("rest api") too: in the text font, like every other space on the line.
+  kind_type = kind_type.replace(" ", "<span class='sp'> </span>") if kind_type else kind_type
+  type_html = f"<span class='sp'> </span><span class='t'>{kind_type}</span>" if kind_type else ""
+  return f"<span class='entity k-{kind}'><span class='n'>{name}</span>{type_html}</span>"
+
+
+def cells(text):
+  """One sub-item as table cells: each relation, run of words and entity name or type in its own cell."""
+  out = []
+  for token in re.findall(r"\{[^{}]+\}|_[^_]+_|[^{_]+", text):
+    match = ENTITY.fullmatch(token)
+    if match:
+      kind, name, kind_type = match.groups()
+      out.append(f"<span class='entity k-{kind}'><span class='n'>{name}</span></span>")
+      if kind_type:
+        kind_type = kind_type.replace(" ", "<span class='sp'> </span>")
+        out.append(f"<span class='entity k-{kind}'><span class='t'>{kind_type}</span></span>")
+    elif token.strip():
+      out.append(rich(token.strip()))
+  return "".join(f"<span class='c'>{cell}</span>" for cell in out)
+
+
+def rich(text, subs=None, table=False):
+  """Inline markup in screen items: **label**, `catalog name`, _relation_, {kind:name type}.
 
   A leading **Label:** followed by a line break (`\n` in the YAML) puts the value on its own line.
+  `table`: the sub-items of that value become rows of an invisible table, one word group per column.
   """
   out = html.escape(text)
+  out = ENTITY.sub(entity, out)
   out = re.sub(r"`(.+?)`", r"<code class='mono'>\1</code>", out)
   out = re.sub(r"(?<![\w])_(.+?)_(?![\w])", r"<em>\1</em>", out)
   label = re.match(r"\*\*(.+?)\*\*\n(.*)", out, re.S)
   if label:
     value = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", label.group(2))
     # Value lines starting with "- " become sub-items, each on its own line with a dash.
-    head, *items = value.split("\n- ")
+    # A value that starts with "- " has no head line: the label alone heads the sub-items.
+    head, *items = ("\n" + value if value.startswith("- ") else value).split("\n- ")
     # `subs`: how many sub-items are revealed; the newest is bright, earlier ones and the head dim.
     shown = len(items) if subs is None else subs
     state = lambda i: "" if subs is None or i == shown - 1 else (" dim" if i < shown - 1 else " hidden")
     head = f"<span class='head{' dim' if subs else ''}'>{head}</span>" if items else head
+    if table and items:
+      raw = re.match(r"\*\*(.+?)\*\*\n(.*)", text, re.S).group(2)
+      items = [cells(item) for item in ("\n" + raw if raw.startswith("- ") else raw).split("\n- ")[1:]]
     value = head + "".join(f"<span class='sub{state(i)}'>{sub}</span>" for i, sub in enumerate(items))
+    if isinstance(table, list) and items:
+      # Column names (`align: {header: [...]}`): a row above the sub-items, always shown; `{kind:type}` in the kind's color, faded.
+      name = lambda h: (lambda m: f"<span class='entity k-{m.group(1)}'><span class='t'>{m.group(2)}</span></span>" if m else rich(h))(ENTITY.fullmatch(h))
+      value = head + "<span class='sub colhead'>" + "".join(f"<span class='c'>{name(h)}</span>" for h in table) + "</span>" + value[len(head):]
+    if table and items:
+      # As many columns as the longest row has cells.
+      columns = max(sub.count("<span class='c'>") for sub in items)
+      return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value table' style='--cols: {columns}'>{value}</span>"
     return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value'>{value}</span>"
-  return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+  out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+  # "What:" opens the definition of a concept: amber, like the relations.
+  return out.replace("<strong>What:</strong>", "<strong class='what'>What:</strong>")
 
 
 INLINE_LABEL = re.compile(r"\*\*([^*\n]+?:)\*\* ")
@@ -793,14 +914,15 @@ def aligned(items):
 
 def rich_aligned(text):
   label = INLINE_LABEL.match(text)
-  return f"<strong class='lbl'>{html.escape(label.group(1))}</strong><span class='value'>{rich(text[label.end():])}</span>"
+  what = " what" if label.group(1) == "What:" else ""
+  return f"<strong class='lbl{what}'>{html.escape(label.group(1))}</strong><span class='value'>{rich(text[label.end():])}</span>"
 
 
 def rich_class(text):
   # Marked-up items render in regular weight, so only the marked parts stand out.
   if re.match(r"\*\*.+?\*\*\n", text):
     return " rich labeled"
-  return " rich" if "**" in text or "`" in text or "_" in text else ""
+  return " rich" if "**" in text or "`" in text or "_" in text or ENTITY.search(text) else ""
 
 
 def render_agenda(outline, current=None, links=None):
@@ -900,6 +1022,17 @@ def render_stage(step, base, outline=None):
     # With an overlay, the diagram dims behind the window, centered over it.
     inner = "inner diagram-inner with-overlay" if overlay else "inner diagram-inner"
     return f"{section}<div class='{inner}'><div class='diagram'>{svg}</div></div>{overlay}<div class='footer'></div>{source_html}{trail}"
+  if step.get("columns"):
+    heading = step["slide"].get("heading")
+    kind = lambda entry: (f"<div class='key k-{esc(entry['kind'])}'><span class='rule'></span><div><div class='key-name'>{esc(entry['name'])}</div>"
+                          + "".join(f"<div class='key-ex'>{rich('{' + entry['kind'] + ':' + example + '}')}</div>" for example in entry.get("examples", []))
+                          + "</div></div>")
+    column = lambda col: (f"<div class='key-col'><div class='key-view'><b>{esc(col['title'])}</b>: {esc(col['note'])}</div>"
+                          + "".join(kind(entry) for entry in col["kinds"]) + "</div>")
+    body = ((f"<div class='item key-heading'>{esc(heading)}</div>" if heading else "")
+            + f"<div class='key-cols'>{''.join(column(col) for col in step['columns'])}</div>")
+    inner_class = "inner with-topic key-inner" if has_topic else "inner key-inner"
+    return f"{section}<div class='{inner_class}'>{body}</div><div class='footer'></div>{trail}"
   if step.get("code"):
     source = (base / step["code"]["file"]).read_text().splitlines()
     shown = sorted(line_set(step["code"].get("lines"), set(range(1, len(source) + 1))))
@@ -916,10 +1049,15 @@ def render_stage(step, base, outline=None):
     bullet = lambda state: " bullet" if bulleted and "heading" not in state else ""
     size = 4.4 if count == 1 else 3.6 if count <= 3 else 3.0
     # Opt-in per slide (`align: true`): labels become an invisible column.
+    # On items whose value is a list of sub-items, the sub-items' words line up in columns instead.
     align = bool(step["slide"] and step["slide"].get("align")) and aligned(step["items"])
+    table = bool(step["slide"] and step["slide"].get("align")) and not align
+    if table and isinstance(step["slide"]["align"], dict):
+      table = step["slide"]["align"].get("header") or True
     subs = lambda state: int(state.split("subs-")[1]) if "subs-" in state else None
-    render = lambda text, state: rich_aligned(text) if align and "heading" not in state else rich(text, subs(state))
-    body = (f"<div class='items{' aligned' if align else ''}' style='--item-size: {size:.2f}cqw'>"
+    render = lambda text, state: rich_aligned(text) if align and "heading" not in state else rich(text, subs(state), table)
+    entities = " entities" if not align and any(ENTITY.search(text) for text, _ in step["items"]) else ""
+    body = (f"<div class='items{' aligned' if align else ''}{entities}' style='--item-size: {size:.2f}cqw'>"
             + "".join(f"<div class='item {state.replace('active', '').strip()}{bullet(state)}{rich_class(text)}'>{render(text, state)}</div>" for text, state in step["items"])
             + "</div>")
   source = step["slide"].get("source") if step["slide"] else None
@@ -1069,9 +1207,10 @@ def render_html(outline, base):
   <div class='meta'>{' · '.join(meta)}</div>
 </section>""")
 
+  kind_colors = " ".join(f"--{kind}: {color};" for kind, color in KINDS.items())
   return f"""<!doctype html>
 <html lang='pt-BR'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{' — '.join(esc(x) for x in (deck['title'], deck.get('iteration')) if x)}</title>
-<style>{CSS}</style><script>if (/^#present-[\\w-]+$/.test(location.hash)) document.documentElement.classList.add('presenting');</script></head>
+<style>{CSS}.stage {{ {kind_colors} }}</style><script>if (/^#present-[\\w-]+$/.test(location.hash)) document.documentElement.classList.add('presenting');</script></head>
 <body><div id='deck'>{deck_html}<div class='notes-panel'></div><div class='hint'>{home_link}<span class='keys'>{" · " if home_link else ""}← → avançar · Backspace voltar do detalhe · I índice · N notas · L posição das notas · S janela do apresentador · F tela cheia · Esc sair</span></div><div class='counter'></div></div><button id='toggle-nav' type='button'>«</button><nav>{''.join(nav)}</nav><main>{''.join(body)}</main>
 <script>{SCRIPT}</script></body></html>
 """

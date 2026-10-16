@@ -366,6 +366,20 @@ spec:
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
+  name: rebooking-assistant
+  description: Rebooks the passengers of a cancelled flight onto the next one with free seats
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/team-booking
+  system: reservations
+  dependsOn:
+    - resource:default/flight-events
+    - resource:default/passengers-db
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
   name: fares-engine
   description: Recomputes the price per flight and fare class and writes it to the fares cache
 spec:

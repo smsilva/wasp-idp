@@ -128,8 +128,8 @@ def names(steps):
 
 def test_details_come_after_the_main_track():
   steps = ro.build_steps(outline())
-  assert names(steps) == ["title", "map", "map", "map", "map", "full", "full", "box", "box-a", "box-a", "box-b"]
-  assert [step.get("detail") for step in steps[7:]] == ["box"] * 4
+  assert names(steps) == ["title", "map", "map", "map", "map", "full", "full", "box", "box-a", "box-a", "box-b", "box-b"]
+  assert [step.get("detail") for step in steps[7:]] == ["box"] * 5
   assert not any(step.get("detail") for step in steps[:7])
 
 
@@ -158,7 +158,7 @@ def test_crumbs_overlay_and_up():
 def test_entry_and_exit():
   steps = ro.build_steps(outline())
   assert [i for i, step in enumerate(steps) if step.get("entry")] == [7]
-  assert [i for i, step in enumerate(steps) if step.get("exit")] == [10]
+  assert [i for i, step in enumerate(steps) if step.get("exit")] == [11]
 
 
 def deck(tmp_path):
@@ -177,7 +177,7 @@ def test_stage_attributes(tmp_path):
   page = deck(tmp_path)
   # root `box` goes up to the last step of `map` (4); `box-b` to the first step of `box-a` (8)
   assert "data-detail='box' data-up='4' data-out='4' data-entry" in stage(page, 7)
-  assert "data-up='8' data-out='4' data-exit" in stage(page, 10)
+  assert "data-up='8' data-out='4' data-exit" in stage(page, 11)
   assert "data-detail" not in stage(page, 6)
 
 
@@ -286,6 +286,56 @@ SVG_COLORS = ('<svg><g data-part="obs-plane"><rect fill="#101010" stroke="#aa880
               '<g data-part="dev.1"><rect fill="#050505" stroke="#404040" /><text fill="#909090">B</text></g></svg>')
 
 def test_detail_slide_without_heading_shows_its_label(tmp_path):
-  # `box-b` has a `label` and no `heading`: the label opens the slide, dimmed like a heading over its items.
+  # `box-b` has a `label` and no `heading`: like a heading, the label opens the slide alone, then dims
+  # as the items enter.
   page = deck(tmp_path)
-  assert "<div class='item dim heading'>B</div>" in stage(page, 10)
+  first, second = stage(page, 10), stage(page, 11)
+  assert "<div class='item heading'>B</div>" in first and "<div class='item hidden'>y</div>" in first
+  assert "<div class='item dim heading'>B</div>" in second and "<div class='item '>y</div>" in second
+
+
+def test_label_with_only_sub_items():
+  # A value that starts with "- " has no head line: the label alone heads the sub-items.
+  out = ro.rich("**`x` service**\n- _shows_ a\n- _holds_ b", subs=1)
+  assert out.startswith("<strong class='lbl'><code class='mono'>x</code> service</strong>")
+  assert "<span class='sub'><em>shows</em> a</span><span class='sub hidden'><em>holds</em> b</span>" in out
+
+
+def test_entity_markup():
+  # {kind:name type}: the name in its kind's color, the type after it; the kind picks the color.
+  out = ro.rich("_provided by_ {component:seat-selection service}")
+  assert ("<span class='entity k-component'><span class='n'>seat-selection</span>"
+          "<span class='sp'> </span><span class='t'>service</span></span>") in out
+  assert ro.rich("{api:seats rest api}").endswith("<span class='n'>seats</span><span class='sp'> </span><span class='t'>rest<span class='sp'> </span>api</span></span>")
+  assert ro.rich("{system:seat-map}") == "<span class='entity k-system'><span class='n'>seat-map</span></span>"
+  # An unknown kind is not markup.
+  assert "entity" not in ro.rich("{nope:x y}")
+  assert ro.rich_class("{group:team-airport team}") == " rich"
+
+
+def test_color_key_slide(tmp_path):
+  # `columns`: one column per view, each kind with its examples in the kind's color.
+  data = outline()
+  slide(data, "box-b")["columns"] = [{"title": "business view", "note": "how it is grouped",
+                                      "kinds": [{"kind": "domain", "name": "Domain", "examples": ["tailwind domain"]}]}]
+  steps = ro.build_steps(data)
+  assert [step.get("columns") is not None for step in steps].count(True) == 1
+  (tmp_path / "o.yaml").write_text(yaml.safe_dump(data))
+  (tmp_path / "d.svg").write_text(SVG)
+  html_out = ro.render_html(data, tmp_path)
+  assert "<div class='key k-domain'>" in html_out
+  assert "<span class='entity k-domain'><span class='n'>tailwind</span><span class='sp'> </span><span class='t'>domain</span></span>" in html_out
+
+
+def test_aligned_subitems():
+  # `align: true` on a value made of sub-items: each word group in its own column of an invisible table.
+  out = ro.rich("**{resource:t topic}**\n- _read by_ {component:a service} in {domain:x subdomain}\n- _read by_ {component:bb service} in {domain:y subdomain}", table=True)
+  assert "<span class='value table' style='--cols: 6'>" in out
+  assert ("<span class='c'><em>read by</em></span><span class='c'><span class='entity k-component'><span class='n'>a</span></span></span>"
+          "<span class='c'><span class='entity k-component'><span class='t'>service</span></span></span><span class='c'>in</span>") in out
+
+
+def test_aligned_subitems_with_header():
+  # `align: {header: [...]}`: the column names in a row above, in the kind's color.
+  out = ro.rich("**{resource:t topic}**\n- _read by_ {component:a} {domain:x}", table=["", "{component:service}", "{domain:subdomain}"])
+  assert ("<span class='sub colhead'><span class='c'></span><span class='c'><span class='entity k-component'><span class='t'>service</span></span></span>") in out

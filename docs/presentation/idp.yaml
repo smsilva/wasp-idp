@@ -148,7 +148,9 @@ parts:
 #   dependsOn  slides que precisam ter sido vistos antes (o encadeamento do raciocínio)
 #   heading    título do slide: aparece sozinho no 1º passo e fica no alto, esmaecido, enquanto os itens de screen entram
 #   source     origem curta mostrada no rodapé do slide (obrigatória quando há número na tela)
-#   align      true: itens **Rótulo:** valor viram tabela invisível (valores alinhados à esquerda)
+#   align      true: itens **Rótulo:** valor viram tabela invisível (valores alinhados à esquerda);
+#              num item com subitens "- ", as palavras dos subitens viram colunas alinhadas;
+#              {header: ["", "{component:service}", ...]}: nomes das colunas acima, e o tipo sai das linhas
 #   subitems   together: subitens "- " de um valor aparecem todos de uma vez (default: um por passo)
 #   code       {file, lines?, focus?}: bloco de código estilo IDE no lugar de `screen`;
 #              `focus` realça linhas e esmaece o resto (mostrar um arquivo por partes)
@@ -476,13 +478,43 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-ownership]
 
+  - name: concept-colors
+    act: developer-control
+    parent: catalog-levels
+    label: "Concept colors"
+    topic: "Software Catalog"
+    message: "Cada conceito do catálogo tem uma cor, e ela se repete em todos os exemplos do deck."
+    heading: "One color per concept"
+    columns:
+      - title: "business view"
+        note: "how it is grouped"
+        kinds:
+          - { kind: domain, name: "Domain", examples: ["tailwind domain", "airport subdomain"] }
+          - { kind: system, name: "System", examples: ["seat-map system"] }
+          - { kind: group, name: "Group", examples: ["team-airport team"] }
+      - title: "engineering view"
+        note: "what is built"
+        kinds:
+          - { kind: component, name: "Component", examples: ["seat-selection service", "web-checkin website"] }
+          - { kind: api, name: "API", examples: ["seats rest api"] }
+          - { kind: resource, name: "Resource", examples: ["passengers-db database", "flight-events topic"] }
+    notes: |-
+      O que queremos dizer: **a cor diz o conceito**; daqui em diante, cada nome do catálogo aparece na cor do seu conceito, seguido do seu tipo.
+
+      A visão de negócio tem tons terrosos e a de engenharia, tons frios: de longe, a cor já diz de que lado do catálogo a peça está.
+
+      Os exemplos são da Tailwind Air, a companhia aérea fictícia do catálogo de exemplo (`idp/catalog/airline/tailwind/`).
+
+      Fonte: references/content-rules.md.
+    dependsOn: [catalog-levels]
+
   - name: catalog-business-view
     act: developer-control
     parent: catalog-levels
     topic: "Software Catalog"
     message: "A visão de negócio agrupa o software por área e por capacidade."
     heading: "Business view"
-    screen: ["**Domain:** a business area", "**System:** a capability with public APIs"]
+    screen: ["**{domain:Domain}:** a business area", "**{system:System}:** a capability with public APIs"]
     notes: |-
       O que queremos dizer: a visão de negócio **agrupa o software por área e por capacidade**.
 
@@ -491,7 +523,7 @@ slides:
       **System:** o conjunto de Components e Resources que entrega uma capacidade e expõe uma ou mais APIs públicas, **escondendo a implementação de quem consome**.
 
       Fonte: references/backstage-catalog.md.
-    dependsOn: [catalog-levels]
+    dependsOn: [concept-colors]
 
   - name: catalog-engineering-view
     act: developer-control
@@ -499,7 +531,7 @@ slides:
     topic: "Software Catalog"
     message: "A visão de engenharia mostra o que se constrói, como as peças conversam e do que dependem."
     heading: "Engineering view"
-    screen: ["**Component:** what you _build_ and _deploy_", "**API:** the _boundary_ between components", "**Resource:** what it _needs_ at runtime"]
+    screen: ["**{component:Component}:** what you _build_ and _deploy_", "**{api:API}:** the _boundary_ between components", "**{resource:Resource}:** what it _needs_ at runtime"]
     notes: |-
       O que queremos dizer: **a visão de engenharia mostra o que se constrói**, como as peças conversam e do que dependem.
 
@@ -524,6 +556,7 @@ slides:
     audiences: [engineering, platform]
     message: "Component é uma peça de software que alguém mantém e entrega."
     heading: "Component"
+    kind: component
     screen: ["**What:** software you build and deploy"]
     notes: |-
       O que queremos dizer: **Component é o software que um time mantém e entrega** — serviço, site, biblioteca, pipeline de dados.
@@ -537,9 +570,9 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Component example from Tailwind Air"
+    kind: component
     message: "O seat-selection, do catálogo de exemplo da Tailwind Air, é um Component."
-    animations: none
-    screen: ["`seat-selection` (service) _holds_ the seat a passenger picks"]
+    screen: ["**{component:seat-selection service}**\n- _shows_ the **free seats** of a flight\n- _holds_ the **seat** a passenger picks"]
     notes: |-
       `seat-selection`, o serviço que mostra o mapa de assentos e reserva o assento que o passageiro escolhe. Vem do **catálogo de exemplo deste repo** (`idp/catalog/airline/tailwind/`), que modela a **Tailwind Air**, uma companhia aérea fictícia.
 
@@ -552,6 +585,7 @@ slides:
     audiences: [engineering, platform]
     message: "API é o contrato entre Components."
     heading: "API"
+    kind: api
     screen: ["**What:** the contract between components"]
     notes: |-
       O que queremos dizer: **API é o contrato**; quem consome depende dele, não da implementação.
@@ -570,9 +604,9 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "API example from Tailwind Air"
+    kind: api
     message: "O Component web-checkin consome a API seats, fornecida pelo Component seat-selection."
-    animations: none
-    screen: ["`web-checkin` (website) _consumes_ `seats` (API)", "`seats` (API) _provided by_ `seat-selection` (service)"]
+    screen: ["**{api:seats rest api}**\n- _provided by_ {component:seat-selection service}\n- _consumed by_ {component:web-checkin website}"]
     notes: |-
       O site de check-in `web-checkin` (`type: website`) consome a API `seats` (`consumesApis`), que o microsserviço `seat-selection` (`type: service`) expõe (`providesApis`). O tipo vem do campo `spec.type` de cada Component no catálogo da Tailwind Air.
 
@@ -587,6 +621,7 @@ slides:
     audiences: [engineering, platform]
     message: "Resource é a infraestrutura de que o Component precisa para rodar."
     heading: "Resource"
+    kind: resource
     screen: ["**What:** infrastructure needed at runtime"]
     notes: |-
       O que queremos dizer: **Resource é a infraestrutura de que o Component precisa para rodar** — banco, fila, bucket.
@@ -602,9 +637,9 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Resource example from Tailwind Air"
+    kind: resource
     message: "O seat-selection depende do banco passengers-db."
-    animations: none
-    screen: ["`passengers-db` (database) _used by_ `seat-selection` (service)"]
+    screen: ["**{resource:passengers-db database}**\n- _owned by_ {system:reservations system}\n- _used by_ {component:seat-selection service}"]
     notes: |-
       O microsserviço `seat-selection` (`type: service`) depende de `passengers-db` (`type: database`), que guarda as reservas e os seus passageiros.
 
@@ -617,6 +652,7 @@ slides:
     audiences: [engineering, platform]
     message: "System junta Components, APIs e Resources que entregam uma capacidade — e esconde o resto."
     heading: "System"
+    kind: system
     screen: ["**What:** components that deliver a capability"]
     notes: |-
       O que queremos dizer: **System junta as peças que entregam uma capacidade** e esconde o que há dentro.
@@ -634,9 +670,9 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "System example from Tailwind Air"
+    kind: system
     message: "O System seat-map junta as peças anteriores."
-    animations: none
-    screen: ["`seat-map` (System) _groups_:", "`web-checkin` (website)", "`seat-selection` (service)", "`seats` (API)"]
+    screen: ["**{system:seat-map system}**\n- _groups_ {component:web-checkin website}\n- _groups_ {component:seat-selection service}\n- _groups_ {api:seats rest api}"]
     notes: |-
       O System `seat-map` reúne o site `web-checkin`, o microsserviço `seat-selection` e a API `seats` entre eles — as peças dos slides anteriores. Um System junta **Components, APIs e Resources**.
 
@@ -651,6 +687,7 @@ slides:
     audiences: [engineering, platform]
     message: "Domain agrupa Systems da mesma área de negócio."
     heading: "Domain"
+    kind: domain
     screen: ["**What:** systems of one business area"]
     notes: |-
       O que queremos dizer: **Domain agrupa Systems da mesma área de negócio.**
@@ -667,10 +704,10 @@ slides:
     parent: entity-domain
     topic: "Software Catalog"
     audiences: [engineering, platform]
-    label: "Domain example"
+    label: "Domain example from Tailwind Air"
+    kind: domain
     message: "O Domain tailwind tem um subdomínio por área de negócio."
-    animations: none
-    screen: ["The `tailwind` domain _contains_:", "`airport` subdomain", "`booking` subdomain"]
+    screen: ["**{domain:tailwind domain}**\n- _contains_ {domain:airport subdomain}\n- _contains_ {domain:booking subdomain}"]
     notes: |-
       `tailwind`, o Domain da companhia, tem um subdomínio (`subdomainOf`) por área de negócio. Na tela, dois deles: `airport` (check-in, assentos, embarque, bagagem) e `booking` (busca, tarifa, reserva). Os outros são `flight-ops`, `loyalty` e `crew`.
 
@@ -680,10 +717,9 @@ slides:
     act: developer-control
     parent: detail-catalog
     topic: "Software Catalog"
-    message: "Juntando: do negócio ao banco de dados, uma árvore só."
-    align: true
+    message: "Juntando: do negócio ao serviço, uma árvore só."
     heading: "Tailwind Air catalog"
-    screen: ["**Domain:** `tailwind`", "**Subdomain:** `airport`", "**System:** `seat-map`", "**Component:** `seat-selection`"]
+    screen: ["{domain:tailwind domain}", "{domain:airport subdomain}", "{system:seat-map system}", "{component:seat-selection service}"]
     notes: |-
       O que queremos dizer: **do negócio ao código, o catálogo é uma árvore só.**
 
@@ -696,18 +732,22 @@ slides:
       Fonte: references/backstage-catalog.md.
     dependsOn: [catalog-levels]
 
-  - name: catalog-tree
+  - name: tailwind-dependents
     act: developer-control
     parent: detail-catalog
     topic: "Software Catalog"
-    message: "No exemplo deste repo: o Domain communication com os Systems greeter e notifier."
-    heading: "Our catalog"
-    subitems: together
-    screen: ["**Example:**\nThe `communication` domain _contains_:\n- `greeter` system\n- `notifier` system"]
+    message: "Um atraso de voo vira um evento que chega a cinco subdomínios, e o catálogo mostra quem depende dele."
+    heading: "Across the Tailwind domain"
+    align: {header: ["", "{component:service}", "{domain:subdomain}"]}
+    screen: ["**{resource:flight-events topic}**\n- _written by_ {component:flight-tracker} {domain:flight-ops}\n- _read by_ {component:boarding-pass-issuer} {domain:airport}\n- _read by_ {component:bag-tracker} {domain:airport}\n- _read by_ {component:rebooking-assistant} {domain:booking}\n- _read by_ {component:miles-ledger} {domain:loyalty}\n- _read by_ {component:roster-planner} {domain:crew}"]
     notes: |-
-      O que queremos dizer: **a mesma árvore descreve um software real.**
+      O que queremos dizer: **a árvore mostra o caminho de cima para baixo; o catálogo também mostra o que atravessa os galhos.**
 
-      É a mesma árvore, aplicada ao **catálogo de exemplo deste repo** (`idp/catalog/communication/`): o `greeter` publica saudações e um evento por saudação; o `notifier` consome esse evento e entrega notificações. Os Resources são descritos **pelo papel** (banco, tópico, fila, bucket), não pelo serviço de nuvem.
+      Um atraso no voo vira um evento no tópico `flight-events`. Quem escreve no tópico é o `flight-tracker`, em `flight-ops`; quem lê está em **quatro outros subdomínios**: o `boarding-pass-issuer` reemite o cartão de embarque e o `bag-tracker` redireciona as malas (`airport`), o `rebooking-assistant` remarca os passageiros de um voo cancelado no próximo com assentos livres (`booking`), o `miles-ledger` estorna as milhas de um voo cancelado (`loyalty`) e o `roster-planner` refaz a escala da tripulação (`crew`).
+
+      **Quem muda o evento precisa saber quem o lê.** O catálogo responde sem ninguém perguntar no chat: no Backstage, a página do `flight-events` lista os quatro Components (`scripts/demo/backstage-tailwind`). Na Platform API isso chega quando os Components entram no catálogo pela discovery (#205).
+
+      Os nomes vêm de `idp/catalog/airline/tailwind/catalog-info.yaml`; a cor de cada nome diz o conceito (legenda: `concept-colors`).
 
       Fonte: references/backstage-catalog.md.
     dependsOn: [tailwind-tree]
@@ -720,7 +760,7 @@ slides:
     audiences: [engineering, platform]
     message: "No catálogo, a app é um arquivo curto junto do código — começando pelo nome e pelo que ela faz."
     code: {file: snippets/catalog-info.yaml, focus: 3-4}
-    dependsOn: [catalog-tree]
+    dependsOn: [tailwind-dependents]
     notes: |-
       O que queremos dizer: **cada app se declara no catálogo com um arquivo curto, junto do código**; as primeiras linhas dizem o nome e o que a app faz, em linguagem humana — é o que aparece na busca do catálogo.
 
@@ -736,7 +776,7 @@ slides:
     code: {file: snippets/catalog-info.yaml, focus: 6-7}
     dependsOn: [declare-name]
     notes: |-
-      O que queremos dizer: **`system` posiciona a app na árvore** — liga ao System `greeter`, que liga ao Domain `communication`.
+      O que queremos dizer: **`system` posiciona a app na árvore** — liga ao System `seat-map`, que liga ao subdomain `airport` da Tailwind Air.
 
       `type: service` diz o tipo de Component: poderia ser `website` ou `library`.
 
@@ -752,9 +792,9 @@ slides:
     code: {file: snippets/catalog-info.yaml, focus: 8-9}
     dependsOn: [declare-system]
     notes: |-
-      O que queremos dizer: **`owner` diz quem responde pela app** — liga ao Group `team-alpha`.
+      O que queremos dizer: **`owner` diz quem responde pela app** — liga ao Group `team-airport`.
 
-      `lifecycle: experimental` diz **o quanto dá para confiar** nela; para um Internal Product, em que ponto da jornada ele está.
+      `lifecycle: production` diz **o quanto dá para confiar** nela; para um Internal Product, em que ponto da jornada ele está.
 
       Fonte: references/backstage-catalog.md.
 
@@ -768,7 +808,7 @@ slides:
     notes: |-
       O que queremos dizer: **compartilhar com a organização é uma mudança de estado**, e o catálogo já tem o campo para isso.
 
-      **Valores bem conhecidos do Backstage:** `experimental`, `production` e `deprecated`, no `spec.lifecycle` de Component, API, Resource e System. Hoje **todo o nosso catálogo está em `experimental`**.
+      **Valores bem conhecidos do Backstage:** `experimental`, `production` e `deprecated`, no `spec.lifecycle` de Component, API, Resource e System. Na Tailwind Air, todo o catálogo está em `production`; o catálogo de exemplo da plataforma, em `experimental`.
 
       **Proposta** (ideia, não decidida):
       - `experimental`: o dono provisiona, testa e refina.
@@ -790,7 +830,7 @@ slides:
     code: {file: snippets/catalog-info.yaml, focus: 10-11}
     dependsOn: [declare-ownership]
     notes: |-
-      O que queremos dizer: **a app declara o contrato que oferece.** `providesApis` aponta para a entidade API `greeting-http`.
+      O que queremos dizer: **a app declara o contrato que oferece.** `providesApis` aponta para a entidade API `seats`; o `web-checkin` declara `consumesApis` dela.
 
       Quem consome declara `consumesApis` do outro lado — **o catálogo desenha a aresta.**
 
@@ -803,14 +843,14 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     message: "Do que depende para rodar — descrito pelo papel."
-    code: {file: snippets/catalog-info.yaml, focus: 12-15}
+    code: {file: snippets/catalog-info.yaml, focus: 12-13}
     dependsOn: [declare-apis]
     notes: |-
       O que queremos dizer: **a app declara do que depende pelo papel, nunca pelo serviço de nuvem.**
 
-      Um banco relacional, um tópico de eventos e um bucket de imagens. **Nenhuma linha diz qual produto de nuvem** — o mesmo princípio que reaparece na declaração da app.
+      O `passengers-db` é um banco relacional, e **nenhuma linha diz qual produto de nuvem** — o mesmo princípio que reaparece na declaração da app.
 
-      Baseado em `idp/catalog/communication/catalog-info.yaml`, onde os três Resources do `greeter` declaram `dependencyOf` o `greeting-api` — a mesma aresta, vista do outro lado.
+      É um Resource compartilhado: pertence ao System `reservations`, e o `seat-selection` só o usa (slide `entity-resource-example`). Baseado em `idp/catalog/airline/tailwind/catalog-info.yaml`.
 
       Fonte: references/backstage-catalog.md.
 
@@ -855,7 +895,7 @@ slides:
     label: "What the catalog stores example"
     message: "seat-selection é um Component, com várias versões rodando."
     animations: none
-    screen: ["`seat-selection` _is_ 1 component, N versions running"]
+    screen: ["{component:seat-selection service} _is_ **1 component**, **N versions** running"]
     notes: |-
       Recomendação explícita da documentação do Backstage (FAQ do catálogo). O `seat-selection`, o serviço de assentos da Tailwind Air, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
 
@@ -881,11 +921,13 @@ slides:
     topic: "Software Catalog"
     audiences: [engineering, platform]
     label: "Breaking change example"
-    message: "A FAQ do Backstage: customerinfo vira customerinfo2."
+    message: "Quebrar o contrato de assentos cria a API seats2, ao lado da seats."
     animations: none
-    screen: ["`customerinfo` → `customerinfo2`"]
+    screen: ["{api:seats rest api} → {api:seats2 rest api}"]
     notes: |-
-      Exemplo da própria FAQ do Backstage: `customerinfo` → `customerinfo2`.
+      Na Tailwind Air: mudar o contrato de `seats` de forma incompatível cria a API `seats2`, e o `web-checkin` migra de forma explícita, trocando o `consumesApis`. As duas convivem até a `seats` ser `deprecated`.
+
+      É o mesmo padrão do exemplo da FAQ do Backstage: `customerinfo` → `customerinfo2`.
 
     dependsOn: [major-breaking]
 
@@ -1024,10 +1066,10 @@ slides:
   - name: golden-paths
     act: developer-control
     parent: detail-golden-paths
-    label: "The easy way is the right way"
+    label: "Why developers choose it"
     topic: "Golden Paths"
     message: "O caminho certo precisa ser o mais fácil: é isso que faz o dev escolher o golden path."
-    heading: "The easy way is the right way"
+    heading: "Why developers choose it"
     screen: ["**What:** the supported path for a recurring task", "**Rule:** the easy way _is_ the right way"]
     notes: |-
       O que queremos dizer: **o caminho certo precisa ser o mais fácil** — é a facilidade, não a obrigação, que faz o dev segui-lo.
@@ -1045,7 +1087,7 @@ slides:
     parent: detail-golden-paths
     topic: "Golden Paths"
     message: "O golden path guia sem prender: é opcional e se compõe com outros."
-    heading: "Optional and composable"
+    heading: "How it guides"
     screen: ["**Shape:** optional and composable", "**Risk:** a golden cage _breeds_ shadow platforms"]
     notes: |-
       O que queremos dizer: **o golden path guia sem virar jaula**.
@@ -1136,7 +1178,7 @@ slides:
     topic: "Version Control"
     audiences: [engineering, platform]
     message: "Tudo começa como código versionado."
-    heading: "Version control"
+    heading: "Where code lives"
     screen: ["**What:** source of truth for code and infra", "**Tools:** `GitHub`, `Bitbucket`"]
     notes: |-
       O que queremos dizer: **tudo começa como código versionado** — inclusive o estado desejado da infraestrutura.
@@ -1202,7 +1244,7 @@ slides:
     topic: "Registry"
     message: "O registry guarda cada versão — é aqui que a versão que o catálogo não guarda mora."
     heading: "Where versions live"
-    screen: ["**Registry:** `Azure Container Registry` _stores_ the version", "**Chosen:** per build, a default set by the platform team"]
+    screen: ["**Tool:** `Azure Container Registry`", "**Chosen:** per build, with a platform default"]
     notes: |-
       O que queremos dizer: **a versão que o catálogo não guarda mora aqui** — é a tag da imagem no registry.
 
@@ -1218,9 +1260,9 @@ slides:
     parent: registry
     topic: "Registry"
     label: "Where versions live example"
-    message: "vitrine:1.4.2 é uma versão; vitrine:latest não é."
+    message: "seat-selection:1.4.2 é uma versão; seat-selection:latest não é."
     animations: none
-    screen: ["`vitrine:1.4.2` _is_ a version"]
+    screen: ["{component:seat-selection:1.4.2} _is_ a version"]
     notes: |-
       A tag `1.4.2` é **ilustrativa**: uma imagem publicada só como `:latest` **não identifica versão nenhuma**.
 
@@ -1379,7 +1421,7 @@ slides:
     parent: detail-delivery
     topic: "Delivery"
     message: "A entrega é GitOps: o estado desejado de cada ambiente está no git."
-    heading: "GitOps delivery"
+    heading: "GitOps"
     screen: ["**What:** desired state per environment _lives in_ git", "**Tool:** `Argo CD`"]
     notes: |-
       O que queremos dizer: **o git registra qual versão roda em qual ambiente** — fecha o fio de "Where versions live".
@@ -1943,7 +1985,7 @@ slides:
   - name: portal
     act: api
     parent: detail-portal
-    topic: "Clients"
+    topic: "Portal"
     message: "Antes de criar, o dev precisa descobrir o que já existe: o portal é a vitrine da plataforma."
     heading: "Discovery first"
     screen: ["**Question:** what already exists?", "**Tool:** `Backstage`"]
@@ -1962,7 +2004,7 @@ slides:
   - name: portal-is-not-platform
     act: api
     parent: detail-portal
-    topic: "Clients"
+    topic: "Portal"
     message: "Portal e plataforma não são a mesma coisa: o portal é a interface, a plataforma é o que está atrás dela."
     heading: "Portal is not the platform"
     screen: ["**Portal:** the interface", "**Platform:** the capabilities behind it"]
@@ -2003,7 +2045,7 @@ slides:
   - name: cli-example
     act: api
     parent: detail-cli
-    topic: "Clients"
+    topic: "CLI"
     audiences: [engineering, platform]
     message: "Uma boa CLI mostra as mesmas entidades do portal — para gente, para pipeline e para agente."
     heading: "What a good platform CLI does"
@@ -2049,7 +2091,7 @@ slides:
   - name: editor-and-agent
     act: api
     parent: detail-ide-agents
-    topic: "Clients"
+    topic: "IDE & Agents"
     audiences: [engineering, platform]
     message: "O dev começa no editor — e cada vez mais com um agente ao lado."
     heading: "Where developers work"
@@ -2070,7 +2112,7 @@ slides:
   - name: catalog-as-context
     act: api
     parent: detail-ide-agents
-    topic: "Clients"
+    topic: "IDE & Agents"
     audiences: [engineering, platform]
     message: "O mesmo catálogo serve o portal, a CLI e o agente."
     heading: "One catalog"
@@ -2098,7 +2140,7 @@ slides:
   - name: context-next-to-code
     act: api
     parent: detail-ide-agents
-    topic: "Clients"
+    topic: "IDE & Agents"
     audiences: [engineering, platform]
     message: "O repo diz ao agente como trabalhar no código: comandos, convenções e guardrails."
     heading: "What the repo tells the agent"
@@ -2462,7 +2504,7 @@ slides:
     act: agentic
     topic: "Agents as users"
     message: "Agentes já são usuários da plataforma — e ela vira o contexto e o freio deles."
-    heading: "Agents as users"
+    heading: "A new kind of user"
     screen: ["**Context:** the platform _feeds_ the agent", "**Brakes:** the platform _limits_ the agent", "**Today:** platform clients in 29% of orgs"]
     source: "DORA ROI of AI-assisted Software Development (2026), p. 40; State of AI in Platform Engineering, Vol. 2 (2026), p. 43"
     notes: |-
@@ -2611,7 +2653,7 @@ slides:
     act: agentic
     topic: "Maturity"
     message: "A escala de maturidade vai do humano como loop ao humano como orquestrador."
-    heading: "AI maturity levels"
+    heading: "Levels of AI use"
     screen: ["**Level 0:** no agents", "**Level 1:** AI suggests, human executes", "**Level 2:** agents open PRs in parallel", "**Level 3:** agents act on signals", "**Level 4:** autonomous within guardrails"]
     source: "State of AI in Platform Engineering, Vol. 2 (2026), p. 18"
     notes: |-
