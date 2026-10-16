@@ -570,7 +570,7 @@ slides:
     label: "Component example from Tailwind Air"
     kind: component
     message: "O seat-selection, do catálogo de exemplo da Tailwind Air, é um Component."
-    screen: ["**{component:seat-selection service}**\n- _shows_ the free seats of a flight\n- _holds_ the seat a passenger picks"]
+    screen: ["**{component:seat-selection service}**\n- _shows_ the **free seats** of a flight\n- _holds_ the **seat** a passenger picks"]
     notes: |-
       `seat-selection`, o serviço que mostra o mapa de assentos e reserva o assento que o passageiro escolhe. Vem do **catálogo de exemplo deste repo** (`idp/catalog/airline/tailwind/`), que modela a **Tailwind Air**, uma companhia aérea fictícia.
 
@@ -889,7 +889,7 @@ slides:
     label: "What the catalog stores example"
     message: "seat-selection é um Component, com várias versões rodando."
     animations: none
-    screen: ["{component:seat-selection service} _is_ 1 component, N versions running"]
+    screen: ["{component:seat-selection service} _is_ **1 component**, **N versions** running"]
     notes: |-
       Recomendação explícita da documentação do Backstage (FAQ do catálogo). O `seat-selection`, o serviço de assentos da Tailwind Air, é **um Component, mesmo com várias versões rodando ao mesmo tempo**. O estado vivo fica em outro lugar.
 
