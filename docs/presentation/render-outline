@@ -111,6 +111,10 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .item.dim { color: #6b7a8d; }
 .stage .item.hidden { visibility: hidden; }
 .stage .item .sub { display: block; margin-top: 0.5cqw; }
+/* `align: true` on sub-items: an invisible table, the dash and each word group in its own column. */
+.stage .item .value.table { display: grid; grid-template-columns: repeat(var(--cols), max-content); column-gap: 0.3em; width: max-content; }
+.stage .item .value.table .head { grid-column: 1 / -1; }
+.stage .item .value.table .sub { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
 .stage .item .sub::before { content: '- '; }
 .stage .item .sub.dim, .stage .item .head.dim { color: #6b7a8d; }
 .stage .item .sub.dim .mono, .stage .item .sub.dim em, .stage .item .head.dim .mono, .stage .item .head.dim em, .stage .item .sub.dim .entity, .stage .item .head.dim .entity { opacity: 0.55; }
@@ -832,10 +836,27 @@ def entity(match):
   return f"<span class='entity k-{kind}'><span class='n'>{name}</span>{type_html}</span>"
 
 
-def rich(text, subs=None):
+def cells(text):
+  """One sub-item as table cells: each relation, run of words and entity name or type in its own cell."""
+  out = []
+  for token in re.findall(r"\{[^{}]+\}|_[^_]+_|[^{_]+", text):
+    match = ENTITY.fullmatch(token)
+    if match:
+      kind, name, kind_type = match.groups()
+      out.append(f"<span class='entity k-{kind}'><span class='n'>{name}</span></span>")
+      if kind_type:
+        kind_type = kind_type.replace(" ", "<span class='sp'> </span>")
+        out.append(f"<span class='entity k-{kind}'><span class='t'>{kind_type}</span></span>")
+    elif token.strip():
+      out.append(rich(token.strip()))
+  return "".join(f"<span class='c'>{cell}</span>" for cell in out)
+
+
+def rich(text, subs=None, table=False):
   """Inline markup in screen items: **label**, `catalog name`, _relation_, {kind:name type}.
 
   A leading **Label:** followed by a line break (`\n` in the YAML) puts the value on its own line.
+  `table`: the sub-items of that value become rows of an invisible table, one word group per column.
   """
   out = html.escape(text)
   out = ENTITY.sub(entity, out)
@@ -851,7 +872,14 @@ def rich(text, subs=None):
     shown = len(items) if subs is None else subs
     state = lambda i: "" if subs is None or i == shown - 1 else (" dim" if i < shown - 1 else " hidden")
     head = f"<span class='head{' dim' if subs else ''}'>{head}</span>" if items else head
+    if table and items:
+      raw = re.match(r"\*\*(.+?)\*\*\n(.*)", text, re.S).group(2)
+      items = [cells(item) for item in ("\n" + raw if raw.startswith("- ") else raw).split("\n- ")[1:]]
     value = head + "".join(f"<span class='sub{state(i)}'>{sub}</span>" for i, sub in enumerate(items))
+    if table and items:
+      # The dash is the first column, then as many as the longest row has cells.
+      columns = 1 + max(sub.count("<span class='c'>") for sub in items)
+      return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value table' style='--cols: {columns}'>{value}</span>"
     return f"<strong class='lbl'>{label.group(1)}</strong> <span class='value'>{value}</span>"
   out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
   # "What:" opens the definition of a concept: amber, like the relations.
@@ -1004,9 +1032,11 @@ def render_stage(step, base, outline=None):
     bullet = lambda state: " bullet" if bulleted and "heading" not in state else ""
     size = 4.4 if count == 1 else 3.6 if count <= 3 else 3.0
     # Opt-in per slide (`align: true`): labels become an invisible column.
+    # On items whose value is a list of sub-items, the sub-items' words line up in columns instead.
     align = bool(step["slide"] and step["slide"].get("align")) and aligned(step["items"])
+    table = bool(step["slide"] and step["slide"].get("align")) and not align
     subs = lambda state: int(state.split("subs-")[1]) if "subs-" in state else None
-    render = lambda text, state: rich_aligned(text) if align and "heading" not in state else rich(text, subs(state))
+    render = lambda text, state: rich_aligned(text) if align and "heading" not in state else rich(text, subs(state), table)
     entities = " entities" if not align and any(ENTITY.search(text) for text, _ in step["items"]) else ""
     body = (f"<div class='items{' aligned' if align else ''}{entities}' style='--item-size: {size:.2f}cqw'>"
             + "".join(f"<div class='item {state.replace('active', '').strip()}{bullet(state)}{rich_class(text)}'>{render(text, state)}</div>" for text, state in step["items"])
