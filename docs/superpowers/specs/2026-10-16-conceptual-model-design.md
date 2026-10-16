@@ -6,6 +6,8 @@
 
 Este documento é o resultado de uma conversa de design (2026-10-16) e foi escrito para que uma sessão nova, sem nenhum contexto, continue de onde ela parou.
 
+**Antes de tudo (agente):** ao receber este documento numa sessão nova, a primeira coisa a fazer, antes de qualquer resumo, é perguntar: "Você está com uma pessoa para quem precisamos introduzir o tema? Se sim, qual o nome dela?". Se sim, seguir a [Sessão ao vivo](#sessão-ao-vivo-trazer-um-colega-para-pensar-junto) e se dirigir à pessoa pelo nome. Se não, seguir os passos abaixo.
+
 **Para retomar numa sessão nova (agente ou pessoa):**
 
 1. Ler o [Resumo](#resumo) e o [Glossário](#glossário). Eles bastam para entender o resto.
@@ -15,21 +17,23 @@ Este documento é o resultado de uma conversa de design (2026-10-16) e foi escri
 
 **Para apresentar ao time:** seguir o [Guia para apresentar ao time](#guia-para-apresentar-ao-time), que introduz os conceitos em sessões curtas, um bloco por vez.
 
+**Vocabulário em inglês:** os termos do modelo (Concept, Instance, Class, Driver, Controller, Tool, Vendor) ficam sempre em inglês, mesmo em texto e conversa em pt-BR: "a Instance grava o Driver escolhido", nunca "a Instância grava o Driver escolhido". Isso vale para este documento, para ADRs, issues, comentários e para quem conduz a conversa (pessoa ou agente). "Instância da plataforma", no sentido de uma instalação da plataforma, não é termo do modelo e fica em português.
+
 **Convenções:** os nomes propostos (`EnvironmentClass`, `ResourceClass`, `driver.yaml`, `platform driver`, `platform class`, `kind: Platform`…) são propostas para discussão. Os exemplos de YAML e de CLI mostram a experiência desejada, não comandos que existem hoje, exceto onde o texto diz "hoje".
 
 ## Resumo
 
-**A aposta:** um modelo conceitual forte é o que permite trocar os componentes que implementam cada conceito. A caixa `IaC` do Integration & Delivery plane é um conceito; a ferramenta por trás dela pode ser Terraform ou Crossplane sem que quem consome a plataforma perceba.
+**A aposta:** um modelo conceitual forte é o que permite trocar os componentes que implementam cada Concept. A caixa `IaC` do Integration & Delivery plane é um Concept; a ferramenta por trás dela pode ser Terraform ou Crossplane sem que quem consome a plataforma perceba.
 
-**O modelo** separa seis camadas: **Conceito → Instância → Class → Driver → Tool**, com **Vendor** como atributo. É o mesmo padrão do Kubernetes com volumes: PersistentVolumeClaim (Instância) → StorageClass (Class) → CSI driver (Driver) → API do storage (Tool).
+**O modelo** separa seis camadas: **Concept → Instance → Class → Driver → Tool**, com **Vendor** como atributo. É o mesmo padrão do Kubernetes com volumes: PersistentVolumeClaim (Instance) → StorageClass (Class) → CSI driver (Driver) → API do storage (Tool).
 
-**A divisão entre camadas do sistema:** a Platform API conhece Conceitos e Instâncias e trata a Class como dado opaco. A resolução da Class, os Drivers e as Tools ficam na camada Kubernetes (CRDs e controllers). Assim o modelo não recria na API a abstração que o Kubernetes já oferece.
+**A divisão entre camadas do sistema:** a Platform API conhece Concepts e Instances e trata a Class como dado opaco. A resolução da Class, os Drivers e as Tools ficam na camada Kubernetes (CRDs e controllers). Assim o modelo não recria na API a abstração que o Kubernetes já oferece.
 
 **As regras que saíram da conversa:**
 
-- Toda Instância grava qual Driver a atende (`status.resolution`) antes de qualquer Driver agir.
+- Toda Instance grava qual Driver a atende (`status.resolution`) antes de qualquer Driver agir.
 - A Tool é código do Driver; nunca aparece no pedido nem na Class.
-- Drivers de conceitos diferentes se encontram por um **contrato de runtime** (`provides`/`consumes`), não por acoplamento direto: um único `kubernetes-workload` atende vcluster, EKS e AKS.
+- Drivers de Concepts diferentes se encontram por um **contrato de runtime** (`provides`/`consumes`), não por acoplamento direto: um único `kubernetes-workload` atende vcluster, EKS e AKS.
 - O método de acesso a um ambiente (token de ServiceAccount, STS do EKS, Entra ID do AKS) é responsabilidade do Driver de environment; quem consome pede uma credencial por um caminho único.
 - A experiência é consistente para três personas (quem consome, quem implanta, quem mantém): os mesmos verbos na CLI, o mesmo formato declarativo, as mesmas relações de permissão.
 - A mudança é incremental, e a CLI é o contrato estável: o que muda por baixo muda fatia a fatia.
@@ -38,7 +42,7 @@ Este documento é o resultado de uma conversa de design (2026-10-16) e foi escri
 
 ### A aposta
 
-A plataforma (Platform API, CLI `platform`, MCP) cresceu por fatias, uma capability por vez (ADR 0034, subsistemas da plataforma). Cada capability tem uma implementação concreta: vcluster para ambientes, GitHub para SCM e build, Postgres em cluster para bancos. Para que a plataforma sirva a organizações diferentes (AWS, Azure, GCP, GitHub, Bitbucket, Crossplane, Terraform), a implementação tem que ser trocável sem mudar o que o desenvolvedor pede. Isso só funciona se o conceito for estável e bem definido, e se a forma de explicá-lo for clara.
+A plataforma (Platform API, CLI `platform`, MCP) cresceu por fatias, uma capability por vez (ADR 0034, subsistemas da plataforma). Cada capability tem uma implementação concreta: vcluster para ambientes, GitHub para SCM e build, Postgres em cluster para bancos. Para que a plataforma sirva a organizações diferentes (AWS, Azure, GCP, GitHub, Bitbucket, Crossplane, Terraform), a implementação tem que ser trocável sem mudar o que o desenvolvedor pede. Isso só funciona se o Concept for estável e bem definido, e se a forma de explicá-lo for clara.
 
 ### Os problemas de vocabulário que dispararam a conversa
 
@@ -49,42 +53,109 @@ A plataforma (Platform API, CLI `platform`, MCP) cresceu por fatias, uma capabil
 
 ### A preocupação com duplicar o Kubernetes
 
-A Platform API usa o Kubernetes como motor: ela grava CRs, e controllers os reconciliam (ADR 0022, a kube API como fonte da verdade). O risco do modelo é recriar na API uma camada de abstração que o Kubernetes já tem. A resposta adotada: **a API fica com os conceitos e as abstrações se resolvem na camada Kubernetes**, usando os idiomas dela (CRD, CR, *Class, controller). O modelo é uma forma de explicar e padronizar esse uso, não uma camada nova.
+A Platform API usa o Kubernetes como motor: ela grava CRs, e controllers os reconciliam (ADR 0022, a kube API como fonte da verdade). O risco do modelo é recriar na API uma camada de abstração que o Kubernetes já tem. A resposta adotada: **a API fica com os Concepts e as abstrações se resolvem na camada Kubernetes**, usando os idiomas dela (CRD, CR, *Class, controller). O modelo é uma forma de explicar e padronizar esse uso, não uma camada nova.
 
 ## Glossário
 
 | Camada | Pergunta que responde | Quem escreve | Analogia no Kubernetes | Exemplo |
 |---|---|---|---|---|
-| **Conceito** | o que existe na plataforma? | a plataforma (CRD + contrato) | "volume" | Environment, Workload, Database |
-| **Instância** | qual ocorrência, de quem? | quem consome, via API | PersistentVolumeClaim | Environment `demo`, Workload `orders` em `demo` |
+| **Concept** | o que existe na plataforma? | a plataforma (CRD + contrato) | "volume" | Environment, Workload, Database |
+| **Instance** | qual ocorrência, de quem? | quem consome, via API | PersistentVolumeClaim | Environment `demo`, Workload `orders` em `demo` |
 | **Class** | como materializar neste contexto? | quem implanta | StorageClass | "ambientes efêmeros usam vcluster" |
-| **Driver** | quem cumpre o contrato do conceito? | a plataforma ou terceiros | CSI driver | `vcluster`, `aws-eks`, `kubernetes-workload` |
+| **Driver** | quem cumpre o contrato do Concept? | a plataforma ou terceiros | CSI driver | `vcluster`, `aws-eks`, `kubernetes-workload` |
 | **Controller** | qual processo executa o Driver? | — (deployable) | o Pod do CSI driver | hoje `platform/providers/*` |
 | **Tool** | com o quê o Driver trabalha, por dentro? | — (detalhe do Driver) | a API do storage | Helm, Crossplane, Terraform, STS |
 | **Vendor** (atributo) | de quem é a coisa materializada? | — | AWS, NetApp | AWS, Azure, GitHub |
 
 Termos auxiliares:
 
-- **Contrato de um conceito:** entrada (o `spec` da Instância), saída (`status`, outputs, Secrets) e ciclo de vida (materializar, observar, liberar). A agnosticidade da plataforma vem do contrato, não dos nomes.
-- **Resolução:** o ato de escolher o Driver de uma Instância, gravado em `status.resolution`.
+- **Contrato de um Concept:** entrada (o `spec` da Instance), saída (`status`, outputs, Secrets) e ciclo de vida (materializar, observar, liberar). A agnosticidade da plataforma vem do contrato, não dos nomes.
+- **Resolução:** o ato de escolher o Driver de uma Instance, gravado em `status.resolution`.
 - **Runtime:** o tipo de lugar que um ambiente entrega (`kubernetes`, `container-apps`, `cloud-run`). É o contrato entre Drivers de environment e Drivers de workload e resources.
 - **Pacote de Driver:** o controller, o manifesto `driver.yaml` e os manifests da Tool.
 - **Personas:** quem consome (desenvolvedor), quem implanta (instala e configura uma instância da plataforma), quem mantém (opera e diagnostica).
 
 **Por que Driver, e não Provider:** "Provider" já nomeia o plugin de vendor no Terraform e no Crossplane, o que colide com a camada Tool na explicação ("o provider do Crossplane é provider de quê?"). Driver tem o sentido de sistema operacional: o OS define "impressora", o driver adapta, o hardware é do vendor. O ADR 0034 já fala em "driver de um vendor". O que hoje se chama provider (`platform/providers/*`) é o **Controller** que implementa um ou mais Drivers.
 
+### O paralelo com PVC, lado a lado
+
+O mesmo pedido nos dois mundos: um volume para um Pod no Kubernetes, e o Postgres `db` do componente `orders` num ambiente efêmero da plataforma.
+
+| Camada | Kubernetes | Plataforma hoje | Plataforma no modelo |
+|---|---|---|---|
+| Concept | volume | `type: postgres` no Score | Database |
+| Instance | PersistentVolumeClaim `data` | `ResourceRequest` `demo.orders.db` (o Forager cria a partir do Score) | igual |
+| Class | StorageClass `fast` | `BindingPolicy` `profile-ephemeral` | `ResourceClass` `database-ephemeral` |
+| Driver | `ebs.csi.aws.com` | `postgres/compose` | `shared-database` |
+| Controller | Pod `ebs-csi-controller` | `forager` | `forager` |
+| Tool | API do EBS | SQL no Postgres compartilhado `shared-pg` | igual |
+| Vendor | AWS | local | local |
+| Onde a escolha fica gravada | annotation `volume.kubernetes.io/storage-provisioner` no PVC | `spec.provisioner` do `ResourceRequest` | `status.resolution` |
+| O que é materializado | PersistentVolume + volume EBS | database e role no `shared-pg` + Secret | igual |
+
+Lado a lado, o que quem implanta cadastra e o que quem consome pede:
+
+```yaml
+# Kubernetes                               # Plataforma (no modelo)
+kind: StorageClass                         kind: ResourceClass
+metadata:                                  metadata:
+  name: fast                                 name: database-ephemeral
+provisioner: ebs.csi.aws.com               spec:
+parameters:                                  concept: database
+  type: gp3                                  scope:
+                                               profile: ephemeral
+                                             driver: shared-database
+                                             params:
+                                               instance: shared-pg
+---                                        ---
+kind: PersistentVolumeClaim                # score.yaml do orders
+metadata:                                  resources:
+  name: data                                 db:
+spec:                                          type: postgres
+  storageClassName: fast
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+E a Instance depois da escolha:
+
+```yaml
+# Kubernetes                               # Plataforma (no modelo)
+kind: PersistentVolumeClaim                kind: ResourceRequest
+metadata:                                  metadata:
+  name: data                                 name: demo.orders.db
+  annotations:                             spec:
+    volume.kubernetes.io/storage-provisioner:  environment: demo
+      ebs.csi.aws.com                        component: orders
+spec:                                        resource: db
+  storageClassName: fast                     type: postgres
+  volumeName: pvc-3f1c…                    status:
+status:                                      resolution:
+  phase: Bound                                 class: database-ephemeral
+                                               driver: shared-database
+                                             conditions:
+                                               - {type: Ready, status: "True"}
+```
+
+**Onde o paralelo não é exato:**
+
+- **Quem nomeia a Class.** O PVC pode nomear a StorageClass (`storageClassName`) ou cair na default. O desenvolvedor da plataforma nunca nomeia a Class: ela é escolhida pelo escopo, em camadas (ambiente → profile → default). É como se cada namespace tivesse a própria default StorageClass.
+- **Quem cria a Instance.** O PVC é escrito por quem consome. O `ResourceRequest` é derivado do Score pelo Forager, um por recurso de cada `WorkloadRevision`; quem consome escreve só o Score.
+- **Não há PersistentVolume.** O Kubernetes tem um objeto para a coisa materializada (o PV). A plataforma não tem: o que o Driver criou aparece no `status` da Instance e nos Secrets que ela publica.
+
 ## Princípios
 
-1. **A API conhece Conceitos e Instâncias; a Class é dado opaco para ela.** A API autoriza quem escreve uma Class e a guarda no journal, mas não interpreta o conteúdo. Resolução e escolha de Driver acontecem em controllers.
-2. **Um escritor por objeto** (ADR 0034). A API escreve o `spec` das Instâncias; o resolvedor escreve `status.resolution`; o Driver escreve o resto do `status`.
-3. **A resolução fica gravada na Instância** (`status.resolution`) antes de qualquer Driver agir, venha ela de uma Class (Environment, Database) ou de uma regra fixa (Workload pelo runtime do ambiente). Cada Driver só atende Instâncias com o próprio nome, como um CSI driver só atende os PVCs anotados com ele.
+1. **A API conhece Concepts e Instances; a Class é dado opaco para ela.** A API autoriza quem escreve uma Class e a guarda no journal, mas não interpreta o conteúdo. Resolução e escolha de Driver acontecem em controllers.
+2. **Um escritor por objeto** (ADR 0034). A API escreve o `spec` das Instances; o resolvedor escreve `status.resolution`; o Driver escreve o resto do `status`.
+3. **A resolução fica gravada na Instance** (`status.resolution`) antes de qualquer Driver agir, venha ela de uma Class (Environment, Database) ou de uma regra fixa (Workload pelo runtime do ambiente). Cada Driver só atende Instances com o próprio nome, como um CSI driver só atende os PVCs anotados com ele.
 4. **A Tool é código do Driver.** Não aparece no pedido, na Class nem no manifesto `Platform`. O Driver a declara no próprio `driver.yaml`.
-5. **Vendor é atributo**, usado para agrupar e reportar. Vai no nome do Driver só quando a coisa materializada é do vendor (`aws-eks`), não quando o conceito é genérico.
+5. **Vendor é atributo**, usado para agrupar e reportar. Vai no nome do Driver só quando a coisa materializada é do vendor (`aws-eks`), não quando o Concept é genérico.
 6. **Drivers se encontram por contrato de runtime** (`provides`/`consumes`), nunca por acoplamento direto. Um pacote pode trazer vários Drivers juntos, mas o contrato continua separado.
 7. **O método de acesso a um ambiente é do Driver de environment.** Quem consome (pessoa ou Driver) pede uma credencial de curta duração por um caminho único, e a plataforma delega ao Driver do ambiente.
 8. **Cada consumidor recebe uma credencial com escopo próprio**, nunca a credencial admin do ambiente.
 9. **Segredo nunca vai em pedido nem em manifesto**, só referência (como o `externalId` da `CloudAccount`, ADR 0029).
-10. **A experiência é dedutível:** os mesmos verbos para todo conceito na CLI, o mesmo formato declarativo para todo `kind`, as mesmas relações de permissão para todo tipo.
+10. **A experiência é dedutível:** os mesmos verbos para todo Concept na CLI, o mesmo formato declarativo para todo `kind`, as mesmas relações de permissão para todo tipo.
 11. **Todo comando imperativo tem contraparte declarativa**, e os dois convergem para o mesmo estado.
 12. **A CLI é o contrato estável da migração.** CRDs, nomes de Class e Tools mudam por baixo, fatia a fatia, sem mudar a experiência.
 
@@ -228,7 +299,7 @@ platform environment create demo --profile ephemeral
 platform environment create prod --profile production    # requer can_create no projeto
 ```
 
-A API grava só o conceito:
+A API grava só o Concept:
 
 ```yaml
 apiVersion: platform.wasp.silvios.me/v1alpha1
@@ -284,7 +355,7 @@ Depois, para cada revisão:
 3. **Acesso:** o `kubernetes-workload` e o `in-cluster-database` pedem uma credencial para `demo`. A plataforma delega ao Driver `vcluster`, que emite um token de ServiceAccount com escopo restrito. Em `prod`, delega ao `aws-eks`, que gera o token STS com a própria identidade (EKS Pod Identity).
 4. **Materialização:** o `kubernetes-workload` aplica Deployment, Service, ConfigMap e Secret, **com o mesmo código** nos dois ambientes, e grava o estado observado no `WorkloadInstance` (ADR 0033).
 
-A plataforma **não** cria um CR intermediário como "WorkloadKubernetes". O Driver traduz o conceito em objetos nativos do runtime. Se um Driver precisar de um CR intermediário (um kind do Crossplane, por exemplo), ele é detalhe interno daquele Driver e a API nunca o vê.
+A plataforma **não** cria um CR intermediário como "WorkloadKubernetes". O Driver traduz o Concept em objetos nativos do runtime. Se um Driver precisar de um CR intermediário (um kind do Crossplane, por exemplo), ele é detalhe interno daquele Driver e a API nunca o vê.
 
 ### Ato 4 — Quem consome: observar e acessar
 
@@ -348,13 +419,13 @@ O `gcp-cloud-run` oferece `runtime: cloud-run`; o workload resolve para `cloud-r
 
 ## O que existe hoje
 
-### Conceitos, Instâncias e como o Driver é escolhido
+### Concepts, Instances e como o Driver é escolhido
 
-| Conceito | Instância | Como o Driver é escolhido hoje | Driver (nome proposto) → Controller de hoje | Tool | Vendor |
+| Concept | Instance | Como o Driver é escolhido hoje | Driver (nome proposto) → Controller de hoje | Tool | Vendor |
 |---|---|---|---|---|---|
 | Database | `ResourceRequest` | **Class explícita:** `BindingPolicy` em camadas (ambiente → profile → default) | InClusterDatabase, SharedDatabase, ExistingDatabase → `forager` | manifests, SQL, cópia de Secret | local |
 | DNS, Route | `ResourceRequest` | a mesma `BindingPolicy` | `dns/provision`, `route/provision` → `forager` | manifests | local |
-| Environment | `Environment` | **campo na Instância:** com ou sem `spec.cloudAccount` | LocalVcluster → `local_vcluster`; CloudVcluster → `crossplane_aws` | Helm; Crossplane | local; AWS |
+| Environment | `Environment` | **campo na Instance:** com ou sem `spec.cloudAccount` | LocalVcluster → `local_vcluster`; CloudVcluster → `crossplane_aws` | Helm; Crossplane | local; AWS |
 | Build | `Build` | **por referência:** a API resolve a `ScmConnection` da org do repo | GitHubActionsBuild → `scm_github` | GitHub Actions | GitHub |
 | Repository | `ComponentCreation` | por referência, como o Build | GitHubRepository → `scm_github` | API do GitHub | GitHub |
 | Workload | `WorkloadRevision` | **sem escolha:** um Driver só | VclusterWorkload → `workload` | manifests, Istio | — |
@@ -362,18 +433,18 @@ O `gcp-cloud-run` oferece `runtime: cloud-run`; o workload resolve para `cloud-r
 | SCM | `ScmConnection` | `spec.vendor` | GitHubApp → `scm_github` | GitHub App | GitHub |
 | Registry | `OCIRegistry` | `spec.vendor` (só `ghcr`), com `spec.default` | GhcrRegistry → `registry` | OCI Distribution API | GitHub |
 
-São cinco formas de escolher o Driver: Class explícita, campo na Instância, referência, vendor na configuração e nenhuma escolha. Só `resources` tem a forma completa.
+São cinco formas de escolher o Driver: Class explícita, campo na Instance, referência, vendor na configuração e nenhuma escolha. Só `resources` tem a forma completa.
 
 ### Dois tipos de objeto
 
 A API mistura o que quem consome pede com o que quem implanta cadastra. É a mesma divisão de PVC × StorageClass, Gateway × GatewayClass, e Claim × ProviderConfig no Crossplane:
 
-- **Instâncias (pedidos):** `Environment`, `WorkloadRevision`, `ResourceRequest`, `Build`, `ComponentCreation`.
+- **Instances (pedidos):** `Environment`, `WorkloadRevision`, `ResourceRequest`, `Build`, `ComponentCreation`.
 - **Classes e configuração (cadastros):** `BindingPolicy`, `CloudAccount`, `ScmConnection`, `OCIRegistry`.
 
 É por isso que `CloudAccount`, `ScmConnection` e `OCIRegistry` carregam `spec.vendor`: o vendor mora na configuração. O `OCIRegistry.spec.default` faz o papel do "default StorageClass".
 
-**Teste de agnosticidade:** o `spec` de uma Instância se lê sem saber vendor nem Tool? `ResourceRequest`, `WorkloadRevision` e `Build` passam. `Environment` não passa: `spec.cloudAccount` (imutável, `platform/crds/environment.yaml`) faz o desenvolvedor escolher, indiretamente, onde o ambiente roda.
+**Teste de agnosticidade:** o `spec` de uma Instance se lê sem saber vendor nem Tool? `ResourceRequest`, `WorkloadRevision` e `Build` passam. `Environment` não passa: `spec.cloudAccount` (imutável, `platform/crds/environment.yaml`) faz o desenvolvedor escolher, indiretamente, onde o ambiente roda.
 
 ### Contratos que já existem sem nome
 
@@ -419,7 +490,7 @@ Hoje: `can_use` e `is_owner_or_admin` em `platform/api/src/platform_api/environm
 
 ### Quem consome
 
-Gramática `platform <conceito> <verbo> <nome>`, com verbos fixos (`create`, `list`, `get`, `delete`) e ações próprias do conceito (`share`, `deploy`). Quem aprendeu um conceito deduz o próximo. Quem consome nunca vê Class, Driver nem Tool, a não ser como informação no `get`.
+Gramática `platform <concept> <verbo> <nome>`, com verbos fixos (`create`, `list`, `get`, `delete`) e ações próprias do Concept (`share`, `deploy`). Quem aprendeu um Concept deduz o próximo. Quem consome nunca vê Class, Driver nem Tool, a não ser como informação no `get`.
 
 ```bash
 platform environment create demo --profile ephemeral
@@ -429,7 +500,7 @@ platform workload get orders --environment demo
 
 ### Quem implanta
 
-Class e Driver como substantivos de primeiro nível, iguais para todo conceito. Duas instâncias da plataforma diferem só no manifesto `Platform` e nas Classes.
+Class e Driver como substantivos de primeiro nível, iguais para todo Concept. Duas instâncias da plataforma diferem só no manifesto `Platform` e nas Classes.
 
 ```bash
 platform status
@@ -452,7 +523,7 @@ platform driver metrics cloud-database
 
 ### Permissões dedutíveis
 
-Se todo conceito tem os mesmos verbos, todo tipo no modelo de autorização tem as mesmas relações:
+Se todo Concept tem os mesmos verbos, todo tipo no modelo de autorização tem as mesmas relações:
 
 | Verbo da CLI | Relação |
 |---|---|
@@ -464,7 +535,7 @@ Se todo conceito tem os mesmos verbos, todo tipo no modelo de autorização tem 
 | `class set`, `apply` de Class | `can_configure` |
 | `driver verify`, `logs`, `metrics` | `can_operate` |
 
-As camadas do modelo se alinham às personas: Instância → quem consome; Class → quem implanta; Driver → quem mantém. Um conceito novo herda o conjunto de relações. Na CLI, no estilo de `kubectl auth can-i`:
+As camadas do modelo se alinham às personas: Instance → quem consome; Class → quem implanta; Driver → quem mantém. Um Concept novo herda o conjunto de relações. Na CLI, no estilo de `kubectl auth can-i`:
 
 ```bash
 platform auth can-i delete environment demo
@@ -561,8 +632,8 @@ As regras de match de `policy.py` (`type`, `class`, `id`) e o comportamento do F
 ## Alternativas em aberto
 
 - **Environment lógico × Runtime como recurso.** Separar o Environment (nome, dono, compartilhamento, profile, o que é deployado) do Runtime, que viraria um recurso do ambiente resolvido por Class como qualquer database (modelo do Humanitec). Ganho: tudo vira Class → Driver, e o Environment fica 100% agnóstico. Custo: um nível a mais para explicar; e hoje o vcluster do `local_vcluster` é o próprio Environment.
-- **Crossplane como camada Kubernetes inteira, ou só como Tool.** O Crossplane já implementa esse modelo dentro do Kubernetes (XRD = Conceito, Claim = Instância, Composition = Class/Driver, Function/Provider = Tool). Os Drivers de infra poderiam ser Compositions. Ele não cobre Build, SCM nem Workload, que continuam com controller próprio, então a tendência é um híbrido. Fatos já decididos: o ADR 0031 adiou Radius e KubeVela; o ADR 0032 adotou o Crossplane como único método de provisionamento por cloud e adiou o Kratix.
-- **Class por conceito (`EnvironmentClass`, `ResourceClass`) ou Class genérica** (`kind: Class` com `spec.concept`).
+- **Crossplane como camada Kubernetes inteira, ou só como Tool.** O Crossplane já implementa esse modelo dentro do Kubernetes (XRD = Concept, Claim = Instance, Composition = Class/Driver, Function/Provider = Tool). Os Drivers de infra poderiam ser Compositions. Ele não cobre Build, SCM nem Workload, que continuam com controller próprio, então a tendência é um híbrido. Fatos já decididos: o ADR 0031 adiou Radius e KubeVela; o ADR 0032 adotou o Crossplane como único método de provisionamento por cloud e adiou o Kratix.
+- **Class por Concept (`EnvironmentClass`, `ResourceClass`) ou Class genérica** (`kind: Class` com `spec.concept`).
 - **Como o consumidor obtém a credencial:** (a) o Driver de environment grava um Secret por consumidor e o rotaciona; (b) o consumidor pede à plataforma, que delega ao Driver, o mesmo caminho do `platform environment credential`.
 
 ## Caminho incremental
@@ -576,7 +647,7 @@ Cada fatia começa pelos exemplos de CLI (o walkthrough escrito antes do código
 5. **Declarativo:** `--dry-run --output yaml` nos `create`, e `get --output yaml` no mesmo formato; depois `platform apply`/`diff` genéricos por `kind`, começando por `Environment`; o `workload apply` migra para `kind: Workload`, aceitando o formato antigo durante a transição.
 6. **Class de resources:** `platform class` sobre a `BindingPolicy` atual; o rename do CRD e dos modos vem depois, por trás do comando.
 7. **Correção dos vazamentos da API:** a escolha da connection do build e os params do `bind`.
-8. **`status.resolution` em todas as Instâncias**, começando por `ResourceRequest` (onde já existe como `spec.provisioner`) e `WorkloadRevision`.
+8. **`status.resolution` em todas as Instances**, começando por `ResourceRequest` (onde já existe como `spec.provisioner`) e `WorkloadRevision`.
 9. **Contrato de runtime e credencial por consumidor:** `status.runtime` e `status.access` no `Environment`; o caminho único de credencial; o fim do uso do certificado admin pelos Drivers.
 10. **`EnvironmentClass`:** o `cloudAccount` sai do pedido e vira param da Class.
 11. **`driver.yaml` completo e `kind: Platform` no `platform init`:** o `--with-crossplane` some, porque ligar um Driver que pede Crossplane já implica Crossplane.
@@ -587,17 +658,17 @@ Cada fatia começa pelos exemplos de CLI (o walkthrough escrito antes do código
 
 | Peça | Responsável por | Nunca toca em |
 |---|---|---|
-| Operator | o ciclo de vida da plataforma | Instâncias |
-| Platform API | Conceitos, Instâncias, autorização, journal | a instalação de si mesma |
-| Controllers (Drivers) | materializar e observar Instâncias | a instalação de outros controllers |
+| Operator | o ciclo de vida da plataforma | Instances |
+| Platform API | Concepts, Instances, autorização, journal | a instalação de si mesma |
+| Controllers (Drivers) | materializar e observar Instances | a instalação de outros controllers |
 
-Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta decidir se ele instala ou só referencia Keycloak e OpenFGA; ele precisa de RBAC amplo, restrito à instalação; e o upgrade de CRDs com Instâncias vivas (versões e conversão) é o ponto mais caro.
+Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta decidir se ele instala ou só referencia Keycloak e OpenFGA; ele precisa de RBAC amplo, restrito à instalação; e o upgrade de CRDs com Instances vivas (versões e conversão) é o ponto mais caro.
 
 ## Questões em aberto
 
-1. **Escopo do ADR:** o padrão Instância → Class → Driver vale para todos os subsistemas (ADR geral, com resources como primeira aplicação) ou só para resources por enquanto? Inclinação: todos.
-2. **Nomes:** Class por conceito ou genérica; `ResourceClass` ou `ResourcePolicy`; nomes dos Drivers (`in-cluster-database`, `shared-database`, `existing-database`…).
-3. **Granularidade do Conceito:** `Database` com `engine: postgres`, ou um Conceito por engine. O Score pede hoje `type: postgres`.
+1. **Escopo do ADR:** o padrão Instance → Class → Driver vale para todos os subsistemas (ADR geral, com resources como primeira aplicação) ou só para resources por enquanto? Inclinação: todos.
+2. **Nomes:** Class por Concept ou genérica; `ResourceClass` ou `ResourcePolicy`; nomes dos Drivers (`in-cluster-database`, `shared-database`, `existing-database`…).
+3. **Granularidade do Concept:** `Database` com `engine: postgres`, ou um Concept por engine. O Score pede hoje `type: postgres`.
 4. **Environment lógico × Runtime como recurso** (ver [Alternativas em aberto](#alternativas-em-aberto)).
 5. **Crossplane como camada inteira ou só como Tool** (ver [Alternativas em aberto](#alternativas-em-aberto)).
 6. **Caminho da credencial:** Secret rotacionado por consumidor ou pedido delegado ao Driver.
@@ -636,18 +707,18 @@ O modelo tem muitos conceitos, e apresentá-los todos de uma vez confunde. O gui
 - **Não mostrar ainda:** Class, Driver, Tool, runtime.
 - **Pergunta para fechar:** "Onde vocês já sentiram essa inconsistência usando ou explicando a plataforma?"
 
-### Sessão 2 — Conceito, Instância e Class
+### Sessão 2 — Concept, Instance e Class
 
 - **Objetivo:** separar o que se pede do como se materializa.
-- **Material:** [Glossário](#glossário) (só as três primeiras linhas); [Dois tipos de objeto](#dois-tipos-de-objeto); o Ato 1 e o Ato 2 do [Exemplo de ponta a ponta](#exemplo-de-ponta-a-ponta), só com Database.
+- **Material:** [Glossário](#glossário) (só as três primeiras linhas); [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado), sem as linhas Driver, Controller, Tool e Vendor; [Dois tipos de objeto](#dois-tipos-de-objeto); o Ato 1 e o Ato 2 do [Exemplo de ponta a ponta](#exemplo-de-ponta-a-ponta), só com Database.
 - **Mostrar:** o mesmo Score do `orders` resolvendo em três Postgres diferentes conforme o ambiente (no cluster, compartilhado, RDS existente); e a analogia PVC × StorageClass.
 - **Não mostrar ainda:** Tool, Vendor, runtime, credenciais.
-- **Pergunta para fechar:** "Que outros conceitos da plataforma deveriam ter uma Class?"
+- **Pergunta para fechar:** "Que outros Concepts da plataforma deveriam ter uma Class?"
 
 ### Sessão 3 — Driver, Tool e Vendor
 
 - **Objetivo:** entender onde fica a troca de ferramenta, e por que "Driver" e não "Provider".
-- **Material:** o restante do [Glossário](#glossário) e o parágrafo "Por que Driver, e não Provider"; [Princípios](#princípios) 3, 4 e 5; a tabela de [Conceitos, Instâncias e como o Driver é escolhido](#conceitos-instâncias-e-como-o-driver-é-escolhido).
+- **Material:** o restante do [Glossário](#glossário) e o parágrafo "Por que Driver, e não Provider"; [Princípios](#princípios) 3, 4 e 5; a tabela de [Concepts, Instances e como o Driver é escolhido](#concepts-instances-e-como-o-driver-é-escolhido).
 - **Mostrar:** o `crossplane_aws` de hoje (o controller cria kinds do Crossplane, que materializa na AWS); e as cinco formas diferentes de escolher o Driver que a plataforma tem hoje.
 - **Não mostrar ainda:** contrato de runtime, credenciais, `driver.yaml`.
 - **Pergunta para fechar:** "Qual a próxima ferramenta ou vendor que vocês esperam ter que suportar?"
@@ -662,7 +733,7 @@ O modelo tem muitos conceitos, e apresentá-los todos de uma vez confunde. O gui
 
 ### Sessão 5 — Runtimes, contratos e acesso
 
-- **Objetivo:** entender como Drivers de conceitos diferentes se encontram, e por que o acesso é do Driver de environment.
+- **Objetivo:** entender como Drivers de Concepts diferentes se encontram, e por que o acesso é do Driver de environment.
 - **Material:** [Contrato de runtime e acesso](#contrato-de-runtime-e-acesso); [Driver como pacote](#driver-como-pacote); o Ato 0 e o trecho "O mesmo exemplo em outros runtimes".
 - **Mostrar:** o mesmo `orders` em vcluster, EKS e Cloud Run; a tabela de autenticação por runtime.
 - **Não mostrar ainda:** operator.
@@ -674,6 +745,32 @@ O modelo tem muitos conceitos, e apresentá-los todos de uma vez confunde. O gui
 - **Material:** [Experiência por persona](#experiência-por-persona); o [Exemplo de ponta a ponta](#exemplo-de-ponta-a-ponta) completo, agora de uma vez; [Caminho incremental](#caminho-incremental); [Ideias futuras](#ideias-futuras); [Questões em aberto](#questões-em-aberto).
 - **Mostrar:** os Atos 4, 5 e 6 (observar, manter, declarar); as permissões dedutíveis a partir dos verbos.
 - **Pergunta para fechar:** "Quais questões em aberto cada um quer assumir, e qual fatia do caminho incremental começamos?"
+
+### Sessão ao vivo: trazer um colega para pensar junto
+
+O autor e um colega, juntos numa chamada, com a tela compartilhada mostrando uma sessão nova do Claude Code. O colega chega sem nenhum contexto. O objetivo é que ele entenda o modelo bem o bastante para questioná-lo, não receber o modelo pronto. O agente conduz, o autor complementa, e o colega é quem precisa entender.
+
+**Como a sessão começa:** o autor abre uma sessão limpa e manda o path deste documento (`@docs/superpowers/specs/2026-10-16-conceptual-model-design.md`), talvez já dizendo que está com alguém. O agente lê o documento inteiro e, antes de qualquer resumo, pergunta: "Você está com uma pessoa para quem precisamos introduzir o tema? Se sim, qual o nome dela?". Se a resposta for sim, o agente passa a se dirigir à pessoa pelo nome e segue o roteiro abaixo. Se for não, segue [Para retomar numa sessão nova](#como-usar-este-documento).
+
+**Regras para o agente:**
+
+- **Falar com a pessoa, pelo nome**, em pt-BR, com os termos do modelo em inglês.
+- **Um passo por vez, curto:** cada mensagem cabe numa tela, termina numa pergunta para a pessoa e espera a resposta antes do passo seguinte. Nada de despejar seções do documento.
+- **Perguntar antes de mostrar:** em cada passo que tem um problema, apresentar o problema e ouvir como a pessoa resolveria antes de mostrar a resposta do documento.
+- **Checar o entendimento:** só avançar quando a pessoa conseguir explicar o passo com as próprias palavras. Se ela travar, voltar ao exemplo concreto, nunca ao glossário.
+- **Divergência é resultado:** quando a pessoa propuser outra coisa, anotar e, no fim, oferecer registrar como comentário na #594, em vez de defender o texto.
+- **Não mostrar o que ainda não foi introduzido:** nenhum termo do modelo aparece antes do passo que o introduz.
+
+**Roteiro:**
+
+1. **Relembrar o PVC do Kubernetes, sem falar da plataforma.** Perguntar o que a pessoa já sabe e completar a partir daí: o Pod quer um volume; o PersistentVolumeClaim é o pedido ("10Gi, leitura e escrita"), sem dizer onde nem como; a StorageClass, escrita por quem administra o cluster, diz como materializar (`provisioner: ebs.csi.aws.com`, `parameters: {type: gp3}`); a StorageClass default atende o PVC que não nomeia uma.
+2. **O CSI driver em detalhe.** O controller do driver observa os PVCs cuja StorageClass aponta para ele (e só esses); chama a API do storage (AWS EBS); cria o volume; o PersistentVolume registra o volume criado e o PVC fica `Bound`. A escolha fica gravada no próprio PVC (annotation `volume.kubernetes.io/storage-provisioner`). O Kubernetes não sabe nada de EBS: quem sabe é o driver. Trocar EBS por NetApp muda a StorageClass e o driver instalado, e o PVC do desenvolvedor continua igual. Pergunta: "o que o desenvolvedor precisa saber sobre o storage para pedir um volume?".
+3. **Dar nome às camadas, ainda no Kubernetes:** volume (Concept), PVC (Instance), StorageClass (Class), CSI driver (Driver), o Pod do driver (Controller), a API do EBS (Tool), AWS (Vendor). Só a primeira coluna da tabela de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado).
+4. **A plataforma em uma frase:** a Platform API recebe pedidos (ambiente, deploy, banco) e controllers os materializam no Kubernetes. Mostrar o Postgres `db` do `orders`: o Score pede `type: postgres`, e conforme o ambiente vira um Postgres no cluster, um database num Postgres compartilhado ou um RDS existente. Pergunta: "isso lembra o quê, do que acabamos de ver?".
+5. **O paralelo lado a lado:** a tabela e os YAMLs de [O paralelo com PVC, lado a lado](#o-paralelo-com-pvc-lado-a-lado), com a coluna "hoje", e os pontos em que o paralelo não é exato.
+6. **O problema:** os nomes de hoje (`BindingPolicy`, os modos `provision`/`compose`/`bind`, "provider" com dois sentidos) e as cinco formas de escolher o Driver ([Concepts, Instances e como o Driver é escolhido](#concepts-instances-e-como-o-driver-é-escolhido)). Pergunta: "como você unificaria isso?". Só depois mostrar a proposta: Class e `status.resolution` para todo Concept.
+7. **A aposta:** um modelo forte permite trocar a Tool (Terraform, Crossplane) sem que quem consome perceba, como o PVC não muda quando o storage muda. Aqui entra o [Resumo](#resumo).
+8. **Fechar:** perguntar o que fez sentido e o que não fez, e combinar o próximo encontro. Daí em diante a sequência é a do guia (Sessão 3 em diante), uma por encontro; as [Questões em aberto](#questões-em-aberto) entram só no fim, uma por vez.
 
 ### Entrada de uma pessoa nova no meio do caminho
 
