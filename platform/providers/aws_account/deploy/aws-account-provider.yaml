@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/providers/aws-account-provider.yaml: platform init no longer reads this file directly.
 # Provider aws_account (#193, ADR 0029): verifies the trust of each AWS CloudAccount from the
 # platform base credential (Secret aws-base-credential). Installed by `platform init --aws-profile`.
 apiVersion: v1

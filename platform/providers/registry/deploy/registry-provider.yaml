@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/providers/registry-provider.yaml: platform init no longer reads this file directly.
 # Provider registry (ADR 0037, #365): checks that each OCIRegistry answers the OCI Distribution API
 # (https://<host>/v2/) and sets Ready. Installed by `platform init`. Pull credentials come with #367.
 apiVersion: v1

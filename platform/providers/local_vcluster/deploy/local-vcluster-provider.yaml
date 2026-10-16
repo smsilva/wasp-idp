@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/providers/local-vcluster-provider.yaml: platform init no longer reads this file directly.
 # Provider local_vcluster (#183): runs inside platform-local and turns each Environment into a
 # vcluster (Helm release `vcluster`) in namespace env-<name>. Installed by `platform init`.
 apiVersion: v1

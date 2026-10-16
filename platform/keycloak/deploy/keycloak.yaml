@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/keycloak/keycloak.yaml: platform init no longer reads this file directly.
 # Keycloak for the local target: start-dev with the embedded H2 database on a PVC, so users and
 # group memberships survive a pod restart. Secrets keycloak-admin and keycloak-google are created
 # by `platform init`, never versioned.

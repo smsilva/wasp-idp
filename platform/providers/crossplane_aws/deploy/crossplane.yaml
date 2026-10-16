@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/providers/crossplane.yaml: platform init no longer reads this file directly.
 # Crossplane and its AWS EC2 provider for environments in a cloud account (#436, ADR 0032): the same versions
 # as the EKS (aws/eks/scripts/install-crossplane, aws/eks/providers/providers-aws.yaml). Installed by
 # `platform init --with-crossplane` through the helm-controller of k3s, like the Traefik of the environments.

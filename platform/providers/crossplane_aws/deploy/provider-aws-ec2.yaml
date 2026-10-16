@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/providers/provider-aws-ec2.yaml: platform init no longer reads this file directly.
 # The VPC of each environment (ec2.aws.upbound.io); the family provider (ProviderConfig in
 # aws.upbound.io) comes in as its dependency. Applied once the Provider CRD of Crossplane exists.
 apiVersion: pkg.crossplane.io/v1

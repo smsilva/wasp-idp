@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/keycloak/realm-import.yaml: platform init no longer reads this file directly.
 # Applies realm-platform.yaml (ConfigMap keycloak-realm, rendered by `platform init`).
 # keycloak-config-cli is idempotent; init deletes and recreates this Job on every run.
 apiVersion: batch/v1

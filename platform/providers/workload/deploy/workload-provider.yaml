@@ -1,3 +1,4 @@
+# RENDERED FROM platform/chart/platform-control-plane/templates/providers/workload-provider.yaml: platform init no longer reads this file directly.
 # Provider workload (ADR 0033): applies each WorkloadRevision in the vcluster of its Environment
 # (with the admin kubeconfig of Environment.status) and keeps the WorkloadInstance; turns each
 # WorkloadRoute into a GAMMA HTTPRoute there (ADR 0035, #344). Works with any
