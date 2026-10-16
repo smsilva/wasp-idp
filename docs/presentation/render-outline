@@ -58,7 +58,7 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .code .k { color: #9cdcfe; } .code .s { color: #ce9178; } .code .p { color: #dcdcaa; font-weight: bold; } .code .c { color: #6a9955; } .code .n { color: #b5cea8; }
 .tag { display: inline-block; background: #1f2937; border-radius: 10px; padding: 0 8px; margin-right: 4px; }
 .stage { container-type: inline-size; position: relative; aspect-ratio: 16/9; background: #0a0e1a; border: 1px solid #1f2937; border-radius: 6px; overflow: hidden; box-sizing: border-box; }
-.stage .inner { position: absolute; inset: 0; padding: 8cqw 7cqw 7cqw; display: flex; flex-direction: column; justify-content: center; gap: 1.6cqw; }
+.stage .inner { position: absolute; inset: 0; padding: 8cqw 7cqw 7cqw; display: flex; flex-direction: column; justify-content: safe center; gap: 1.6cqw; }
 .stage .section { position: absolute; top: 4cqw; left: 7cqw; font-size: 1.3cqw; letter-spacing: 0.4cqw; text-transform: uppercase; font-weight: bold; color: #fff; }
 .stage .inner.with-topic { padding-top: 10cqw; }
 .stage .section.has-topic .act-name { font-size: 1.0cqw; color: #6b7a8d; }
@@ -97,6 +97,9 @@ section.slide { min-height: 70vh; border-bottom: 1px solid #1f2937; padding: 32p
 .stage .item.labeled .value { display: block; margin-top: 1.8cqw; padding-left: 0.9em; }
 .stage .item.bullet::before { content: '- '; }
 .stage .items { display: contents; }
+.stage .items.entities { display: flex; flex-direction: column; gap: 1.6cqw; font-size: calc(var(--item-size) * var(--fit, 1)); }
+.stage .items.entities .item { font-size: inherit; white-space: nowrap; width: max-content; }
+.stage .items.entities .item.heading { white-space: normal; font-size: var(--item-size); }
 .stage .items.aligned { display: grid; grid-template-columns: max-content 1fr; column-gap: 0.35em; row-gap: 1.6cqw; font-size: calc(var(--item-size) * var(--fit, 1)); }
 .stage .items.aligned .item { font-size: inherit; }
 .stage .items.aligned .item { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
@@ -305,14 +308,16 @@ const NOTES_KEY = 'idp-outline-notes';
 if (localStorage.getItem(NOTES_KEY) === '1' || location.search.includes('presenter')) deck.classList.add('with-notes');
 const LAYOUT_KEY = 'idp-outline-notes-layout';
 if (localStorage.getItem(LAYOUT_KEY) !== 'bottom') deck.classList.add('notes-right');
-// Aligned label/value lists: shrink the font until the widest row fits the slide width.
+// Aligned label/value lists, and lists that name catalog entities: shrink the font until the widest row
+// fits the slide width, so a row never wraps (an entity line reads as one term after another).
 function fitAligned(stage) {
-  stage.querySelectorAll('.items.aligned').forEach((list) => {
+  stage.querySelectorAll('.items.aligned, .items.entities').forEach((list) => {
     list.style.removeProperty('--fit');
     const inner = list.closest('.inner'), style = getComputedStyle(inner);
     const room = inner.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     const left = list.getBoundingClientRect().left;
-    const widest = Math.max(...Array.from(list.querySelectorAll('.value, .item')).map((el) => el.getBoundingClientRect().right - left));
+    const rows = list.classList.contains('entities') ? '.item, .sub' : '.value, .item';
+    const widest = Math.max(...Array.from(list.querySelectorAll(rows)).map((el) => el.getBoundingClientRect().right - left));
     if (widest > room) list.style.setProperty('--fit', (room / widest * 0.98).toFixed(3));
   });
 }
@@ -821,6 +826,8 @@ def entity(match):
   """`{component:seat-selection service}`: the name in its kind's color, the type after it, faded."""
   kind, name, kind_type = match.groups()
   # A real space before the type: selecting or copying the line keeps "seat-selection service" apart.
+  # Spaces inside a type ("rest api") too: in the text font, like every other space on the line.
+  kind_type = kind_type.replace(" ", "<span class='sp'> </span>") if kind_type else kind_type
   type_html = f"<span class='sp'> </span><span class='t'>{kind_type}</span>" if kind_type else ""
   return f"<span class='entity k-{kind}'><span class='n'>{name}</span>{type_html}</span>"
 
@@ -1000,7 +1007,8 @@ def render_stage(step, base, outline=None):
     align = bool(step["slide"] and step["slide"].get("align")) and aligned(step["items"])
     subs = lambda state: int(state.split("subs-")[1]) if "subs-" in state else None
     render = lambda text, state: rich_aligned(text) if align and "heading" not in state else rich(text, subs(state))
-    body = (f"<div class='items{' aligned' if align else ''}' style='--item-size: {size:.2f}cqw'>"
+    entities = " entities" if not align and any(ENTITY.search(text) for text, _ in step["items"]) else ""
+    body = (f"<div class='items{' aligned' if align else ''}{entities}' style='--item-size: {size:.2f}cqw'>"
             + "".join(f"<div class='item {state.replace('active', '').strip()}{bullet(state)}{rich_class(text)}'>{render(text, state)}</div>" for text, state in step["items"])
             + "</div>")
   source = step["slide"].get("source") if step["slide"] else None

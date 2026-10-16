@@ -306,7 +306,7 @@ def test_entity_markup():
   out = ro.rich("_provided by_ {component:seat-selection service}")
   assert ("<span class='entity k-component'><span class='n'>seat-selection</span>"
           "<span class='sp'> </span><span class='t'>service</span></span>") in out
-  assert ro.rich("{api:seats rest api}").endswith("<span class='n'>seats</span><span class='sp'> </span><span class='t'>rest api</span></span>")
+  assert ro.rich("{api:seats rest api}").endswith("<span class='n'>seats</span><span class='sp'> </span><span class='t'>rest<span class='sp'> </span>api</span></span>")
   assert ro.rich("{system:seat-map}") == "<span class='entity k-system'><span class='n'>seat-map</span></span>"
   # An unknown kind is not markup.
   assert "entity" not in ro.rich("{nope:x y}")
