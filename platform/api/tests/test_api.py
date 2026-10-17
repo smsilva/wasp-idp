@@ -37,14 +37,15 @@ def test_healthz(client):
   assert client.get("/healthz").json() == {"status": "ok"}
 
 
-def test_create_without_provider_reports_condition(client, state):
+def test_create_starts_pending_until_provider_claims(client, state):
   response = client.post("/v1/environments", json={"name": "greetings-test", "profile": "ephemeral", "expires": "3d"})
   assert response.status_code == 202
   body = response.json()
-  assert body["status"] == "NoProviderForCapability"
+  assert body["status"] == "Pending"
   assert re.match(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$", body["expiresAt"])
   ready = state.objects["greetings-test"]["status"]["conditions"][0]
-  assert (ready["type"], ready["status"], ready["reason"]) == ("Ready", "False", "NoProviderForCapability")
+  assert (ready["type"], ready["status"], ready["reason"]) == ("Ready", "False", "Pending")
+  assert ready["message"] == "waiting for a provider to claim the environment capability"
 
 
 def test_create_keeps_status_written_by_provider(client, state):

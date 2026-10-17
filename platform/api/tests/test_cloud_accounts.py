@@ -292,7 +292,7 @@ def test_an_environment_in_a_ready_account(client, as_, state, journal_path):
   response = create_environment(client, as_)
   assert response.status_code == 202
   assert response.json()["cloudAccount"] == "nonprod-aws"
-  assert response.json()["status"] == "NoProviderForCapability"
+  assert response.json()["status"] == "Pending"
   assert state.stores[ENVIRONMENTS]["cloud-env"]["spec"]["cloudAccount"] == "nonprod-aws"
   # The exact account authorized, for the provider to check (#436).
   annotations = state.stores[ENVIRONMENTS]["cloud-env"]["metadata"]["annotations"]

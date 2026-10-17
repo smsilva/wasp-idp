@@ -39,7 +39,7 @@ def api(monkeypatch):
     if request.method == "POST" and path == "/v1/environments":
       body = json.loads(request.content)
       item = {
-        "name": body["name"], "profile": body["profile"], "expiresAt": None, "status": "NoProviderForCapability",
+        "name": body["name"], "profile": body["profile"], "expiresAt": None, "status": "Pending",
         "owner": "dev@example.com", "sharedWith": sorted(body.get("sharedWith", [])), "cloudAccount": body.get("cloudAccount"),
       }
       environments[body["name"]] = item
@@ -82,11 +82,11 @@ def api(monkeypatch):
   return environments
 
 
-def test_create_without_wait_shows_no_provider(api):
+def test_create_without_wait_shows_pending(api):
   result = runner.invoke(app, ["environment", "create", "greetings-test", "--profile", "ephemeral", "--expires", "3d"])
   assert result.exit_code == 0, result.output
   assert "provisioning greetings-test (profile: ephemeral)" in result.output
-  assert "NoProviderForCapability" in result.output
+  assert "Pending" in result.output
 
 
 def test_create_wait_until_ready(api):
@@ -99,7 +99,7 @@ def test_list_table_and_json(api):
   runner.invoke(app, ["environment", "create", "dev", "--profile", "shared"])
   table = runner.invoke(app, ["environment", "list"]).output.splitlines()
   assert table[0].split() == ["NAME", "PROFILE", "ACCOUNT", "STATUS", "EXPIRES", "OWNER", "SHARED"]
-  assert table[1].split() == ["dev", "shared", "—", "NoProviderForCapability", "—", "dev@example.com", "—"]
+  assert table[1].split() == ["dev", "shared", "—", "Pending", "—", "dev@example.com", "—"]
   as_json = json.loads(runner.invoke(app, ["environment", "list", "--output", "json"]).output)
   assert as_json[0]["name"] == "dev"
 

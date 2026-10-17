@@ -4,7 +4,7 @@ from typing import Literal, get_args
 from .durations import format_time
 from .state import GROUP, VERSION
 
-NO_PROVIDER = "NoProviderForCapability"
+PENDING = "Pending"
 # Who asked for the environment (token `sub`), set by the API on create; the CR spec stays the user's intent.
 OWNER_ANNOTATION = f"{GROUP}/owner"
 # The owner's e-mail, for display only: authorization always goes by OWNER_ANNOTATION (ADR 0026).
@@ -39,13 +39,13 @@ def manifest(name: str, profile: str, expires_at: str | None, owner: str, owner_
   }
 
 
-def no_provider_status() -> dict:
+def pending_status() -> dict:
   return {
     "conditions": [{
       "type": "Ready",
       "status": "False",
-      "reason": NO_PROVIDER,
-      "message": "no provider has claimed the environment capability yet",
+      "reason": PENDING,
+      "message": "waiting for a provider to claim the environment capability",
       "lastTransitionTime": format_time(datetime.now(timezone.utc)),
     }]
   }

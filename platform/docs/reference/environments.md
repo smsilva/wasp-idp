@@ -26,7 +26,7 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 
 - On create, the account must exist, be `ready` and have a region (`422` otherwise), and you must be able to use it: owner, `platform-admins`, or a member of a team it is shared with (`403` otherwise). This is checked only at creation: an unshare never takes down environments already there.
 - The account is immutable: the CRD refuses changing, adding or removing `spec.cloudAccount`.
-- Without `platform init --with-crossplane`, nothing creates it, and it stays `NoProviderForCapability`; `--wait` gives up after 60 s in that status instead of waiting out `--timeout`.
+- Without `platform init --with-crossplane`, nothing creates it, and it stays `Pending`; `--wait` gives up after 60 s in that status instead of waiting out `--timeout`, with the `platform init --with-crossplane` hint.
 - It is `ready` once Crossplane reports the VPC `Ready` (the message of `get` names the VPC and its region; `--output json` has them in `cloud`); `CloudAccountNotReady` while the account is not `ready` and the VPC was not created yet; `ProvisioningFailed` with the Crossplane message when AWS refuses (a role without `ec2:CreateVpc`, for example).
 - `delete` removes the VPC in the account first; the environment goes once Crossplane confirms it is gone.
 - The provider creates the VPC only in the exact account the API authorized on create (its uid is kept on the environment): an environment written around the API, or an account removed and registered again under the same name, gets `ProvisioningFailed`.
@@ -38,7 +38,7 @@ An environment is a vcluster created by the `local_vcluster` provider inside `pl
 
 | Status | Meaning |
 |---|---|
-| `NoProviderForCapability` | no provider has picked up the request yet |
+| `Pending` | a provider has not picked up the request yet |
 | `Provisioning` | vcluster being created, then the mesh and the gateway installed in it (about 60 s); in a cloud account, the VPC being created |
 | `ready` | vcluster, `istiod` and the gateway up; `get` or `--wait` writes the kubeconfig. In a cloud account: the VPC exists |
 | `CloudAccountNotReady` | in a cloud account: the account is not `ready` (or is gone), so nothing was created yet |

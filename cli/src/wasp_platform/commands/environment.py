@@ -19,6 +19,7 @@ Name = Annotated[str, typer.Argument(help="Environment name (platform environmen
 ProfileName = Annotated[str, typer.Argument(help="Profile name: ephemeral or shared.")]
 FAILED = {"ProvisioningFailed"}
 NO_PROVIDER = "NoProviderForCapability"
+PENDING = "Pending"
 # A cloud provider claims an environment within seconds: still unclaimed after this, none is installed
 # (#436). Not for local ones: local_vcluster reconciles one at a time, so a queued one waits longer.
 NO_PROVIDER_GRACE = 60
@@ -91,7 +92,7 @@ def _wait_ready(client: PlatformClient, environment: dict, timeout: int, quiet: 
       last = environment["status"]
     if environment["status"] in FAILED:
       fail(f"{environment['name']}: {environment.get('message') or environment['status']}")
-    if environment.get("cloudAccount") and environment["status"] == NO_PROVIDER and time.monotonic() - started > NO_PROVIDER_GRACE:
+    if environment.get("cloudAccount") and environment["status"] in {NO_PROVIDER, PENDING} and time.monotonic() - started > NO_PROVIDER_GRACE:
       fail(f"{environment['name']}: no provider claimed it after {NO_PROVIDER_GRACE}s; none is installed for environments in cloud accounts: platform init --with-crossplane")
     if time.monotonic() > deadline:
       fail(f"{environment['name']} not ready after {timeout}s (status: {environment['status']})")

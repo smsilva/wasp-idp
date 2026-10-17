@@ -11,7 +11,7 @@ time platform environment create demo \
 
 ``` { .text .output title="output" }
 provisioning demo (profile: shared) …
-  NoProviderForCapability
+  Pending
   Provisioning
 ✓ demo ready
 
@@ -19,4 +19,4 @@ real    0m51s
 ```
 
 !!! note
-    The request starts at `NoProviderForCapability` and the `local_vcluster` provider, which runs inside `platform-local`, picks it up right after. **There is no second terminal.**
+    The request starts at `Pending` and the `local_vcluster` provider, which runs inside `platform-local`, picks it up right after. **There is no second terminal.**
