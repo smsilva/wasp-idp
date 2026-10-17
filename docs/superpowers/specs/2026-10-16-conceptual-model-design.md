@@ -675,6 +675,28 @@ Cada fatia começa pelos exemplos de CLI (o walkthrough escrito antes do código
 
 Cuidados: o operator precisa ser instalado por algo de fora (Helm ou OLM); falta decidir se ele instala ou só referencia Keycloak e OpenFGA; ele precisa de RBAC amplo, restrito à instalação; e o upgrade de CRDs com Instances vivas (versões e conversão) é o ponto mais caro.
 
+**identity como primeiro Concept com Driver trocável** (sessão ao vivo de 2026-10-16, guardada para retomar). O `platform init` escolhe o Driver de identity: `keycloak-identity` (o de hoje, default) ou `auth0-identity`. Os dois são broker OIDC na frente do Google, então metade do contrato já é genérica.
+
+```bash
+platform init \
+  --identity-driver auth0-identity \
+  --identity-param domain=<tenant>.auth0.com \
+  --identity-param upstream=google-oauth2
+```
+
+| Parte do contrato | Genérico ou do Driver | `keycloak-identity` | `auth0-identity` |
+|---|---|---|---|
+| Instalação | do Driver, uma vez no init | Deployment + realm no cluster (`cli/src/wasp_platform/bootstrap/local.py`) | nada no cluster; configuração com referência ao Secret do client M2M |
+| Login da CLI | genérico: OIDC + PKCE e device code | `kc_idp_hint=google` (`cli/src/wasp_platform/auth.py`) | `connection=google-oauth2`, `audience=platform-api` |
+| Validação na API | genérico: `iss`, `aud`, JWKS | claim `group_paths` (`platform/api/src/platform_api/auth.py`) | claim própria, emitida por uma Action do Auth0 |
+| Times | código do Driver | grupos em `/teams` pela admin API (`KeycloakTeams` em `teams.py`) | Organizations ou Roles pela Management API |
+| Admin inicial | código do Driver | mapper do IdP para `/platform-admins` | Action ou role atribuída |
+| Formato do `sub` | muda por Driver | UUID | `google-oauth2\|1234…` (o digest de `credentials.py` já cobre nomes inválidos de ServiceAccount) |
+
+O Driver publica o que a API e a CLI hoje sabem de cor, num ConfigMap como o `aws-base-identity` do ADR 0029: `issuer`, `audience`, `cliClientId`, `groupsClaim` e `authorizeParams`. A parte cara são os times: a API ganha uma interface com uma implementação por Driver, ou, pelo princípio 1, a lógica vai para o controller do Driver. Nome no padrão do princípio 14 (o Concept no fim: `keycloak-identity`); `identity-keycloak` foi a primeira forma proposta e fica em aberto.
+
+Fatias: (1) o Driver de Keycloak publica o ConfigMap e a API e a CLI passam a lê-lo, sem mudar o comportamento (walking skeleton); (2) times atrás de uma interface; (3) o `auth0-identity`.
+
 **Class default, Environment por projeto e multi-região.** Ideias da conversa de 2026-10-16, ainda não discutidas. A Class marcada como default responde quando o pedido não diz qual usar, como a annotation `storageclass.kubernetes.io/is-default-class` da StorageClass. A Class aponta para quem a atende (`spec.controller`; no vocabulário do modelo, o Driver, como o `controllerName` da GatewayClass):
 
 ```yaml
@@ -755,6 +777,7 @@ Pontos a decidir antes de aproveitar: `controller` × `driver` (o glossário sep
 10. **Class por projeto:** um admin de projeto (ADR 0042) pode ter Classes próprias para os ambientes do projeto, ou Class é só da plataforma?
 11. **`managed` × `external` por Tool:** onde se declara, no `Platform` ou na configuração do Driver.
 12. **Onde ficam as figuras da #595:** o guia da platform-api, o deck, ou os dois.
+13. **identity como primeira fatia de Driver trocável** (`keycloak-identity` × `auth0-identity`, ver [Ideias futuras](#ideias-futuras)): entra antes de resources no caminho incremental? E os times ficam numa interface da API ou no controller do Driver?
 
 ## Próximos passos
 
