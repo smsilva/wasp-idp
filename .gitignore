@@ -46,3 +46,4 @@ __pycache__/
 
 # Saída do `mkdocs build` local do guia da Platform API (o CI gera em ${RUNNER_TEMP})
 platform/site/
+.superpowers/
